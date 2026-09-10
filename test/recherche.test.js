@@ -5514,7 +5514,13 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves. Le SENS est
   // intact — armé reste sous vide sur les trois —, et c'est la seule chose que
   // ce test mesure.
-  const apres38 = { 7: 327_082_825n, 9: 1_775_548_650n, 24: 524_648_503n };
+  // ⚠⚠ SECOND GESTE DU LOT MUR : **LA GRAINE 7 SEULE BOUGE**, 327 082 825 →
+  // 326 352 543, et les graines 9 et 24 ne bougent pas d'un point. Le rangement
+  // latéral de `seDecaler` ne mord que là où une défenseuse bute sur une
+  // structure en se décalant : sur ces trois bases-là, une seule est dans ce
+  // cas. ⚠ Et la propriété que ce test garde — le canal armé coûte MOINS que le
+  // canal vide — tient sur les trois, aux niveaux 38 comme 50.
+  const apres38 = { 7: 326_352_543n, 9: 1_775_548_650n, 24: 524_648_503n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),

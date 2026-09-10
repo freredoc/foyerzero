@@ -499,8 +499,16 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // butin toujours nul. Les trois causes et les trois comptes de survivants ne
     // bougent pas d'une unité : c'est le déroulé qui se déplace, pas l'issue.
     // Rien n'est compensé ; le calibrage revient à Ethan.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 280, butin: { quartz: 0, scorie: 0 }, survivants: 1 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 244, butin: { quartz: 25_184, scorie: 8_394 }, survivants: 5 },
+    // ⚠⚠ SECOND GESTE DU LOT MUR : A GARDE SON TICK ET GAGNE UN SURVIVANT
+    // (1 → 2) ; B BOUGE SUR LES TROIS GRANDEURS — 244 → 287 ticks, butin
+    // 25 184 / 8 394 → 25 199 / 8 399, survivants 5 → 6 ; **C NE BOUGE PAS D'UN
+    // CHAMP**. Le rangement latéral de `seDecaler` écarte les défenseuses du
+    // trajet de l'assaut au lieu de les laisser fluer dans la case voisine :
+    // l'assaut perd moins de monde, et il met plus longtemps là où la défense
+    // tient mieux sa ligne. Les trois causes sont inchangées, et le contraste
+    // que ce test garde — B ne rase PLUS la Souche à assaut budgété — aussi.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 280, butin: { quartz: 0, scorie: 0 }, survivants: 2 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 287, butin: { quartz: 25_199, scorie: 8_399 }, survivants: 6 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne

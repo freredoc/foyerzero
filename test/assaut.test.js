@@ -386,8 +386,15 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // test garde n'a pas bougé : les trois préréglages figés rendent un combat
   // déterministe, mesuré ici en clair, et B rase toujours moins bien que ce que
   // le lot CIBLES-RANGÉES avait relevé.
+  // ⚠⚠ SECOND GESTE DU LOT MUR : **A SEUL BOUGE, 259 → 670**, et B comme C ne
+  // bougent pas d'un tick. Le rangement latéral de `seDecaler` ne mord que là où
+  // une défenseuse est bloquée PAR UNE STRUCTURE en se décalant : A est un
+  // avant-poste, dont la garnison se presse entre des barrières, et son assaut
+  // met deux fois et demie plus longtemps à passer. Un préréglage FIGÉ aligne
+  // Broyeur et Pilon au niveau 15, donc il traverse ; ce qui a changé est le
+  // temps que la défense met à s'écarter de son chemin.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 259);
+  assert.equal(figes[0].tick, 670);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
   assert.equal(figes[1].tick, 667);
   assert.equal(figes[2].cause, 'attaquants');
@@ -452,7 +459,8 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // déroulé et rien d'autre : l'assaut lourd de B casse la garnison plus vite
   // parce qu'il s'arrête dessus, l'assaut d'infanterie de C se traîne parce qu'il
   // bute sur ce qu'il ne peut pas percer. Les trois causes ne bougent pas.
-  assert.equal(budgetes[1].nbTicks, 244);
+  // ⚠ SECOND GESTE DU LOT MUR : **B SEUL BOUGE, 244 → 287**, A et C intacts.
+  assert.equal(budgetes[1].nbTicks, 287);
   assert.equal(budgetes[2].cause, 'attaquants');
   assert.equal(budgetes[2].nbTicks, 458);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une

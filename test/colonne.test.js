@@ -958,8 +958,18 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   //
   // ⚠ ET LE COMPTE PASSE DE HUIT À TROIS SUR LE MÊME ÉCHANTILLON. Le dire dans ce
   // sens-là : c'est un autre déroulé de combats, pas une dette qui se referme.
+  //
+  // ⚠⚠ SECOND GESTE DU LOT MUR : LES TROIS BOUGENT UNE FOIS DE PLUS, ET LE
+  // COMPTE REMONTE DE TROIS À **CINQ** sur le même échantillon de 600. Le
+  // rangement LATÉRAL de `seDecaler` déplace la position des défenseuses, donc
+  // ce que chaque passe laisse debout, donc les PV que `site-entame.js` range.
+  // Les cinq : `25/92`, `26/41`, `28/54`, `29/54`, `29/68` — et une seule des
+  // trois d'hier survit, la `28/54`. **Une dette qui remonte n'est pas une
+  // régression du lot** : c'est le même défaut, atteint par d'autres
+  // dispositions. Il est TOUJOURS dans `pvCourantsDesDefenses` quand l'Étai est
+  // tombé, et aucune ligne de ce lot ne l'a touché.
   for (const [type, niveau, graine] of [
-    ['camp', 28, 54], ['camp', 29, 54], ['camp', 30, 92],
+    ['camp', 25, 92], ['camp', 26, 41], ['camp', 28, 54],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,

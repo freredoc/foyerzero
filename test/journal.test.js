@@ -146,13 +146,28 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'au lot PA
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
   // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON LE
   // VOIE. C'est la même garde qu'en `T1 bis`, posée dès la première couche
-  // plutôt qu'après coup : **561 champs sur 1 600**, **110 combats sur 200**, et
-  // **1 039 champs encore adossés** à la capture du lot PAQUETS — dont
-  // quatre-vingt-dix combats entiers. Une couche qui grandirait sans qu'un lot
-  // le déclare fait tomber ce test.
-  assert.equal(surcharges, 561, `champs surchargés : ${surcharges}`);
-  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR).length, 110);
-  assert.equal(champs - surcharges, 1039, 'le compte des champs encore gardés a changé');
+  // plutôt qu'après coup : **583 champs sur 1 600**, **124 combats sur 200**, et
+  // **1 017 champs encore adossés** à la capture du lot PAQUETS — dont
+  // soixante-seize combats entiers. Une couche qui grandirait sans qu'un lot le
+  // déclare fait tomber ce test.
+  //
+  // ⚠⚠ LE SECOND GESTE DU LOT MUR L'A FAIT MONTER DE 561 À 583, ET DE 110 À 124
+  // COMBATS — le rangement latéral de `seDecaler`, demandé par Ethan le 10/09
+  // après qu'on lui eut MESURÉ le jumeau du point 2 sur l'axe des colonnes. Une
+  // défenseuse qui se range sur sa case au lieu de fluer à 96 % dans celle du
+  // merlon n'est plus à la même distance de rien : `distanceCarreeMilli` lit des
+  // MILLIÈMES, donc le ciblage et le départage suivent. Vingt-deux champs de
+  // plus, quatorze combats de plus — le périmètre est étroit parce que seule une
+  // défenseuse BLOQUÉE PAR UNE STRUCTURE change de position.
+  //
+  // ⚠ LA COUCHE EST RECALCULÉE, LA CAPTURE NE L'EST PAS. `TEMOINS_COMBAT` n'a
+  // pas une ligne de changée ; ce qui est refait est la DESCRIPTION de ce que ce
+  // lot-ci déplace contre elle. Contre-épreuve jouée : le même générateur, sur
+  // le `combat.js` d'avant le second geste, rend EXACTEMENT 110 combats et 561
+  // champs — les nombres que cette ligne portait.
+  assert.equal(surcharges, 583, `champs surchargés : ${surcharges}`);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR).length, 124);
+  assert.equal(champs - surcharges, 1017, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -205,7 +220,7 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
           // test-ci resterait VERT sans couche neuve ; **il tombe**, et son §5 le
           // nommait pourtant parmi les vingt-neuf. Un moteur qui change change
           // aussi ce que l'ANCIEN placement rend — c'est mesuré, pas supposé :
-          // 125 combats, 681 champs.
+          // 127 combats, 686 champs.
           const deplacesMur = COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
@@ -280,7 +295,7 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE).length, 200);
-  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS).length, 125);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS).length, 127);
   assert.ok(champs - surcharges === 269, 'le compte des champs encore gardés a changé');
 });
 

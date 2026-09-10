@@ -4014,27 +4014,27 @@ export const DEPLACES_PAR_MUR = {
   "rapports": "3f7f00dee4891981"
  },
  "p11_raidOuvrageApres": {
-  "recherche": "e0b4503dca88f2c6",
-  "sitesEntames": "a45d8ecc57abf556",
-  "rapports": "fe55692e46c9f7bd",
+  "recherche": "166f96ff35f3d88b",
+  "sitesEntames": "e2565c3d128bc8ab",
+  "rapports": "ee3e98a01cf7691e",
   "armee": "fe40a072c6e7d4f0"
  },
  "p12_veilleDuRaid": {
-  "recherche": "e0b4503dca88f2c6",
-  "sitesEntames": "558317c979e9286a",
-  "rapports": "fe55692e46c9f7bd",
+  "recherche": "166f96ff35f3d88b",
+  "sitesEntames": "d8928f8eacc86afe",
+  "rapports": "ee3e98a01cf7691e",
   "armee": "fe40a072c6e7d4f0"
  },
  "p13_apresLeRaid": {
-  "recherche": "e0b4503dca88f2c6",
-  "sitesEntames": "eb7dc631d910d053",
-  "rapports": "032cc9db74f368c0",
+  "recherche": "166f96ff35f3d88b",
+  "sitesEntames": "033c8f0a5d30e465",
+  "rapports": "8fa8c2761642f742",
   "disposition": "23a628bd56e48b32",
   "armee": "fe40a072c6e7d4f0"
  },
  "p14_sousLeFeu": {
-  "recherche": "e0b4503dca88f2c6",
-  "rapports": "2d1217a6e9559291",
+  "recherche": "166f96ff35f3d88b",
+  "rapports": "72c04cdd82052e3d",
   "armee": "fe40a072c6e7d4f0"
  }
 };
@@ -4062,7 +4062,7 @@ export const EMPREINTES_PAR_GRAINE_MUR = {
  "10": "2d711dadde9a8d31",
  "11": "398805a191224307",
  "12": "84749aa97cccde2f",
- "13": "ffad458eca82c2d1",
+ "13": "dc6e58d2de5e0daa",
  "14": "4c73f488699fe011",
  "16": "e085f8878ad64777",
  "17": "0138408f7d2fc8a7",
@@ -4107,7 +4107,7 @@ export const RAPPORTS_PROCHE_MUR = {
  */
 export const RAPPORTS_OUVRAGE_MUR = {
  "1": "9f795470ee127d62",
- "13": "ab2362a67aee9134",
+ "13": "32449f44fb3207e0",
  "14": "7bf9e142b36a56a5",
  "25": "774365ba1ed2e630"
 };

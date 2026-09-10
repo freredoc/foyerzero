@@ -2052,7 +2052,7 @@ function retirerLesMorts(etat) {
  * `peutAvancer` les retient et elles TIRENT, donc `nuit(e)`, c'est-à-dire
  * `aTire`, remet `ticksInutiles` à zéro et elles ne se replient pas. Ce qui a
  * changé pour elles est ailleurs : elles se RANGENT désormais sur leur case au
- * lieu de fluer dans le mur — voir `structureImmobileDevant` dans `avancer`.
+ * lieu de fluer dans le mur — voir `structureImmobileSur`, lu par les deux axes.
  *
  * ⚠⚠ ET LE REPLI NE PEUT TOUJOURS PAS EMPIRER PAR CETTE FONCTION, PAR
  * CONSTRUCTION — vérifié explicitement au lot COLONNE plutôt que reconduit, et
@@ -2321,8 +2321,17 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
 }
 
 /**
- * La case DEVANT porte-t-elle une STRUCTURE IMMOBILE — celle qui empêche
- * d'avancer, et devant laquelle une unité doit se ranger plutôt que de fluer ?
+ * La case VISÉE porte-t-elle une STRUCTURE IMMOBILE — celle qui empêche de
+ * passer, et devant laquelle une unité doit se ranger plutôt que de fluer ?
+ *
+ * ⚠⚠ UNE SEULE ÉCRITURE, DEUX LECTEURS, ET C'EST LE SECOND GESTE DU LOT MUR.
+ * Elle a servi `avancer` seule pendant un premier jet ; `seDecaler` porte le
+ * MÊME défaut sur l'axe des COLONNES, et Ethan a demandé de le corriger le
+ * 10/09 après l'avoir vu mesuré. Une seconde fonction « à côté » aurait été
+ * deux lectures de la même grandeur, dont une seule recevrait la prochaine
+ * correction. L'appelant nomme la case qu'il regarde — `caseDevant, colonne`
+ * pour la verticale, `rangee, caseACote` pour la latérale — et rien d'autre ne
+ * change.
  *
  * ⚠⚠ « UNE STRUCTURE IMMOBILE », PAS « N'IMPORTE QUEL BLOCAGE », ET C'EST UNE
  * MESURE, PAS UN CHOIX D'ÉCRITURE. Ranger l'entité dès que la case devant est
@@ -2331,6 +2340,8 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
  * qu'Ethan a nommé le 10/09. Restreint aux occupantes de `vitesseMilli === 0`
  * il en déplace 339. `MUR T4` garde ce périmètre par sa moitié utile — deux
  * alliées dans la même colonne, et la seconde GARDE sa position intermédiaire.
+ * `MUR T6 bis` garde le même périmètre sur l'axe latéral, avec une alliée
+ * mobile à côté au lieu d'un merlon.
  *
  * ⚠ LE DISCRIMINANT EST LA VITESSE, PAS LE GENRE, ET C'EST GRATUIT.
  * `profilDefense` et `profilBatiment` posent tous deux `vitesseMilli: 0` :
@@ -2339,12 +2350,12 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
  * que le `if (p.vitesseMilli === 0) continue;` de l'étape 7.
  *
  * ⚠ L'AVIATION N'EST JAMAIS RANGÉE : `!p.bloquant` sort en tête. Elle ignore
- * l'occupation partout ailleurs — `peutAvancer` comme `avancer` —, et la
- * ranger devant un mur qu'elle survole serait un défaut neuf.
+ * l'occupation partout ailleurs — `peutAvancer`, `avancer` et `seDecaler` —, et
+ * la ranger devant un mur qu'elle survole serait un défaut neuf.
  */
-function structureImmobileDevant(etat, e, p, occupation, caseDevant) {
+function structureImmobileSur(etat, p, occupation, rangee, colonne) {
   if (!p.bloquant) return false;
-  const indice = occupantDe(occupation, caseDevant, caseColonne(e));
+  const indice = occupantDe(occupation, rangee, colonne);
   if (indice === undefined) return false;
   return profil(etat.entites[indice]).vitesseMilli === 0;
 }
@@ -2587,6 +2598,24 @@ function seDecaler(etat, e, p, occupation, obstacles) {
 
   const rangee = caseDepuisMilli(e.rangeeMilli);
   const colonne = caseColonne(e);
+  // ⚠⚠ LA CASE À CÔTÉ, NOMMÉE UNE FOIS — le pendant exact de `caseDevant` dans
+  // `avancer`. Elle se prend dans le SENS DU DÉPLACEMENT et non à droite : une
+  // défenseuse se décale vers sa cible, qui peut être de l'un ou l'autre bord.
+  // Hors grille, `occupantDe` rend `undefined` et la garde tombe d'elle-même.
+  //
+  // ⚠⚠ ET AUCUN TEST NE PEUT DISTINGUER `+ sens` DE `+ 1` AUJOURD'HUI — MESURÉ,
+  // ET DÉCLARÉ PLUTÔT QUE TU. Le flottement n'existe QUE vers la droite : une case
+  // couvre `[c × 1 000, c × 1 000 + 999]`, donc le bord extrême dans le sens du pas
+  // vaut `+999` à droite mais EXACTEMENT la position rangée à gauche. Une pièce qui
+  // se décale vers la gauche depuis sa case ne rampe donc jamais : son premier pas
+  // franchit déjà la frontière, et il est refusé. Mesuré des deux côtés, soixante
+  // ticks : `6 000 → 6 000`, une seule position distincte, avec `+ sens` comme avec
+  // `+ 1`. On écrit quand même `+ sens`, parce que c'est ce que la ligne VEUT dire
+  // et que la symétrie cessera d'être gratuite le jour où une pièce partira d'un
+  // milieu de case. *Un test qui ne peut tomber sur aucun état d'aujourd'hui se
+  // déclare, il ne se compte pas.*
+  const caseACote = colonne + sens;
+  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, rangee, caseACote);
   // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
   // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
   // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
@@ -2606,6 +2635,30 @@ function seDecaler(etat, e, p, occupation, obstacles) {
 
   const caseDestination = caseDepuisMilli(destinationMilli);
   if (caseDestination === colonne) {
+    // ⚠⚠⚠ ELLE NE FLUE PLUS DANS LE MUR NON PLUS — ETHAN, 10/09, LE JUMEAU
+    // LATÉRAL DU POINT 2. Le premier jet du lot MUR n'a corrigé qu'`avancer`,
+    // donc le camp qui ATTAQUE ; la défense des DEUX camps passe ici depuis le
+    // lot COLONNE, et cette branche-ci portait EXACTEMENT le même défaut, tourné
+    // de quatre-vingt-dix degrés. Elle est le raccourci « je bouge dans ma
+    // propre case » : elle écrivait `colonneMilli` SANS jamais regarder
+    // l'occupation, si bien que la pièce rampait jusqu'au bord extrême de sa
+    // case, puis calait quand le pas suivant aurait franchi la frontière.
+    //
+    // ⚠⚠ MESURÉ AVANT DE TOUCHER UNE LIGNE, défenseuse en colonne 4, merlon en
+    // colonne 5, cible en colonne 8 : elle partait de 4 000 et se figeait à
+    // **4 960** — 96 % dans la case du merlon. Le MÊME 960 millièmes que le
+    // Meute à la verticale, qui montait à 2 960. Trois montages sur trois
+    // (`meute`, `guetteur`, `ratisseur`) rendent le même nombre.
+    //
+    // ⚠ ET LE PÉRIMÈTRE EST CELUI DE LA VERTICALE, PAS UN AUTRE : on ne se range
+    // que devant une STRUCTURE IMMOBILE. Ethan nomme « un mur, tourelles,
+    // structure » — les trois sont à `vitesseMilli === 0`. Devant une alliée
+    // MOBILE, la case se libérera d'elle-même, et ranger lui coûterait à chaque
+    // fois les millièmes qu'elle vient de gagner. `MUR T6 bis` mesure les deux.
+    if (bloqueeParUneStructure) {
+      e.colonneMilli = milliDepuisCase(colonne);
+      return;
+    }
     // Elle se décale À L'INTÉRIEUR de sa case : rien à réserver, rien à libérer.
     e.colonneMilli = destinationMilli;
     return;
@@ -2671,7 +2724,7 @@ function avancer(etat, e, p, occupation, obstacles) {
   // SILENCE. `ARRÊT T7` tombe si on l'ignore, `MUR T5` le double côté « case
   // devant ».
   const caseDevant = rangee + 1;
-  const bloqueeParUneStructure = structureImmobileDevant(etat, e, p, occupation, caseDevant);
+  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, caseDevant, colonne);
 
   // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
   // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`

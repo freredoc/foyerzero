@@ -52,11 +52,17 @@ commande de `CLAUDE.md` §0.5 est à adapter le jour où un lot d'art tournera i
 
 | | avant | après | delta |
 |---|---|---|---|
-| `dist/index.html` | 9 310 752 | **9 310 842** | **+90** |
+| `dist/index.html` | 9 310 752 | **9 310 894** | **+142** |
 | lignes `data:` | 307 | 307 | 0 |
 | URI `data:` | 306 | 306 | 0 |
-| version · build | 0.99.41 · 143 | **0.99.42 · build 144** | — |
+| version · build | 0.99.41 · 143 | **0.99.43 · build 145** | — |
 | `SAVE_VERSION` | 31 | **31** | inchangé |
+
+⚠ **DEUX GESTES, UN SEUL LOT.** Le premier — les deux points d'Ethan du 10/09 —
+pesait **+90 octets** et sortait en `0.99.42 · build 144`. Le second, le jumeau
+LATÉRAL du point 2, a été mesuré et porté ici comme reste ouvert ; Ethan a
+tranché « **1. à corriger maintenant** », et il ajoute **+52 octets**. Les
+chiffres de ce rapport sont ceux du lot ENTIER.
 
 **Ventilation poste par poste**, contre le livrable rebâti dans un
 `git worktree` sur l'arbre pristine de `main` :
@@ -64,18 +70,18 @@ commande de `CLAUDE.md` §0.5 est à adapter le jour où un lot d'art tournera i
 ```
 poste                 avant          apres      delta
 feuille               44556          44556         +0
-javascript           405352         405442        +90
+javascript           405352         405494       +142
 balisage              36255          36255         +0
 images              7631243        7631243         +0
 audio               1193346        1193346         +0
-TOTAL               9310752        9310842        +90
-somme des postes : +90  (accord : True)
+TOTAL               9310752        9310894       +142
+somme des postes : +142  (accord : True)
 ```
 
 La somme des cinq postes tombe **exactement** sur le total. Le lot est du
 JavaScript pur : il ne fait entrer ni image, ni son, ni une règle de feuille.
 
-⚠ **BORNE T10 INCHANGÉE À 9 600 000**, marge **289 158 octets, 3,01 %**. Le lot
+⚠ **BORNE T10 INCHANGÉE À 9 600 000**, marge **289 106 octets, 3,01 %**. Le lot
 ne fait entrer aucune ressource ; une borne ne se relève pas pour du code.
 
 ⚠ **`SAVE_VERSION` RESTE À 31**, vérifié au diff et non supposé : la règle est
@@ -83,7 +89,7 @@ une décision de TICK. `rangeeMilli` naît de `creerCombat` et meurt avec le
 montage — il ne traverse ni `serialiser`, ni une migration. Aucun champ n'entre
 dans l'état, et la sauvegarde ne grandit pas d'un octet.
 
-⚠ **VERSION ET BUILD SONT DES CHAÎNES**, `"0.99.42"` et `"144"` :
+⚠ **VERSION ET BUILD SONT DES CHAÎNES**, `"0.99.43"` et `"145"` :
 `android/app/build.gradle.kts` les lit `as String`, et un nombre y fait tomber le
 build Android à la CONFIGURATION (`CLAUDE.md` §6).
 
@@ -148,6 +154,55 @@ if (caseDestination === rangee) {
 }
 ```
 
+### Ancre C — le jumeau LATÉRAL, second geste
+
+`seDecaler` portait EXACTEMENT le même défaut sur l'axe des COLONNES. Sa branche
+de raccourci — « je bouge à l'intérieur de ma propre case » — écrivait
+`colonneMilli` **sans jamais regarder l'occupation** :
+
+```js
+const caseDestination = caseDepuisMilli(destinationMilli);
+if (caseDestination === colonne) {
+  if (bloqueeParUneStructure) {          // ← le geste
+    e.colonneMilli = milliDepuisCase(colonne);
+    return;
+  }
+  e.colonneMilli = destinationMilli;
+  return;
+}
+```
+
+**Mesuré avant de toucher une ligne** — défenseuse en colonne 4, merlon en
+colonne 5, cible en colonne 8 :
+
+| gêneur | départ | fin | millièmes dans la case |
+|---|---|---|---|
+| `meute` | 4 000 | **4 960** | 960 |
+| `guetteur` | 4 000 | **4 960** | 960 |
+| `ratisseur` | 4 000 | **4 960** | 960 |
+
+**4 960 — 96 % dans la case du merlon, et le MÊME 960 millièmes** que le Meute à
+la verticale, qui montait à 2 960. Après le geste : **4 000 pile** sur les trois.
+
+⚠⚠ **ET LE HELPER SE GÉNÉRALISE PLUTÔT QUE DE SE DOUBLER.**
+`structureImmobileDevant` devient
+`structureImmobileSur(etat, p, occupation, rangee, colonne)` — **une écriture,
+deux lecteurs**, l'appelant nommant la case qu'il regarde : `caseDevant, colonne`
+pour la verticale, `rangee, caseACote` pour la latérale. Une seconde fonction
+« à côté » aurait été deux lectures de la même grandeur, dont une seule aurait
+reçu la prochaine correction. **Aucun test ne nommait l'ancienne**, vérifié avant
+de renommer ; un renvoi périmé dans un commentaire a été corrigé au passage.
+
+⚠ **LE PÉRIMÈTRE EST CELUI DE LA VERTICALE, ET C'EST UNE LECTURE DES MOTS
+D'ETHAN** : on ne se range que devant une STRUCTURE IMMOBILE. Il nomme « un mur,
+tourelles, structure » — les trois sont à `vitesseMilli === 0`. Devant une alliée
+MOBILE, la case se libérera d'elle-même, et ranger coûterait à chaque fois les
+millièmes qu'on vient de gagner. `MUR T6 bis` garde ce périmètre.
+
+⚠ **ET LE RANGEMENT NE CHANGE PAS DE CASE** : il remet la POSITION sur le
+multiple exact, donc l'occupation ne bouge pas et rien de ce que le moteur indexe
+par case n'est touché. `MUR T6` l'asserte.
+
 ### La « case devant » — une écriture, deux lecteurs
 
 Elle est calculée **une fois**, dans `avancer` :
@@ -205,16 +260,30 @@ avant d'être corrigé.*
 
 | table | combats | champs | lecteur |
 |---|---|---|---|
-| `COMBATS_DEPLACES_PAR_MUR` | **110** / 200 | **561** / 1 600 | `JOURNAL T1` |
-| `COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS` | **125** / 200 | **681** | `JOURNAL T1 bis`, **5ᵉ couche** |
+| `COMBATS_DEPLACES_PAR_MUR` | **124** / 200 | **583** / 1 600 | `JOURNAL T1` |
+| `COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS` | **127** / 200 | **686** | `JOURNAL T1 bis`, **5ᵉ couche** |
+
+⚠⚠ **LE SECOND GESTE LES FAIT MONTER DE 110/561 À 124/583 ET DE 125/681 À
+127/686.** Une défenseuse qui se range au lieu de fluer à 96 % dans la case
+voisine n'est plus à la même distance de rien — `distanceCarreeMilli` lit des
+MILLIÈMES —, donc le ciblage et le départage suivent.
+
+⚠⚠ **LES DEUX COUCHES SONT RECALCULÉES, LA CAPTURE NE L'EST PAS.**
+`TEMOINS_COMBAT` n'a pas une ligne de changée ; ce qui est refait est la
+DESCRIPTION de ce que ce lot-ci déplace contre elle — c'est la définition même
+d'une couche. **Contre-épreuve jouée avant d'écrire** : le même générateur, sur
+le `combat.js` d'avant le second geste, rend EXACTEMENT **110 combats / 561
+champs** et **125 / 681**, les nombres que le premier geste portait. Un
+générateur qui ne reproduit pas l'existant n'a pas le droit de le remplacer.
 
 `JOURNAL T1` : **561 surchargés, 1 039 encore adossés** à la capture d'origine —
 c'est cette moitié-là qui dit que le lot ne touche qu'au déplacement.
 
 `JOURNAL T1 bis` : la cinquième couche **n'ajoute ZÉRO champ neuf à l'union**.
-Les 681 étaient **tous** déjà surchargés par l'une des quatre couches d'avant, si
+Les 686 sont **tous** déjà surchargés par l'une des quatre couches d'avant, si
 bien que les comptes ne bougent pas — **1 331 surchargés, 269 gardés**,
-identiques au lot PAQUETS. Le compte est l'UNION des cinq, jamais leur somme.
+identiques au lot PAQUETS, et le second geste ne les déplace pas davantage. Le
+compte est l'UNION des cinq, jamais leur somme.
 
 ### `test/temoins-bases-0.js`
 
@@ -224,6 +293,14 @@ identiques au lot PAQUETS. Le compte est l'UNION des cinq, jamais leur somme.
 | `EMPREINTES_PAR_GRAINE_MUR` | **22 graines sur 25** |
 | `RAPPORTS_PROCHE_MUR` | **10 sur 25** |
 | `RAPPORTS_OUVRAGE_MUR` | **4 sur 25** |
+
+⚠⚠ **ET LE SECOND GESTE N'Y DÉPLACE QUE CINQ VALEURS — LES QUATRE TABLES GARDENT
+LEUR TAILLE AU CHAMP PRÈS.** Trois champs de la phase 11
+(`p11_raidOuvrageApres.recherche`, `.sitesEntames`, `.rapports`, propagés aux
+phases 12 à 14) et la **seule graine 13**, dans `EMPREINTES_PAR_GRAINE_MUR` comme
+dans `RAPPORTS_OUVRAGE_MUR`. `RAPPORTS_PROCHE_MUR` ne bouge pas d'une entrée. Le
+périmètre est étroit parce qu'une défenseuse ne se range que si une STRUCTURE la
+bloque **en se décalant**, et c'est rare.
 
 ⚠ **LES GRAINES 15, 21 ET 24 SONT IDENTIQUES AU BIT**, et c'est ce qui rend le
 repli `??` de `bases.test.js` **nécessaire et non décoratif** — sans lui, ces
@@ -253,12 +330,18 @@ la prémisse du §4 qui est fausse.
 
 ## Tests
 
-**Verdict final : 1569 déclarés · 1568 pass · 0 fail · 1 skipped**, `npm run
+**Verdict final : 1571 déclarés · 1570 pass · 0 fail · 1 skipped**, `npm run
 check` sortie 0. Le skipped est `LIMITE T8`, préexistant.
 
 **Aucune assertion n'a été retirée ni assouplie.** Une garde est RETOURNÉE, une
-change de montage, et vingt-six changent de valeur — **chacune en écrivant le
+change de montage, et les autres changent de valeur — **chacune en écrivant le
 nombre d'avant à côté de celui d'après, et pourquoi il a changé**.
+
+⚠ **LE SECOND GESTE A UN PÉRIMÈTRE ÉTROIT, MESURÉ TEST PAR TEST : DIX TESTS**,
+là où le premier en faisait tomber vingt-huit. Les deux couches de témoins de
+combat, les trois `BASES-0 T1`, et **cinq valeurs** — `assaut T7`, `cible T4`,
+`COL T18 bis`, `MODULES-F T14`, `roster T6`. Toutes les autres sont intactes, y
+compris `MUR T1` à `T5`, qui n'ont **pas eu à bouger d'une assertion**.
 
 ### Méthode de mesure
 
@@ -320,6 +403,17 @@ geste : un titre faux est un commentaire menteur en puissance.
 | `T5` | `roster` | `[122]` → **`[162]`** | Un même site à deux niveaux se résout dans le même temps — le temps a changé, l'égalité tient. |
 | `T6` | `roster` | A 264 → **280** · B 287 → **244**, butin `{24 516, 8 172}` → **`{25 184, 8 394}`** · C 396 → **458** | Les trois raids de référence, mesurés après conversion. |
 
+### Les cinq valeurs que le SECOND geste déplace
+
+| test | fichier | avant → après | pourquoi |
+|---|---|---|---|
+| `T7` figés | `assaut` | A 259 → **670** ; B 667 et C 446 **intacts** | A est un avant-poste, dont la garnison se presse entre des barrières : son assaut met deux fois et demie plus longtemps à passer, la défense mettant plus de temps à s'écarter de son chemin. |
+| `T7` budgétés | `assaut` | B 244 → **287** ; A 280 et C 458 **intacts** | Même cause, sur le seul des trois qui rencontre le cas. |
+| `T4` | `cible` | butin `{15 636, 5 212}` → **`{18 540, 6 180}`**, survivants 3 → **4**, ticks **309 des deux côtés** | Le butin REMONTE de 18,6 % : les défenseuses écartées du trajet laissent l'assaut lourd atteindre davantage de bâtiments, et le multiplicateur de 3,25 de l'avant-poste amplifie la remontée comme il amplifiait la baisse. ⚠ Les deux moitiés du lot jouent **en sens contraire** ici — la première arrêtait l'assaut sous le feu des tourelles, la seconde lui dégage le passage — et la seconde l'emporte. |
+| `COL T18 bis` | `colonne` | `[28/54, 29/54, 30/92]` → **`[25/92, 26/41, 28/54]`**, et le balayage remonte de **3 à 5** sur 600 | La DETTE n'est toujours pas payée : elle se déplace avec la position des défenseuses, donc avec ce que chaque passe laisse debout. **Une dette qui remonte n'est pas une régression du lot** — c'est le même défaut, atteint par d'autres dispositions, et il est toujours dans `pvCourantsDesDefenses` quand l'Étai est tombé. |
+| `MODULES-F T14` | `recherche` | graine 7 au niveau 38 : 327 082 825 → **326 352 543** ; graines 9 et 24 **intactes**, niveaux 20 et 50 **intacts** | Une seule des trois bases a une défenseuse qui bute sur une structure en se décalant. ⚠ La propriété que le test garde — canal armé < canal vide — tient sur les trois, aux niveaux 38 comme 50. |
+| `T6` | `roster` | A survivants 1 → **2** ; B 244 → **287** ticks, butin `{25 184, 8 394}` → **`{25 199, 8 399}`**, survivants 5 → **6** ; **C intact sur les quatre champs** | L'assaut perd moins de monde — les défenseuses ne fluent plus dans son passage — et il met plus longtemps là où la défense tient mieux sa ligne. Les trois causes sont inchangées, et le contraste que ce test garde — B ne rase PLUS la Souche à assaut budgété — aussi. |
+
 ### Les deux qui se réparent tout seuls
 
 | test | verdict |
@@ -358,7 +452,7 @@ reste ouvert : Ethan tranche.**
 
 ---
 
-### MUR T1 à T5 — montage effectif et falsification jouée
+### MUR T1 à T6 bis — montage effectif et falsification jouée
 
 Le montage commun : **une pièce seule face à un Merlon**, plus une Gangue
 lointaine qui donne au combat une raison de durer.
@@ -435,7 +529,46 @@ commencé** au tick même du rangement, par `ecart - ecartAuRangement === 20 × 
 avec `pas = 20 000`, et vérifie que `pvMaxMilli / pas === 100` — les cent ticks
 que le module annonce.
 
-### Falsifications — SIX POSÉES, SIX CHUTES
+#### MUR T6 — le jumeau LATÉRAL
+
+Le miroir de `MUR T3`, axe pour axe : la défenseuse est en **colonne 4**, le
+merlon en **colonne 5**, sa cible en **colonne 8**. Ce qui change d'avec T3, c'est
+que la pièce qui bouge est une DÉFENSEUSE — un attaquant ne change jamais de
+colonne, la sienne est fixe.
+
+Le seuil d'avant se **calcule**, il ne s'approxime pas : la vitesse latérale vaut
+les deux tiers de la vitesse, tronqués — la Meute va à 60, donc **40** de côté —
+et `4 000 + k × 40 < 5 000` donne k = 24, soit **4 960**. Le test l'asserte avant
+de mesurer quoi que ce soit, puis exige `colonneMilli % MILLI_PAR_CASE === 0`
+**et** `=== 4 000`, **et** que la pièce n'ait pas changé de CASE — le rangement
+est un recadrage de position, pas un déplacement.
+
+⚠⚠ **ET SON MONTAGE PORTE UNE GARDE DE NON-DÉGÉNÉRESCENCE, APRÈS MESURE.** Le
+premier jet posait tout en **rangée 5 ET colonne 5** : `structureImmobileSur`
+prend `(rangee, colonne)` dans cet ordre, donc INTERVERTIR ses deux arguments ne
+changeait rien et la falsification était MUETTE. Rangée 3 désormais, et une
+assertion refuse le montage dégénéré.
+
+#### MUR T6 bis — le PÉRIMÈTRE, et un montage repris
+
+Le pendant latéral de `MUR T4` : gênée par une alliée **MOBILE**, la défenseuse
+GARDE sa position intermédiaire — 4 960 — au lieu de se ranger. Sans lui, élargir
+le rangement à tout blocage passerait inaperçu.
+
+⚠⚠ **LE GÊNEUR EST UNE CARAPACE, ET C'EST UNE CORRECTION APRÈS MESURE.** Le
+premier jet prenait un **Guetteur** : mobile, mais il vise l'infanterie comme la
+décaleuse, donc il **se décale lui aussi** vers le même assaillant, libère la
+case, et la décaleuse la franchit — **5 920 mesuré**, et le test ne disait plus
+rien du périmètre. La Carapace vise les VÉHICULES : face à un assaut
+d'infanterie, `cibleDuDecalage` ne lui rend personne et elle ne bouge pas d'un
+millième. *Un gêneur qui s'écarte ne gêne rien.* Le test asserte désormais que le
+gêneur est mobile, que sa prédilection DIFFÈRE de celle de la décaleuse, **et
+qu'il n'a effectivement pas bougé** à la fin de la fenêtre.
+
+### Falsifications — DIX POSÉES, HUIT CHUTES, DEUX MUETTES
+
+**Six au premier geste**, quatre au second. Chacune est jouée sur le
+`src/sim/combat.js` du lot, une par une, l'arbre étant restauré entre chaque.
 
 Chacune est jouée sur le `src/sim/combat.js` du lot, une par une, l'arbre étant
 restauré entre chaque.
@@ -448,6 +581,10 @@ restauré entre chaque.
 | **F4** | `progresse` oublie `!bloqueeParUneStructure` | `MUR T5` |
 | **F5** | le rangement s'élargit à TOUT blocage (`return true`) | `MUR T4` |
 | **F6** | la garde aérienne tombe | `MUR T1` |
+| **G1** | le rangement LATÉRAL est retiré | `MUR T6` |
+| **G2** | `caseACote` pris à droite au lieu du sens du pas | *(inerte — voir ci-dessous)* |
+| **G3** | le rangement latéral s'élargit à TOUT blocage | `MUR T4`, `MUR T6 bis` |
+| **G4** | les arguments `(rangee, colonne)` du helper intervertis | `MUR T6` |
 
 ⚠⚠ **F6 A ÉTÉ MUETTE AU PREMIER RELEVÉ, ET ELLE A FAIT RESSERRER LE TEST.**
 Retirer la garde aérienne laissait `MUR T1` **VERT**. Mesuré, la raison : sans
@@ -466,6 +603,29 @@ resserrement : `MUR T1` **tombe**.
 
 *Une falsification qui ne mord pas se vérifie avant d'être crue* — sixième fois
 du dépôt.
+
+⚠⚠ **G4 A ÉTÉ MUETTE AUSSI, ET C'ÉTAIT LE MONTAGE.** Intervertir `(rangee,
+colonne)` ne changeait rien parce que le montage posait tout en rangée 5 ET
+colonne 5 — les deux arguments valaient le même nombre. Rangée 3, plus une
+assertion qui refuse le montage dégénéré : **G4 mord**.
+
+⚠⚠ **ET G2 EST INERTE, PROUVÉE PLUTÔT QUE SUPPOSÉE.** Remplacer `colonne + sens`
+par `colonne + 1` ne peut rien changer sur aucun état d'aujourd'hui : **le
+flottement n'existe QUE vers la droite**. Une case couvre
+`[c × 1 000, c × 1 000 + 999]`, donc le bord extrême dans le sens du pas vaut
+`+999` à droite mais **exactement la position rangée** à gauche — une pièce qui
+se décale vers la gauche depuis sa case franchit la frontière dès son premier
+pas, et il est refusé. Mesuré des deux côtés sur soixante ticks :
+
+```
+vers la DROITE : 4000 -> 4000 | positions distinctes : 4000
+vers la GAUCHE : 6000 -> 6000 | positions distinctes : 6000
+```
+
+On écrit `+ sens` quand même — c'est ce que la ligne VEUT dire, et la symétrie
+cessera d'être gratuite le jour où une pièce partira d'un milieu de case —, et le
+fait est **inscrit à côté du code**. *Un test qui ne peut tomber sur aucun état
+d'aujourd'hui se déclare, il ne se compte pas.*
 
 ---
 
@@ -498,41 +658,45 @@ du dépôt.
    106) : sa prémisse avait cessé d'être vraie, la seconde branche de
    `montageCourant` n'étant plus exercée.
 
-8. **Deux nombres faux dans ma propre prose, corrigés** : le titre d'`ARRÊT T10`
-   (« QUATRE lecteurs » pour huit) et un commentaire de `journal.test.js`
-   (« 685 champs » pour 681).
+8. **Trois nombres faux dans ma propre prose, corrigés** : le titre d'`ARRÊT T10`
+   (« QUATRE lecteurs » pour huit), un commentaire de `journal.test.js`
+   (« 685 champs » pour 681) et un renvoi périmé à `structureImmobileDevant`
+   après le renommage du helper.
+
+9. **LE LOT PORTE UN GESTE QUE LE BRIEF NE DEMANDAIT PAS**, et c'est un
+   arbitrage d'Ethan rendu en cours d'exécution. Le jumeau latéral était un
+   RESTE OUVERT de ce rapport — le brief disait « le mesurer et le dire, pas le
+   corriger » ; mis devant la mesure, Ethan a tranché « **1. à corriger
+   maintenant** ». Le lot le porte donc, sur la même branche : `CLAUDE.md` §0
+   veut qu'il tourne SEUL, et ouvrir une seconde PR sur le même moteur aurait
+   été deux lots en vol.
 
 ---
 
 ## Restes ouverts
 
-1. ⚠⚠ **LE JUMEAU LATÉRAL DU DÉFAUT N'EST PAS TRAITÉ.** Le rangement vaut pour
-   `avancer`, donc pour le camp qui **ATTAQUE**. `seDecaler` — par où la défense
-   des **deux** camps passe depuis le lot COLONNE — porte le même défaut sur
-   l'axe des **COLONNES** : une défenseuse bloquée latéralement peut encore fluer
-   dans la case voisine. Le brief demandait de le **mesurer et de le dire**, pas
-   de le corriger. **Ethan tranche.**
-
-2. ⚠⚠ **LE DÉFAUT DE PERMUTATION DE `volDeVie`** — 60 sur 120 avec le lot, 0 sur
+1. ⚠⚠ **LE DÉFAUT DE PERMUTATION DE `volDeVie`** — 60 sur 120 avec le lot, 0 sur
    120 sur `main`, 9 966 milli-PV. Antérieur au lot ; c'est l'ordre de service de
    l'overkill par indice de tireur croissant. Le montage de `MODULES-F T16` est
    réparé, **le défaut ne l'est pas**.
 
-3. **`MODULES-F T14`, graine 1, niveau 38** : le signe du canal s'inverse. La
+2. **`MODULES-F T14`, graine 1, niveau 38** : le signe du canal s'inverse. La
    graine sort de la liste, réancrée par balayage — le fait est relevé, non
    corrigé.
 
-4. **`cible.test.js T5` — `mixte/camp/7`** reste le seul raid qui expire, à
+3. **`cible.test.js T5` — `mixte/camp/7`** reste le seul raid qui expire, à
    **2,9 fois** le plafond. Deux des trois d'avant se concluent maintenant ; ce
    troisième est un autre régime, comme le 4 645 du lot CARTE et le 5 478 du lot
    COLONNE. **À remonter.**
 
-5. **Le rendu n'a été vu ni sur appareil ni dans un navigateur, et se déclare non
+4. **Le rendu n'a été vu ni sur appareil ni dans un navigateur, et se déclare non
    exécuté.** Ce que le lot change est **précisément ce qu'Ethan a VU** — une
    unité dessinée à 96 % dans la case du mur — et rien de ce qui précède n'a été
    regardé à l'écran : tout est mesuré sur `rangeeMilli`.
 
-6. **Le calibrage revient à Ethan, et rien n'a été compensé.** Les raids
-   s'allongent — A 264 → 280, C 396 → 458 — et B raccourcit de 287 à 244 en
-   rapportant **plus** de butin. Trois raids, trois sens : c'est un changement de
-   régime de combat, pas un ajustement.
+5. **Le calibrage revient à Ethan, et rien n'a été compensé.** Sur les trois
+   raids de référence, lot ENTIER : **A 264 → 280**, **B 287 → 287** (mêmes
+   ticks, mais 683 de butin et un survivant de plus), **C 396 → 458**. Le premier
+   geste et le second tirent **en sens contraire** — l'un arrête l'assaut devant
+   les structures, l'autre lui dégage le passage —, et le solde n'est pas le même
+   sur les trois. C'est un changement de régime de combat, pas un ajustement.

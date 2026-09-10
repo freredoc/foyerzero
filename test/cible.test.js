@@ -385,10 +385,20 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // multiplicateur de 3,25 de l'avant-poste amplifie la baisse comme toujours.
   // **Aucun barème n'a été touché**, et ce que ce test tient — le raid ne se
   // termine pas faute de mieux — ne bouge pas : la cause reste `attaquants`.
-  assert.deepEqual(r.butin, { quartz: 15_636, scorie: 5_212 });
-  // ⚠ Et un survivant de moins — quatre → trois. Une pièce arrêtée devant une
-  // tourelle est une pièce sous son feu : l'arrêt coûte ce qu'il rapporte.
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
+  // ⚠⚠ ET LE SECOND GESTE DU LOT MUR LE REMONTE À **18 540 ET 6 180**, POUR LE
+  // MÊME NOMBRE DE TICKS — 309 des deux côtés. C'est le rangement LATÉRAL de
+  // `seDecaler`, le jumeau du point 2 sur l'axe des colonnes : une défenseuse
+  // qui se range sur sa case au lieu de fluer à 96 % dans celle du merlon cesse
+  // d'être là où l'assaut la croyait. La défense de cet avant-poste s'écarte
+  // donc autrement, l'assaut lourd atteint davantage de bâtiments, et le
+  // multiplicateur de 3,25 amplifie la remontée comme il amplifiait la baisse.
+  // **Aucun barème n'a été touché**, et la cause reste `attaquants`.
+  assert.deepEqual(r.butin, { quartz: 18_540, scorie: 6_180 });
+  // ⚠ ET LE SURVIVANT REVIENT — trois au premier geste, **quatre** au second.
+  // La première moitié du lot faisait s'arrêter les anti-structure sous le feu
+  // des tourelles ; la seconde écarte les défenseuses de leur trajet. Les deux
+  // effets jouent en sens contraire, et le second l'emporte ici.
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
 });
 
 // ---------------------------------------------------------------------------

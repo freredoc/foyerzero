@@ -27,7 +27,7 @@ import assert from 'node:assert/strict';
 
 import { creerCombat, tick } from '../src/sim/combat.js';
 import { MILLI_PAR_CASE } from '../src/sim/grille.js';
-import { DEFENSES, UNITES } from '../src/data/combat.js';
+import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
 
 /** Un montage nu — la gangue lointaine donne au combat une raison de durer. */
 const montage = (o) => ({
@@ -363,4 +363,122 @@ test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il se range',
   assert.equal(mur(avec).pvMaxMilli / pas, 100);
   assert.equal(unite(avec).rangeeMilli, 5 * MILLI_PAR_CASE, 'le porteur a bougé pendant le forçage');
   assert.equal(unite(avec).ticksInutiles, 0, 'le compteur de repli est monté alors qu\'il force');
+});
+
+// ---------------------------------------------------------------------------
+// MUR T6 — le JUMEAU LATÉRAL : une défenseuse bloquée se range aussi
+// ---------------------------------------------------------------------------
+
+// ⚠⚠ SECOND GESTE DU LOT, ET IL VIENT D'ETHAN. Le premier jet n'a corrigé
+// qu'`avancer`, donc le camp qui ATTAQUE ; la défense des DEUX camps passe par
+// `seDecaler` depuis le lot COLONNE, et cette fonction-là portait EXACTEMENT le
+// même défaut, tourné de quatre-vingt-dix degrés. Mesuré et porté au rapport,
+// Ethan a tranché : « à corriger maintenant ».
+//
+// ⚠ LE MONTAGE EST LE MIROIR DE `MUR T3`, AXE POUR AXE : la défenseuse est en
+// colonne 4, le merlon en colonne 5, et sa cible en colonne 8 — donc elle se
+// décale vers la droite et le mur lui barre la route. Ce qui change d'avec T3,
+// c'est que la pièce qui bouge est une DÉFENSEUSE : un attaquant ne change
+// jamais de colonne, sa colonne est fixe.
+
+/** Une défenseuse mobile qui se décale vers un assaillant, et ce qui la gêne. */
+function faceAuBlocageLateral(idGene) {
+  return creerCombat(montage({
+    defenseurs: [
+      { id: idGene, rangee: 3, colonne: 5 },
+      { id: 'meute', rangee: 3, colonne: 4 },
+    ],
+    vagues: [[{ id: 'meute', colonne: 8 }]],
+  }));
+}
+
+/** La défenseuse du montage — celle de la colonne 4, jamais le gêneur. */
+const decaleuse = (etat) => etat.entites.find(
+  (e) => e.camp !== 'attaque' && e.id === 'meute' && caseColonneDe(e) === 4,
+);
+const caseColonneDe = (e) => Math.floor(e.colonneMilli / MILLI_PAR_CASE);
+
+test('MUR T6 — bloquée LATÉRALEMENT par un mur, la défenseuse reste sur sa case au millième', () => {
+  const etat = faceAuBlocageLateral('merlon');
+  const d = decaleuse(etat);
+  assert.ok(d !== undefined, 'montage : la défenseuse est introuvable');
+  assert.equal(d.colonneMilli, 4 * MILLI_PAR_CASE, 'montage : elle ne part pas de sa case');
+  assert.equal(DEFENSES.merlon.vitesse ?? 0, 0, 'montage : le Merlon s\'est mis à bouger');
+  // ⚠⚠ LA RANGÉE ET LA COLONNE DOIVENT DIFFÉRER, ET CE N'EST PAS UNE COQUETTERIE
+  // DE MONTAGE. `structureImmobileSur` prend `(rangee, colonne)` dans cet ordre ;
+  // le premier jet posait tout en rangée 5 ET colonne 5, si bien qu'INTERVERTIR
+  // les deux arguments ne changeait rien et que la falsification était MUETTE.
+  // Mesuré, puis corrigé : rangée 3, colonne 4.
+  assert.notEqual(caseColonneDe(d), Math.floor(d.rangeeMilli / MILLI_PAR_CASE),
+    'montage dégénéré : rangée et colonne égales, une inversion d\'arguments passerait');
+
+  // ⚠ LE SEUIL SE CALCULE, IL NE S'APPROXIME PAS — même règle qu'en `MUR T3`.
+  // La vitesse LATÉRALE vaut les deux tiers de la vitesse, tronqués : la Meute
+  // va à 60, donc 40 de côté. Sans le correctif, elle fluait jusqu'au plus grand
+  // `k` qui la laisse dans sa case — `4 000 + k × 40 < 5 000`, donc k = 24 et
+  // **4 960**, soit 96 % de la case du merlon. C'est le MÊME 960 millièmes que
+  // le Meute à la verticale, et c'est ce qui dit que les deux défauts n'en font
+  // qu'un.
+  const { numerateur, denominateur } = GRILLE.lateral;
+  const pas = Math.floor((UNITES.meute.vitesse * numerateur) / denominateur);
+  assert.equal(pas, 40, 'la vitesse latérale de la Meute a changé');
+  const k = Math.floor((MILLI_PAR_CASE - 1) / pas);
+  const avantLeLot = 4 * MILLI_PAR_CASE + k * pas;
+  assert.equal(avantLeLot, 4960, 'le calcul du seuil d\'avant le second geste a changé');
+
+  jouer(etat, 60);
+  assert.equal(d.colonneMilli % MILLI_PAR_CASE, 0, 'elle flue encore dans la case du mur');
+  assert.equal(d.colonneMilli, 4 * MILLI_PAR_CASE);
+  assert.notEqual(d.colonneMilli, avantLeLot);
+  assert.equal(parId(etat, 'merlon').vivant, true, 'montage : le mur doit tenir la fenêtre');
+  // ⚠ ET ELLE NE CHANGE PAS DE CASE : le rangement remet la POSITION sur le
+  // multiple exact, il ne déplace pas la pièce d'une case. L'occupation ne bouge
+  // donc pas, et rien de ce que le moteur indexe par case n'est touché.
+  assert.equal(caseColonneDe(d), 4, 'elle a changé de case : le rangement doit être un recadrage');
+});
+
+// ---------------------------------------------------------------------------
+// MUR T6 bis — le PÉRIMÈTRE : devant une alliée MOBILE, elle garde sa position
+// ---------------------------------------------------------------------------
+
+test('MUR T6 bis — gênée par une alliée MOBILE, la défenseuse GARDE sa position intermédiaire', () => {
+  // ⚠⚠ C'EST LE PENDANT LATÉRAL DE `MUR T4`, ET IL GARDE LE PÉRIMÈTRE. On ne se
+  // range que devant une STRUCTURE IMMOBILE : Ethan nomme « un mur, tourelles,
+  // structure », et les trois sont à `vitesseMilli === 0`. Devant une alliée
+  // MOBILE, la case se libérera d'elle-même, et ranger lui coûterait à chaque
+  // fois les millièmes qu'elle vient de gagner — c'est très exactement le prix
+  // que `combat.test.js` mesure à la verticale, 960 millièmes rendus.
+  //
+  // ⚠ SANS CE TEST, ÉLARGIR LE RANGEMENT À TOUT BLOCAGE PASSERAIT INAPERÇU.
+  // `MUR T6` seul serait vert, et tout embouteillage de colonne se mettrait à
+  // claquer sur les deux cents témoins.
+  // ⚠⚠ LE GÊNEUR EST UNE CARAPACE, ET LE MONTAGE A DÛ ÊTRE REPRIS APRÈS MESURE.
+  // Le premier jet prenait un Guetteur : MOBILE, mais il vise l'infanterie comme
+  // la décaleuse, donc il se décale LUI AUSSI vers le même assaillant, libère la
+  // case, et la décaleuse la franchit — 5 920 mesuré, et le test ne disait plus
+  // rien du périmètre. La Carapace vise les VÉHICULES : face à un assaut
+  // d'infanterie, `cibleDuDecalage` ne lui rend personne et elle ne bouge pas
+  // d'un millième. **Un gêneur qui s'écarte ne gêne rien.**
+  const etat = faceAuBlocageLateral('carapace');
+  const d = decaleuse(etat);
+  assert.ok(d !== undefined, 'montage : la défenseuse est introuvable');
+  const geneur = etat.entites.find((e) => e.camp !== 'attaque' && e.id === 'carapace');
+  assert.ok(geneur !== undefined, 'montage : le gêneur est introuvable');
+  assert.ok(UNITES.carapace.vitesse > 0, 'montage : le gêneur doit être MOBILE');
+  assert.notEqual(predilectionDe('carapace'), predilectionDe('meute'),
+    'montage : le gêneur vise la même chose que la décaleuse, il va s\'écarter');
+
+  const { numerateur, denominateur } = GRILLE.lateral;
+  const pas = Math.floor((UNITES.meute.vitesse * numerateur) / denominateur);
+  const k = Math.floor((MILLI_PAR_CASE - 1) / pas);
+  const attendu = 4 * MILLI_PAR_CASE + k * pas;
+
+  jouer(etat, 60);
+  // ⚠ LE GÊNEUR N'A PAS BOUGÉ — sans quoi la mesure porterait sur autre chose.
+  assert.equal(geneur.colonneMilli, 5 * MILLI_PAR_CASE,
+    'montage : le gêneur s\'est décalé, il ne gêne plus');
+  assert.equal(d.colonneMilli, attendu,
+    'la défenseuse s\'est rangée devant une alliée mobile : le rangement déborde de son périmètre');
+  assert.notEqual(d.colonneMilli % MILLI_PAR_CASE, 0);
+  assert.equal(caseColonneDe(d), 4, 'elle a franchi la case de son alliée');
 });
