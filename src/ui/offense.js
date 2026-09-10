@@ -44,6 +44,12 @@ import { acquisesDe } from '../sim/recherche.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
 import {
   plafondDeLaReserve, direLaDuree, CHASSIS_REPARABLES,
+  // ⚠⚠ LE MOTEUR EXISTE DEPUIS LE LOT RÉSERVE, ET IL TRAVAILLE DÉJÀ SUR
+  // `laBase.armee` — c'est-à-dire sur l'ARMÉE, exactement. Ce que le point 6
+  // d'Ethan branche ici, c'est un bouton ; pas une ligne de `src/sim/` ne bouge,
+  // et `src/ui/raid.js` appelle ces quatre fonctions depuis le 01/09.
+  problemesDeLaReparationDUnePiece, reparerUnePiece,
+  problemesDeToutReparer, toutReparer,
 } from '../sim/reparation.js';
 import { FAMILLE_DE_CHASSIS } from '../data/base.js';
 // ⚠⚠ LE MÊME POINT D'ENTRÉE QUE LA GRILLE DU CHANTIER ET QUE LE CHAMP DE
@@ -62,7 +68,7 @@ import {
   formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
   messageDePose, messageDeConfirmation,
   DUREE_TOAST_MS, poserCouches,
-  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau, vueDuJournal,
+  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
 } from './chantier.js';
 import { baseCourante } from '../sim/base-courante.js';
 
@@ -272,24 +278,6 @@ export function messageDeDestinationDUnite(nom) {
 }
 
 /**
- * Ce que Réparer répond sur l'écran de composition.
- *
- * ⚠⚠ IL REMPLACE `messagePasDeReparation`, QUI EST PARTIE AU LOT RÉPARER-ÉCRAN
- * — ET QUI MENTAIT ICI AUSSI. Elle rendait « aucune unité n'est endommagée : les
- * dégâts n'existent pas encore » ; les dégâts d'une unité existent depuis le lot
- * RAID-0, `reporterLesDegats` les écrit après chaque raid, et
- * `reparerUnePiece` les efface depuis le lot RÉSERVE. La phrase décrivait un
- * manque comblé deux fois.
- *
- * ⚠ ET CE N'EST PAS UN REFUS DE MOTEUR : `actionSansMoteur` dirait « Réparer
- * n'existe pas encore pour l'armée », ce qui est FAUX. Le moteur existe, il est
- * simplement branché sur l'AUTRE écran — arbitrage du 01/09, l'armée se répare
- * là où elle part au combat. Ce message dit où aller, il ne refuse rien.
- */
-export const REPARATION_AILLEURS = 'Les unités se réparent sur l\'écran de raid,'
-  + ' avec « Réparer » ou « Tout réparer ».';
-
-/**
  * Ce que la ligne de réserve de réparation de l'armée annonce.
  *
  * ⚠⚠ ETHAN, 07/09, POINT 10 : « Compteur de réparation offensive nulle part, ni
@@ -340,7 +328,26 @@ export function ligneDeLaReserveDArmee(etat) {
 }
 
 export const ACTIONS_ARMEE = {
-  reparer: { bouton: 'offense-reparer', libelle: 'Réparer', agir: null },
+  // ⚠⚠ « RÉPARER » A GAGNÉ SON MOTEUR LE 10/09, ET LE `agir: null` QUI TENAIT
+  // ICI EST PARTI AVEC — même mouvement qu'« Améliorer » le 03/09. Il rendait
+  // `REPARATION_AILLEURS`, « les unités se réparent sur l'écran de raid » : c'était
+  // VRAI, et ça a cessé de l'être à la ligne d'en dessous. Ethan, point 6 :
+  // « Rajouter un bouton tout réparer dans l'onglet armée » — livrer « Tout
+  // réparer » à côté d'un « Réparer » qui renvoie ailleurs aurait appris deux
+  // règles contradictoires sur le même écran, dans la même barre.
+  //
+  // ⚠ ÉCART AU BRIEF D'ETHAN, DÉCLARÉ : il n'a demandé que le bouton global.
+  // Le geste unitaire suit parce que l'inverse serait incohérent, pas parce
+  // qu'il l'a demandé — et il se défait en remettant `agir: null`.
+  //
+  // ⚠ ET IL N'A PAS DE CHAMP `cible` : réparer désigne la pièce qu'on touche, en
+  // UN toucher. Seul `deplacer` en demande deux, et c'est son champ qui le dit.
+  reparer: {
+    bouton: 'offense-reparer',
+    libelle: 'Réparer',
+    problemes: (etat, index) => problemesDeLaReparationDUnePiece(etat, index),
+    agir: (etat, index) => reparerUnePiece(etat, index),
+  },
   // ⚠⚠ AMÉLIORER A UN MOTEUR DEPUIS LE 03/09, ET LE `null` QUI TENAIT ICI EST
   // PARTI AVEC. Il disait vrai : le COÛT existait depuis le 28/08 et rien dans
   // `sim/` ne montait une pièce d'un niveau, si bien que `poserEffectif`
@@ -744,9 +751,18 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       // deux messages disaient l'un et l'autre en dur, ce qui allait tant que
       // la barre contextuelle n'existait qu'au Chantier. Vu en essayant cet
       // écran-ci, pas en le relisant.
-      toast(nom === 'reparer'
-        ? REPARATION_AILLEURS
-        : actionSansMoteur(action.libelle, 'l\'armée'));
+      //
+      // ⚠⚠ ET LE CAS PARTICULIER DE « RÉPARER » EST PARTI LE 10/09 AVEC SON
+      // `agir: null` — point 6. Il rendait `REPARATION_AILLEURS` ; la constante
+      // n'avait plus qu'un lecteur, celui-ci, et ce qu'elle disait est devenu
+      // faux le jour où le bouton a agi. Une constante sans lecteur est la
+      // prochaine à mentir : elle est retirée, pas gardée « au cas où ».
+      //
+      // ⚠ LA BRANCHE, ELLE, RESTE — ET ELLE EST INATTEIGNABLE PAR LA TABLE
+      // D'AUJOURD'HUI, les quatre actions ayant toutes un moteur. C'est le
+      // précédent d'`effetNonCable` au lot FORMATION-ET-GARNISON : « la ligne de
+      // code reste, elle parlera du prochain module écrit avant son moteur ».
+      toast(actionSansMoteur(action.libelle, 'l\'armée'));
       peindre(etatCourant);
       return;
     }
@@ -1099,26 +1115,9 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     fermerPanneau();
   });
 
-  // ⚠⚠ LE JOURNAL DES RAIDS — lot JOURNAL, 07/09, point 14. Six lignes, et pas
-  // une de plus : la VUE est `vueDuJournal` de `ui/chantier.js`, écrite une
-  // seule fois, et le rendu est `peindreVueDuPanneau`, partagé depuis le lot
-  // ERGONOMIE. Ce que cet écran-ci ajoute, c'est un bouton et un panneau.
-  const panneauJournal = $('offense-journal-panneau');
-  const elementsJournal = {
-    titre: $('offense-journal-titre'), corps: $('offense-journal-corps'), bouton: null,
-  };
-  function fermerLeJournal() { if (panneauJournal !== null) panneauJournal.hidden = true; }
-  fermerLeJournal();
-  $('offense-journal').addEventListener('click', () => {
-    if (etatCourant === null || panneauJournal === null) return;
-    fermerPanneau();
-    peindreVueDuPanneau(
-      doc, elementsJournal,
-      vueDuJournal(etatCourant.rapports, etatCourant.horloge.nbTicks),
-    );
-    panneauJournal.hidden = false;
-  });
-  $('offense-journal-fermer').addEventListener('click', fermerLeJournal);
+  // ⚠⚠ LE JOURNAL DES RAIDS A QUITTÉ CET ÉCRAN LE 10/09 — point 4 d'Ethan. Il y
+  // avait ici six lignes jumelles de celles du Chantier ; il n'y en a plus aucune,
+  // et le bouton vit dans `#tete-onglets`. Voir `ui/session.js`.
   // ⚠ LE BOUTON DU PANNEAU AGIT DIRECTEMENT, SANS ARMER — même règle qu'au
   // Chantier : « armer puis toucher » existe parce que les boutons de la barre
   // n'ont pas de cible ; celui-ci en a une.
@@ -1193,6 +1192,46 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
    */
   function rafraichir(etat) {
     if (etatCourant === null) peindre(etat);
+  }
+
+  // ⚠⚠ « TOUT RÉPARER » EST UN BOUTON DIRECT, PAS UNE CINQUIÈME ENTRÉE
+  // D'`ACTIONS_ARMEE` — Ethan, 10/09, point 6, et c'est le contrat exact du
+  // Chantier et de l'écran de raid. `ACTIONS_ARMEE` est le registre du modèle
+  // « armer puis toucher » : chacune de ses lignes attend un doigt sur une pièce.
+  // Un geste GLOBAL n'a rien à y désigner, et l'y mettre lui donnerait un bouton
+  // de bandeau contextuel, un mode et une ligne d'invite pour rien.
+  const toutReparerBouton = $('offense-tout-reparer');
+  if (toutReparerBouton !== null) {
+    toutReparerBouton.addEventListener('click', () => {
+      if (etatCourant === null) return;
+      // ⚠⚠ ON PASSE PAR `problemesDeToutReparer` POUR SON SEUL CODE
+      // `rien-a-reparer`, JAMAIS POUR SON VERDICT DE PRIX. Elle juge le devis
+      // TOTAL : elle refuserait les treize unités payables parce que la
+      // quatorzième est hors de portée, alors que `toutReparer` est écrite pour
+      // l'inverse — elle fait ce qu'elle peut et COMPTE le reste. C'est la
+      // lecture que `ui/chantier.js` et `ui/raid.js` appliquent déjà, mot pour
+      // mot ; en prendre une autre ici rendrait cet écran plus sévère que les
+      // deux autres pour la même mécanique.
+      const rien = problemesDeToutReparer(etatCourant)
+        .find((p) => p.code === 'rien-a-reparer');
+      if (rien !== undefined) { toast(rien.message); return; }
+
+      const bilan = toutReparer(etatCourant);
+      peindre(etatCourant);
+      if (apresPose) apresPose();
+      // ⚠ ET LE BILAN SE DIT, MÊME À ZÉRO RÉPARÉ. Sans lui, une réserve à sec
+      // rendrait un écran qui ne bouge pas : le joueur croirait le bouton mort.
+      // Les deux autres écrans disent déjà la même chose, dans la même forme.
+      if (bilan.reparees === 0) {
+        toast(`Aucune réparation payable : ${bilan.impayables} unité(s)`
+          + ' hors de portée de la réserve ou de la scorie.');
+      } else if (bilan.impayables === 0) {
+        toast(`${bilan.reparees} unité(s) réparée(s).`);
+      } else {
+        toast(`${bilan.reparees} réparée(s), ${bilan.impayables} hors de portée`
+          + ' de la réserve ou de la scorie.');
+      }
+    });
   }
 
   // ⚠ LE PANNEAU CONTEXTUEL PART VIDE, EXPLICITEMENT. Comme celui du Chantier :

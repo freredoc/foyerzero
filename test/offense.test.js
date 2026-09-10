@@ -239,10 +239,31 @@ test('offense — la barre contextuelle existe, et ses quatre boutons répondent
   }
   assert.ok(!/bâtiment/i.test(messageDeDestinationDUnite('Fusiliers')));
 
-  // ⚠ RÉPARER N'A PAS DE MOTEUR, ET LA TABLE LE DIT PAR `null`. Le bouton
-  // s'arme quand même et répond : « un indice n'est pas une interdiction »
-  // (CLAUDE.md §4).
-  assert.equal(ACTIONS_ARMEE.reparer.agir, null);
+  // ⚠⚠ RÉPARER A GAGNÉ SON MOTEUR LE 10/09, ET CETTE ASSERTION A CHANGÉ DE CIBLE
+  // SANS S'ASSOUPLIR — exactement comme celle d'« Améliorer » le 03/09, deux
+  // lignes plus bas. Elle exigeait `agir === null`, ce qui était juste tant que
+  // le geste renvoyait à l'écran de raid ; le point 6 d'Ethan met « Tout
+  // réparer » dans cette barre, et un « Réparer » qui renverrait ailleurs à côté
+  // d'un « Tout réparer » qui agit apprendrait deux règles contradictoires sur
+  // le même écran. Elle exige donc la PAIRE `problemes` + `agir`, la forme
+  // qu'`appliquerAction` sait consommer : un `agir` sans `problemes` la fait
+  // tomber, et sans `problemes` l'écran lèverait au premier toucher.
+  assert.equal(typeof ACTIONS_ARMEE.reparer.problemes, 'function');
+  assert.equal(typeof ACTIONS_ARMEE.reparer.agir, 'function');
+  // ⚠ ET IL NE DEMANDE PAS DE SECOND TOUCHER : réparer désigne la pièce qu'on
+  // touche. Poser `cible: true` la mettrait « en main » et attendrait une
+  // destination que la réparation n'a pas.
+  assert.notEqual(ACTIONS_ARMEE.reparer.cible, true);
+  // ⚠⚠ ET PLUS AUCUNE ACTION DE CETTE TABLE N'EST SANS MOTEUR — c'était la
+  // dernière. Conséquence à dire, et elle est mesurée ici : la branche
+  // `action.agir === null` d'`appliquerAction` devient INATTEIGNABLE par la
+  // table. La ligne de code reste — c'est le précédent d'`effetNonCable`, « elle
+  // parlera du prochain geste écrit avant son moteur » — mais plus rien ne la
+  // traverse aujourd'hui, et cette assertion-ci tombera si on rouvre un `null`
+  // sans le vouloir.
+  for (const [nom, action] of Object.entries(ACTIONS_ARMEE)) {
+    assert.equal(typeof action.agir, 'function', `« ${nom} » n'a plus de moteur`);
+  }
 
   // ⚠⚠ AMÉLIORER EN A UN DEPUIS LE 03/09, ET CETTE ASSERTION A CHANGÉ DE CIBLE
   // SANS S'ASSOUPLIR. Elle exigeait `agir === null`, ce qui était juste tant
@@ -1046,9 +1067,14 @@ function fauxDocumentOffense() {
     'offense-deplacer', 'offense-retirer', 'offense-panneau',
     'offense-panneau-titre', 'offense-panneau-corps', 'offense-panneau-fermer',
     'offense-panneau-ameliorer', 'offense-reserve',
-    // Le journal des raids — lot JOURNAL, 07/09, point 14.
-    'offense-journal', 'offense-journal-panneau', 'offense-journal-titre',
-    'offense-journal-corps', 'offense-journal-fermer',
+    // ⚠ « TOUT RÉPARER » — Ethan, 10/09, point 6. La confrontation ci-dessous le
+    // cherche AUSSI dans le balisage : la liste et la page se tiennent l'une
+    // l'autre, dans les deux sens.
+    'offense-tout-reparer',
+    // ⚠ LE JOURNAL DES RAIDS N'EST PLUS DE CET ÉCRAN — Ethan, 10/09, point 4.
+    // Ses cinq identifiants ont quitté cette liste avec le balisage : c'est
+    // exactement ce que la confrontation ci-dessous existe pour dire, et elle
+    // l'a dit — les cinq y sont restés le temps d'un `npm test`.
   ];
   // ⚠ LA LISTE SE CONFRONTE AU BALISAGE, elle ne se croit pas sur parole : le
   // faux garde donc aussi que l'écran ne demande rien que la page n'ait pas.
@@ -1583,4 +1609,160 @@ test('PAL T10 — l\'OFFENSE refuse toujours faute de Caserne, sur la base qui o
       `${id} : l'assaut l'accepte sans son bâtiment`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// EC T4 — « Tout réparer » entre dans l'armée, et « Réparer » gagne son moteur
+// ---------------------------------------------------------------------------
+
+test('EC T4 — l\'armée répare : quatre actions, quatre moteurs, un bouton global', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 6 : « Rajouter un bouton tout réparer dans l'onglet
+  // armée ». Le Chantier en a un depuis le lot RÉPARER-ÉCRAN ; l'armée n'avait ni
+  // le bouton global ni même le geste UNITAIRE — `ACTIONS_ARMEE.reparer` portait
+  // `agir: null` et le bouton répondait par une phrase.
+  //
+  // ⚠ LA PREMIÈRE ASSERTION NOMME LA CLÉ, et c'est ce que le brief demande :
+  // « laisser `agir: null` fait tomber la première assertion ». Un test qui
+  // parcourrait la table sans la nommer dirait « une action est sans moteur »
+  // sans dire laquelle.
+  assert.equal(typeof ACTIONS_ARMEE.reparer.agir, 'function',
+    '`ACTIONS_ARMEE.reparer.agir` est encore nul : le bouton Réparer répond par une phrase');
+  assert.equal(typeof ACTIONS_ARMEE.reparer.problemes, 'function',
+    '`ACTIONS_ARMEE.reparer.problemes` est nul : le refus ne serait pas chiffré');
+
+  // ⚠⚠ ET PLUS AUCUNE DES QUATRE N'EST SANS MOTEUR. C'est la moitié qui compte :
+  // « Réparer » était la dernière, donc la branche `agir === null` de l'écran est
+  // devenue INATTEIGNABLE par la table. Elle reste écrite — c'est le précédent
+  // d'`effetNonCable` au lot FORMATION-ET-GARNISON, la ligne qui parlera de la
+  // prochaine action écrite avant son moteur — et ce test dit qu'aujourd'hui elle
+  // ne parle de personne.
+  for (const [nom, action] of Object.entries(ACTIONS_ARMEE)) {
+    assert.equal(typeof action.agir, 'function', `« ${nom} » n'a pas de moteur`);
+    assert.equal(typeof action.problemes, 'function', `« ${nom} » ne sait pas refuser`);
+    // La garde existe déjà, on la relit : une action sans message de mode
+    // laisserait la ligne d'avis muette au moment où le joueur vient d'armer.
+    assert.equal(typeof MESSAGES_MODE_ARMEE[nom], 'string',
+      `« ${nom} » n'a pas de message de mode`);
+  }
+  assert.deepEqual(Object.keys(ACTIONS_ARMEE).sort(), Object.keys(MESSAGES_MODE_ARMEE).sort(),
+    'la table des actions et celle des messages ont divergé');
+
+  // ⚠⚠ ET LE BOUTON GLOBAL EST PERMANENT, PAS SOUS MODE. C'est la différence
+  // avec `#raid-tout-reparer`, replié tant que « Réparer » n'est pas armé :
+  // l'écran d'armée n'a pas de mode « réparation » à ouvrir, et un bouton qu'il
+  // faut armer pour voir serait un bouton qu'on ne trouve pas. Il n'a donc ni
+  // `hidden` ni `repliee` dans le balisage.
+  const html = feuilleDecommentee();
+  assert.match(html, /id="offense-tout-reparer"/, 'le bouton « Tout réparer » manque à l\'armée');
+  assert.doesNotMatch(html, /id="offense-tout-reparer"[^>]*\shidden/,
+    'le bouton « Tout réparer » de l\'armée naît caché');
+  assert.doesNotMatch(html, /id="offense-tout-reparer"[^>]*class="[^"]*repliee/,
+    'le bouton « Tout réparer » de l\'armée naît replié');
+
+  // ⚠⚠ ET `REPARATION_AILLEURS` A DISPARU AVEC SON DERNIER LECTEUR. Elle disait
+  // « les unités se réparent sur l'écran de raid » — vrai jusqu'à ce lot, faux
+  // depuis. Une phrase qui décrit un état révolu est le mensonge que `CLAUDE.md`
+  // §6 raconte trois fois ; la garder « au cas où » l'aurait fait relire comme
+  // une règle.
+  //
+  // ⚠⚠ ET ELLE LIT LA SOURCE DÉCOMMENTÉE — NEUVIÈME FOIS DU DÉPÔT. Le premier
+  // jet de cette ligne est tombé sur DEUX commentaires d'`ui/offense.js` qui
+  // NOMMENT la constante pour dire qu'elle est partie. Une garde qui lit ce
+  // qu'on a écrit à son sujet ne garde rien ; c'est le TEXTE qui a raison ici,
+  // pas le motif, et l'appât ci-dessous prouve que le filtre n'a pas tout mangé.
+  const brut = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
+  const ecran = brut.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  assert.match(brut, /REPARATION_AILLEURS/,
+    'plus aucun commentaire ne dit pourquoi la constante est partie : le filtre ne mesure plus rien');
+  assert.ok(!/REPARATION_AILLEURS/.test(ecran),
+    '`REPARATION_AILLEURS` survit : l\'écran annonce encore que l\'armée se répare ailleurs');
+  assert.match(ecran, /export function vueDeLOffense/,
+    'le filtre de commentaires a mangé le code : la garde ne lit plus rien');
+});
+
+// ---------------------------------------------------------------------------
+// EC T5 — la vignette de la palette de l'Offense a une taille, et elle est dite
+// ---------------------------------------------------------------------------
+
+test('EC T5 — la vignette de la palette de l\'Offense porte une taille explicite', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 7 : « Sprites trop petit dans la barre du bas
+  // construction ». Les deux palettes portaient 26 px ; le lot RETOUCHES a porté
+  // celle du Chantier à 52 le 08/09 et son jumeau n'a pas suivi.
+  //
+  // ⚠⚠ ET « AU MOINS AUTANT QUE `.posable i` » EST GÉOMÉTRIQUEMENT IMPOSSIBLE —
+  // ÉCART DÉCLARÉ AU BRIEF, MESURÉ AVANT D'ÊTRE ÉCRIT. La bande de l'Offense fait
+  // 86 px et porte, EN PLUS du sprite, un libellé et un coût que celle du
+  // Chantier n'a pas : `86 − 1` de liseré `− 2 × 5` de `padding` = 75 pour la
+  // vignette, `− 2 × 1` de liseré et RIEN en `padding` vertical = 73, `− 2 × 2`
+  // de `gap` entre trois enfants = 69, moins le libellé 15,4 et le coût 9,2 —
+  // il reste **44,4**. À 52 la vignette déborderait de 7,6 px et serait rognée
+  // par l'`overflow-y: hidden` de la bande. On prend **40**, le plus grand
+  // multiple de huit qui tienne — un sprite de 128 s'y réduit d'un facteur
+  // entier.
+  const vignette = regleCss('#offense-palette .unite i');
+  const cote = Number(vignette.match(/width:\s*(\d+)px/)?.[1]);
+  assert.equal(cote, 40, `la vignette de l'Offense mesure ${cote} px`);
+  assert.match(vignette, new RegExp(`height:\\s*${cote}px`),
+    'la vignette de l\'Offense n\'est plus carrée');
+
+  // ⚠⚠ ET LE TEST NE SE CONTENTE PAS DE « UNE TAILLE EST ÉCRITE » — c'est la
+  // falsification que le brief nomme : un tel test resterait VERT à 12 px. Il
+  // exige donc le nombre, et il exige qu'il ait GRANDI par rapport à ce que la
+  // bande portait avant le lot.
+  assert.ok(cote > 26, 'la vignette n\'a pas grandi : le point 7 n\'est pas traité');
+
+  // ⚠ ET LE BUDGET EST TENU : la vignette plus ses deux lignes de texte doivent
+  // tenir dans la bande. Le nombre se DÉRIVE de la feuille, il ne se recopie pas.
+  const bande = Number(regleCss('#offense-palette').match(/flex:\s*0 0 (\d+)px/)?.[1]);
+  assert.equal(bande, 86, `la bande de la palette mesure ${bande} px : le budget de la vignette a bougé`);
+  assert.ok(cote < bande, 'la vignette est plus haute que la bande qui la porte');
+
+  // ⚠ ET CELLE DU CHANTIER N'A PAS BOUGÉ : ce lot corrige un retard, il ne
+  // renverse pas l'arbitrage du 08/09.
+  assert.match(regleCss('.posable i'), /width:\s*52px/,
+    'la vignette du Chantier a changé de taille : ce lot ne devait pas y toucher');
+});
+
+// ---------------------------------------------------------------------------
+// EC T8 — le libellé d'une vignette d'Offense se lit sur le sprite
+// ---------------------------------------------------------------------------
+
+test('EC T8 — le libellé de la palette de l\'Offense se lit, et les trois états restent distincts', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 14 : le nom d'une unité se peint SUR le sprite, et à
+  // 40 px le sprite occupe la moitié de la vignette. Mesuré : l'os `#F5F3E8` rend
+  // **14,53** de contraste sur le fond `#1E2124` de la bande et **2,70** sur
+  // `#8C9A72`, le ton clair de la rampe kaki dont les sprites du joueur sont
+  // faits — sous les 3 qu'un texte de 11 px demande. Ce n'est donc pas
+  // la COULEUR du libellé qu'il faut changer, c'est son FOND : une ombre portée
+  // `#161914` rend 15,95 contre l'os, et elle suit le texte où qu'il tombe.
+  const libelle = regleCss('#offense-palette .unite b');
+  assert.match(libelle, /text-shadow:/, 'le libellé de la palette n\'a pas d\'ombre : il se perd sur le sprite');
+  // ⚠ L'OMBRE CERNE LE TEXTE DES QUATRE CÔTÉS. Une ombre d'un seul côté laisse
+  // trois bords du glyphe sur le sprite, et c'est précisément là qu'il disparaît.
+  const cotes = (libelle.match(/text-shadow:([^;]*);/)[1].match(/#161914/g) ?? []).length;
+  assert.equal(cotes, 4, `l'ombre du libellé ne cerne le texte que de ${cotes} côtés`);
+  // ⚠ ET AUCUNE TEINTE NEUVE : `#161914` est l'ombre des pastilles de niveau
+  // depuis le lot RETOUR-DE-RAID. `banc.test.js` refuse déjà tout hex hors
+  // palette ; ici on exige que ce soit CELUI-LÀ.
+  assert.match(libelle, /text-shadow:[^;]*#161914/, 'l\'ombre du libellé emploie une autre teinte');
+  // ⚠ LE COÛT PORTE LA MÊME, pour la même raison : il tombe au même endroit.
+  assert.match(regleCss('#offense-palette .unite .cout'), /text-shadow:[^;]*#161914/,
+    'le coût d\'une vignette n\'a pas l\'ombre du libellé');
+
+  // ⚠⚠ ET LES TROIS ÉTATS RESTENT DEUX À DEUX DIFFÉRENTS — LE MONTAGE DE `RET T7`,
+  // REPRIS ET NON RÉÉCRIT. Le libellé d'une vignette VERROUILLÉE change de teinte
+  // dans ce lot : `#68727E` ne se distinguait plus une fois cerné de noir. Sans
+  // cette moitié-ci, éclaircir le libellé aurait pu effacer le signal du verrou.
+  const teintes = {
+    repos: regleCss('#offense-palette .unite b').match(/color:\s*(#[0-9A-Fa-f]{6})/)[1].toUpperCase(),
+    verrouillee: regleCss('#offense-palette .unite.verrouillee b').match(/color:\s*(#[0-9A-Fa-f]{6})/)[1].toUpperCase(),
+    armee: regleCss('#ecran-offense .unite.choisie b').match(/color:\s*(#[0-9A-Fa-f]{6})/)[1].toUpperCase(),
+  };
+  assert.notEqual(teintes.repos, teintes.verrouillee,
+    `le libellé verrouillé ne se distingue plus du libellé au repos : ${teintes.repos}`);
+  // ⚠ ET LE VERROU GARDE SON SECOND SIGNAL, l'opacité — un seul support de
+  // distinction serait perdu au premier réglage de teinte.
+  assert.match(regleCss('#offense-palette .unite.verrouillee'), /opacity/,
+    'la vignette verrouillée a perdu son opacité : la teinte du libellé la porte seule');
 });

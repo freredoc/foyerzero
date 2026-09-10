@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  BASE_BATIMENTS, ORDRE_PALETTE, VIGNETTES_MIXTES, CHAMPS,
+  BASE_BATIMENTS, ORDRE_PALETTE, VIGNETTES_MIXTES, BATIMENTS_DONNES, CHAMPS,
   ETATS_BATIMENT, SUFFIXE_ETAT_BATIMENT, etatDuBatiment,
   batimentDeLaVignette, batimentDeReference, posablesSurUnChamp,
 } from '../src/data/base.js';
@@ -28,6 +28,7 @@ import { etatDeLaPose } from '../src/sim/reparation.js';
 import {
   creerEtat, serialiser, charger, migrer, poser, exigerAucunePerte, SAVE_VERSION,
 } from '../src/sim/state.js';
+import { dispositionNouvelleBase } from '../src/sim/disposition.js';
 import { poserLaBaseSur } from '../src/sim/deplacement.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { ressourceDeLaCase } from '../src/sim/champs.js';
@@ -342,14 +343,71 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // joueur n'a jamais à choisir entre les deux collecteurs — c'est l'arbitrage
   // d'Ethan du 08/09, et c'est ce qui garde vraie la phrase du tutoriel : « c'est
   // le champ sous lui qui décide de ce qu'il sort ».
-  assert.equal(ORDRE_PALETTE.length, 14);
+  // ⚠⚠ ET LE CHANTIER EST SORTI DE LA PALETTE LE 10/09, DONC LA COUVERTURE EST
+  // LE ROSTER MOINS CE QUI EST DONNÉ — point 3 d'Ethan. Treize vignettes pour
+  // quinze bâtiments : les deux collecteurs en partagent une, et le Chantier n'en
+  // a plus. Ce que ce test garde ne s'est pas relâché — « ni un nom en trop, ni
+  // un oublié » vaut toujours, avec une soustraction NOMMÉE et DÉRIVÉE.
+  assert.equal(ORDRE_PALETTE.length, 13);
   assert.deepEqual(
     [...new Set(ORDRE_PALETTE.flatMap(
       (v) => (VIGNETTES_MIXTES[v] ? Object.values(VIGNETTES_MIXTES[v].pose) : [v]),
     ))].sort(),
-    Object.keys(BASE_BATIMENTS).sort(),
+    Object.keys(BASE_BATIMENTS).filter((b) => !BATIMENTS_DONNES.includes(b)).sort(),
   );
+  // ⚠ ET LA SOUSTRACTION N'EST PAS VIDE : sans cette ligne, un `BATIMENTS_DONNES`
+  // devenu `[]` ferait de l'assertion ci-dessus l'ancienne, et le retrait du
+  // Chantier repasserait sans que rien ne tombe.
+  assert.deepEqual(BATIMENTS_DONNES, ['chantierDeConstruction']);
+  assert.ok(!ORDRE_PALETTE.includes('chantierDeConstruction'),
+    'le Chantier est revenu dans la palette');
+  // ⚠ IL RESTE UN BÂTIMENT À PART ENTIÈRE : ce qui sort est la vignette.
+  assert.ok(BASE_BATIMENTS.chantierDeConstruction !== undefined);
   assert.equal(ORDRE_PALETTE.filter((v) => VIGNETTES_MIXTES[v]).length, 1);
+});
+
+// ---------------------------------------------------------------------------
+// EC T1 — le Chantier sort de la palette, et de nulle part ailleurs
+// ---------------------------------------------------------------------------
+
+test('EC T1 — le Chantier sort de la palette, et de nulle part ailleurs', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 3 : « enlever le chantier de construction dans la
+  // liste des constructions ». Ce test-ci ne recompte pas la palette — `B4 T7`
+  // le fait juste au-dessus — il mesure ce que le retrait NE DOIT PAS coûter.
+  //
+  // ⚠⚠ RIEN NE SE PERD, ET C'EST LA MOITIÉ QUI COMPTE (§4 de `CLAUDE.md`). Un
+  // bâtiment est POSABLE ou DONNÉ, jamais ni l'un ni l'autre : l'union des deux
+  // ensembles est le roster ENTIER, et leur intersection est vide. Sans cette
+  // paire, retirer un second bâtiment de la palette par mégarde le rendrait
+  // inatteignable en silence — la faute exacte que le point 3 corrige à l'envers,
+  // le Chantier étant, lui, donné.
+  const posables = new Set(ORDRE_PALETTE.flatMap(
+    (v) => (VIGNETTES_MIXTES[v] ? Object.values(VIGNETTES_MIXTES[v].pose) : [v]),
+  ));
+  const donnes = new Set(BATIMENTS_DONNES);
+  const roster = Object.keys(BASE_BATIMENTS);
+  assert.deepEqual([...posables, ...donnes].sort(), roster.slice().sort(),
+    'un bâtiment du roster n\'est ni posable ni donné : il est devenu inatteignable');
+  assert.deepEqual(roster.filter((b) => posables.has(b) && donnes.has(b)), [],
+    'un bâtiment est à la fois donné et posable : sa vignette serait grisée pour toujours');
+
+  // ⚠⚠ ET « DONNÉ » SE MESURE SUR LA BASE NEUVE, IL NE SE DÉCLARE PAS.
+  // `BATIMENTS_DONNES` se dérive de `BASE_NEUVE` ; une liste écrite à la main
+  // resterait juste le jour où la base neuve changerait de contenu, et le
+  // bâtiment neuf serait alors introuvable. On confronte donc la table à la
+  // disposition que le moteur POSE pour de bon.
+  const neuve = dispositionNouvelleBase();
+  assert.deepEqual(neuve.map((b) => b.id).sort(), [...donnes].sort(),
+    '`BATIMENTS_DONNES` ne décrit plus ce que la base neuve porte');
+  assert.ok(neuve.length > 0, 'montage : la base neuve est vide, la soustraction ne mesure rien');
+
+  // ⚠ ET LE CHANTIER RESTE UN BÂTIMENT ENTIER. Ce qui sort est la VIGNETTE : il
+  // garde son niveau, son coût de montée et son sprite. Le confondre avec un
+  // retrait du roster ferait chercher un bâtiment que le jeu pose toujours.
+  assert.ok(BASE_BATIMENTS.chantierDeConstruction.unique,
+    'le Chantier a cessé d\'être unique : il redeviendrait posable à raison');
+  assert.equal(spriteDe('chantierDeConstruction', 'intact'), 'bat_j_chantier_de_construction',
+    'le Chantier a perdu son sprite en sortant de la palette');
 });
 
 // ---------------------------------------------------------------------------

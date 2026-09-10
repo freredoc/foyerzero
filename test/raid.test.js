@@ -854,13 +854,37 @@ test('RAID-A T5 — les six boutons, et « tout réparer » sous condition', () 
     'raid-retour-carte', 'raid-retour-offense']) {
     assert.match(html, new RegExp(`id="${id}"`), `le bouton « ${id} » manque`);
   }
-  // ⚠ « TOUT RÉPARER » EST CACHÉ DANS LE BALISAGE, et il n'apparaît qu'armé.
-  assert.match(html, /id="raid-tout-reparer" hidden/,
+  // ⚠ « TOUT RÉPARER » EST REPLIÉ DANS LE BALISAGE, et il ne se déplie qu'armé.
+  //
+  // ⚠⚠ LA SONDE A CHANGÉ LE 10/09, PAS LA PROPRIÉTÉ — Ethan, point 5 : « idem en
+  // préparation raid ». Le bouton basculait sur `hidden`, donc sur
+  // `display: none` : paraître ajoutait sa hauteur à `#raid-bas`, et le canevas
+  // au-dessus perdait d'autant — le décor se recadrait et les unités bougeaient.
+  // Il se replie maintenant par une classe et GARDE SA PLACE. Ce test garde le
+  // même fait — il n'est là que le mode armé — sur le mécanisme qui le porte.
+  assert.match(html, /id="raid-tout-reparer" class="repliee"/,
     '« tout réparer » est visible sans que le mode soit armé');
+  // ⚠⚠ ET L'ATTRIBUT `hidden` NE DOIT PAS REVENIR : son `!important` de tête de
+  // feuille l'emporterait sur `visibility`, donc le bouton disparaîtrait pour de
+  // bon — invisible ET sans place réservée, c'est-à-dire le défaut d'origine.
+  assert.doesNotMatch(html, /id="raid-tout-reparer"[^>]*\shidden/,
+    '« tout réparer » a repris `hidden` : il pousse à nouveau la préparation');
   const source = sansCommentairesRaidA(lireSource('src', 'ui', 'raid.js'));
-  assert.match(source, /if \(nom === 'reparer'\) \$\('raid-tout-reparer'\)\.hidden = false/,
+  assert.match(source,
+    /if \(nom === 'reparer'\) \$\('raid-tout-reparer'\)\.classList\.remove\('repliee'\)/,
     '« tout réparer » n\'apparaît plus avec le mode Réparer');
-  assert.match(source, /tout\.hidden = true/, '« tout réparer » ne se recache plus au désarmement');
+  assert.match(source, /tout\.classList\.add\('repliee'\)/,
+    '« tout réparer » ne se replie plus au désarmement');
+  // ⚠ ET LA FEUILLE LE REPLIE SANS LUI PRENDRE SA PLACE — la moitié que la
+  // source seule ne dit pas : une classe qui poserait `display: none` laisserait
+  // les trois lignes ci-dessus vertes et le défaut d'Ethan entier.
+  const regle = html.replace(/\/\*[\s\S]*?\*\//g, '')
+    .match(/#chantier-reparation\.repliee, #raid-tout-reparer\.repliee\s*\{([^}]*)\}/);
+  assert.ok(regle, 'les deux barres à bouton ne partagent plus une règle de repli');
+  assert.match(regle[1], /visibility:\s*hidden/,
+    'le repli ne passe plus par `visibility` : la hauteur redeviendrait variable');
+  assert.doesNotMatch(regle[1], /display:\s*none/,
+    'le repli passe par `display: none` : la place n\'est plus réservée');
   // ⚠ AUCUNE EXCEPTION NE REMONTE : on demande, puis on agit. Jamais de `try`
   // autour d'un appel de `sim/`.
   assert.doesNotMatch(source, /try\s*\{/, 'l\'écran de raid rattrape une levée de la simulation');

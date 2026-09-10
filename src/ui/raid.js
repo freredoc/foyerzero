@@ -1349,8 +1349,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       const bouton = $(m.bouton);
       if (bouton !== null) bouton.classList.remove('arme');
     }
+    // ⚠ ELLE SE REPLIE, ELLE NE DISPARAÎT PLUS — point 5, 10/09. Voir `armer`.
     const tout = $('raid-tout-reparer');
-    if (tout !== null) tout.hidden = true;
+    if (tout !== null) tout.classList.add('repliee');
     avis('');
   }
 
@@ -1362,7 +1363,17 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     $(m.bouton).classList.add('arme');
     // ⚠ « TOUT RÉPARER » N'APPARAÎT QUE LE MODE RÉPARER ARMÉ, et AU-DESSUS de la
     // rangée — Ethan, 01/09.
-    if (nom === 'reparer') $('raid-tout-reparer').hidden = false;
+    //
+    // ⚠⚠ MAIS IL GARDE SA PLACE QUAND IL N'APPARAÎT PAS — Ethan, 10/09, point 5 :
+    // « idem en préparation raid ». Il basculait sur `hidden`, donc sur
+    // `display: none` : paraître ajoutait sa hauteur à `#raid-bas`, et le CANEVAS
+    // au-dessus perdait d'autant — le décor de la cible se recadrait et les
+    // unités bougeaient sous le doigt, ce qu'Ethan décrit mot pour mot. C'est une
+    // CLASSE désormais, `visibility: hidden` dans la feuille : il ne se dessine
+    // pas, ne reçoit rien, et sa hauteur ne varie jamais.
+    // ⚠ ET L'ATTRIBUT `hidden` NE PEUT PAS SERVIR : son `!important` de tête de
+    // feuille l'emporterait sur `visibility`, et le bouton ne reparaîtrait jamais.
+    if (nom === 'reparer') $('raid-tout-reparer').classList.remove('repliee');
     avis(m.invite);
   }
 

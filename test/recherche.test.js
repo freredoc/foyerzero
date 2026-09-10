@@ -6153,3 +6153,59 @@ test('RECH-É T11 — tout hôte d\'une couche tournante est un ancêtre POSITIO
   assert.equal(appels, 7, `sept poses attendues, ${appels} trouvées : nommer l'hôte de la nouvelle`);
   assert.equal(HOTES.length, 6);
 });
+
+// ---------------------------------------------------------------------------
+// EC T7 — les sprites de l'arbre de recherche, et leur pastille avec eux
+// ---------------------------------------------------------------------------
+
+test('EC T7 — le sprite de l\'arbre fait 44 px, et la pastille EXACTEMENT autant', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 13 : « Sprites trop petit dans l'arbre de recherche ».
+  // Ils faisaient 28 px. Ce que ce test garde n'est pas le nombre pour lui-même,
+  // c'est l'ÉGALITÉ des deux : la pastille `◈` d'un module et le sprite d'une
+  // pièce se posent sur la même colonne d'une ligne de l'arbre, et régler l'un
+  // sans l'autre décale toute la rangée d'un module — c'est la faute que le
+  // commentaire de la pastille annonce depuis le lot RECHERCHE-ÉCRAN.
+  const feuille = feuilleDuJeu().replace(/\/\*[\s\S]*?\*\//g, '');
+  const cote = (selecteur) => {
+    const m = feuille.match(new RegExp(`${selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
+    assert.ok(m, `la règle « ${selecteur} » a disparu de la feuille`);
+    const base = Number(m[1].match(/flex:\s*0 0 (\d+)px/)?.[1]);
+    const hauteur = Number(m[1].match(/height:\s*(\d+)px/)?.[1]);
+    assert.ok(Number.isInteger(base), `« ${selecteur} » n'a plus de largeur en pixels`);
+    assert.equal(hauteur, base,
+      `« ${selecteur} » n'est plus carré : ${base} de large pour ${hauteur} de haut`);
+    return base;
+  };
+  const sprite = cote('#ecran-recherche .sprite');
+  const pastille = cote('#ecran-recherche .pastille');
+  assert.equal(sprite, 44, `le sprite de l'arbre mesure ${sprite} px`);
+  assert.equal(pastille, sprite,
+    `la pastille (${pastille}) n'a pas suivi le sprite (${sprite}) : la rangée d'un module se décale`);
+
+  // ⚠ ET IL A GRANDI : un test qui n'exigerait que l'égalité resterait VERT si
+  // les deux redescendaient ensemble à 28.
+  assert.ok(sprite > 28, 'le sprite de l\'arbre n\'a pas grandi : le point 13 n\'est pas traité');
+
+  // ⚠⚠ ET LA RANGÉE LE PORTE. Mesuré avant d'écrire : le nom d'une pièce et sa
+  // description font deux lignes de 11 px à `line-height: 1,2`, soit 26,4 — c'est
+  // donc déjà le SPRITE qui gouvernait la hauteur à 28, et il la gouverne encore
+  // à 44. La rangée est un `flex` à `align-items: center` : sa hauteur EST celle
+  // de son plus grand enfant, donc elle grandit avec lui au lieu de le rogner.
+  const rangee = feuille.match(/#ecran-recherche \.rangee\s*\{([^}]*)\}/);
+  assert.ok(rangee, 'la règle de la rangée a disparu');
+  assert.match(rangee[1], /display:\s*flex/, 'la rangée n\'est plus un conteneur flex');
+  assert.match(rangee[1], /align-items:\s*center/,
+    'la rangée ne centre plus ses colonnes : un sprite plus haut sortirait du cadre');
+  assert.ok(!/height:\s*\d+px/.test(rangee[1]),
+    'la rangée porte une hauteur fixe : le sprite agrandi ne tient plus dedans');
+  const cadre = feuille.match(/#ecran-recherche \.piece\s*\{([^}]*)\}/);
+  assert.ok(cadre, 'la règle du cadre d\'une pièce a disparu');
+  assert.ok(!/height:\s*\d+px/.test(cadre[1]),
+    'le cadre d\'une pièce porte une hauteur fixe : la rangée agrandie déborderait');
+
+  // ⚠ ET LE PANNEAU DÉFILE, ce qui est ce qui rend l'agrandissement payable :
+  // trente et une lignes plus hautes ne tiennent pas dans l'écran, et c'est déjà
+  // vrai à 28.
+  assert.match(feuille, /#recherche-panneaux \.panneau\s*\{[^}]*overflow-y:\s*auto/,
+    'le panneau d\'une branche ne défile plus : les lignes agrandies déborderaient');
+});

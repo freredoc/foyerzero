@@ -357,8 +357,34 @@ export const BASE_BATIMENTS = {
  * ⚠ C'EST UNE TABLE ET PAS UN TRI. Aucune clé de `BASE_BATIMENTS` ne porte
  * « à quel point ce bâtiment vient tôt » ; en inventer une pour pouvoir trier
  * ferait une donnée de calibrage qui n'en est pas une. L'ordre est un choix
- * d'écran, il s'écrit comme tel — et un test exige qu'il soit une PERMUTATION
- * exacte du roster, ni un nom en trop, ni un oublié.
+ * d'écran, il s'écrit comme tel — et un test exige qu'il COUVRE le roster, ni un
+ * nom en trop, ni un oublié, à l'exception NOMMÉE ci-dessous.
+ *
+ * ⚠⚠ LE CHANTIER DE CONSTRUCTION N'EST PAS DANS LA PALETTE — Ethan, 10/09,
+ * point 3 : « Enlever le chantier de construction dans la liste des
+ * constructions ». Ce n'est pas un choix d'écran de plus, c'est le retrait d'un
+ * bouton QUI NE POUVAIT RIEN FAIRE, et ça se mesure dans cette table-ci : il
+ * porte `unique: true`, et `BASE_NEUVE` en pose un d'office sur TOUTE base du
+ * joueur. Sa vignette était donc grisée en permanence, de la première seconde de
+ * la partie à la dernière — la palette montrait un geste que le moteur refusait
+ * toujours, avec la seule raison « il est unique, et il est déjà posé ».
+ *
+ * ⚠ ET C'EST LE SEUL DU ROSTER DANS CE CAS, ce qui est ce qui rend l'exception
+ * bornée. Les deux autres uniques du début — `centreDeCommandement` et
+ * `qgDeDefense` — ne sont PAS posés d'office : leur vignette est vive tant qu'on
+ * ne les a pas bâtis, donc elle a un geste à offrir. Le discriminant est
+ * « posé par `BASE_NEUVE` », pas « unique » ; le jour où un second bâtiment
+ * serait donné avec la base, il sortirait d'ici pour la même raison, et le test
+ * de couverture le dirait en tombant.
+ *
+ * ⚠ IL N'EST PAS RETIRÉ DE `BASE_BATIMENTS` POUR AUTANT, et il ne peut pas
+ * l'être : il se pose, se montre, se répare, s'améliore et RASE LA BASE quand il
+ * tombe. Ce qui sort est la vignette, pas le bâtiment.
+ *
+ * ⚠ LA SOUSTRACTION SE LIT DANS `BATIMENTS_DONNES`, plus bas — elle est DÉRIVÉE
+ * de `BASE_NEUVE` et ne peut donc pas dériver de lui. Elle vit là-bas et pas
+ * ici parce qu'un `const` ne se lit pas avant d'être écrit : la déclarer au-dessus
+ * de sa source passe `node --check` et LÈVE au chargement du module.
  *
  * ⚠ ET IL NE REMPLACE PAS L'ORDRE DE `BASE_BATIMENTS`. Réordonner la table
  * elle-même aurait déplacé tout ce qui l'énumère — le générateur, les tests, la
@@ -366,10 +392,11 @@ export const BASE_BATIMENTS = {
  */
 export const ORDRE_PALETTE = [
   'collecteurMixte', 'raffinerie', 'centrale', 'accumulateur',
-  'chantierDeConstruction', 'centreDeCommandement', 'qgDeDefense',
+  'centreDeCommandement', 'qgDeDefense',
   'complexeDeDefense', 'caserne', 'depotDeVehicules', 'aerodrome',
   'artillerieAntiInfanterie', 'artillerieAntiVehicule', 'artillerieAntiAerien',
 ];
+
 
 /**
  * La vignette de palette qui n'est PAS un bâtiment, et ce qu'elle pose.
@@ -602,6 +629,20 @@ export const BASE_NEUVE = {
   degatsMilli: 0,
   ...caseDuChantier(),
 };
+
+/**
+ * Les bâtiments que la base reçoit d'office, et qui n'ont donc pas de vignette.
+ *
+ * ⚠⚠ ELLE EST DÉRIVÉE DE `BASE_NEUVE`, JAMAIS ÉCRITE À LA MAIN — Ethan, 10/09,
+ * point 3. C'est ce qui fait que la garde de couverture d'`ORDRE_PALETTE` ne peut
+ * pas mentir : elle soustrait ce que la base neuve POSE, pas une liste recopiée
+ * qui vieillirait au premier bâtiment donné de plus.
+ *
+ * ⚠ ET ELLE EST UNE LISTE POUR UN SEUL ÉLÉMENT, exprès. `BASE_NEUVE` est un
+ * bâtiment aujourd'hui ; le jour où elle en poserait deux, c'est ELLE qui
+ * changerait de forme, et cette ligne-ci suivrait sans qu'on la relise.
+ */
+export const BATIMENTS_DONNES = [BASE_NEUVE.id];
 
 // ---------------------------------------------------------------------------
 // Champs de ressource — le socle des collecteurs

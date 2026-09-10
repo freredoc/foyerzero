@@ -4837,10 +4837,19 @@ export function initialiserEcranChantier(doc, {
     }
     // ⚠ « TOUT RÉPARER » N'APPARAÎT QUE LE MODE RÉPARER ARMÉ — Ethan, 01/09, sur
     // l'écran de raid ; c'est la même discipline, sur l'autre écran.
+    //
+    // ⚠⚠ MAIS ELLE GARDE SA PLACE QUAND ELLE N'APPARAÎT PAS — Ethan, 10/09,
+    // point 5. Elle basculait sur `hidden`, donc sur `display: none`, donc elle
+    // POUSSAIT le champ en paraissant : mesuré au lot ÉCRAN-DÉFENSE,
+    // `#chantier-defile` tombait de 458 à 392 px, dont 22 pour cette barre.
+    // C'est une CLASSE désormais, et la feuille la rend `visibility: hidden` :
+    // même dessin, même geste, hauteur constante. L'attribut `hidden` ne peut
+    // pas servir ici — son `!important` l'emporterait sur `visibility`.
     const barre = $('chantier-reparation');
     if (barre === null) return;
-    barre.hidden = actionArmee !== 'reparer';
-    if (!barre.hidden) ecrireLaReserve();
+    const repliee = actionArmee !== 'reparer';
+    barre.classList.toggle('repliee', repliee);
+    if (!repliee) ecrireLaReserve();
   }
 
   /**
@@ -5218,35 +5227,15 @@ export function initialiserEcranChantier(doc, {
   fermerPanneau();
   $('chantier-panneau-fermer').addEventListener('click', fermerPanneau);
 
-  // ⚠⚠ LE JOURNAL DES RAIDS — lot JOURNAL, 07/09, point 14. Le bouton ouvre, le
-  // panneau se peint par `peindreVueDuPanneau`, et la VUE vient de
-  // `vueDuJournal`, écrite une seule fois pour les deux écrans. L'Offense fait
-  // exactement les mêmes six lignes, et `JRN T8` refuse qu'elles divergent.
-  //
-  // ⚠ IL SE PEINT À L'OUVERTURE, PAS À CHAQUE IMAGE. Rien ne peut changer
-  // pendant qu'on le regarde : un rapport n'entre au journal qu'à la RÉSOLUTION
-  // d'un raid, et les deux chemins qui en résolvent un — le bouton Attaquer et
-  // le rattrapage au retour — passent par un autre écran. Le repeindre dix fois
-  // par seconde referait dix sections pour la même image.
-  const panneauJournal = $('chantier-journal-panneau');
-  const elementsJournal = {
-    titre: $('chantier-journal-titre'), corps: $('chantier-journal-corps'), bouton: null,
-  };
-  function fermerLeJournal() { if (panneauJournal !== null) panneauJournal.hidden = true; }
-  fermerLeJournal();
-  $('chantier-journal').addEventListener('click', () => {
-    if (etatCourant === null || panneauJournal === null) return;
-    // ⚠ LE PANNEAU DE DÉTAIL SE FERME, ET C'EST LA LEÇON DU LOT ÉCRAN-DÉFENSE :
-    // deux panneaux de détail au même endroit se recouvriraient, et le second
-    // avalerait les touchers du premier.
-    fermerPanneau();
-    peindreVueDuPanneau(
-      doc, elementsJournal,
-      vueDuJournal(etatCourant.rapports, etatCourant.horloge.nbTicks),
-    );
-    panneauJournal.hidden = false;
-  });
-  $('chantier-journal-fermer').addEventListener('click', fermerLeJournal);
+  // ⚠⚠ LE JOURNAL DES RAIDS A QUITTÉ CET ÉCRAN LE 10/09 — point 4 d'Ethan,
+  // « Bouton rapport a deplacer en haut entre base et mission ». Il vivait ici en
+  // six lignes, et l'Offense en portait six jumelles : deux boutons, deux
+  // panneaux, deux câblages pour UNE vue. `vueDuJournal` reste écrite ici — elle
+  // a besoin de `formaterEntier`, de `direLaDuree` et du rendu partagé, tous
+  // trois de ce fichier —, elle est EXPORTÉE, et c'est `ui/session.js` qui
+  // l'appelle désormais, une fois, depuis `#tete-onglets`. `JRN T8` refuse
+  // toujours une seconde écriture de la vue ; ce qui change est le nombre de
+  // LECTEURS, qui passe de deux à un.
 
   // ⚠ ON DEMANDE, PUIS ON AGIT — même règle que `tenterLaPose` et
   // `executerAction`, et jamais de `try` autour d'`ameliorer`.
@@ -5587,7 +5576,11 @@ export function initialiserEcranChantier(doc, {
     // mais SEULEMENT quand la barre est à l'écran. Elle ne l'est que le mode
     // Réparer armé ; hors de là, ce serait recalculer un devis sur quarante
     // bâtiments dix fois par seconde pour une ligne que personne ne voit.
-    if ($('chantier-reparation')?.hidden === false) ecrireLaReserve();
+    // ⚠ ON LIT LA CLASSE, PLUS L'ATTRIBUT — point 5, 10/09. La barre est
+    // TOUJOURS dans le flux : `.hidden` vaut désormais `false` en permanence, et
+    // le test d'origine aurait fait écrire la réserve dix fois par seconde même
+    // le mode désarmé. C'est `repliee` qui dit si elle est à l'écran.
+    if ($('chantier-reparation')?.classList.contains('repliee') === false) ecrireLaReserve();
     // ⚠ ELLE SE REPEINT À CHAQUE PASSE, ET C'EST NÉCESSAIRE : la ligne porte un
     // COMPTE À REBOURS, qui descend pendant qu'on le regarde. Elle sort d'elle-
     // même dès que la bande courante n'est pas la Défense, donc la boucle ne

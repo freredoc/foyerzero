@@ -44,7 +44,12 @@ import {
 } from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
-import { poisDeLaFenetre, poiEstAcquis } from '../sim/poi.js';
+// ⚠⚠ `carteDesPoi` ENTRE AU LOT ÉCRANS — point 11 d'Ethan, 10/09. Elle rend la
+// LISTE des soixante-dix, là où `poisDeLaFenetre` n'en rend que ce qui tombe
+// sous les yeux : le panneau les montre TOUS, acquis comme restants, et il ne
+// peut donc pas passer par la fenêtre. Elle est mémoïsée sur une entrée, comme
+// son en-tête le dit, donc la demander à chaque ouverture ne retire rien.
+import { poisDeLaFenetre, poiEstAcquis, carteDesPoi } from '../sim/poi.js';
 import {
   saveurDeLaCase, siteDeLaCase, butinSiToutTombe, forceDeLaDefense,
 } from '../sim/site-de-la-case.js';
@@ -69,12 +74,13 @@ import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 // EN A QU'UN. `src/ui/recherche.js` importe déjà de là pour la même raison : ce
 // sont des fonctions PURES d'un module d'écran, pas son DOM.
 //
-// ⚠⚠ ET LA DURÉE D'UN TOAST VIENT DE LÀ AUSSI, POUR LA MÊME RAISON. Le message
-// qui s'efface tout seul existe déjà sur l'écran de la base ; en écrire un
-// second qui s'effacerait au bout d'un AUTRE délai apprendrait au joueur deux
-// grammaires pour le même objet. Ce lot recopie l'affichage — il n'a pas le
-// droit de toucher au balisage (§1.6 du brief) — et pas le réglage.
-import { formaterDixiemes, DUREE_TOAST_MS } from './chantier.js';
+// ⚠⚠ ET `DUREE_TOAST_MS` A QUITTÉ CETTE LIGNE — point 11 d'Ethan, 10/09,
+// « plutôt qu'un toast mieux vaut avoir un pop-up ». Ce module portait un message
+// qui s'effaçait tout seul au bout du délai de l'écran de la base ; il n'en porte
+// plus aucun, et la liste des gisements se ferme au BOUTON. Un import que plus
+// rien ne lit est une dépendance qu'on croit vivante : `esbuild` ne dit rien, et
+// la prochaine lecture chercherait une minuterie qui n'existe pas.
+import { formaterDixiemes } from './chantier.js';
 import {
   territoireDeLaFenetre, bordsDuTerritoire, RAYONS, JOUEUR, OUVRAGE,
 } from '../sim/territoire.js';
@@ -1449,6 +1455,55 @@ export function phraseDesPoisAcquis(nombre) {
 }
 
 /**
+ * Les soixante-dix gisements de la carte, dits un par un.
+ *
+ * ⚠⚠ ETHAN, 10/09, POINT 11 : « rajouter un petit bouton pour voir les POI
+ * acquis. Et non acquis avec coordonnées ». Le joueur savait qu'il en avait pris
+ * un — un message le disait, quatre secondes — et n'avait aucun moyen de savoir
+ * lesquels, ni où sont les autres. La carte en porte sept types dans dix bandes,
+ * et rien à l'écran ne les énumérait.
+ *
+ * ⚠⚠ ELLE LIT `sim/poi.js`, ELLE NE LE RÉÉCRIT PAS. La liste vient de
+ * `carteDesPoi`, l'acquisition de `poiEstAcquis` — celle-là même que le moteur
+ * emploie, et qui compare le TYPE **et** la BANDE. Recompter ici « ce type est
+ * dans `poisAcquis` » marcherait par accident sur une graine et se tromperait de
+ * neuf bandes sur dix.
+ *
+ * ⚠⚠ ET L'ORDRE NE SE RECALCULE PAS NON PLUS. `tirerLesPoi` pose ses soixante-dix
+ * bande par bande, puis type par type dans l'ordre de la table `POI` — c'est
+ * exactement le `rang` que `releverLesPoisAcquis` emploie à l'écriture. Trier ici
+ * serait écrire une seconde fois un ordre qui existe, et deux ouvertures du
+ * panneau pourraient rendre deux listes.
+ *
+ * ⚠ ELLE EST PURE ET EXPORTÉE, comme `phraseDesPoisAcquis` et `lignesDuBilan` :
+ * le dépôt n'a pas de navigateur, donc ce qui peut être éprouvé sans écran doit
+ * l'être.
+ *
+ * ⚠ ET LA COORDONNÉE SE DIT « rangée · colonne », l'ordre de tout le dépôt.
+ * `lignesDuSite` écrit déjà la position d'un site dans cette forme-là ; en
+ * inventer une seconde ferait lire deux grammaires sur le même écran.
+ *
+ * @param {number} graine
+ * @param {Array<{type: string, bande: number}>} poisAcquis
+ * @returns {{titre: string, sections: Array<object>}} la forme de `peindreLesLignes`
+ */
+export function vueDesPois(graine, poisAcquis) {
+  const liste = carteDesPoi(graine).liste;
+  const acquis = liste.filter((poi) => poiEstAcquis(poisAcquis, poi));
+  return {
+    titre: `Gisements — ${acquis.length} / ${liste.length}`,
+    lignes: liste.map((poi) => ({
+      // ⚠ LE NOM VIENT DE `POI`, il ne se recompose pas — c'est la table qui fait
+      // foi sur les libellés, et `EMBLEMES_CARTE` l'y lit déjà pour l'étiquette.
+      quoi: `${POI[poi.type].nom} · bande ${poi.bande}`,
+      valeur: poiEstAcquis(poisAcquis, poi)
+        ? 'Acquis'
+        : `${poi.rangee} · ${poi.colonne}`,
+    })),
+  };
+}
+
+/**
  * La ruine ENCORE ACTIVE d'une case, ou `null`.
  *
  * ⚠⚠ ELLE PASSE PAR `ruinesActives`, ET C'EST LA SEULE PORTE. Son commentaire le
@@ -1595,41 +1650,17 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauConfirmer = $('monde-panneau-confirmer');
   const panneauRenoncer = $('monde-panneau-renoncer');
   const panneauAttaquer = $('monde-panneau-attaquer');
-  // ⚠⚠ LE TOAST DE LA CARTE EST FABRIQUÉ ICI, ET C'EST UNE DUPLICATION ASSUMÉE.
-  // Le §3.2 du brief la nomme : le toast du jeu vit dans `ui/chantier.js`,
-  // qu'un autre lot est en train de modifier, et l'extraire demanderait d'y
-  // toucher. Le §1.6 interdit par ailleurs `src/index.src.html` — quatre lots,
-  // quatre territoires —, donc l'élément ne peut pas venir du balisage : il se
-  // crée. Les deux moitiés sont à réunir plus tard, et le rapport le dit.
+  // ⚠⚠ LE MESSAGE DES GISEMENTS N'EST PLUS UN TOAST — Ethan, 10/09, point 11 :
+  // « Plutôt qu'un toast mieux vaut avoir un pop-up pour les POI ». Il y avait
+  // ici un `<div>` fabriqué à la main, posé dans `#monde-outils`, vidé par une
+  // minuterie de quelques secondes ; son propre commentaire disait que « les deux
+  // moitiés sont à réunir plus tard ». Elles le sont : le message ouvre désormais
+  // LE panneau de l'écran, celui des sites et des ruines, et il y ouvre la LISTE
+  // — le joueur apprend qu'il a pris un gisement ET lequel, dans le même geste.
   //
-  // ⚠⚠ IL SE POSE DANS `#monde-outils`, ET PAS SUR LE CHAMP. Cette barre-là est
-  // déjà en `absolute` au coin haut-droit, au-dessus de la carte et LOIN du
-  // panneau, qui occupe la moitié basse : un message posé en bas serait recouvert
-  // par le premier panneau qu'on ouvre. Elle est en `flex`, donc le message se
-  // range à côté du bouton « Recentrer » sans le déplacer quand il est caché —
-  // `[hidden]` porte un `!important` en tête de feuille.
-  //
-  // ⚠⚠ ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE. `#monde-outils` porte
-  // un `z-index` et intercepte le toucher pour son bouton ; un message qui
-  // avalerait les touchers de la carte sous lui serait la faute mesurée trois
-  // fois par le dépôt — la ligne d'avis du Chantier, le calque des traits, la
-  // mini-fenêtre du tutoriel.
-  //
-  // ⚠ LES TEINTES SE LISENT DANS `PALETTE`, ELLES NE SE RETAPENT PAS. La garde de
-  // palette de `banc.test.js` balaie ce fichier ; trois valeurs recopiées y
-  // passeraient, et seraient la copie qui vieillit au premier réglage. Ce sont
-  // celles du panneau : fond métal sombre, liseré kaki, texte os.
-  const toastPoi = doc.createElement('div');
-  toastPoi.hidden = true;
-  toastPoi.style.pointerEvents = 'none';
-  toastPoi.style.padding = '4px 8px';
-  toastPoi.style.fontSize = '10px';
-  toastPoi.style.background = PALETTE.metalSombre;
-  toastPoi.style.border = `1px solid ${PALETTE.kakiCorps}`;
-  toastPoi.style.color = PALETTE.accents.infanterie.clair;
-  $('monde-outils').appendChild(toastPoi);
-  /** La minuterie du toast en cours — `null` quand rien n'est affiché. */
-  let minuterieToast = null;
+  // ⚠ IL SE FERME AU BOUTON, PLUS À LA MINUTERIE. Un pop-up qu'on n'a pas eu le
+  // temps de lire est un toast avec un cadre ; c'est très exactement ce qu'Ethan
+  // fait changer. La minuterie et le `<div>` sortent avec lui.
   // ⚠⚠ L'ENSEMBLE DES GISEMENTS CONNUS, ET IL VIT EN MÉMOIRE DE SESSION. Le §6
   // du brief l'exige : le PERSISTER serait un changement de schéma, donc un bump
   // de `SAVE_VERSION` pour un message. `null` veut dire « jamais vu » — et c'est
@@ -2814,32 +2845,6 @@ export function initialiserEcranMonde(doc, crochets = {}) {
 
   // --- le toast des gisements -----------------------------------------------
 
-  /**
-   * Un message qui répond à un fait, et qui s'efface tout seul.
-   *
-   * ⚠ MÊME GRAMMAIRE QUE CELUI DE L'ÉCRAN DE LA BASE, ET MÊME DURÉE. Un seul à
-   * la fois, une minuterie, pas d'empilement — c'est la règle que `chantier.js`
-   * a payée le 28/08 en ayant deux écrivains du même message.
-   *
-   * ⚠ ET IL NE S'EFFACE QUE S'IL EST ENCORE LE SIEN. Entre l'affichage et
-   * l'échéance, un autre message a pu s'écrire ; effacer celui-là ferait
-   * disparaître ce que le joueur vient de recevoir.
-   */
-  function toast(texte) {
-    if (minuterieToast !== null) {
-      fenetre.clearTimeout(minuterieToast);
-      minuterieToast = null;
-    }
-    toastPoi.textContent = texte;
-    toastPoi.hidden = texte === '';
-    if (texte === '') return;
-    minuterieToast = fenetre.setTimeout(() => {
-      minuterieToast = null;
-      if (toastPoi.textContent !== texte) return;
-      toastPoi.textContent = '';
-      toastPoi.hidden = true;
-    }, DUREE_TOAST_MS);
-  }
 
   /**
    * Ce qui a été pris depuis le dernier passage — et qui le dit une fois.
@@ -2871,10 +2876,16 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     let neufs = 0;
     for (const cle of cles) if (!poisConnus.has(cle)) neufs += 1;
     poisConnus = cles;
-    // ⚠ UN SEUL TOAST, MÊME POUR PLUSIEURS. Un déplacement fait entrer tout un
-    // octogone d'un coup : trois messages à la file sur un téléphone, c'est deux
-    // de trop. `phraseDesPoisAcquis` dit le nombre.
-    if (neufs > 0) toast(phraseDesPoisAcquis(neufs));
+    // ⚠ UN SEUL MESSAGE, MÊME POUR PLUSIEURS. Un déplacement fait entrer tout un
+    // octogone d'un coup : trois pop-up à la file sur un téléphone, c'est deux de
+    // trop. `phraseDesPoisAcquis` dit le nombre.
+    //
+    // ⚠⚠ ET IL OUVRE LA LISTE, PAS UNE PHRASE SEULE — point 11, 10/09. Ethan
+    // demande les deux choses dans la même phrase : un pop-up plutôt qu'un toast,
+    // et de quoi voir « les POI acquis. Et non acquis avec coordonnées ». Le
+    // message EST donc la liste, titrée par la nouvelle : le joueur apprend qu'il
+    // vient d'en prendre un et voit lequel sans un geste de plus.
+    if (neufs > 0) ouvrirLesPois(phraseDesPoisAcquis(neufs));
   }
 
   // --- le panneau ------------------------------------------------------------
@@ -3182,6 +3193,49 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * à vrai entre deux images. Chaque champ est posé explicitement, comme
    * `ouvrirPanneau` le fait déjà.
    */
+  /**
+   * Le panneau des soixante-dix gisements — ce que le bouton ouvre, et le pop-up.
+   *
+   * ⚠⚠ C'EST LE PANNEAU DE L'ÉCRAN, PAS UN QUATRIÈME DESSIN — point 11 d'Ethan,
+   * 10/09. `#monde-panneau` sert déjà les sites et les ruines, et il pose ses
+   * lignes par `peindreLesLignes` : lui en ajouter un second aurait mis deux DOM
+   * voisins dans le même coin, dont un seul serait éprouvé. C'est le motif
+   * d'`ouvrirRuine`, repris à la lettre — même titre, mêmes lignes, et tout ce
+   * qui appartient à un SITE explicitement refermé.
+   *
+   * ⚠⚠ ET LES DEUX MOITIÉS DU POINT 11 PASSENT PAR ICI. `annonce` porte la
+   * nouvelle quand un gisement vient d'être pris — c'est le « pop-up » qui
+   * remplace le toast — et vaut `null` quand c'est le bouton qui ouvre. Un
+   * second chemin pour la seconde moitié aurait donné deux panneaux qui disent la
+   * même chose, dont un seul suivrait le prochain réglage.
+   *
+   * ⚠ RIEN N'EST RECALCULÉ ICI : `vueDesPois` est PURE, elle lit `sim/poi.js`, et
+   * elle est éprouvée sans écran. L'écran ne fait que poser ce qu'elle rend.
+   */
+  function ouvrirLesPois(annonce = null) {
+    if (etatCourant === null) return;
+    // ⚠ CE QUI APPARTIENT À UN SITE S'EN VA, ET LA LISTE EST EXHAUSTIVE — c'est
+    // ce qu'`ouvrirRuine` fait juste en dessous, et pour la même raison : le
+    // panneau est PARTAGÉ, donc ce qu'on n'éteint pas reste allumé sous une autre
+    // matière. Un bouton « Attaquer » laissé là pointerait sur le dernier site
+    // ouvert, depuis un panneau qui parle de gisements.
+    siteOuvert = null;
+    ciblageOuvert = null;
+    ruineOuverte = null;
+    deplacementEnAttente = null;
+    const vue = vueDesPois(etatCourant.graine, etatCourant.poisAcquis);
+    panneauTitre.textContent = annonce === null ? vue.titre : `${annonce} ${vue.titre}`;
+    peindreLesLignes(vue.lignes);
+    panneauPrix.hidden = true;
+    panneauRefus.hidden = true;
+    panneauRefus.textContent = '';
+    panneauConfirmation.hidden = true;
+    panneauDeplacer.hidden = true;
+    panneauAttaquer.hidden = true;
+    panneau.hidden = false;
+    dessiner();
+  }
+
   function ouvrirRuine(ruine) {
     siteOuvert = null;
     ciblageOuvert = null;
@@ -3283,6 +3337,20 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     fermerPanneau();
     centrerSur(baseCourante(etatCourant).position);
     dessiner();
+  });
+
+  // ⚠⚠ LE BOUTON DES GISEMENTS — point 11, 10/09. Il ouvre la MÊME liste que le
+  // pop-up d'acquisition, sans annonce : c'est le second chemin vers un seul
+  // panneau, pas un second panneau.
+  //
+  // ⚠ IL DÉSARME LE DÉPLACEMENT AVANT D'OUVRIR, comme « Ma base » juste
+  // au-dessus. Sans ça, le mode resterait armé derrière la liste et le prochain
+  // toucher sur la carte déplacerait la base — la faute que le « Fermer »
+  // ci-dessous garde déjà.
+  $('monde-poi').addEventListener('click', () => {
+    if (etatCourant === null) return;
+    desarmerLeDeplacement();
+    ouvrirLesPois();
   });
 
   $('monde-panneau-fermer').addEventListener('click', () => {
