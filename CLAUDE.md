@@ -43,24 +43,45 @@ Dernière révision : **10/09/2026**, version 0.99.40 · build 142.
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
 **Référence au 10/09/2026 (après le lot ARRIVÉE-CARTE-ET-BUILD), à confronter :**
-⚠⚠ **C'EST LE PREMIER LOT DEPUIS FICHE-JUSTE QUI REND DES OCTETS, ET IL EN REND
-QUATRE-VINGT-QUATORZE MILLE.** `npm test` rend **1558 pass / 0 fail** au sens de
-la garde de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le
-verdict mesuré est **1557 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par
-Ethan le 08/09), et `npm run check` sort en 0. `npm run build` →
-`dist/index.html`, **9 331 195 octets**, 0 référence externe. Coût
-**−94 226 octets**, mesuré poste par poste contre le livrable rebâti dans un
-`git worktree` sur l'arbre pristine de `main` = `d68c4d1` (**9 425 421**) :
-**feuille −97 361 · JavaScript +2 735 · balisage +400 · images +0 · audio +0**,
-la somme des cinq postes tombant EXACTEMENT sur le total. **306 URI de part et
-d'autre**, identiques à l'octet ; les lignes `data:` passent de 311 à **307** —
-les quatre qui partent sont des COMMENTAIRES qui nommaient `data:` sans en porter
-un. Borne T10 **inchangée à 9 600 000** — ce lot ALLÈGE, et une borne ne se
-baisse pas non plus pour se féliciter d'un gain —, marge **268 805 octets,
-2,80 %**. Le lot touche `src/data/sons.js`, `src/index.src.html`,
-`src/render/arrivee.js`, `src/render/scene.js`, `src/ui/monde.js`,
-`tools/build.js`, `tools/sons.py`, six fichiers de `test/`, et fait entrer
-`src/render/mini-carte.js`.
+⚠⚠ **LE LOT REND QUATRE-VINGT-QUATORZE MILLE OCTETS, ET C'EST LE SECOND DE LA
+JOURNÉE À EN RENDRE.** `npm test` rend **1564 pass / 0 fail** au sens de la garde
+de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1563 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09),
+et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 310 752 octets**, 0 référence externe. Coût **−94 226 octets**, mesuré poste
+par poste contre le livrable rebâti dans un `git worktree` sur l'arbre pristine de
+`main` = `6eccedc` (**9 404 978**) : **feuille −97 361 · JavaScript +2 735 ·
+balisage +400 · images +0 · audio +0**, la somme des cinq postes tombant
+EXACTEMENT sur le total. **306 URI de part et d'autre**, identiques à l'octet ;
+les lignes `data:` passent de 311 à **307** — les quatre qui partent sont des
+COMMENTAIRES qui nommaient `data:` sans en porter un. Borne T10 **inchangée à
+9 600 000** — ce lot ALLÈGE, et une borne ne se baisse pas non plus pour se
+féliciter d'un gain —, marge **289 248 octets, 3,01 %**. Le lot touche
+`src/data/sons.js`, `src/index.src.html`, `src/render/arrivee.js`,
+`src/render/scene.js`, `src/ui/monde.js`, `tools/build.js`, `tools/sons.py`, six
+fichiers de `test/`, et fait entrer `src/render/mini-carte.js`.
+⚠⚠ **ET LA BASE A BOUGÉ SOUS LE LOT — `main` EST PASSÉ DE `d68c4d1` À `6eccedc`
+PENDANT SON EXÉCUTION**, Ethan ayant fusionné EMPRISES-ET-DÉLAI (#128) puis son
+correctif de CI (#129). Le lot est donc REMESURÉ contre la base neuve, poste par
+poste, plutôt que recopié ; version et build passent à **0.99.41 · build 143**, le
+suivant disponible — **`main` avait déjà pris 0.99.40 · build 142**, et les deux
+lots auraient porté le MÊME numéro pour deux livrables différents, ce que
+l'enveloppe Android lit par `config.build`. Troisième fois du dépôt.
+⚠⚠ **ET LE COÛT NE BOUGE PAS D'UN OCTET À LA FUSION, MESURÉ DES DEUX CÔTÉS.**
+Contre `6eccedc` comme contre `d68c4d1` : **−97 361 · +2 735 · +400 · +0 · +0**,
+total **−94 226**. C'est un fait mesuré et non une addition — le lot ÉCRANS avait
+mesuré **six octets** d'écart entre la somme de deux diffs et le livrable
+fusionné, parce que les deux lots partageaient `src/ui/monde.js` et
+`src/ui/raid.js`. Ici les deux lots ne partagent **aucun fichier du livrable**, et
+leurs gains portent sur des postes DISJOINTS — les images là-bas, la feuille ici.
+⚠ **ET LE REMESURAGE CONFIRME LA VENTILATION D'EMPRISES-ET-DÉLAI PAR UN CHEMIN
+INDÉPENDANT** : entre `d68c4d1` et `6eccedc`, les images tombent de 7 651 104 à
+**7 630 256** (−20 848) et le JavaScript monte de 402 212 à **402 617** (+405) —
+au dernier octet ce que son `PIC T7` annonce. Sa mesure de 9 404 978 est exacte.
+⚠ **ET « PREMIER LOT DEPUIS FICHE-JUSTE QUI REND DES OCTETS » A CESSÉ D'ÊTRE VRAI
+PENDANT L'EXÉCUTION** : EMPRISES-ET-DÉLAI en rend 20 443, et il atterrit avant.
+La phrase est corrigée plutôt que laissée — c'est très exactement le genre
+d'affirmation que ce fichier punit ailleurs.
 ⚠⚠ **LES COMMENTAIRES DE LA FEUILLE SORTENT AU BUILD, ET C'EST LE LEVIER QUE LE
 LOT ÉCRANS AVAIT CHIFFRÉ SANS LE TIRER.** Son §0 écrivait « le livrable porte
 98 084 octets de commentaires CSS pour 43 833 de règles […] les retirer AU BUILD
@@ -224,6 +245,283 @@ ni sprite ni son.
 — aucun périphérique audio ici —, l'ambre d'un gisement ACQUIS sur la mini-carte
 (la partie neuve du relevé n'en porte aucun), et le rendu sur l'appareil d'Ethan
 (§3). Tout ce qui précède est relevé dans Chromium à la géométrie du S25 FE.
+
+**Auparavant, après le lot EMPRISES-ET-DÉLAI :**
+`npm test` rend **1556 pass / 0 fail** au sens de la garde de `documentation.test.js`
+— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1555 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. `npm run build` → `dist/index.html`, **9 404 978 octets**, 0 référence
+externe. ⚠⚠ **LE LOT REND 20 443 OCTETS, ET C'EST LE PREMIER DEPUIS
+SPRITES-V2-JOUEUR QUI EN RENDE.** Mesuré poste par poste contre le livrable bâti
+sur l'arbre pristine de `main` = `d68c4d1` au premier `npm run check` de la
+session (**9 425 421**) : **images −20 848 · JavaScript +405 · feuille +0 ·
+balisage +0 · audio +0**, et les cinq postes PARTITIONNENT le fichier des deux
+côtés — chacun NET de ses `data:`, somme exacte sur le total avant comme après —
+`data:` à **311 lignes / 306 URI** des deux côtés. Borne T10 **9 600 000,
+NON TOUCHÉE** — le lot allège —, marge **195 022 octets, 2,03 %**. Version et
+build passent à **0.99.40 · build 142**, le suivant disponible ; `main` n'a pas
+bougé sous le lot, vérifié au `git fetch` — il est toujours à `d68c4d1`.
+⚠⚠ **DEUX CHANTIERS SANS RAPPORT, ET LES DEUX RENVERSENT UN LOT DU MATIN MÊME.**
+Les vingt bâtiments quittent l'emprise unique de 29 qu'ART-90 avait posée pour
+TROIS paliers ; le délai de déplacement quitte la droite de RÈGLES-DE-CARTE pour
+une géométrique qui double tous les dix niveaux. Le lot touche
+`tools/batiments_v2.py`, `tools/ruines.py`, 86 PNG de `art/sprites/bâtiment/`,
+les deux atlas `batiment`, `art/sprites/atlas-empreintes.json`,
+`src/data/sites.js`, `src/sim/deplacement.js`, `package.json` et cinq fichiers
+de `test/` ; il fait entrer `test/emprises-et-delai.test.js` et
+`RAPPORT-lotEMPRISES-ET-DELAI.md`. **Pas une ligne de `src/ui/`, `src/render/`,
+`src/son/`, `src/index.src.html` ni `tools/build.js`** — vérifié au diff.
+⚠⚠ **LES −20 848 OCTETS D'IMAGES SONT UN SEUL FICHIER, AU DERNIER OCTET.**
+`atlas-batiment-128.webp` passe de 507 076 à 491 442, soit 676 104 → 655 256 en
+base64 : l'écart du poste `images` EST celui de cet atlas-là. La grille 64
+maigrit aussi — 185 210 → 179 002 — et **ne coûte rien au livrable**,
+`GRILLE_ATLAS` valant 128.
+⚠⚠ **NEUF BÂTIMENTS RÉTRÉCISSENT, DEUX GRANDISSENT, ET DIX NE BOUGENT PAS D'UN
+PIXEL.** Ethan : « Passer tous les bâtiments collecteur et central etc à 85. Les
+autres 92 %. Chantier et souche 98 % », puis, la classification lui ayant été
+soumise ligne par ligne, « Emprise 3 palier ok ». **92 % de 32 font 29,44, donc
+29, qui est exactement ce qu'ART-90 avait posé partout** : le palier médian est
+un non-événement, et c'est ce qui rend ce lot-ci beaucoup moins cher que celui du
+matin. Mesuré au fichier près — **86 PNG modifiés sur les 166 que la chaîne
+réécrit**, soit 16 (palier 31) + 64 (palier 27) + 2 (la vignette mixte) + 4 (les
+deux ruines), et **zéro pour les dix bâtiments du palier médian**.
+⚠ **LES TROIS ÉCARTS AUX POURCENTAGES SE DÉCLARENT** : 98 % de 32 font 31,36 →
+**31** (96,9 %), 92 % font 29,44 → **29** (90,6 %), 85 % font 27,2 → **27**
+(84,4 %). Les trois sont sous le demi-gros pixel.
+⚠⚠ **LES TROIS PALIERS SONT ÉCRITS DANS `batiments_v2.py` ET NON LUS DANS
+`joueur_v2.py`, ALORS QUE DEUX DE LEURS VALEURS Y EXISTENT DÉJÀ.**
+`EMPRISE_QUATRE_VINGT_DIX` (29) et `EMPRISE_QUATRE_VINGT_CINQ` (27) y servent
+les murs, les barrières et les socles d'artillerie — des UNITÉS et des DÉFENSES,
+qu'Ethan a nommément exclues : « seulement bâtiment, pas unités ». Les partager
+ferait bouger quatorze unités le jour où il règle le palier des collecteurs, et
+**aucun test ne le dirait** puisque les nombres sont égaux. `batiments_v2.py`
+cesse donc d'IMPORTER `joueur_v2`, et `ED T2` garde l'absence de cet import —
+par le STATEMENT, jamais par le mot.
+⚠⚠ **ET CETTE GARDE-LÀ A LU MA PROPRE PROSE AU PREMIER JET, DIXIÈME FOIS DU
+DÉPÔT.** L'en-tête de `batiments_v2.py` nomme `tools/joueur_v2.py` deux fois,
+dont une pour dire qu'on ne l'importe plus ; mon filtre ne retirait pas la
+DOCSTRING — seulement les lignes en `#` — et le test accusait l'outil d'une faute
+qu'il ne commet pas. `sansProsePython` retire les deux, avec un témoin qui
+prouve que le filtre n'a pas tout mangé et un appât dans l'autre sens.
+⚠⚠ **LE DÉFAUT EST LE PALIER MÉDIAN, ET IL EST ÉCRIT COMME UN DÉFAUT.** La table
+ne porte que les DEUX exceptions : un vingt-et-unième bâtiment ajouté demain
+prend 92 % sans que personne ne l'inscrive. ⚠ Et une clé mal orthographiée
+enverrait son bâtiment au défaut EN SILENCE — c'est le défaut lui-même qui rend
+la faute muette —, donc `emprise_du_batiment` LÈVE sur toute clé absente du
+roster, et `ED T2` le mesure dans les deux sens.
+⚠ **CASERNE, DÉPÔT ET AÉRODROME SONT AU PALIER DES « AUTRES », PAS À CELUI DE
+L'ÉCONOMIE**, et c'est un choix soumis à Ethan puis validé : ils PRODUISENT des
+unités, ils ne produisent pas de ressource. La formule d'Ethan nomme « collecteur
+et central etc », c'est-à-dire la chaîne quartz/scorie/électricité et ses deux
+entrepôts, plus leurs pendants de l'Ouvrage — Nœud, Gangue, Terril.
+⚠⚠ **LA VIGNETTE MIXTE REDEVIENT UN CALCUL, ET C'EST LE POINT ÉLÉGANT DU LOT.**
+Le second membre de `VIGNETTES` avait cessé d'en être un au lot ART-90, qui
+écrivait qu'il « ne sert plus à CALCULER l'emprise ; il dit QUEL bâtiment la
+vignette représente » : les paliers reviennent, donc l'emprunt aussi. L'emprise
+de `collecteur_mixte` est **celle de `collecteur_quartz`, lue dans la table**.
+Écrire 27 en dur passerait aujourd'hui et se tairait au premier réglage d'Ethan ;
+`ED T3` compare les DEUX SORTIES, jamais l'une à un nombre, et prouve d'abord
+que le collecteur n'est PAS au palier par défaut.
+⚠⚠ **LES DEUX RUINES SUIVENT LE CHANTIER ET LA SOUCHE — 26 → 31, ET NON LE
+DÉFAUT.** Ethan : « Les ruines doivent suivre les bâtiments ». Le palier HAUT,
+parce qu'une ruine remplace à l'écran une base RASÉE TOUT ENTIÈRE : plus petite
+que le bâtiment central qu'elle recouvre, elle se lirait comme un rétrécissement
+du site. ⚠ **Et le nombre s'IMPORTE** : `ruines.py` lit
+`EMPRISE_QUATRE_VINGT_DIX_HUIT` de `batiments_v2.py`. Deux `31` dans deux
+fichiers seraient deux occasions de diverger, et celle-là serait muette.
+`ED T4` mesure les pixels ET compte les définitions dans `tools/` : une seule.
+⚠⚠ **LE PIÈGE D'ART-90 S'EST REPRÉSENTÉ À L'IDENTIQUE, ET IL A ÉTÉ ÉVITÉ PAR LA
+MESURE.** `tools/build.js` n'inline pas les PNG, il inline les atlas cousus :
+sans `python3 tools/atlas.py --ecrire --forcer batiment`, le livrable ne bouge
+pas d'un octet. ⚠ Et `--forcer` est obligatoire : sans lui l'outil imprime
+« ÉCART » et **n'écrit pas** l'atlas.
+⚠⚠ **MAIS SEULE LA FAMILLE `batiment` EST RECOUSUE, ET C'EST UN ÉCART DÉCLARÉ AU
+BRIEF, TRANCHÉ PAR LA MESURE.** Le brief demandait de recoudre « chacune des
+familles listées » par les ÉCART, et `carte` comme `interface` y apparaissent.
+**Mesuré sur un `git worktree` pristine à `d68c4d1` AVANT d'écrire une ligne :
+`atlas.py --verifier` y rend déjà 17 identiques · 3 différents — `carte-64`,
+`carte-128`, `interface-128`, et eux seuls**, ce qui est exactement ce
+qu'ART-90 a laissé. Leur écart est l'encodeur WebP de cette machine, il préexiste
+au lot, et **aucun sprite de ces deux familles n'a changé** — zéro fichier au
+`git status`. Les recoudre aurait réécrit des images identiques, ce que
+`CLAUDE.md` §3 interdit depuis PICTOGRAMMES. Le lot **laisse ces trois-là
+exactement où il les a trouvés**.
+⚠ **LE COMPTE DE SIX « DIFFÉRENTS » INCLUT `atlas-empreintes.json` LUI-MÊME**,
+et il fallait le lire dans le code plutôt que le supposer : `atlas.py` ligne 452
+l'ajoute aux `differents`. Cinq `.webp` + le manifeste = six ; `src/data/atlas.js`,
+lui, n'est pas compté — il est **identique**, la géométrie des cellules ne
+changeant pas.
+⚠⚠ **ET `--ecrire` SEUL ÉCRIT QUAND MÊME LE MANIFESTE, CE QUI LAISSE UN ÉTAT
+INCOHÉRENT.** Mesuré : l'appel de reconnaissance du §3 — celui qui ne doit rien
+écrire — a modifié `atlas-empreintes.json` alors qu'aucun `.webp` ne l'était.
+Restauré au `git checkout` avant de mesurer quoi que ce soit. Le manifeste final
+est cohérent : il décrit le fichier RETENU, pas celui qu'on vient de coudre.
+⚠⚠ **`PIC T7` MENTAIT DEPUIS UN LOT, ET IL EST RÉANCRÉ.** Il écrivait 9 410 485
+quand le disque en rendait **9 425 421** : **14 936 octets de dérive**, donc SOUS
+la tolérance de 50 000, donc VERT. Le lot ÉCRANS connaissait le bon chiffre — son
+rapport écrit 9 425 421, marge 174 579, 1,82 % — et n'a pas rouvert le fichier.
+C'est très exactement ce que la dernière assertion de ce test existe pour
+empêcher ; **la tolérance garde contre la dérive lente, pas contre un lot qui
+sait ce qu'il déplace**. ⚠ `PIC T6` est réancré aussi, dans l'autre sens que
+d'habitude : les deux atlas `batiment` MAIGRISSENT, et les seize autres lignes
+n'ont pas bougé d'un octet.
+⚠⚠ **`AR T2` A DÉMÉNAGÉ ET EST DEVENU `ED T1` — RETOURNÉ, PAS SUPPRIMÉ.** Il
+exigeait que les quatre-vingt-un sprites prennent TOUS 29, ce qui est la
+propriété qu'Ethan renverse. C'est le précédent `EMB T6` → `EMB-C T1` du lot
+EMBLÈME-CENTRÉ : il mesure les mêmes boîtes contre le palier de CHACUN, reconduit
+nommément la tolérance du panache, et **falsifie l'ancienne règle de face** en
+exigeant trois emprises distinctes.
+⚠⚠ **ET `AR T3` ÉTAIT DEVENU UN PROXY MUET — VERT EN NE MESURANT PLUS RIEN.**
+Il comptait TROIS occurrences de `EMPRISE_QUATRE_VINGT_DIX` avec un motif NON
+BORNÉ ; le palier haut s'appelle `EMPRISE_QUATRE_VINGT_DIX_HUIT`, dont l'ancien
+nom est un PRÉFIXE. **Mesuré : le motif non borné en trouve exactement 3, le
+motif borné en trouve ZÉRO.** La garde passait donc au vert en comptant une
+constante qu'elle ne nomme pas. C'est le piège du préfixe que `MODULES-D` a payé
+avec `moduleDefense` et `CLAUDE.md` §6 avec `jouer(` contre `rejouer(` —
+onzième fois du dépôt. Il est RETOURNÉ, borné, et gagne un appât.
+⚠⚠ **LA TOLÉRANCE DU PANACHE SURVIT, REMESURÉE, ET ELLE EST ENCORE NÉCESSAIRE.**
+`bat_j_artillerie_anti_infanterie_tres_abime` sort à **57 sur 58** en grille 64 et
+**114 sur 116** en 128 — EXACTEMENT les nombres d'ART-90, parce que son palier n'a
+pas bougé : elle est au 92 %, celui qui vaut encore 29. La cause est
+`eroder(m, 3)`, pas l'arrondi, et un changement d'emprise ne la touche pas.
+**Quatre-vingts sur quatre-vingts tombent au pixel sur leur palier, sur les deux
+grilles.**
+⚠⚠ **LE DÉLAI DE DÉPLACEMENT DOUBLE TOUS LES DIX NIVEAUX, ET LES 24 HEURES DU
+NIVEAU 50 SONT RENDUES.** Ethan, le soir du 10/09 : « 1 h 30 niv 10 distance 10 ;
+3 h niv 20 d10 ; 6 h niv 30 d10 ; 12 h niv 40 d10 ; 24 h niv 50 d10 », puis
+« 1 h mini ». La droite de RÈGLES-DE-CARTE — `60 + niveau + (distance − 1)`,
+posée le MATIN même — plafonnait le jeu entier à 1 h 59 ; le pire cas vaut de
+nouveau 24 h, par une géométrique et non par l'interpolation qu'il avait jadis.
+`plafond(niveau) = 900 × 2 ^ ((niveau − 10) / 10)` en dixièmes de minute,
+`délai = 600 + max(0, plafond − 600) × distance / portéeMax`.
+⚠⚠ **AUCUN `Math.pow` DANS LE MOTEUR, ET LES CINQUANTE PLAFONDS SONT
+PRÉCALCULÉS DANS LA DONNÉE.** Cette durée ENTRE DANS LA SAUVEGARDE —
+`dernierDeplacementDelaiTicks`, posé au lot RÈGLES-DE-CARTE — et `2 ^ 0,1` n'est
+pas garanti bit à bit d'un moteur JavaScript à l'autre : une divergence de dernier
+bit donnerait deux attentes différentes pour la même partie selon le navigateur.
+⚠ **ET LE RISQUE EST MESURÉ, PAS CRAINT** : `plafond(8)` vaut **783,4955**, à
+quatre millièmes d'une égalité. C'est le seul des cinquante qui approche une
+bascule d'arrondi, et il suffit à justifier la table.
+⚠⚠ **LE PLANCHER D'UNE HEURE EST DANS LA FORME, PAS POSÉ SUR LE RÉSULTAT.** Le
+plafond passe SOUS 600 en dessous du niveau **4,2** — mesuré — et le `max(0, …)`
+du terme de distance écrase alors le surplus. Un `Math.max(600, …)` final rendrait
+le même nombre et cacherait le mécanisme. ⚠⚠ **CE QU'IL COÛTE EST À DIRE : SOUS
+LE NIVEAU 4,2 LA DISTANCE EST GRATUITE** — dix cases coûtent autant qu'une, et
+**une base NEUVE est exactement dans ce cas**, donc le premier déplacement de
+toute partie. C'est une conséquence de la forme d'Ethan, pas un oubli ; **Ethan
+tranche** s'il la veut payante dès le premier niveau.
+⚠⚠ **ET CE FAIT-LÀ A ÉTÉ TROUVÉ PAR TROIS GARDES « LE MONTAGE NE MESURE RIEN »,
+QUI ONT MORDU ENSEMBLE.** `DÉPLACEMENT T8`, `RC T5` et `RC T6` portaient chacun
+un « dix cases coûtent autant qu'une » ; les trois montages posaient une base
+neuve. **C'est le MONTAGE qu'on répare, jamais l'assertion** — les assouplir
+aurait retiré la seule chose qui disait que la distance compte. `baseHorsDuPlancher`
+les monte au-dessus de 4,2 et vérifie que la distance discrimine.
+⚠⚠ **L'INTERPOLATION SE FAIT SUR LES DIXIÈMES DE NIVEAU, EN ENTIERS, ET C'EST LE
+PIÈGE DÉJÀ PAYÉ DEUX FOIS.** `niveauDesBatiments` rend **86** pour une base de
+niveau 8,6 : le plafond vaut `783 + arrondi((840 − 783) × 6 / 10)` = **817**,
+jamais `plafonds[85]` ni `plafonds[7]`. Le délai à distance 1 rend alors **622**
+dixièmes de minute, et `ED T6` refait ce chemin à la main plutôt que de le
+recopier. ⚠ Et au plafond exact, l'interpolation ne lit PAS `plafonds[50]`, qui
+n'existe pas : c'est un `return` qui le dit, pas un commentaire.
+⚠ **LA CONVERSION EN TICKS EST EXACTE, MESURÉ** : un dixième de minute vaut six
+secondes, donc **exactement soixante ticks** à 10 Hz. L'arrondi final est un
+non-événement aujourd'hui, et la monotonie du barème en dixièmes se transporte
+telle quelle en ticks.
+⚠ **LES ONZE LIGNES DE CONTRÔLE TOMBENT JUSTE, ET LES 4 910 POINTS DISTINCTS DU
+BALAYAGE SONT MONOTONES SUR LES DEUX AXES** — zéro décroissance en distance, zéro
+en niveau, plancher tenu à 600, aucun non-entier. Le brief annonçait 5 000
+points ; le domaine borné `[10, 500]` n'en porte que 4 910 de distincts, et
+`ED T7` balaie quand même de 1 à 500 pour exercer la borne.
+⚠⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 31, ET LA SAUVEGARDE NE GRANDIT PAS
+D'UN OCTET.** Mesuré sur cinq graines : 1 404 · 1 404 · 1 406 · 1 410 · 1 412
+octets, avant comme après. Aucun champ n'entre ni ne sort —
+`dernierDeplacementDelaiTicks` existe depuis RÈGLES-DE-CARTE et porte toujours une
+durée en ticks. ⚠ **Les sauvegardes existantes gardent la durée contractée sous
+l'ancien barème**, ce qui est juste : un joueur a contracté une attente, il la
+purge. **Rien n'est rétro-corrigé.**
+⚠⚠ **L'INVARIANT DE RATTRAPAGE EST REJOUÉ DES DEUX CÔTÉS : 0 DIVERGENCE SUR 5
+GRAINES, 72 H, SÉRIALISATION IDENTIQUE À L'OCTET.** `tickJeu` × 2 592 000 et
+`rattraperJeu(2 592 000)` rendent le même texte, sur l'arbre pristine comme sur
+celui du lot.
+⚠⚠ **LES DEUX CENTS TÉMOINS DE COMBAT NE BOUGENT PAS, ET LE TÉMOIN DE BASES-0 NON
+PLUS.** `test/temoins-combat.js` et `test/temoins-bases-0.js` n'ont pas une ligne
+de changée, et les deux fichiers de test qui les rejouent sont verts : le lot ne
+touche ni le moteur de combat, ni le placement, ni une garnison. **Aucune couche
+`DEPLACES_PAR_*` n'est ajoutée**, parce qu'il n'y a rien à attribuer.
+⚠ **SEPT TESTS ENTRENT — `ED T1` À `ED T7` — ET LE COMPTE PASSE DE 1 550 À
+1 556.** Un test SORT de `test/art-90.test.js` (`AR T2`, qui devient `ED T1`),
+donc le solde est +7 − 1 = +6. **Aucune assertion n'a été retirée ni assouplie** ;
+**six gardes changent de cible et toutes se RESSERRENT ou se RETOURNENT** —
+`AR T3` (motif borné, plus un appât), `PIC T6` et `PIC T7` (réancrés),
+`DÉPLACEMENT T7` et `RC T4` (barème retourné, les deux règles mortes falsifiées
+de face), et trois montages remontés au-dessus du plancher.
+⚠⚠ **ET `main` A ÉTÉ FUSIONNÉ ROUGE, À `ece1e39`, AVANT QUE LE CORRECTIF NE
+SOIT PRIS.** La PR #128 a été fusionnée le 10/09 à 12 h 06 UTC sur `ece1e39`,
+quand le correctif était poussé depuis huit minutes sous `487e21b` : le
+commit de fusion `2ef0c65` a pour parents `d68c4d1` et `ece1e39`, et **pas**
+`487e21b`. `main` porte donc l'appel à `python3` et **son job `web` échoue**.
+Une PR de suite le referme — la branche est REPARTIE de `origin/main` et le
+correctif y est reporté, une PR fusionnée ne se rouvrant pas.
+⚠⚠ **LA CI EST TOMBÉE SUR CE LOT, ET LA CAUSE ÉTAIT ÉCRITE DANS CE FICHIER
+DEPUIS LE MATIN MÊME.** Le premier jet de `test/emprises-et-delai.test.js` lisait
+la table des paliers en APPELANT l'outil — `python3 -c "import batiments_v2 …"`,
+**au chargement du module** —, plus quatre appels dans `ED T2` et `ED T3`. Il
+passait ici, où Pillow, numpy et scipy sont installés POUR CE LOT ; il a levé en
+CI, où `npm ci` n'installe qu'esbuild. ⚠⚠ **ET LE COMPTE LE DIT AU TEST PRÈS,
+AVANT MÊME DE LIRE UN JOURNAL : 1 556 − 7 + 1 = 1 550**, ce que la CI a rendu —
+un fichier qui ne se CHARGE pas ne compte aucun de ses tests et vaut UN échec.
+⚠ Le téléchargement des journaux est refusé par le proxy de sortie (403 sur
+`productionresultssa4.blob` comme sur `results-receiver.actions`) : c'est
+l'arithmétique qui a nommé le fautif, et une reproduction sous un `python3`
+factice qui l'a confirmé.
+⚠⚠ **ET LE §0 D'ART-90 LE DISAIT EN TOUTES LETTRES, ÉCRIT LE MATIN MÊME** :
+« `AR T4` ET `AR T5` DU BRIEF NE SONT PAS DES TESTS […] **la CI n'a pas de
+Python**, et §3 en fait un changement d'architecture. » C'est le §0.6 pris par
+l'autre bout — la réponse était dans le dépôt, et ce lot ne l'a pas cherchée.
+⚠⚠ **LA RÈGLE EST DONC REJOUÉE EN JAVASCRIPT, PAS RECOPIÉE**, l'idiome de
+`SON T1` : les trois constantes, `EMPRISE_DEFAUT` — résolu par le NOM qu'il
+porte —, `BATIMENTS`, `EMPRISE_PAR_BATIMENT` et `VIGNETTES` se lisent dans la
+source décommentée, et `emprise_du_batiment` devient
+`NOMMEES[cle] ?? EMPRISE_DEFAUT`. **Zéro appel à `python3` dans tout `test/`.** ⚠ Il y reste un
+`execFileSync`, dans `banc.test.js`, et il lance **node** — un sous-processus
+n'est pas le problème, un sous-processus PYTHON l'est.
+⚠ **CE QUI EST PERDU SE DÉCLARE** : le test ne prouve plus que la fonction Python
+s'EXÉCUTE ainsi, il prouve que sa source la DÉCRIT ainsi ; ce qui l'exerce pour de
+bon reste `verifier.py`, qui rejoue la chaîne et compare les 86 PNG à l'octet.
+⚠⚠ **ET CE QUI EST GAGNÉ N'EST PAS RIEN** : `ED T2` exige désormais que le roster
+lu dans l'outil **plus les vignettes** soit EXACTEMENT l'ensemble des clés des
+sprites cousus — un bâtiment retiré de `BATIMENTS` sans que ses sprites sortent
+fait tomber le test, ce que la version qui exécutait Python ne voyait pas. Trois
+témoins au chargement interdisent une lecture vide. **Neuf falsifications, neuf
+chutes**, dont trois au chargement — ce sont les témoins, et ils doivent être
+bruyants. ⚠ **Contre-épreuve dans l'environnement de la CI** : sous un `python3`
+qui n'existe pas, `npm test` rend **1 556 · 1 555 pass · 0 fail · 1 skipped**.
+⚠ **`dist/index.html` NE BOUGE PAS D'UN OCTET — 9 404 978 des deux côtés**, donc
+version et build ne sont PAS bumpés (§5) : le correctif ne touche que `test/`.
+⚠⚠ **`python3 tools/verifier.py` A ÉTÉ LANCÉ AVANT ET APRÈS, ET L'AVANT L'A ÉTÉ
+DANS UN `git worktree` PRISTINE ISOLÉ** — `CLAUDE.md` interdit de le lancer sur un
+arbre qu'on modifie, et le lot avait dix minutes de travail à faire pendant.
+Avant, sur `d68c4d1` : **1 110 identiques · 0 différent · 0 nouveau · 0 MANQUANT**
+en 557,0 s, code de sortie **1** sur la seule ligne `ATLAS`, préexistante.
+**Après, sur l'arbre du lot : les MÊMES quatre nombres — 1 110 identiques ·
+0 différent · 0 nouveau · 0 MANQUANT — en 583,9 s, et la MÊME ligne `ATLAS`.**
+⚠⚠ **ET LES 86 PNG RÉGÉNÉRÉS SONT DANS LES « IDENTIQUES À L'OCTET » : c'est la
+seule chose qui dise que les trois paliers commités viennent de l'outil
+commité.** ⚠ `atlas.py --verifier` rend **17 identiques · 3 différents** des deux
+côtés, et les trois sont `carte-64`, `carte-128`, `interface-128` — voir l'écart
+déclaré ci-dessus. `entrees.py --verifier` rend **501 / 501 et 152 / 152**,
+`art/sourcesstandby/` 34 fichiers 0 lu, `art/reserve/` 10 fichiers 0 lu :
+**aucune source n'entre ni ne sort**, le lot ne fait que recadrer ce que la
+chaîne lisait déjà. ⚠ Les
+trois dépendances Python et `opus-tools` MANQUAIENT au conteneur et ont dû être
+installées : sans elles il sort en 1 dès le premier outil, et on lit « chaîne
+cassée » là où il manque un paquet (§3). Pillow 12.3.0, numpy 2.4.6, scipy 1.17.1,
+libopus 1.4 — les versions qu'ART-90 a mesurées.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE DÉCLARE
+NON EXÉCUTÉ.** Tout ce qui précède est mesuré sur les PIXELS des PNG, sur la
+SOURCE des outils et sur des fonctions PURES. **Ce qu'il faut regarder au premier
+essai d'Ethan** : la différence entre 27 et 31 gros pixels sur une même base — un
+Collecteur à côté du Chantier —, et les deux ruines, qui grandissent de 26 à 31.
 
 **Auparavant, après le lot ÉCRANS :**
 `npm test` rend **1550 pass / 0 fail** au sens de la garde de `documentation.test.js`
@@ -9824,7 +10122,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   66 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   67 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -9835,7 +10133,7 @@ test/                   66 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage  paquets  art-90
+  voisinage  paquets  art-90  emprises-et-delai
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
@@ -11275,6 +11573,23 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   déclenchent rien, quatre vraies violations sont attrapées.
   ⚠ **La leçon reste vraie ailleurs** : `\b` est ASCII, et le projet écrit son
   code en français. Tout nouveau motif de mot doit être borné en Unicode.
+- ⚠⚠ **UN TEST QUI EXÉCUTE LA CHAÎNE PYTHON NE TOURNE PAS EN CI, ET IL PASSE
+  ICI.** Payé le 10/09 au lot EMPRISES-ET-DÉLAI : `test/emprises-et-delai.test.js`
+  appelait `python3 -c "import batiments_v2 …"` au CHARGEMENT du module. Cette
+  machine porte Pillow, numpy et scipy — installés par les lots d'art pour jouer
+  `tools/verifier.py` — et la CI fait `npm ci` et rien d'autre. §3 le dit depuis
+  toujours ; le §0 d'ART-90 aussi, écrit le matin même.
+  ⚠⚠ **ET LA SIGNATURE SE LIT DANS LE COMPTE, SANS OUVRIR UN JOURNAL** : un
+  fichier qui ne se CHARGE pas ne compte AUCUN de ses tests et vaut **UN** échec,
+  donc `déclarés − N + 1`. 1 556 ici, 1 550 en CI, sept tests dans le fichier :
+  l'arithmétique nomme le fautif. C'est d'autant plus utile que les journaux de
+  run ne sont **pas téléchargeables** depuis ce conteneur — 403 du proxy de
+  sortie sur le stockage d'artefacts, et l'outil MCP n'en rend que la queue.
+  ⚠ **CE QUI REMPLACE L'EXÉCUTION EST UNE LECTURE REJOUÉE**, l'idiome de `SON T1` :
+  on lit la source de l'outil et on refait sa règle en JavaScript. Ce n'est pas
+  une recopie — la table reste dans l'outil — et ça se CONFRONTE à l'atlas, donc
+  au dessin réellement cousu. Ce qu'on perd est l'exercice de la fonction Python,
+  et ça se déclare.
 - **Un montage de test doit tenir dans le budget** — sinon il ne prouve rien.
   Huit Faucheuses au niveau 30 font 202 points pour un budget de 190.
 - **`[hidden]` ne cache rien contre un sélecteur d'id.** `#banc-arsenal` fixe

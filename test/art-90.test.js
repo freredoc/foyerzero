@@ -18,14 +18,14 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ATLAS } from '../src/data/atlas.js';
 import { SUFFIXE_ETAT_BATIMENT } from '../src/data/base.js';
-import { decoderRgba } from './png-rgba.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCES = join(RACINE, 'art', 'sources');
-const SPRITES = join(RACINE, 'art', 'sprites', 'bâtiment');
 
+// ⚠ `ATLAS`, `decoderRgba` ET `SPRITES` SONT PARTIS AVEC `AR T2` au lot
+// EMPRISES-ET-DÉLAI : ils ne servaient qu'à mesurer les boîtes, et `ED T1` les
+// reprend. Un import qu'aucune ligne ne lit est la prochaine chose qui ment.
 const sha = (chemin) => createHash('sha256').update(readFileSync(chemin)).digest('hex');
 
 // ---------------------------------------------------------------------------
@@ -108,162 +108,23 @@ test('AR T1 — le QG de défense et le Centre de commandement ont échangé leu
 });
 
 // ---------------------------------------------------------------------------
-// AR T2 — les quatre-vingt-un sprites de bâtiment tiennent 29 gros pixels sur 32
+// AR T2 a déménagé — il est devenu `ED T1` au lot EMPRISES-ET-DÉLAI
 // ---------------------------------------------------------------------------
-
-// ⚠⚠ LE SEUIL D'ENCRE SE LIT DANS L'OUTIL, IL NE SE RETAPE PAS — même idiome que
-// `test/embleme.test.js` depuis le lot EMBLÈME-CENTRÉ. `ecrire` de
-// `tools/final128.py` coupe l'alpha sous `SEUIL_ALPHA` : ce qui survit à cette
-// coupe est DESSINÉ à l'écran, et c'est donc là qu'est la frontière de l'encre.
 //
-// ⚠⚠ ET LE SEUIL DE 128 MENTIRAIT ICI, MESURÉ. À alpha ≥ 128 la boîte des
-// quatre-vingt-un sprites s'écarte de sa cible de **0 à −3 pixels** sur les deux
-// grilles ; au seuil de l'encre, de **0 à ±1**. Ce qui les sépare est mesuré, en
-// grille 64 : **vingt sprites sur 81** ont une boîte plus large à l'encre qu'à
-// 128 — de 1 px pour quinze, 2 pour quatre, 3 pour un. Ces pixels-là sont
-// DESSINÉS, `ecrire` ne coupant qu'à `SEUIL_ALPHA` : c'est donc la mesure à 128
-// qui serait fausse, pas le sprite. Sans cette ligne-ci, ce test tomberait sur
-// une chaîne parfaitement juste.
-const SEUIL_ENCRE = (() => {
-  const src = readFileSync(join(RACINE, 'tools', 'final128.py'), 'utf8');
-  const m = src.match(/^SEUIL_ALPHA\s*=\s*(\d+)/m);
-  assert.ok(m, 'tools/final128.py ne porte plus SEUIL_ALPHA');
-  return Number(m[1]);
-})();
-
-// ⚠⚠ L'EMPRISE SE LIT DANS `tools/joueur_v2.py`, OÙ ELLE EST DÉJÀ ÉCRITE. 90 %
-// de 32 font 28,8 et les outils prennent un entier : c'est 29, et le nombre
-// existait avant ce lot — les murs, les barrières et trois socles du joueur le
-// portent depuis le lot SPRITES-V2-JOUEUR. Le retaper ici serait la seconde
-// vérité que §4 de `CLAUDE.md` interdit.
-const EMPRISE = (() => {
-  const src = readFileSync(join(RACINE, 'tools', 'joueur_v2.py'), 'utf8');
-  const m = src.match(/^EMPRISE_QUATRE_VINGT_DIX\s*=\s*(\d+)/m);
-  assert.ok(m, 'tools/joueur_v2.py ne porte plus EMPRISE_QUATRE_VINGT_DIX');
-  return Number(m[1]);
-})();
-
-// ⚠⚠ LA LISTE DES QUATRE-VINGT-UN SE DÉRIVE DE L'INDEX, ELLE NE S'ÉCRIT PAS.
-// `src/data/atlas.js` est GÉNÉRÉ par `tools/atlas.py` et porte les
-// quatre-vingt-trois noms de la famille : quatre-vingt-un bâtiments — vingt à
-// quatre états, plus la vignette mixte — et les DEUX ruines, qui n'ont jamais
-// été des bâtiments et sortent de `tools/ruines.py`. Le partage se fait sur le
-// préfixe, et les deux comptes sont assertés : un sprite qui entre ou qui sort
-// fait tomber ce test et oblige à décider, au lieu de glisser dans la boucle.
+// ⚠⚠ IL EXIGEAIT QUE LES QUATRE-VINGT-UN SPRITES PRENNENT TOUS 29 GROS PIXELS
+// SUR 32, ET C'EST EXACTEMENT LA PROPRIÉTÉ QU'ETHAN A RENVERSÉE LE SOIR MÊME.
+// « Passer tous les bâtiments collecteur et central etc à 85. Les autres 92 %.
+// Chantier et souche 98 % » : il y a désormais TROIS paliers, et une garde qui
+// en exige un seul ne mesure plus la règle du jeu.
 //
-// ⚠ ET LES DEUX RUINES NE PRENNENT PAS 90 % — mesuré : leur boîte vaut 52 sur
-// 64. Elles ne sont pas dans le périmètre d'Ethan (« les bâtiments »), leur
-// producteur n'est pas touché par le lot, et les compter ferait tomber ce test
-// sur un art que personne n'a demandé de changer.
-const BATIMENTS = ATLAS.batiment.noms.filter((n) => n.startsWith('bat_'));
-const PANACHE = 'bat_j_artillerie_anti_infanterie_tres_abime';
-const RUINES = ATLAS.batiment.noms.filter((n) => !n.startsWith('bat_'));
+// ⚠ IL N'EST NI SUPPRIMÉ NI ASSOUPLI : il est RETOURNÉ et relocalisé dans
+// `test/emprises-et-delai.test.js` sous le nom `ED T1`, où il mesure les mêmes
+// quatre-vingt-une boîtes contre le palier de CHACUN, reconduit nommément la
+// tolérance du panache, et FALSIFIE l'ancienne règle de face — trois emprises
+// distinctes exigées. C'est le précédent `EMB T6` → `EMB-C T1` du lot
+// EMBLÈME-CENTRÉ, à la lettre.
 
-function boiteDuSprite(grille, nom) {
-  const { largeur, hauteur, pixels } = decoderRgba(join(SPRITES, String(grille), `${nom}.png`));
-  let x0 = largeur; let y0 = hauteur; let x1 = -1; let y1 = -1;
-  for (let y = 0; y < hauteur; y += 1) {
-    for (let x = 0; x < largeur; x += 1) {
-      if (pixels[(y * largeur + x) * 4 + 3] < SEUIL_ENCRE) continue;
-      if (x < x0) x0 = x;
-      if (x > x1) x1 = x;
-      if (y < y0) y0 = y;
-      if (y > y1) y1 = y;
-    }
-  }
-  assert.ok(x1 >= 0, `${nom} en ${grille} : pas un pixel d'encre`);
-  return { largeur: x1 - x0 + 1, hauteur: y1 - y0 + 1, cote: largeur };
-}
 
-test('AR T2 — les 81 sprites de bâtiment prennent 90 % de la case sur les deux grilles', () => {
-  assert.equal(BATIMENTS.length, 81,
-    `${BATIMENTS.length} bâtiments dans l'index : vingt à quatre états plus la vignette mixte `
-    + 'font 81 — un sprite est entré ou sorti, il faut décider');
-  assert.deepEqual([...RUINES].sort(), ['ruine_j', 'ruine_o'],
-    'la famille « batiment » ne porte plus exactement les deux ruines à côté des bâtiments');
-
-  // ⚠ LE SEUIL EST CALCULÉ, PAS DEVINÉ : `EMPRISE` est en gros pixels d'une
-  // grille de 32, donc 29 × 2 = 58 sur la grille 64 et 29 × 4 = 116 sur la 128.
-  for (const grille of [64, 128]) {
-    const vise = EMPRISE * (grille / 32);
-    const fautifs = [];
-    let justes = 0;
-    for (const nom of BATIMENTS) {
-      const b = boiteDuSprite(grille, nom);
-      assert.equal(b.cote, grille, `${nom} : le sprite ne fait pas ${grille} pixels de côté`);
-      const plusGrande = Math.max(b.largeur, b.hauteur);
-      const tolere = (nom === PANACHE && grille === 128) ? 2 : 1;
-      if (Math.abs(plusGrande - vise) > tolere) fautifs.push(`${nom} (${plusGrande} pour ${vise})`);
-      if (nom === PANACHE) continue;
-      if (plusGrande === vise) justes += 1;
-    }
-    assert.deepEqual(fautifs, [],
-      `grille ${grille} : ${fautifs.length} sprite(s) hors de l'emprise visée — `
-      + fautifs.slice(0, 6).join(', '));
-    // ⚠ ET LA BORNE N'EST PAS LARGE : quatre-vingts sur quatre-vingts tombent
-    // EXACTEMENT sur la cible, le ±1 n'est employé par personne aujourd'hui. Le
-    // dire ici empêche qu'un lot futur s'installe dans la tolérance sans qu'on
-    // le voie.
-    assert.equal(justes, BATIMENTS.length - 1,
-      `grille ${grille} : ${justes} sprites exactement à ${vise} sur ${BATIMENTS.length - 1} — `
-      + 'la tolérance de ±1 a commencé à servir, il faut regarder pourquoi');
-  }
-
-  // ⚠⚠ UNE EXCEPTION SUR QUATRE-VINGT-UNE, ET ELLE EST MESURÉE PLUTÔT QU'ABSORBÉE
-  // PAR UNE TOLÉRANCE PLUS LARGE. L'artillerie anti-infanterie TRÈS ABÎMÉE sort
-  // à **57 sur 58** en grille 64 et à **114 sur 116** en grille 128 ; les
-  // quatre-vingts autres tombent au pixel, sur les deux grilles.
-  //
-  // ⚠⚠ LA CAUSE EST L'ÉROSION DE `conditionner`, ET ELLE EST MESURÉE, PAS
-  // SUPPOSÉE. `eroder(m, 3)` ronge trois pixels du masque DANS LA BOÎTE
-  // RECADRÉE, qui fait ici 993 px : sur une silhouette pleine cela coûte moins
-  // d'un demi-pixel de sortie, et les quatre-vingts autres n'en voient rien.
-  // Ce dessin-là finit en PANACHE DE FUMÉE, large de **3 px** sur ses premières
-  // lignes encrées — et même interrompu, certaines lignes rendant 0. Trois
-  // érosions emportent donc **12 lignes de la source**, soit **1,55 px** de la
-  // grille 128, que l'arrondi de la boîte porte à deux.
-  //
-  // ⚠ ELLE EST ASSERTÉE ENCORE NÉCESSAIRE — l'idiome de `DETTES_ACCENT`. Le jour
-  // où le dessin ou l'érosion changeront, ce test tombera pour dire que
-  // l'exception n'a plus lieu d'être, au lieu de la laisser dormir.
-  //
-  // ⚠⚠ ET ELLE NE PORTE QUE SUR LA GRILLE 128 — c'est la mesure qui le dit, pas
-  // le confort. En grille 64 le même dessin sort à 57 pour 58 visés : il reste
-  // DANS le ±1, donc la boucle ci-dessus l'accepte comme les autres et il n'y a
-  // pas d'exception à écrire. Les douze lignes de source que l'érosion emporte
-  // valent 0,77 px à cette échelle-là, et l'arrondi les ramène à un.
-  for (const [grille, mesure, ecartAttendu] of [[64, 57, 1], [128, 114, 2]]) {
-    const vise = EMPRISE * (grille / 32);
-    const b = boiteDuSprite(grille, PANACHE);
-    assert.equal(Math.max(b.largeur, b.hauteur), mesure,
-      `${PANACHE} en ${grille} : la mesure du panache a bougé (visé ${vise})`);
-    assert.equal(vise - mesure, ecartAttendu,
-      `${PANACHE} en ${grille} : l'écart du panache a bougé — remesurer, `
-      + 'et retirer l\'exception si elle n\'a plus lieu d\'être');
-  }
-
-  // ⚠⚠ FALSIFIABLE, ET C'EST LA MOITIÉ QUI COMPTE. La boucle ci-dessus mesure un
-  // ÉCART à une cible ; elle resterait verte sur l'ancienne règle si quelqu'un
-  // relâchait la tolérance en même temps qu'il remettait `cible(PV[…])`. Ce qui
-  // ne peut PAS survivre à ce retour, c'est l'ÉGALITÉ des deux bouts de l'ancien
-  // barème : la Raffinerie sortait à 16 gros pixels sur 32 — la moitié de la
-  // case — et le Chantier à 28. Ils tiennent désormais la même place, au pixel.
-  const chantier = boiteDuSprite(64, 'bat_j_chantier_de_construction');
-  const raffinerie = boiteDuSprite(64, 'bat_j_raffinerie');
-  assert.equal(Math.max(raffinerie.largeur, raffinerie.hauteur),
-    Math.max(chantier.largeur, chantier.hauteur),
-    'la Raffinerie et le Chantier ne tiennent plus la même place : l\'emprise dépend '
-    + 'encore des PV, alors qu\'elle doit être la même pour les vingt bâtiments');
-
-  // ⚠ ET 90 % SE DIT AUSSI EN CLAIR. 29 sur 32 font 90,6 % ; l'écart à la
-  // consigne d'Ethan est de 0,2 gros pixel, et il est déclaré ici comme au
-  // rapport. Une garde qui ne dirait que « les 81 sont d'accord entre eux »
-  // resterait verte si les 81 tombaient ensemble à 50 %.
-  assert.equal(Math.round((EMPRISE / 32) * 1000) / 10, 90.6,
-    `emprise ${EMPRISE}/32 : ce n'est plus les 90 % du point 2 d'Ethan`);
-});
-
-// ---------------------------------------------------------------------------
 // AR T3 — l'emprise ne se calcule plus depuis les PV, et l'outil le dit
 // ---------------------------------------------------------------------------
 
@@ -281,10 +142,35 @@ test('AR T3 — batiments_v2.py lit l\'emprise au lieu de la dériver des PV', (
   assert.equal((nu.match(/cible\s*\(/g) ?? []).length, 0,
     'tools/batiments_v2.py appelle encore `cible(…)` : l\'emprise d\'un bâtiment '
     + 'ne se dérive plus de ses PV depuis le lot ART-90');
-  assert.equal((nu.match(/EMPRISE_QUATRE_VINGT_DIX/g) ?? []).length, 3,
-    'les DEUX emplois de l\'emprise plus son import doivent nommer '
-    + 'EMPRISE_QUATRE_VINGT_DIX — un seul laisserait la vignette mixte ou les vingt '
-    + 'bâtiments sur l\'ancienne courbe');
+  // ⚠⚠ CETTE ASSERTION EST RETOURNÉE AU LOT EMPRISES-ET-DÉLAI, ET ELLE ÉTAIT
+  // DEVENUE UN PROXY MUET. Elle exigeait TROIS occurrences de
+  // `EMPRISE_QUATRE_VINGT_DIX` — l'import plus les deux emplois — au motif qu'un
+  // seul laisserait la vignette mixte ou les vingt bâtiments sur l'ancienne
+  // courbe. Le lot du soir retire cet import : les bâtiments ont trois paliers à
+  // eux, écrits ici, et la constante de `joueur_v2.py` reste aux unités.
+  //
+  // ⚠⚠ ET ELLE SERAIT RESTÉE VERTE EN NE MESURANT PLUS RIEN — MESURÉ, PAS
+  // SUPPOSÉ. Le palier haut s'appelle `EMPRISE_QUATRE_VINGT_DIX_HUIT`, dont
+  // l'ancien nom est un PRÉFIXE : le motif non borné en comptait trois
+  // occurrences et rendait exactement 3, si bien que la garde passait au vert en
+  // comptant une constante qu'elle ne nomme pas. Le motif borné, lui, en compte
+  // ZÉRO. C'est le piège du préfixe que `MODULES-D` a déjà payé avec
+  // `moduleDefense`, et `CLAUDE.md` §6 avec `jouer(` contre `rejouer(`.
+  const borne = /EMPRISE_QUATRE_VINGT_DIX(?![\p{L}\p{N}_])/gu;
+  assert.equal((nu.match(borne) ?? []).length, 0,
+    'tools/batiments_v2.py lit de nouveau l\'emprise des UNITÉS : les bâtiments et '
+    + 'les unités partageraient un nombre, et l\'une bougerait avec l\'autre en silence');
+  // ⚠ ET L'APPÂT PROUVE QUE LE MOTIF BORNÉ VOIT ENCORE LA VRAIE FAUTE — sans
+  // lui, un motif qui ne reconnaîtrait plus rien passerait aussi.
+  assert.equal(('EMPRISE_QUATRE_VINGT_DIX = 29\nEMPRISE_QUATRE_VINGT_DIX_HUIT = 31'
+    .match(borne) ?? []).length, 1,
+  'le motif borné ne distingue plus la constante des unités de celle des bâtiments');
+  // ⚠ ET LES DEUX EMPLOIS PASSENT DÉSORMAIS PAR LA TABLE DES PALIERS. Un seul
+  // laisserait la vignette mixte ou les vingt bâtiments sur l'emprise unique —
+  // c'est la moitié de l'ancienne assertion qui reste vraie, sous un autre nom.
+  assert.equal((nu.match(/emprise_du_batiment\(/g) ?? []).length, 3,
+    'les DEUX emplois de l\'emprise plus la définition doivent passer par '
+    + '`emprise_du_batiment` — un seul laisserait un groupe sur l\'ancienne emprise');
 
   // ⚠⚠ ET LA GARDE `if cle not in PV` RESTE, SA RAISON AYANT CHANGÉ. Elle ne
   // garde plus une emprise calculable — il n'y en a plus — mais que `BATIMENTS`

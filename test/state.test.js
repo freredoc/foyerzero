@@ -2491,6 +2491,14 @@ test('RC T6 — la migration v30 → v31 contracte la durée la plus COURTE, jam
   poserLaBaseSur(etat, 200, positionDepartJoueur().colonne);
   rattraperJeu(etat, 3 * TICKS_PAR_HEURE);
   const laBase = baseCourante(etat);
+  // ⚠⚠ LA BASE EST MONTÉE AU-DESSUS DU PLANCHER, ET C'EST SA PROPRE GARDE QUI
+  // L'A EXIGÉ AU LOT EMPRISES-ET-DÉLAI. Le barème d'Ethan du 10/09 au soir pose
+  // un plancher d'une heure, et le plafond passe SOUS ce plancher en dessous du
+  // niveau 4,2 : sur une base NEUVE, distance 1 et distance 10 rendent le même
+  // délai, donc le « le montage ne mesure rien » ci-dessous mord — il a mordu.
+  // On répare le MONTAGE, jamais l'assertion : c'est elle qui refuse un test
+  // qui passerait sur n'importe quelle lecture de la migration.
+  for (const batiment of laBase.disposition) batiment.niveau = 20;
   laBase.dernierDeplacementTick = etat.horloge.nbTicks - 10;
   laBase.dernierDeplacementDelaiTicks = delaiDeplacementTicks(etat, 10);
 

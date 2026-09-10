@@ -1,10 +1,18 @@
 # RAPPORT — lot ARRIVÉE-CARTE-ET-BUILD
 
-**Version produite : 0.99.40 · build 142.** Base de départ : `main` = `d68c4d1`
+**Version produite : 0.99.41 · build 143.** Base de départ : `main` = `d68c4d1`
 (PR #127 fusionnée), **rebâtie et remesurée dans un `git worktree` avant
 d'écrire une ligne** — 1 550 tests déclarés (1 549 pass · 0 fail · 1 skipped),
 `dist/index.html` **9 425 421 octets**, 0.99.39 · build 141. La base annoncée par
 le brief était donc exacte, ce qui n'arrive pas si souvent qu'il faille le taire.
+
+⚠⚠ **PUIS LA BASE A BOUGÉ SOUS LE LOT : `main` EST PASSÉ À `6eccedc` PENDANT SON
+EXÉCUTION**, Ethan ayant fusionné EMPRISES-ET-DÉLAI (#128) puis son correctif de
+CI (#129). Tout ce qui suit est donc **REMESURÉ contre la base neuve**, poste par
+poste, plutôt que recopié — `6eccedc` déclare **1 556 tests** et pèse
+**9 404 978 octets**. Le numéro de version suit : `main` avait DÉJÀ pris
+**0.99.40 · build 142**, et deux livrables différents sous le même `config.build`
+seraient lus comme un seul par l'enveloppe Android.
 
 ---
 
@@ -26,9 +34,9 @@ combat.**
 | Commande | Verdict |
 |---|---|
 | `npm ci` | ok |
-| `npm test` | **1558 déclarés · 1557 pass · 0 fail · 1 skipped** |
+| `npm test` | **1564 déclarés · 1563 pass · 0 fail · 1 skipped** |
 | `npm run check` | **sortie 0** |
-| `npm run build` | `dist/index.html`, **9 331 195 octets**, 0 référence externe |
+| `npm run build` | `dist/index.html`, **9 310 752 octets**, 0 référence externe |
 
 ⚠ Le skipped est `LIMITE T8`, suspendu par Ethan le 08/09. Il était déjà là au
 départ ; ce lot ne l'a pas touché.
@@ -39,8 +47,10 @@ l'arbre fusionné » en refermant la garde du compte de tests, qu'il avait trouv
 ROUGE ; **mesuré ici sur le worktree pristine de `d68c4d1`, c'est exactement 1 550
 et la suite est VERTE**. La base de ce lot-ci n'a donc rien eu à réparer.
 
-⚠ **Le compte passe de 1 550 à 1 558, soit +8, et ce sont EXACTEMENT les huit
-`AC T1`…`AC T8`** — mesuré des deux côtés, pas déduit du diff. Les trois
+⚠ **Le compte passe de 1 556 à 1 564, soit +8, et ce sont EXACTEMENT les huit
+`AC T1`…`AC T8`** — mesuré des deux côtés, pas déduit du diff. (Contre la base
+d'origine il passait de 1 550 à 1 558 : le +8 ne bouge pas, les six tests qui
+s'ajoutent viennent d'EMPRISES-ET-DÉLAI et de son correctif de CI.) Les trois
 falsifications muettes du §7 n'ont pas fait entrer de test : elles ont fait
 RESSERRER celui qui les laissait passer, et corriger le code dans un cas.
 
@@ -53,16 +63,16 @@ retirée, aucune n'a été assouplie** — vérifié en comptant les
 ## 2. `dist/index.html` — ventilation poste par poste
 
 Mesurée contre un livrable **rebâti dans un `git worktree` sur l'arbre pristine
-de `main` = `d68c4d1`**, jamais contre un nombre recopié.
+de `main` = `6eccedc`**, jamais contre un nombre recopié.
 
 | Poste | Avant | Après | Écart |
 |---|---:|---:|---:|
 | **feuille** | 142 308 | 44 947 | **−97 361** |
-| **JavaScript** | 402 212 | 404 947 | **+2 735** |
+| **JavaScript** | 402 617 | 405 352 | **+2 735** |
 | **balisage** | 42 237 | 42 637 | **+400** |
-| **images** | 7 651 104 | 7 651 104 | **0** |
+| **images** | 7 630 256 | 7 630 256 | **0** |
 | **audio** | 1 187 560 | 1 187 560 | **0** |
-| **total** | **9 425 421** | **9 331 195** | **−94 226** |
+| **total** | **9 404 978** | **9 310 752** | **−94 226** |
 
 ⚠⚠ **LA SOMME DES CINQ POSTES TOMBE EXACTEMENT SUR LE TOTAL DES DEUX CÔTÉS**, et
 c'est ce qui dit qu'aucune ressource n'est entrée par une porte qu'on n'a pas
@@ -87,7 +97,22 @@ de la mini-carte et son bouton). **Les images et l'audio ne bougent pas d'un
 octet** : le lot ne fait entrer aucune ressource, et `src/data/sons.js` est
 régénéré sans qu'un `.opus` change.
 
-**Borne T10 inchangée à 9 600 000, marge 268 805 octets, 2,80 %.** ⚠ Elle ne
+⚠⚠ **ET LE COÛT NE BOUGE PAS D'UN OCTET À LA FUSION — MESURÉ DES DEUX CÔTÉS, PAS
+ADDITIONNÉ.** La même ventilation, prise contre `d68c4d1` avant que `main` ne
+bouge, rendait déjà **−97 361 · +2 735 · +400 · +0 · +0** pour **−94 226**. Le lot
+ÉCRANS avait mesuré **six octets** d'écart entre la somme de deux diffs et le
+livrable fusionné, parce que les deux lots touchaient `src/ui/monde.js` et
+`src/ui/raid.js` ; ici les deux lots ne partagent **aucun fichier du livrable**,
+et leurs gains portent sur des postes DISJOINTS — les images là-bas, la feuille
+ici. **C'est la mesure qui le dit, pas l'arithmétique** : elle aurait pu diverger.
+
+⚠ **ET ELLE CONFIRME LA VENTILATION D'EMPRISES-ET-DÉLAI PAR UN CHEMIN
+INDÉPENDANT.** Entre `d68c4d1` et `6eccedc`, les images tombent de 7 651 104 à
+**7 630 256** (−20 848, l'atlas `batiment-128`) et le JavaScript monte de 402 212
+à **402 617** (+405, la table des cinquante plafonds de délai) — au dernier octet
+ce que son `PIC T7` annonce, et son total de 9 404 978 est retrouvé à l'identique.
+
+**Borne T10 inchangée à 9 600 000, marge 289 248 octets, 3,01 %.** ⚠ Elle ne
 BAISSE pas parce qu'un lot rend : « baisser une borne pour faire passer un lot :
 jamais » se lit dans les deux sens, et une borne relevée au lot ART-90 pour de
 l'art qui est toujours là n'a aucune raison de redescendre.
@@ -111,8 +136,8 @@ Toutes **RE-EXTRAITES du dépôt**, jamais retapées depuis le brief.
 
 ```js
 const BORNE = 9_600_000;      // T10 de `banc.test.js`, relevée au lot ART-90
-const MESURE = 9_331_195;     // mesuré le 10/09, lot ARRIVÉE-CARTE-ET-BUILD, base `d68c4d1`
-const MARGE = BORNE - MESURE; // 268 805 octets
+const MESURE = 9_310_752;     // remesuré après fusion, lot ARRIVÉE-CARTE-ET-BUILD, base `6eccedc`
+const MARGE = BORNE - MESURE; // 289 248 octets
 assert.equal(MARGE, 268_805);
 assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.8);
 ```
@@ -124,7 +149,7 @@ qu'il n'en prend, donc la question ne se posait pas.
 ⚠ **LE COMMENTAIRE CUMULATIF EST AJOUTÉ, PAS ÉCRASÉ.** La ligne du lot ART-90
 reste ; celle de ce lot-ci s'écrit en dessous, avec son sens — c'est le PREMIER
 lot de la série qui fait DESCENDRE le livrable, et le dire est ce qui empêchera
-de lire la marge de 2,80 % comme un resserrement.
+de lire la marge de 3,01 % comme un resserrement.
 
 ⚠ **`image-rendering: pixelated` passe de 8 à 9 sites**, et le neuvième est
 `#monde-mini-canvas` : une mini-carte de 1 080 px affichée dans 360 px CSS est
@@ -457,7 +482,7 @@ même affaiblirait la consigne. »
    la faute est inatteignable sur l'état du jour, et la garde a été mise dans
    l'OUTIL. Voir §7.
 5. ⚠ **LE BRIEF ANNONÇAIT HUIT TESTS, ET IL Y EN A EXACTEMENT HUIT** — mesuré,
-   1 550 → 1 558. Les trois falsifications muettes du §7 n'ont pas fait entrer un
+   1 556 → 1 564. Les trois falsifications muettes du §7 n'ont pas fait entrer un
    neuvième test : deux ont fait RESSERRER `AC T5` et `AC T6`, et la troisième a
    fait corriger `basculeDuSol` elle-même. **Aucun test n'est retiré, aucune
    assertion n'est assouplie.**

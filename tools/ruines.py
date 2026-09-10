@@ -14,6 +14,19 @@ quand la CASE est rasée ; `bat_<c>_<id>_detruit` quand le bâtiment est à zér
 mais encore là. Deux choses différentes, et c'est pour ça que ce fichier ne
 disparaît pas avec ses seize.
 
+⚠⚠ LES DEUX RUINES SUIVENT LE CHANTIER ET LA SOUCHE — lot EMPRISES-ET-DÉLAI,
+10/09/2026 au soir. Ethan : « Les ruines doivent suivre les bâtiments ». Leur
+emprise passe de 26 à 31 gros pixels sur 32, c'est-à-dire au palier HAUT et non
+au défaut, et la raison est de jeu : une ruine remplace à l'écran une base RASÉE
+TOUT ENTIÈRE, pas un bâtiment ordinaire. Une ruine plus PETITE que le bâtiment
+central qu'elle recouvre se lirait comme un rétrécissement du site, c'est-à-dire
+comme un changement d'état que le rasage n'a pas produit.
+
+⚠⚠ ET LE NOMBRE NE SE RECOPIE PAS : IL S'IMPORTE. Deux `31` écrits dans deux
+fichiers sont deux occasions de diverger, et celle-là serait muette — la ruine
+rétrécirait sous le Chantier sans qu'un test le dise. `batiments_v2.py` porte la
+table des paliers ; ce fichier-ci la LIT.
+
 Dix-huit sprites, trois grilles, cinquante-quatre fichiers. Le suffixe de sortie
 est `_detruit`, sur le modèle du `_def` des unités : même dossier, même nom de
 bâtiment, un état de plus.
@@ -52,6 +65,7 @@ from PIL import Image
 import numpy as np
 from cond import est_fond
 from final128 import pal, recadrer, conditionner, ecrire
+from batiments_v2 import EMPRISE_QUATRE_VINGT_DIX_HUIT
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('bâtiment')
@@ -87,7 +101,10 @@ for k, (nom, ouv_attendu) in enumerate(attendus):
     P = pal(ouv_attendu)
     cell = im.crop((k * W // 2, 0, (k + 1) * W // 2, im.size[1]))
     for N in GRILLES:
-        g, matiere = conditionner(recadrer(cell, 26 * (N // 32), N), P, N)
+        # ⚠ `N // 32` EST LA MISE À L'ÉCHELLE DE LA GRILLE, pas un nombre magique :
+        # `N` vaut 64 ou 128, donc le facteur vaut 2 ou 4. Seule l'emprise change.
+        g, matiere = conditionner(
+            recadrer(cell, EMPRISE_QUATRE_VINGT_DIX_HUIT * (N // 32), N), P, N)
         d = os.path.join(DST, str(N))
         os.makedirs(d, exist_ok=True)
         ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)

@@ -343,8 +343,8 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
  * dix autres tranquilles.
  */
 const TAILLES_D_AVANT = {
-  'atlas-batiment-128.webp': 507076, // 299848 avant ART-90
-  'atlas-batiment-64.webp': 185210, // 107050 avant ART-90
+  'atlas-batiment-128.webp': 491442, // 507076 avant EMPRISES-ET-DÉLAI, 299848 avant ART-90
+  'atlas-batiment-64.webp': 179002, // 185210 avant EMPRISES-ET-DÉLAI, 107050 avant ART-90
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
   'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
@@ -400,6 +400,25 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // en 128 sur des images identiques. Le lot le referme pour `batiment` en le
   // réécrivant pour de bon, et **laisse les trois autres exactement où il les a
   // trouvés**.
+  //
+  // ⚠⚠ ET LES DEUX MÊMES SONT RÉANCRÉS AU LOT EMPRISES-ET-DÉLAI, 10/09 AU SOIR,
+  // DANS L'AUTRE SENS : ILS MAIGRISSENT. L'emprise unique de 29 posée le matin
+  // par ART-90 devient TROIS paliers — 31 pour le Chantier et la Souche, 27 pour
+  // les huit de l'économie, 29 pour les dix autres — et neuf bâtiments sur vingt
+  // rétrécissent. `atlas-batiment-128.webp` passe de 507 076 à **491 442**, le 64
+  // de 185 210 à **179 002**. **Aucun sprite n'entre ni ne sort** : 83 des deux
+  // côtés, comme à ART-90.
+  //
+  // ⚠⚠ ET LES SEIZE AUTRES LIGNES N'ONT PAS BOUGÉ D'UN OCTET, CE QUI EST LA
+  // MOITIÉ QUI PROUVE. Le lot ne touche que la famille `batiment` :
+  // `--forcer batiment` la nomme, et `carte` comme `interface` restent
+  // exactement où ART-90 les a trouvées. ⚠ Mesuré sur un `git worktree` pristine
+  // à `d68c4d1` AVANT d'écrire une ligne : `atlas.py --verifier` y rend déjà
+  // **17 identiques · 3 différents** — `carte-64`, `carte-128`, `interface-128`,
+  // et EUX SEULS. Leur écart est l'encodeur WebP de cette machine, il préexiste
+  // au lot, et **aucun sprite de ces deux familles n'a changé** — vérifié au
+  // `git status`, zéro fichier. Les recoudre aurait réécrit des images
+  // identiques pour rien, ce que `CLAUDE.md` §3 interdit depuis PICTOGRAMMES.
   for (const [fichier, octets] of Object.entries(TAILLES_D_AVANT)) {
     assert.equal(statSync(join(SPRITES, fichier)).size, octets,
       `${fichier} a changé de taille : la famille neuve a déplacé un atlas d'avant`);
@@ -417,7 +436,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 331 195 octets, la marge sur la borne T10 est de 2,80 %', () => {
+test('PIC T7 — le livrable pèse 9 310 752 octets, la marge sur la borne T10 est de 3,01 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -564,6 +583,45 @@ test('PIC T7 — le livrable pèse 9 331 195 octets, la marge sur la borne T10 e
   // faux, et c'est mesuré** — la garde « sprite — l'atlas cousu répond des
   // sprites d'aujourd'hui » de `test/sprite.test.js` tombe alors, et elle dit
   // quoi relancer. `npm run check` suffit.
+  //
+  // ⚠⚠ ET CETTE MESURE-LÀ A MENTI PENDANT UN LOT, SANS QU'UN TEST TOMBE. Relevé
+  // le 10/09 au soir sur `d68c4d1` : le disque rendait **9 425 421** quand ce
+  // test écrivait 9 410 485 — **14 936 octets de dérive**, donc SOUS la tolérance
+  // de 50 000, donc vert. Le lot ÉCRANS connaissait le bon chiffre (son rapport
+  // écrit 9 425 421, marge 174 579, 1,82 %) et n'a pas rouvert ce fichier. C'est
+  // exactement ce que la dernière assertion existe pour empêcher — « la mesure
+  // écrite vieillirait en silence » — et la tolérance est ce qui l'a laissée
+  // passer : elle garde contre la dérive lente, pas contre un lot qui SAIT ce
+  // qu'il déplace et ne remesure pas. Un lot qui touche au livrable réancre ici.
+  //
+  // ⚠⚠ REMESURÉ AU LOT EMPRISES-ET-DÉLAI, 10/09 AU SOIR, ET C'EST LE PREMIER LOT
+  // DEPUIS SPRITES-V2-JOUEUR QUI **REND** DES OCTETS. Les vingt bâtiments
+  // quittent l'emprise unique de 29 posée le matin même par ART-90 pour TROIS
+  // paliers — 31 pour le Chantier et la Souche, 27 pour les huit de l'économie,
+  // 29 pour les dix autres (Ethan : « Passer tous les bâtiments collecteur et
+  // central etc à 85. Les autres 92 %. Chantier et souche 98 % »). **9 425 421 →
+  // 9 404 978, soit −20 443**, mesuré contre le livrable bâti sur l'arbre
+  // pristine de `d68c4d1` au premier `npm run check` de la session, et ventilé :
+  // **images −20 848 · JavaScript +405 · feuille +0 · balisage +0 · audio +0**,
+  // la somme des cinq postes tombant EXACTEMENT sur le total, `data:` à **311
+  // lignes / 306 URI** des deux côtés.
+  //
+  // ⚠⚠ ET LES −20 848 SONT UN SEUL FICHIER, AU DERNIER OCTET.
+  // `atlas-batiment-128.webp` passe de 507 076 à 491 442 octets, soit
+  // 676 104 → 655 256 en base64 : l'écart du poste `images` EST celui de cet
+  // atlas-là. La grille 64 maigrit aussi — 185 210 → 179 002 — et ne coûte RIEN
+  // au livrable, `GRILLE_ATLAS` valant 128 : c'est le fait que ce test répète
+  // depuis CONQUÊTE-24H, vu ici dans l'autre sens.
+  //
+  // ⚠ NEUF BÂTIMENTS RÉTRÉCISSENT, DEUX GRANDISSENT, ET DIX NE BOUGENT PAS D'UN
+  // PIXEL : 92 % de 32 font 29,44, donc 29, qui est exactement ce qu'ART-90
+  // avait posé partout. Mesuré au fichier près — 86 PNG modifiés sur les 166
+  // que la chaîne réécrit, soit 16 (palier 31) + 64 (palier 27) + 2 (la vignette
+  // mixte) + 4 (les deux ruines) — et zéro pour le palier médian.
+  //
+  // ⚠ LES 405 OCTETS DE JAVASCRIPT SONT LA TABLE DES CINQUANTE PLAFONDS DE
+  // DÉLAI, moins les trois coefficients qu'elle remplace. C'est le §5 du lot, et
+  // il n'a rien à voir avec l'art : voir `src/data/sites.js`.
   // ⚠⚠ REMESURÉ AU LOT ARRIVÉE-CARTE-ET-BUILD, 10/09, ET C'EST LE PREMIER LOT
   // DEPUIS FICHE-JUSTE QUI **REND** DES OCTETS. Les commentaires de la feuille
   // sortent au build : `tools/build.js` passe `minify: true` à esbuild pour le
@@ -583,23 +641,38 @@ test('PIC T7 — le livrable pèse 9 331 195 octets, la marge sur la borne T10 e
   // quatre qui partent sont des commentaires qui NOMMAIENT `data:` sans en
   // porter un.
   //
-  // ⚠⚠ ET L'ANCRE D'AVANT MENTAIT DÉJÀ DE 14 936 OCTETS, sans qu'aucun test le
-  // dise. Elle écrivait `9_410_485`, mesuré au lot ART-90 sur la base
-  // `14dd4ac` ; `d68c4d1` en pèse **9 425 421** — le lot ÉCRANS n'avait pas
-  // réancré, et la dérive passait sous la tolérance de 50 000 octets de la
-  // dernière assertion de ce test. C'est ce qu'on lui demande : elle garde
-  // contre la dérive LENTE, elle ne remplace pas un remesurage quand un lot sait
-  // ce qu'il déplace.
-  //
   // ⚠ LA BORNE NE BOUGE PAS. Elle a été relevée au lot ART-90 parce qu'une
   // image entrait ; ce lot-ci ALLÈGE, et « baisser une borne pour faire passer
   // un lot : jamais » se lit aussi dans l'autre sens — une borne ne se baisse
   // pas non plus pour se féliciter d'un gain.
+  //
+  // ⚠⚠ ET LA BASE A BOUGÉ SOUS LE LOT : `main` EST PASSÉ DE `d68c4d1` À
+  // `6eccedc` PENDANT SON EXÉCUTION, Ethan ayant fusionné EMPRISES-ET-DÉLAI
+  // (#128) puis son correctif de CI (#129). Les DEUX lots avaient remesuré
+  // contre `d68c4d1`, chacun de son côté, et **leurs gains portent sur des
+  // postes DISJOINTS** — les images là-bas, la feuille ici. Le livrable
+  // fusionné est donc REMESURÉ poste par poste contre la base neuve, jamais
+  // recopié ni additionné : le lot ÉCRANS a déjà payé cette leçon-là, où le
+  // JavaScript avait perdu six octets à la fusion sans qu'aucune arithmétique
+  // le prévoie. ⚠ **ET LA MESURE DIT QUE LE COÛT DU LOT NE BOUGE PAS D'UN OCTET
+  // À LA FUSION** — contre `6eccedc` comme contre `d68c4d1` : **feuille −97 361 ·
+  // JavaScript +2 735 · balisage +400 · images +0 · audio +0**, total **−94 226**,
+  // et les cinq postes PARTITIONNENT le fichier des deux côtés. C'est mesuré, pas
+  // déduit : les deux lots ne partagent aucun fichier du livrable, là où ÉCRANS et
+  // SON-ET-ARRIVÉE partageaient `src/ui/monde.js` et `src/ui/raid.js`.
+  // ⚠ Le remesurage confirme au passage la ventilation d'EMPRISES-ET-DÉLAI par un
+  // chemin indépendant : entre `d68c4d1` et `6eccedc`, les images tombent de
+  // 7 651 104 à **7 630 256** (−20 848, l'atlas `batiment-128`) et le JavaScript
+  // monte de 402 212 à **402 617** (+405, la table des cinquante plafonds).
+  // ⚠ Et le numéro de version suit : `main` avait DÉJÀ pris
+  // 0.99.40 · build 142, donc ce lot passe à **0.99.41 · build 143** — deux
+  // livrables différents sous le même `config.build` seraient lus comme un
+  // seul par l'enveloppe Android.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_331_195;          // mesuré le 10/09, lot ARRIVÉE-CARTE-ET-BUILD, base `d68c4d1`
-  const MARGE = BORNE - MESURE;      // 268 805 octets
-  assert.equal(MARGE, 268_805);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.8);
+  const MESURE = 9_310_752;          // remesuré après fusion, lot ARRIVÉE-CARTE-ET-BUILD, base `6eccedc`
+  const MARGE = BORNE - MESURE;      // 289 248 octets
+  assert.equal(MARGE, 289_248);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 3.01);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
