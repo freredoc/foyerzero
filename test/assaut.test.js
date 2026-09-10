@@ -380,10 +380,16 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // le préréglage figé de B meurt désormais AVANT d'atteindre la Souche. Ce que
   // ce test garde n'a pas bougé : les trois préréglages figés rendent un combat
   // déterministe, mesuré ici en clair.
+  // ⚠⚠ LOT MUR (10/09) : LES TROIS BOUGENT, ET AUCUN NE CHANGE DE CAUSE. Le lot
+  // ne touche ni la composition ni le placement — il change ce que les pièces
+  // FONT devant un mur —, donc c'est le déroulé seul qui se déplace. Ce que ce
+  // test garde n'a pas bougé : les trois préréglages figés rendent un combat
+  // déterministe, mesuré ici en clair, et B rase toujours moins bien que ce que
+  // le lot CIBLES-RANGÉES avait relevé.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 260);
+  assert.equal(figes[0].tick, 259);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
-  assert.equal(figes[1].tick, 646);
+  assert.equal(figes[1].tick, 667);
   assert.equal(figes[2].cause, 'attaquants');
   assert.equal(figes[2].tick, 446);
 
@@ -397,7 +403,14 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // défense se pose par paquets répulsés : l'assaut d'infanterie budgété
   // n'atteint plus un seul bâtiment de l'avant-poste. C'est du CALIBRAGE, pas un
   // défaut, et le rapport le porte pour Ethan.
-  assert.equal(budgetes[0].nbTicks, 264);
+  //
+  // ⚠⚠ LOT MUR (10/09) : 264 → 280 TICKS, SEPTIÈME RÉANCRAGE, ET LE PREMIER QUI
+  // NE DÉPLACE NI LE SITE NI SA GARNISON. Les six d'avant recomposaient ou
+  // replaçaient ; celui-ci ne touche qu'au DÉROULÉ — l'assaut d'infanterie
+  // budgété met seize ticks de plus à mourir parce que les pièces qui le
+  // précèdent s'arrêtent devant la défense au lieu de la longer. Le butin reste à
+  // ZERO, et c'est toujours du calibrage à trancher par Ethan, pas un défaut.
+  assert.equal(budgetes[0].nbTicks, 280);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -434,9 +447,14 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
   assert.equal(budgetes[1].cause, 'attaquants');
   // ⚠ LOT PAQUETS : 323 → 287, 528 → 396.
-  assert.equal(budgetes[1].nbTicks, 287);
+  // ⚠ LOT MUR (10/09) : B passe de 287 à 244 ticks, et C de 396 à 458 — en sens
+  // CONTRAIRE l'un de l'autre. C'est ce qu'on attend d'un lot qui change le
+  // déroulé et rien d'autre : l'assaut lourd de B casse la garnison plus vite
+  // parce qu'il s'arrête dessus, l'assaut d'infanterie de C se traîne parce qu'il
+  // bute sur ce qu'il ne peut pas percer. Les trois causes ne bougent pas.
+  assert.equal(budgetes[1].nbTicks, 244);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 396);
+  assert.equal(budgetes[2].nbTicks, 458);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305

@@ -14,6 +14,14 @@
 // ⚠ T2, T3 ET T4 SONT DES INVERSIONS : ils sont VERTS ici et ROUGES sur
 // `origin/main`, vérifié en exécutant ce fichier dans un `git worktree`. Un
 // test d'inversion qui passe des deux côtés ne teste rien.
+//
+// ⚠⚠⚠ ET LE LOT MUR (10/09) RETOURNE T2 ET T3 UNE SECONDE FOIS — LE FICHIER
+// GARDE DÉSORMAIS LE CONTRAIRE DE CE QUE SON TITRE ANNONCE. Ethan : « les
+// unités anti-structure s'arrêtent devant les tourelles, les barbelés, les murs
+// et les bâtiments. » L'exclusion du 04/09 tombe, `estStructureDefensive` part
+// avec son dernier lecteur, et `T10` garde désormais son ABSENCE. Ce qui reste
+// vrai du titre est la moitié qui n'a jamais bougé : le genre `batiment`
+// arrête TOUT LE MONDE, et il est seul à le faire.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { creerCombat, tick, TICKS_AVANT_REPLI } from '../src/sim/combat.js';
+import { MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { DEFENSES, UNITES } from '../src/data/combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -102,10 +111,17 @@ test('ARRÊT T1 — une anti-infanterie s\'arrête désormais pour un bâtiment'
 });
 
 // ---------------------------------------------------------------------------
-// ARRÊT T2 — une anti-structure ne s'arrête plus pour une tourelle
+// ARRÊT T2 — une anti-structure s'arrête POUR une tourelle
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T2 — une anti-structure ne s\'arrête plus pour une tourelle (inversion)', () => {
+test('ARRÊT T2 — une anti-structure s\'arrête POUR une tourelle (inversion du 10/09)', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ, ET IL L'EST POUR LA SECONDE FOIS. Il assertait
+  // « elle ne s'arrête PLUS pour une tourelle », conséquence de l'exclusion du
+  // 04/09 ; Ethan renverse le 10/09 : « les unités anti-structure s'arrêtent
+  // devant les tourelles, les barbelés, les murs et les bâtiments ». Ce qui est
+  // mesuré ici n'est donc plus une absence d'arrêt mais sa PRÉSENCE — et,
+  // au-delà, que l'arrêt SERT à quelque chose : la tourelle tombe.
+  //
   // ⚠ LA BATTERIE NE PEUT PAS RIPOSTER, ET C'EST VOULU : sa table vaut
   // {0, 0, 40}, donc elle ne touche que ce qui vole ou construit. Une Casemate
   // à sa place tuerait les Perceurs au tick 65 et la mesure porterait sur une
@@ -116,58 +132,98 @@ test('ARRÊT T2 — une anti-structure ne s\'arrête plus pour une tourelle (inv
     vagues: [[{ id: 'perceurs', colonne: 5 }]],
   }));
   const perceurs = assaillant(etat);
+  const batterie = () => etat.entites.find((e) => e.id === 'batterie');
   assert.equal(DEFENSES.batterie.type, 'tourelle', 'montage : ce n\'est pas une tourelle');
+  // ⚠ LA PRÉDILECTION SE DÉDUIT DE LA MATRICE, elle n'est pas un champ de
+  // `UNITES` : `colonneDominante` la calcule au profil. On asserte donc la
+  // DONNÉE d'où elle sort — 25 en structure contre 12 et 5 —, faute de quoi un
+  // réglage de roster ferait passer ce test sur une unité qui n'est plus
+  // anti-structure, et il ne mesurerait plus rien.
+  const d = UNITES.perceurs.degats;
+  assert.ok(d.structureOuAviation > d.vehicule && d.vehicule > d.infanterie,
+    'montage : les Perceurs ne sont plus anti-structure, le test ne mesure rien');
 
-  jouer(etat, 50);
-  assert.equal(cibleDe(etat, perceurs), 'batterie', 'montage : la tourelle doit être visée');
-  // ⚠ ON RELÈVE LE DÉPART, ON NE L'ASSERTE PAS : sur `origin/main` l'unité gèle
-  // dès qu'elle acquiert la tourelle, donc elle n'est même pas à la même case
-  // au tick 50. Asserter sa position ici ferait tomber ce test AVANT la ligne
-  // qui porte la règle, et l'inversion ne dirait plus laquelle des deux
-  // grandeurs a bougé.
-  const depart = perceurs.rangeeMilli;
+  // ⚠ LA TOURELLE EST DANS UNE AUTRE COLONNE, ET C'EST TOUT CE QUI REND LA
+  // MESURE LISIBLE — même raison qu'en `T1`. En (6,6) contre une unité en
+  // colonne 5, la colonne de l'unité est LIBRE : ni `peutAvancer` ni le
+  // rangement du point 2 ne peuvent la retenir. Si elle ne bouge plus, c'est
+  // `doitSArreter` et rien d'autre.
+  jouer(etat, 49);
+  assert.equal(cibleDe(etat, perceurs), null, 'montage : la tourelle ne doit pas être visée avant');
+  assert.equal(perceurs.rangeeMilli, 4940);
 
-  // AVANT : `colonnePredilection` des Perceurs vaut `structureOuAviation`, la
-  // colonne d'une tourelle — l'unité gelait ici, et l'avance valait ZÉRO.
-  // APRÈS : elle continue à sa vitesse nominale de 60 milli-cases par tick, et
-  // dépasse la rangée de la tourelle.
-  jouer(etat, 40);
-  assert.equal(perceurs.rangeeMilli - depart, 40 * UNITES.perceurs.vitesse,
-    'elle ne s\'est pas déplacée de quarante pas : elle s\'arrête pour la tourelle');
-  assert.equal(perceurs.rangeeMilli, 7400);
-  assert.ok(perceurs.rangeeMilli > 6000, 'elle n\'a pas dépassé la rangée de la tourelle');
+  // Le tick de l'acquisition est CELUI DU GEL, pas le suivant : `doitSArreter`
+  // exige `aTire`, l'étape 4 tire, l'étape 7 lit — dans le même tick.
+  jouer(etat, 1);
+  assert.equal(cibleDe(etat, perceurs), 'batterie');
+  assert.equal(perceurs.rangeeMilli, 4940, 'elle a avancé au tick de l\'acquisition');
+
+  // AVANT le 10/09 : elle continuait à 60 milli-cases par tick et dépassait la
+  // rangée de la tourelle — 7 400 au bout de quarante ticks. APRÈS : pas un
+  // milli-case, et la tourelle PERD des PV pendant ce temps. Les deux moitiés
+  // comptent : figée sans tirer, elle serait bloquée, pas arrêtée.
+  const pvAvant = batterie().pvMilli;
+  jouer(etat, 30);
+  assert.equal(perceurs.rangeeMilli, 4940, 'elle avance encore : elle ne s\'arrête pas pour la tourelle');
+  assert.ok(batterie().pvMilli < pvAvant, 'elle est figée sans tirer : c\'est un blocage, pas un arrêt');
+  assert.equal(batterie().vivant, true, 'montage : la tourelle doit tenir la fenêtre mesurée');
+
+  // Et l'arrêt LÈVE avec sa cause : la Batterie tombe au tick 89, l'unité
+  // repart au tick suivant. Un arrêt qui ne lèverait pas serait un gel.
+  jouer(etat, 9);
+  assert.equal(batterie().vivant, false, 'montage : la tourelle devait tomber au tick 89');
+  jouer(etat, 1);
+  assert.equal(perceurs.rangeeMilli, 5000, 'elle ne repart pas une fois la tourelle détruite');
 });
 
 // ---------------------------------------------------------------------------
-// ARRÊT T3 — une anti-structure ne s'arrête plus pour un mur
+// ARRÊT T3 — une anti-structure s'arrête POUR un mur
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T3 — une anti-structure ne s\'arrête plus pour un mur (inversion)', () => {
-  // Le Merlon est DANS la colonne de l'unité : il bloque, donc l'unité ne
-  // franchira pas sa case. Ce que la règle change se lit à l'intérieur de la
-  // case — `peutAvancer` compte comme un progrès le fait d'avancer chez soi.
+test('ARRÊT T3 — une anti-structure s\'arrête POUR un mur (inversion du 10/09)', () => {
+  // ⚠⚠ SECOND RETOURNEMENT, MÊME ARBITRAGE QU'EN `T2`, ET C'EST ICI QUE LE
+  // POINT 3 D'ETHAN SE LIT LE PLUS NETTEMENT : « Une unité anti-structure doit
+  // s'arrêter pour détruire mur barrière tourelles. C'est une cible de
+  // prédilection. »
+  //
+  // ⚠⚠ ET L'ARRÊT SE PRODUIT À PORTÉE, PAS AU CONTACT — c'est ce qui le
+  // distingue du blocage, et c'est ce que le lot MUR sépare. Elle gèle à 4 520,
+  // dans sa case 4, dès qu'elle acquiert le Merlon ; elle n'atteint jamais
+  // 5 960 ni même la case devant le mur. Le rangement du point 2, lui, ne la
+  // concerne pas : `if (arrete) return;` passe AVANT, et une unité arrêtée
+  // n'avait pas commencé à fluer.
   const etat = creerCombat(montage({
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 6, colonne: 5 }],
     vagues: [[{ id: 'perceurs', colonne: 5 }]],
   }));
   const perceurs = assaillant(etat);
+  const mur = () => etat.entites.find((e) => e.id === 'merlon');
 
-  jouer(etat, 45);
+  jouer(etat, 42);
+  assert.equal(cibleDe(etat, perceurs), null, 'montage : le mur ne doit pas être visé avant');
+  assert.equal(perceurs.rangeeMilli, 4520);
+
+  jouer(etat, 1);
   assert.equal(cibleDe(etat, perceurs), 'merlon', 'montage : le mur doit être visé');
-  const acquisition = perceurs.rangeeMilli;
+  assert.equal(perceurs.rangeeMilli, 4520, 'elle a avancé au tick de l\'acquisition');
 
-  // AVANT : gelée pour toujours à l'endroit où elle a acquis le mur — 4 520 sur
-  // `origin/main`, où l'arrêt tombe cinq ticks plus tôt. APRÈS : elle monte
-  // jusqu'au bord de la case du mur, 5 960, et le pas suivant viserait 6 020,
-  // c'est-à-dire la case du Merlon, qui bloque.
-  jouer(etat, 21);
-  assert.ok(perceurs.rangeeMilli > acquisition,
-    'elle n\'a pas bougé depuis qu\'elle vise le mur : elle s\'arrête encore pour lui');
-  assert.equal(perceurs.rangeeMilli, 5960);
-  jouer(etat, 20);
-  assert.equal(perceurs.rangeeMilli, 5960, 'elle a franchi le mur');
+  // AVANT le 10/09 : elle montait jusqu'au bord de la case du mur, 5 960, et y
+  // restait. APRÈS : elle ne bouge plus d'un milli-case dès l'acquisition, et
+  // elle tire — le mur perd des PV pendant les quarante ticks mesurés.
+  const pvAvant = mur().pvMilli;
+  jouer(etat, 40);
+  assert.equal(perceurs.rangeeMilli, 4520,
+    'elle a bougé depuis qu\'elle vise le mur : elle ne s\'arrête pas pour lui');
+  assert.ok(mur().pvMilli < pvAvant, 'elle est figée sans tirer : c\'est un blocage, pas un arrêt');
   assert.equal(perceurs.sorti, false, 'elle s\'est repliée devant le mur');
+  assert.equal(mur().vivant, true, 'montage : le mur doit tenir la fenêtre mesurée');
+
+  // Et l'arrêt lève avec sa cause, ici aussi : le Merlon tombe au tick 122.
+  jouer(etat, 39);
+  assert.equal(mur().vivant, false, 'montage : le mur devait tomber au tick 122');
+  jouer(etat, 1);
+  assert.equal(perceurs.rangeeMilli, 4580, 'elle ne repart pas une fois le mur détruit');
 });
 
 // ---------------------------------------------------------------------------
@@ -303,13 +359,22 @@ test('ARRÊT T7 — devant un mur bloquant, le porteur de l\'Écraseur force', (
   const murDe = (etat) => etat.entites.find((e) => e.id === 'merlon');
   const uniteDe = (etat) => assaillant(etat);
 
-  // Le Broyeur ARRIVE au contact au tick 44, à 5 960 — 4 700 + 14 × 90 — et le
-  // premier forçage tombe au tick 45, le premier où il ne progresse plus. On
-  // relève donc au 44 : un relevé pris au 45 trouve déjà vingt mille milli-PV
-  // d'écart, et c'est ce qui a fait tomber le premier jet de ce test.
-  jouer(avec, 44);
-  jouer(sans, 44);
-  assert.equal(uniteDe(avec).rangeeMilli, 5960, 'montage : le porteur n\'est pas au contact');
+  // ⚠⚠ LE CONTACT A CHANGÉ D'ENDROIT ET DE TICK AU LOT MUR, ET C'EST LE POINT 2.
+  // AVANT : le Broyeur montait jusqu'à 5 960 — le bord de sa case, 4 700 + 14 ×
+  // 90 — au tick 44, et forçait à partir du 45. APRÈS : il ENTRE dans la case 5
+  // au tick 34, à 5 060, puis se RANGE à 5 000 au tick 35, où tombe le premier
+  // forçage. On relève donc au 34 : un relevé pris au 35 trouve déjà vingt mille
+  // milli-PV d'écart, et c'est ce qui avait fait tomber le premier jet de ce
+  // test.
+  //
+  // ⚠⚠⚠ ET CE TEST EST LE CANARI DU PIÈGE DE L'ÉCRASEUR. Le lot MUR range
+  // l'unité sur sa case : `caseDestination` revaut alors `rangee`, si bien que
+  // `structureForcee` chercherait la structure SOUS l'unité et que `peutAvancer`
+  // la dirait « progressante » pour toujours. L'une ou l'autre moitié oubliée,
+  // l'écart mesuré plus bas vaut ZERO et la brèche ne s'ouvre plus — en silence.
+  jouer(avec, 34);
+  jouer(sans, 34);
+  assert.equal(uniteDe(avec).rangeeMilli, 5060, 'montage : le porteur n\'est pas au contact');
   assert.equal(uniteDe(avec).rangeeMilli, uniteDe(sans).rangeeMilli, 'montage : les deux scènes divergent');
   assert.equal(murDe(avec).pvMilli, murDe(sans).pvMilli, 'montage : le forçage a commencé trop tôt');
 
@@ -324,8 +389,11 @@ test('ARRÊT T7 — devant un mur bloquant, le porteur de l\'Écraseur force', (
   assert.equal(ecart, bloques * Math.floor(murDe(avec).pvMaxMilli / 100), `écart mesuré : ${ecart}`);
   assert.ok(ecart > 0, 'le module ne force rien : le test ne mesure rien');
 
-  // Et le porteur n'a pas progressé d'un milli-case pendant ce temps.
-  assert.equal(uniteDe(avec).rangeeMilli, 5960);
+  // Et le porteur est RANGÉ sur sa case, au millième : 5 000, là où il fluait
+  // jusqu'à 5 960 avant le lot.
+  assert.equal(uniteDe(avec).rangeeMilli, 5000);
+  assert.equal(uniteDe(avec).rangeeMilli % MILLI_PAR_CASE, 0,
+    'le porteur flue encore dans la case du mur');
   assert.equal(uniteDe(avec).ticksInutiles, 0, 'le compteur de repli est monté alors qu\'elle force');
 });
 
@@ -334,12 +402,19 @@ test('ARRÊT T7 — devant un mur bloquant, le porteur de l\'Écraseur force', (
 // ---------------------------------------------------------------------------
 
 test('ARRÊT T8 — devant un mur bloquant, aucune ne se replie', () => {
-  // ⚠⚠ C'EST LE TEST QUE LE LOT EXISTE POUR ÉCRIRE, et il porte sur les DEUX
-  // pièces — celle qui force et celle qui ne fait que tirer. Le brief posait
-  // `structureForcee` comme le mécanisme qui retient l'unité ; mesuré, il ne
-  // couvre QUE les porteurs de l'Écraseur. Ce qui retient les vingt-deux autres
-  // est `nuit(e)`, c'est-à-dire `aTire` : elles tirent sur le mur, donc leur
-  // compteur de repli est remis à zéro à chaque tick.
+  // ⚠⚠ C'EST LE TEST QUE LE LOT ARRÊT EXISTAIT POUR ÉCRIRE, et il porte sur les
+  // DEUX pièces — celle qui force et celle qui ne fait que tirer. Son brief
+  // posait `structureForcee` comme le mécanisme qui retient l'unité ; mesuré, il
+  // ne couvre QUE les porteurs de l'Écraseur. Ce qui retient les vingt-deux
+  // autres est `nuit(e)`, c'est-à-dire `aTire` : elles tirent sur le mur, donc
+  // leur compteur de repli est remis à zéro à chaque tick.
+  //
+  // ⚠⚠ ET LE LOT MUR SÉPARE LES DEUX PIÈCES SANS TOUCHER À LA CONCLUSION : elles
+  // ne se replient toujours pas, mais elles ne s'arrêtent plus au même endroit ni
+  // pour la même raison. Le Broyeur n'est PAS anti-structure : il va jusqu'à la
+  // case devant le mur et s'y RANGE — 5 000, point 2. Les Perceurs le sont : ils
+  // gèlent à PORTÉE, dès l'acquisition — 4 520, point 3 — et n'atteignent jamais
+  // le contact. Deux nombres, donc, là où le test n'en attendait qu'un.
   //
   // ⚠ LE SEUIL SE CALCULE : il faut environ cent ticks pour ouvrir la brèche
   // (1 % des PV max par tick), contre trente avant repli. On joue donc
@@ -355,7 +430,9 @@ test('ARRÊT T8 — devant un mur bloquant, aucune ne se replie', () => {
     },
   }));
 
-  for (const [id, modules] of [['broyeur', ['ecraseur']], ['perceurs', []]]) {
+  for (const [id, modules, arret] of [
+    ['broyeur', ['ecraseur'], 5000], ['perceurs', [], 4520],
+  ]) {
     const etat = scene(id, modules);
     const unite = assaillant(etat);
     // ⚠ ON JOUE JUSQU'AU BLOCAGE, ON NE L'ÉCRIT PAS : les deux pièces n'ont pas
@@ -368,7 +445,9 @@ test('ARRÊT T8 — devant un mur bloquant, aucune ne se replie', () => {
       tick(etat);
     }
     const bloquee = unite.rangeeMilli;
-    assert.equal(bloquee, 5960, `${id} : la pièce ne s'est pas arrêtée au bord de la case du mur`);
+    assert.equal(bloquee, arret, `${id} : la pièce ne s'arrête pas où le lot MUR l'attend`);
+    assert.equal(bloquee % MILLI_PAR_CASE === 0, id === 'broyeur',
+      `${id} : le rangement doit porter sur la pièce BLOQUÉE, pas sur celle qui s'arrête à portée`);
     jouer(etat, TICKS_AVANT_REPLI + 5);
     assert.equal(unite.rangeeMilli, bloquee, `${id} : la scène ne bloque pas, le test ne mesure rien`);
     assert.equal(unite.sorti, false, `${id} s'est replié devant le mur`);
@@ -433,7 +512,7 @@ test('ARRÊT T9 — aucune tourelle ne retient plus, et aucune n\'est non bloqua
 // ARRÊT T10 — `colonnePredilection` n'est pas devenu un champ mort
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T10 — `colonnePredilection` garde ses QUATRE lecteurs', () => {
+test('ARRÊT T10 — `colonnePredilection` garde ses HUIT lecteurs', () => {
   // ⚠ LE BRIEF DU LOT ARRÊT LE DEMANDAIT PAR GREP, ET C'EST LA BONNE FORME : un
   // champ qu'on laisserait sans lecteur serait un commentaire menteur en
   // puissance. Le compte SE RESSERRE au lot COLONNE, il ne s'assouplit pas — le
@@ -465,7 +544,7 @@ test('ARRÊT T10 — `colonnePredilection` garde ses QUATRE lecteurs', () => {
     'une comparaison de prédilection est écrite sans garde de nullité');
 
   // La règle d'arrêt lit le GENRE — la seule grandeur qui sépare un mur d'un
-  // bâtiment — ET la colonne, sous l'exclusion des structures défensives.
+  // bâtiment — ET la colonne, désormais SANS exclusion.
   const regle = code.match(/function doitSArreter[\s\S]*?\n}/);
   assert.ok(regle !== null, 'doitSArreter est introuvable');
   assert.ok(regle[0].includes("genre === 'batiment'"), 'la règle d\'arrêt ne lit pas le genre');
@@ -473,14 +552,29 @@ test('ARRÊT T10 — `colonnePredilection` garde ses QUATRE lecteurs', () => {
   assert.ok(regle[0].includes('e.aTire'), 'la garde du tir a disparu');
   assert.ok(regle[0].includes('p.colonnePredilection === null'),
     'la garde de nullité de la prédilection a disparu de la règle d\'arrêt');
-  assert.ok(regle[0].includes('estStructureDefensive(pc)'),
-    'la règle d\'arrêt ne tient plus l\'exclusion du 04/09');
+  // ⚠⚠ ET LA GARDE DE L'EXCLUSION SE RETOURNE, ELLE NE DISPARAÎT PAS — 10/09.
+  // Elle EXIGEAIT `estStructureDefensive(pc)` dans la règle ; elle INTERDIT
+  // désormais que le nom reparaisse dans le code. C'est ce qui attrapera le lot
+  // futur qui « rétablirait » l'exclusion en croyant réparer une régression : le
+  // 04/09 demandait de ne pas s'arrêter devant un mur, le 10/09 demande le
+  // contraire, les deux viennent d'Ethan, et la plus récente fait foi.
+  //
+  // ⚠ LE BALAYAGE PORTE SUR LA SOURCE SANS SES COMMENTAIRES, et c'est ce qui
+  // permet au bloc de `doitSArreter` de RACONTER l'exclusion retirée sans faire
+  // tomber sa propre garde. Une prose qui explique un motif interdit est le
+  // piège que `documentation.test.js` documente depuis le 26/08.
+  assert.equal(code.includes('estStructureDefensive'), false,
+    'l\'exclusion du 04/09 est revenue dans le code : le 10/09 la renverse');
 
-  // Et l'exclusion est le COUPLE, jamais l'une des deux moitiés seule : le genre
-  // seul couvrirait les artilleries, la colonne seule les bâtiments.
-  const exclusion = code.match(/function estStructureDefensive[\s\S]*?\n}/);
-  assert.ok(exclusion !== null, 'estStructureDefensive est introuvable');
-  assert.ok(exclusion[0].includes("genre === 'defense'"), 'la moitié GENRE a disparu');
-  assert.ok(exclusion[0].includes("colonneMatrice === 'structureOuAviation'"),
-    'la moitié COLONNE a disparu');
+  // Et la seconde branche conclut SANS CONDITION : la prédilection suffit, il
+  // n'y a plus de « sauf » après elle. Un `!quelqueChose(pc)` remis à la place
+  // du `return true;` final fait tomber cette ligne, même sous un autre nom.
+  assert.ok(/return true;\n}$/.test(regle[0]),
+    'la règle ne conclut plus sans condition : une exclusion a été rajoutée');
+
+  // ⚠ LE COMPTE DE LECTEURS NE BOUGE PAS, ET LE BRIEF SE TROMPAIT DESSUS : il
+  // annonçait que `colonnePredilection` « en perdrait un si l'exclusion part ».
+  // Mesuré : `estStructureDefensive` lisait `genre` et `colonneMatrice`, jamais
+  // `colonnePredilection`. Les onze occurrences assertées plus haut sont les
+  // mêmes avant et après le lot.
 });

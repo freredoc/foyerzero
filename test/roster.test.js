@@ -412,7 +412,14 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // ⚠ LOT PAQUETS (09/09) : 183 → 122. L'avant-poste de la graine 99 change de
   // disposition et de garnison ; la propriété — une seule durée aux neuf
   // niveaux — ne bouge pas.
-  assert.deepEqual([...ticks], [122], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT MUR (10/09) : 122 → 162, ET C'EST LE PREMIER RÉANCRAGE DE CE NOMBRE
+  // QUI NE VIENT NI DE LA FORME NI DE LA GARNISON. L'avant-poste de la graine 99
+  // est composé et disposé exactement comme hier : c'est le déroulé qui
+  // s'allonge, les pièces s'arrêtant devant ce qu'elles longeaient. **La
+  // propriété tient toujours, et c'est la seule que ce test mesure : UNE seule
+  // durée, sur neuf niveaux** — le lot ne l'a pas rompue, ce qu'il aurait fait
+  // si l'arrêt dépendait d'une grandeur qui monte avec le niveau.
+  assert.deepEqual([...ticks], [162], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -484,15 +491,23 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // rien (69 210 → 0) en 528 → 396, 11 → 4 survivants. Le site change de
     // disposition ET de garnison — le placement a quitté le flux de
     // composition. Rien n'est compensé ; le calibrage revient à Ethan.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 264, butin: { quartz: 0, scorie: 0 }, survivants: 1 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 287, butin: { quartz: 24_516, scorie: 8_172 }, survivants: 5 },
+    // ⚠⚠ LOT MUR (10/09) : LES TROIS DURÉES BOUGENT, DANS LES DEUX SENS, ET LE
+    // SITE N'A CHANGÉ NI DE FORME NI DE GARNISON. A : 264 → 280, butin toujours
+    // nul, un survivant. B : 287 → 244, et son butin monte de 24 516 · 8 172 à
+    // 25 184 · 8 394 — l'assaut lourd casse la garnison plus vite parce qu'il
+    // s'ARRÊTE dessus, et rase donc un peu plus avant de mourir. C : 396 → 458,
+    // butin toujours nul. Les trois causes et les trois comptes de survivants ne
+    // bougent pas d'une unité : c'est le déroulé qui se déplace, pas l'issue.
+    // Rien n'est compensé ; le calibrage revient à Ethan.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 280, butin: { quartz: 0, scorie: 0 }, survivants: 1 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 244, butin: { quartz: 25_184, scorie: 8_394 }, survivants: 5 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 396, butin: { quartz: 0, scorie: 0 }, survivants: 4 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 458, butin: { quartz: 0, scorie: 0 }, survivants: 4 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

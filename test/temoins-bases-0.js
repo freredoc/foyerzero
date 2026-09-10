@@ -3981,3 +3981,133 @@ export const RAPPORTS_OUVRAGE_REGLES_DE_CARTE = {
   "24": "79819a92f985fd6a",
   "25": "875e50c49d08add3"
 };
+
+/**
+ * DIX-NEUVIÈME COUCHE — LOT MUR, 10/09. Ce que les deux règles du mur déplacent
+ * dans le scénario des vingt-cinq graines, phase par phase et champ par champ.
+ *
+ * ⚠⚠ HUIT PHASES, VINGT COUPLES SUR 350, ET LES SIX PREMIÈRES PHASES SONT
+ * IDENTIQUES AU BIT. Le scénario ne combat pas avant son premier raid, à la
+ * phase 7 : tout ce que le lot change est DANS le combat, et rien n'en fuit
+ * avant. C'est la moitié qui prouve que ni l'économie, ni la pose, ni le tirage
+ * de carte n'ont bougé.
+ *
+ * ⚠⚠ ET CE QUE CETTE COUCHE NE PORTE PAS EST AUSSI IMPORTANT QUE CE QU'ELLE
+ * PORTE : `gestes`, `gestesArmer`, `tailleSauvegarde`, `nbCasesAtteignables`,
+ * `deplacement`, `nbAttaquantes`, le nombre de cibles, la cible retenue, la
+ * non-fuite et l'exactitude de la simulation sont IDENTIQUES sur les vingt-cinq
+ * graines et restent gardés contre les captures d'avant. Mesuré, pas supposé :
+ * les deux SEULS scalaires qui bougent sont les deux empreintes de rapport de
+ * raid. `SAVE_VERSION` reste à 31 sur cette base-là.
+ */
+export const DEPLACES_PAR_MUR = {
+ "p07_raidProcheApres": {
+  "rapports": "3f7f00dee4891981"
+ },
+ "p08_100ticks": {
+  "rapports": "3f7f00dee4891981"
+ },
+ "p09_deplace": {
+  "rapports": "3f7f00dee4891981"
+ },
+ "p10_montee": {
+  "rapports": "3f7f00dee4891981"
+ },
+ "p11_raidOuvrageApres": {
+  "recherche": "e0b4503dca88f2c6",
+  "sitesEntames": "a45d8ecc57abf556",
+  "rapports": "fe55692e46c9f7bd",
+  "armee": "fe40a072c6e7d4f0"
+ },
+ "p12_veilleDuRaid": {
+  "recherche": "e0b4503dca88f2c6",
+  "sitesEntames": "558317c979e9286a",
+  "rapports": "fe55692e46c9f7bd",
+  "armee": "fe40a072c6e7d4f0"
+ },
+ "p13_apresLeRaid": {
+  "recherche": "e0b4503dca88f2c6",
+  "sitesEntames": "eb7dc631d910d053",
+  "rapports": "032cc9db74f368c0",
+  "disposition": "23a628bd56e48b32",
+  "armee": "fe40a072c6e7d4f0"
+ },
+ "p14_sousLeFeu": {
+  "recherche": "e0b4503dca88f2c6",
+  "rapports": "2d1217a6e9559291",
+  "armee": "fe40a072c6e7d4f0"
+ }
+};
+
+/**
+ * Les empreintes par graine, après la dix-neuvième couche.
+ *
+ * ⚠⚠ VINGT-DEUX SUR VINGT-CINQ, ET TROIS NE BOUGENT PAS — 15, 21, 24. Les
+ * dix-huit couches d'avant en déplaçaient vingt-cinq sur vingt-cinq dès qu'elles
+ * touchaient au raid ; celle-ci en laisse trois à l'octet, et c'est une mesure
+ * utile : sur ces parties-là, aucune unité anti-structure ne croise de mur et
+ * aucune colonne ne bute. Elles restent gardées contre
+ * `EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE`.
+ */
+export const EMPREINTES_PAR_GRAINE_MUR = {
+ "1": "5c2059f6492668ab",
+ "2": "bd53b174f38e5456",
+ "3": "7e1d6dcb81f48ce3",
+ "4": "cde61dbc2cb673f4",
+ "5": "0f5631574f0ec7c3",
+ "6": "033d9e0ff9d1876e",
+ "7": "f07ba4272e0f3286",
+ "8": "f8ffad77f203391e",
+ "9": "7bf6b59364bbfd7d",
+ "10": "2d711dadde9a8d31",
+ "11": "398805a191224307",
+ "12": "84749aa97cccde2f",
+ "13": "ffad458eca82c2d1",
+ "14": "4c73f488699fe011",
+ "16": "e085f8878ad64777",
+ "17": "0138408f7d2fc8a7",
+ "18": "07950cdc8cd7f9b6",
+ "19": "a59290e58d6877da",
+ "20": "2a92c900e6109e88",
+ "22": "00b5f5f81bc37933",
+ "23": "efdd78ce1a160ef0",
+ "25": "77cc4faa929431e4"
+};
+
+/**
+ * Les empreintes du rapport du raid de PROXIMITÉ, dix-neuvième couche.
+ *
+ * ⚠⚠ DIX SUR VINGT-CINQ SEULEMENT, ET C'EST L'ÉCRASEUR QUI FAIT CE NOMBRE-LÀ.
+ * Mesuré sur la variante naïve du lot — celle où `progresse` reste vrai devant
+ * un mur et où le forçage n'est jamais calculé —, ce même compte valait **23 sur
+ * 25** : sans brèche, la moitié des raids se traînait autrement. La correction
+ * du §3.2 les ramène sur la couche d'avant. Les quinze qui ne bougent pas
+ * restent gardées contre `RAPPORTS_PROCHE_PAQUETS`.
+ */
+export const RAPPORTS_PROCHE_MUR = {
+ "3": "80118000ef991306",
+ "5": "9c5cb967524cf21b",
+ "6": "97e2ee4ada6da87f",
+ "7": "50c94d62632b0f19",
+ "8": "cc4c126d2ca0f705",
+ "9": "04de7994ced02533",
+ "13": "5ed3798c74a0387b",
+ "16": "ce62b041069d4c5d",
+ "20": "f76ade54c5e2ce61",
+ "22": "405c6d0268dc2440"
+};
+
+/**
+ * Les empreintes du rapport du raid de l'OUVRAGE, dix-neuvième couche.
+ *
+ * ⚠ QUATRE SUR VINGT-CINQ. Le raid de l'Ouvrage frappe la base du JOUEUR, dont
+ * la garnison est ce que le scénario a posé — quatre escouades et deux ouvrages,
+ * sans mur ni barrière sur la plupart des graines. Les vingt et une autres
+ * restent gardées contre les couches d'avant.
+ */
+export const RAPPORTS_OUVRAGE_MUR = {
+ "1": "9f795470ee127d62",
+ "13": "ab2362a67aee9134",
+ "14": "7bf9e142b36a56a5",
+ "25": "774365ba1ed2e630"
+};

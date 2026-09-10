@@ -171,16 +171,22 @@ test('COL T1 — une anti-infanterie s\'arrête pour une infanterie de garnison'
 });
 
 // ---------------------------------------------------------------------------
-// COL T2 — personne ne s'arrête pour un merlon
+// COL T2 — on s'arrête pour un merlon, même hors de sa colonne
 // ---------------------------------------------------------------------------
 //
-// ⚠⚠ C'EST LE TEST QUI GARDE L'ARBITRAGE DU 04/09, ET SANS LUI LE LOT LE PERD.
-// Ethan, ce jour-là : « Merlon et tourelles exclus, sauf si ils empêchent
-// d'avancer. » Le point 7 rouvre l'arrêt sur la colonne de prédilection ; or un
-// merlon EST rangé sous `structureOuAviation`, exactement comme un bâtiment.
-// Sans l'exclusion du COUPLE `genre: 'defense'` + `colonneMatrice:
-// 'structureOuAviation'`, une anti-structure se figerait de nouveau devant lui.
-test('COL T2 — une anti-structure ne s\'arrête pas pour un merlon hors de sa colonne', () => {
+// ⚠⚠ CE TEST GARDAIT L'ARBITRAGE DU 04/09 ; LE LOT MUR (10/09) LE RETOURNE, ET
+// C'EST LA MOITIÉ QU'IL GARDE MAINTENANT QUI COMPTE. Ethan le 04/09 : « Merlon
+// et tourelles exclus, sauf si ils empêchent d'avancer » ; Ethan le 10/09 : « les
+// unités anti-structure s'arrêtent devant les tourelles, les barbelés, les murs
+// et les bâtiments ». L'exclusion tombe.
+//
+// ⚠⚠ ET LE MONTAGE VAUT PLUS APRÈS LE RENVERSEMENT QU'AVANT, PARCE QUE LE
+// MERLON EST HORS DE LA COLONNE. Cette moitié-là reste vraie : en (6,6) contre
+// un Bélier en colonne 5, il ne BLOQUE rien — ni `peutAvancer` ni le rangement
+// du point 2 ne peuvent retenir l'unité. Si elle ne bouge plus, c'est
+// `doitSArreter` et rien d'autre, et le test sépare donc l'ARRÊT du BLOCAGE
+// aussi nettement qu'avant, dans l'autre sens.
+test('COL T2 — une anti-structure s\'arrête pour un merlon MÊME hors de sa colonne', () => {
   const etat = creerCombat(montage({
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 6, colonne: 6 }],
@@ -202,10 +208,17 @@ test('COL T2 — une anti-structure ne s\'arrête pas pour un merlon hors de sa 
   assert.ok(e.aTire, `montage : l'assaillant n'a pas tiré en ${ticks} ticks`);
   assert.equal(etat.entites[e.cibleIndice].id, 'merlon', 'montage : il ne vise pas le merlon');
 
+  // AVANT le 10/09 : il continuait à sa vitesse nominale, le merlon n'étant ni
+  // dans sa colonne ni dans sa règle. APRÈS : pas un milli-case, et le merlon
+  // perd des PV — les deux moitiés ensemble, sinon on mesurerait un gel.
   const avant = e.rangeeMilli;
+  const mur = () => etat.entites.find((x) => x.id === 'merlon');
+  const pvAvant = mur().pvMilli;
   jouer(etat, 10);
-  assert.ok(e.rangeeMilli > avant,
-    'l\'assaillant s\'arrête pour un merlon : l\'arbitrage du 04/09 est perdu');
+  assert.equal(e.rangeeMilli, avant,
+    'l\'assaillant avance encore : l\'arbitrage du 10/09 n\'est pas lu');
+  assert.ok(mur().pvMilli < pvAvant,
+    'il est figé sans tirer : ce serait un blocage, or le merlon n\'est pas dans sa colonne');
 });
 
 // ---------------------------------------------------------------------------
@@ -932,8 +945,21 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   // ⚠ LOT PAQUETS (09/09) : LES TROIS TRIPLETS ONT ENCORE BOUGÉ — la dette n'est
   // pas payée, elle s'est déplacée avec la disposition. Balayage de 600
   // scénarios : huit lèvent encore, du même message. Trois d'entre eux.
+  //
+  // ⚠⚠ LOT MUR (10/09) : QUATRIÈME RÉANCRAGE, ET LA DETTE N'EST TOUJOURS PAS
+  // PAYÉE — elle s'est déplacée avec le DÉROULÉ du combat cette fois, pas avec
+  // la disposition. Les trois scénarios d'hier lèvent zéro sur trois : un raid
+  // qui s'arrête devant les murs ne laisse plus les mêmes survivants. Balayage
+  // du MÊME échantillon de 600 — `camp`, niveaux 25 à 30, graines 1 à 100 — :
+  // **trois lèvent encore**, et c'est TOUJOURS le même message,
+  // `pvMilli N hors de 1…M` sur un défenseur « perceurs ». Le défaut est dans
+  // `pvCourantsDesDefenses` quand l'Étai est tombé, et aucune ligne de ce lot ne
+  // l'a touché.
+  //
+  // ⚠ ET LE COMPTE PASSE DE HUIT À TROIS SUR LE MÊME ÉCHANTILLON. Le dire dans ce
+  // sens-là : c'est un autre déroulé de combats, pas une dette qui se referme.
   for (const [type, niveau, graine] of [
-    ['camp', 28, 19], ['camp', 25, 31], ['camp', 30, 60],
+    ['camp', 28, 54], ['camp', 29, 54], ['camp', 30, 92],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,

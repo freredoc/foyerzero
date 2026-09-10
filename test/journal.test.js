@@ -26,6 +26,7 @@ import {
   COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
   COMBATS_DEPLACES_PAR_CIBLES_RANGEES,
   COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE,
+  COMBATS_DEPLACES_PAR_MUR, COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -111,26 +112,47 @@ function ligneDeTemoin(nom, montage) {
 // montages ne sont plus les mêmes sites, et une cinquième couche aurait couvert
 // 1 267 champs sur 1 600 — plus rien à adosser. Le §7 du brief prescrit la
 // procédure : prouver d'abord que l'ANCIEN placement rejoue l'ancienne table
-// sur le moteur courant (`T1 bis`, 0 écart), et recapturer ALORS. Ce test
-// compare donc SANS couche : la capture repart de zéro, et le prochain lot qui
-// touche au combat devra EMPILER dessus, jamais recapturer.
-test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'au lot PAQUETS (falsification n° 1)', () => {
+// sur le moteur courant (`T1 bis`, 0 écart), et recapturer ALORS.
+//
+// ⚠⚠ LOT MUR (10/09) : LA CAPTURE N'EST PAS REFAITE, ELLE PREND SA PREMIÈRE
+// COUCHE. C'est la consigne que la table porte elle-même — « le prochain lot qui
+// touchera au combat devra à nouveau EMPILER, jamais recapturer » — et le seuil
+// n'est pas atteint de loin : **561 champs bougent, 1 039 restent adossés à la
+// capture du lot PAQUETS**, là où PAQUETS avait dû recapturer à 1 267. Les deux
+// règles du 10/09 y sont, et elles ne se recouvrent pas : les six unités
+// anti-structure s'ARRÊTENT devant un mur, une barrière ou une tourelle, toutes
+// les autres se RANGENT sur leur case au lieu de fluer dedans.
+test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'au lot PAQUETS, hors ce que MUR déplace (falsification n° 1)', () => {
   let i = 0;
   let champs = 0;
+  let surcharges = 0;
   for (const [nom, montage] of montagesTemoins(genererSite)) {
     const vu = ligneDeTemoin(nom, montage);
     const attendu = TEMOINS_COMBAT[i];
     assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT.length} lignes`);
     assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
+    const deplaces = COMBATS_DEPLACES_PAR_MUR[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
-      assert.equal(vu[c], attendu[c], `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot PAQUETS`);
+      const surcharge = Object.prototype.hasOwnProperty.call(deplaces, c);
+      assert.equal(vu[c], surcharge ? deplaces[c] : attendu[c],
+        `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot PAQUETS`);
       champs += 1;
+      if (surcharge) surcharges += 1;
     }
     i += 1;
   }
   assert.equal(i, TEMOINS_COMBAT.length, 'le nombre de combats joués a changé');
   assert.equal(i, 200);
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
+  // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON LE
+  // VOIE. C'est la même garde qu'en `T1 bis`, posée dès la première couche
+  // plutôt qu'après coup : **561 champs sur 1 600**, **110 combats sur 200**, et
+  // **1 039 champs encore adossés** à la capture du lot PAQUETS — dont
+  // quatre-vingt-dix combats entiers. Une couche qui grandirait sans qu'un lot
+  // le déclare fait tomber ce test.
+  assert.equal(surcharges, 561, `champs surchargés : ${surcharges}`);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR).length, 110);
+  assert.equal(champs - surcharges, 1039, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -145,7 +167,7 @@ test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'au lot PA
 // couches empilées depuis JOURNAL-DE-COMBAT : 1 331 surchargés, 269 gardés,
 // exactement le compte d'avant le lot. Si ce test tombe un jour, c'est le
 // moteur ou la copie qui a bougé, pas le placement.
-test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre couches d\'avant PAQUETS', () => {
+test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre couches d\'avant PAQUETS et celle de MUR', () => {
   let i = 0;
   let champs = 0;
   let surcharges = 0;
@@ -178,6 +200,13 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
           const deplacesColonne = COMBATS_DEPLACES_PAR_COLONNE[i] ?? {};
           const deplacesRangees = COMBATS_DEPLACES_PAR_CIBLES_RANGEES[i] ?? {};
           const deplacesFlottant = COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE[i] ?? {};
+          // ⚠⚠ ET LE LOT MUR EN AJOUTE UNE CINQUIÈME. Même doctrine, cinquième
+          // fois : on empile, on ne remplace pas. ⚠ Le §4 du brief annonçait que ce
+          // test-ci resterait VERT sans couche neuve ; **il tombe**, et son §5 le
+          // nommait pourtant parmi les vingt-neuf. Un moteur qui change change
+          // aussi ce que l'ANCIEN placement rend — c'est mesuré, pas supposé :
+          // 125 combats, 681 champs.
+          const deplacesMur = COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
@@ -190,13 +219,17 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
             if (Object.prototype.hasOwnProperty.call(deplacesFlottant, c)) {
               reference = deplacesFlottant[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesMur, c)) {
+              reference = deplacesMur[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
             if (Object.prototype.hasOwnProperty.call(deplaces, c)
               || Object.prototype.hasOwnProperty.call(deplacesColonne, c)
               || Object.prototype.hasOwnProperty.call(deplacesRangees, c)
-              || Object.prototype.hasOwnProperty.call(deplacesFlottant, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesFlottant, c)
+              || Object.prototype.hasOwnProperty.call(deplacesMur, c)) surcharges += 1;
           }
           i += 1;
     }
@@ -235,11 +268,19 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
   // somme, et il ne monte donc que de trente-cinq. Les 269 restants sont pour
   // l'essentiel des CAUSES de fin, que ni la disposition ni la composition ne
   // font changer.
+  //
+  // ⚠⚠ LOT MUR (10/09) : LA CINQUIÈME COUCHE TOUCHE 125 COMBATS ET DÉPLACE 681
+  // CHAMPS, ET LA SURCHARGE NE MONTE PAS D'UN SEUL — elle reste à **1 331**, les
+  // **269 gardés** aussi. Les 681 étaient DÉJÀ surchargés, TOUS, par l'une des
+  // quatre d'avant : le compte est l'UNION des cinq, pas leur somme. Les 269
+  // restants sont pour l'essentiel des CAUSES de fin, et l'ancien placement n'en
+  // fait basculer aucune ici.
   assert.equal(surcharges, 1331, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE).length, 200);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS).length, 125);
   assert.ok(champs - surcharges === 269, 'le compte des champs encore gardés a changé');
 });
 

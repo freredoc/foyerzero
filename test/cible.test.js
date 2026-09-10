@@ -334,7 +334,12 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // placement passe par paquets ET retire ses tirages du flux de composition,
   // donc la garnison de toute graine change avec sa forme. 414 → 308, butin
   // 21 542 · 7 180 → 18 610 · 6 203, survivants 6 → 4.
-  assert.equal(r.nbTicks, 308);
+  //
+  // ⚠ LOT MUR (10/09) : 308 → 309. UN TICK, et rien d'autre — ni la cause, ni le
+  // butin, ni les survivants. Le site n'a changé ni de composition ni de forme ;
+  // seul le déroulé bouge, et à peine. Ce que ce test existe pour tenir — le raid
+  // ne se traîne plus jusqu'au plafond de 900 — est intact.
+  assert.equal(r.nbTicks, 309);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -372,8 +377,18 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // les blocs flottent, donc l'assaut lourd de la graine 1 met plus de temps à
   // atteindre les bâtiments et en griffe moins avant de tomber. **Aucun barème
   // n'a été touché.**
-  assert.deepEqual(r.butin, { quartz: 18_610, scorie: 6_203 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
+  //
+  // ⚠ LOT MUR (10/09) : 15 636 et 5 212, soit −16 %, pour UN tick de plus. Même
+  // mécanique qu'au lot d'avant, en plus petit : le raid s'arrête davantage dans
+  // la bande de défense — les anti-structure y ouvrent murs et tourelles au lieu
+  // de les longer — et griffe donc moins de bâtiments avant de tomber. Le
+  // multiplicateur de 3,25 de l'avant-poste amplifie la baisse comme toujours.
+  // **Aucun barème n'a été touché**, et ce que ce test tient — le raid ne se
+  // termine pas faute de mieux — ne bouge pas : la cause reste `attaquants`.
+  assert.deepEqual(r.butin, { quartz: 15_636, scorie: 5_212 });
+  // ⚠ Et un survivant de moins — quatre → trois. Une pièce arrêtée devant une
+  // tourelle est une pièce sous son feu : l'arrêt coûte ce qu'il rapporte.
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
 });
 
 // ---------------------------------------------------------------------------
@@ -527,8 +542,25 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // et **2 104** (mixte/base/1). Le pire vaut 2,3 fois le plafond, contre 4 fois
   // au lot d'avant. La liste change parce que la disposition ET la garnison de
   // chaque site changent ; le calibrage reste à Ethan.
+  // ⚠⚠ LOT MUR (10/09) : ILS NE SONT PLUS QU'UN, ET C'EST LE MEILLEUR CHIFFRE
+  // QUE CETTE LISTE AIT PORTÉ. `blindeLourd/base/7` et `mixte/base/1` en
+  // SORTENT — ils se concluent désormais dans le plafond —, `mixte/camp/7`
+  // reste. Deux règles tirent dans le même sens ici : les anti-structure
+  // s'arrêtent pour OUVRIR les murs au lieu de les longer, et le forçage de
+  // l'Écraseur retrouve la case devant lui, donc les brèches se font. Un raid
+  // qui n'a plus de mur devant lui ne traîne plus.
+  //
+  // ⚠ ET LE SURVIVANT N'EST PAS UN GEL, vérifié en portant `maxTicks` à 20 000 :
+  // il se conclut par `attaquants` au tick **2 618**, soit 2,9 fois le plafond —
+  // contre 2,3 fois au lot PAQUETS. C'est le quatrième du genre après le 4 645
+  // du lot CARTE, le 5 478 du lot COLONNE et le 2 104 du lot PAQUETS, et il est
+  // à remonter pour la même raison : ce n'est pas un dépassement, c'est un autre
+  // régime. **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan.
+  //
+  // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
+  // n'importe quel autre raid. Celui-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), ['blindeLourd/base/7', 'mixte/base/1', 'mixte/camp/7'],
+    expires.sort(), ['mixte/camp/7'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.

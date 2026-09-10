@@ -807,7 +807,22 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   // seuil de résidu aussi. La propriété du miroir est gardée par l'égalité des
   // causes et des ticks ; ce qu'on perd, c'est la mesure de l'arrondi, qui
   // demanderait un autre montage. Un `>=` laisserait glisser sans un mot.
-  assert.equal(ecartMax, 0, `écart maximal ${ecartMax} ticks au lieu des 0 mesurés`);
+  // ⚠⚠ LOT MUR (10/09) : 0 → 1, ET LA BORNE DE 1 % CESSE D'ÊTRE VACUEUSE. Le lot
+  // ne touche ni au générateur ni à la courbe de niveau : il change le DÉROULÉ des
+  // combats, donc il échantillonne d'autres fins de combat, et l'arrondi
+  // redevient visible là où le lot PAQUETS l'avait perdu. **Quatre comparaisons
+  // sur cinq cents** écartent d'un tick — 0,8 %, sous le plafond de 5 % —, la
+  // médiane reste À ZÉRO, et l'arrondi ne déplace que **0,173 %** d'un combat,
+  // contre 1 % permis : la marge est de 5,8 fois. C'est trois fois MIEUX que les
+  // 0,782 % du lot DISPOSITION-OUVRAGE, où la mesure était la dernière non
+  // vacueuse.
+  //
+  // ⚠ CE TEST N'EST PAS DANS LES VINGT-NEUF DU BRIEF, et il faut le dire : il
+  // ne tombe QUE sur la variante correcte du lot. Avec l'Écraseur cassé — la
+  // variante où `progresse` reste vrai devant un mur — les cinquante montages
+  // échantillonnent d'autres combats encore, et l'écart y reste nul. Le brief
+  // annonçait 29 ; la variante correcte en fait tomber **28**, celui-ci compris.
+  assert.equal(ecartMax, 1, `écart maximal ${ecartMax} ticks au lieu du 1 mesuré`);
 
   // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
   // du §4 aurait été choisi trop juste sans qu'on le sache.

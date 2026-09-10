@@ -343,16 +343,22 @@ test('T5 — sur une entité de la défense, la réserve s\'arrête au plancher 
   assert.equal(merlon.pvMilli, 0, 'le Merlon tombe au tick 286');
   assert.equal(merlon.vivant, false, 'et il est retiré de la grille');
 
-  // Le Meute était bloqué devant le mur : parti de 2000 à 60 milli-cases par
-  // tick, il atteint 2960 au tick 16 (2000 + 16 × 60) et refuse le pas suivant,
-  // qui le porterait à 3020, donc dans la case du mur. La case libérée, il
-  // avance — au tick 286 même, l'ordre normatif du §6 plaçant le RETRAIT DES
-  // MORTS (6) avant le DÉPLACEMENT (7). Le §12 du brief annonce le tick
-  // d'après ; c'est le seul point où ses deux sections divergent, et §6 est
-  // déclaré normatif.
-  assert.equal(meute.rangeeMilli, 3020, 'la case libérée, le Meute avance dès le tick 286');
+  // ⚠⚠ LE MEUTE EST BLOQUÉ DEVANT LE MUR, ET LE LOT MUR (10/09) CHANGE OÙ. AVANT :
+  // parti de 2 000 à 60 milli-cases par tick, il montait jusqu'à 2 960 au tick 16
+  // — 2 000 + 16 × 60 — et refusait le pas suivant, qui l'aurait porté à 3 020,
+  // dans la case du mur. Il était donc en case 2 pour le moteur et DESSINÉ à
+  // 96 % sur la case 3, celle du mur : c'est très exactement le défaut du point 2
+  // d'Ethan. APRÈS : il se RANGE sur sa case et n'en bouge plus — 2 000 pile.
+  //
+  // La case libérée, il avance au tick 286 même, l'ordre normatif du §6 plaçant
+  // le RETRAIT DES MORTS (6) avant le DÉPLACEMENT (7). Le §12 du brief annonce le
+  // tick d'après ; c'est le seul point où ses deux sections divergent, et §6 est
+  // déclaré normatif. Il repart de 2 000, donc 2 060 puis 2 120 — et non 3 020
+  // puis 3 080 : le rangement lui a coûté les 960 millièmes qu'il n'aurait jamais
+  // dû prendre.
+  assert.equal(meute.rangeeMilli, 2060, 'la case libérée, le Meute avance dès le tick 286');
   jouer(etat, 287);
-  assert.equal(meute.rangeeMilli, 3080);
+  assert.equal(meute.rangeeMilli, 2120);
 });
 
 test('T5 bis — sur un bâtiment, le plancher est levé et l\'unité se vide', () => {
