@@ -328,61 +328,82 @@ test('JRN T7 — un journal vide rend une PHRASE, jamais une vue blanche', () =>
 // T8 — une seule vue pour deux écrans
 // ---------------------------------------------------------------------------
 
-test('JRN T8 — Défense et Offense passent par LA MÊME fonction, et par le rendu partagé', () => {
+test('JRN T8 — UNE vue, UN lecteur, UN panneau : le journal a quitté les écrans', () => {
   const chantier = sansCommentaires(lire('src/ui/chantier.js'));
   const offense = sansCommentaires(lire('src/ui/offense.js'));
+  const session = sansCommentaires(lire('src/ui/session.js'));
 
-  // ⚠⚠ UNE SEULE DÉCLARATION, DEUX APPELS. Deux vues auraient divergé à la
-  // première retouche, et le joueur aurait lu deux histoires de la même partie.
+  // ⚠⚠ CE TEST A CHANGÉ DE CIBLE LE 10/09, ET IL SE RESSERRE — point 4 d'Ethan,
+  // « Bouton rapport a deplacer en haut entre base et mission ». Il gardait
+  // « une seule vue, DEUX appelants » : le Chantier et l'Offense portaient chacun
+  // un bouton, un panneau et six lignes de câblage pour peindre exactement la
+  // même chose. Il garde maintenant « une seule vue, UN appelant » — ce qui est
+  // strictement plus fort, puisqu'il n'y a plus qu'un endroit où le journal peut
+  // diverger de lui-même.
+  //
+  // ⚠ LA VUE N'A PAS DÉMÉNAGÉ AVEC LE BOUTON, ET C'EST MESURÉ. `vueDuJournal` a
+  // besoin de `formaterEntier`, de `direLaDuree` et de `peindreVueDuPanneau`, qui
+  // vivent tous trois dans `ui/chantier.js` : la déplacer dans `ui/session.js`
+  // aurait fait importer l'écran par la session, donc un cycle. Elle reste écrite
+  // là où sont ses briques, et elle s'EXPORTE.
   assert.equal((chantier.match(/export function vueDuJournal\(/g) ?? []).length, 1);
-  assert.ok(!/function vueDuJournal\(/.test(offense), 'l\'Offense a recopié la vue');
-  const bloc = offense.match(/import \{([^}]*)\} from '\.\/chantier\.js';/);
+  for (const [ou, code] of [['l\'Offense', offense], ['la session', session]]) {
+    assert.ok(!/function vueDuJournal\(/.test(code), `${ou} a recopié la vue`);
+  }
+  const bloc = session.match(/import \{([^}]*)\} from '\.\/chantier\.js';/);
   assert.ok(bloc !== null && bloc[1].split(',').map((n) => n.trim()).includes('vueDuJournal'),
-    'l\'Offense n\'importe pas la vue');
+    'la session n\'importe pas la vue');
 
   // ⚠ IMPORTER N'EST PAS APPELER — la leçon d'`ERGO T7 ter`. On compte les
-  // APPELS, déclaration retirée.
+  // APPELS, déclaration et imports retirés.
   const appels = (code) => (code.replace(/export function vueDuJournal\(/g, 'DECL(')
     .replace(/import \{[^}]*\} from '[^']*';/g, '')
     .match(/vueDuJournal\(/g) ?? []).length;
-  assert.equal(appels(chantier), 1, 'le Chantier n\'appelle pas la vue exactement une fois');
-  assert.equal(appels(offense), 1, 'l\'Offense n\'appelle pas la vue exactement une fois');
+  assert.equal(appels(session), 1, 'la session n\'appelle pas la vue exactement une fois');
+  // ⚠⚠ ET LES DEUX ÉCRANS NE L'APPELLENT PLUS DU TOUT. C'est la moitié qui
+  // mesure le DÉPLACEMENT : un câblage laissé en place aurait rendu deux boutons
+  // pour un panneau, et le bouton orphelin aurait levé au premier toucher.
+  assert.equal(appels(chantier), 0, 'le Chantier appelle encore le journal');
+  assert.equal(appels(offense), 0, 'l\'Offense appelle encore le journal');
 
-  // ⚠ ET LES DEUX PEIGNENT PAR LE RENDU PARTAGÉ, jamais à la main.
-  for (const [ou, code] of [['chantier', chantier], ['offense', offense]]) {
-    assert.match(code, /peindreVueDuPanneau\(\s*\n?\s*doc, elementsJournal,/,
-      `${ou} ne peint pas le journal par le rendu partagé`);
-    // ⚠⚠ ET OUVRIR LE JOURNAL FERME LA FICHE. Les deux sont des
-    // `panneau-detail`, donc au MÊME endroit, en `absolute` et au même
-    // `z-index` : laisser les deux ouverts en superposerait un sur l'autre, et
-    // le second avalerait les touchers du premier. C'est la faute du lot
-    // TUTORIEL, et celle qu'`ÉD T5 bis` garde déjà pour la ligne d'avis.
-    assert.match(code, /fermerPanneau\(\);\s*\n\s*peindreVueDuPanneau\(/,
-      `${ou} ouvre le journal par-dessus la fiche`);
-  }
+  // ⚠ ET LA SESSION PEINT PAR LE RENDU PARTAGÉ, jamais à la main.
+  assert.match(session, /peindreVueDuPanneau\(\s*\n?\s*doc, elementsJournal,/,
+    'la session ne peint pas le journal par le rendu partagé');
 
-  // ⚠ ET LE BALISAGE PORTE LES DEUX BOUTONS ET LES DEUX PANNEAUX, sous UNE règle.
+  // ⚠⚠ LE BALISAGE PORTE UN BOUTON ET UN PANNEAU, ET LES DEUX ANCIENS ONT
+  // DISPARU. La seconde moitié est celle qui compte : un bouton laissé dans un
+  // écran est le défaut le plus probable de ce déplacement, et `$('…')` rendrait
+  // `null` sans lever — le bouton serait simplement mort.
   const html = lire('src/index.src.html');
+  for (const id of ['tete-rapport', 'journal-panneau', 'journal-titre',
+    'journal-corps', 'journal-fermer']) {
+    assert.ok(html.includes(`id="${id}"`), `le balisage n'a pas ${id}`);
+  }
   for (const id of ['chantier-journal', 'chantier-journal-panneau', 'chantier-journal-titre',
     'chantier-journal-corps', 'chantier-journal-fermer', 'offense-journal',
     'offense-journal-panneau', 'offense-journal-titre', 'offense-journal-corps',
     'offense-journal-fermer']) {
-    assert.ok(html.includes(`id="${id}"`), `le balisage n'a pas ${id}`);
+    assert.ok(!html.includes(`id="${id}"`), `le balisage porte encore ${id}`);
   }
+
+  // ⚠ LE BOUTON EST DANS LA BARRE D'ONGLETS, ENTRE BASE ET MISSION — c'est la
+  // demande, mot pour mot, et une position se garde par l'ORDRE, pas par la
+  // présence : le poser après « Options » passerait toutes les lignes ci-dessus.
+  const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/)[1];
+  const rang = (id) => barre.indexOf(`id="${id}"`);
+  assert.ok(rang('onglet-base') < rang('tete-rapport'),
+    'le rapport n\'est pas après l\'onglet Base');
+  assert.ok(rang('tete-rapport') < rang('onglet-mission'),
+    'le rapport n\'est pas avant l\'onglet Mission');
+
   const feuille = html.replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.match(feuille, /#chantier-journal, #offense-journal \{/,
-    'les deux boutons ne partagent plus une règle');
-  // ⚠ ET PAS DE SECONDE RÈGLE : on cherche un sélecteur qui commence une ligne,
-  // sans quoi le sélecteur PARTAGÉ se dénoncerait lui-même.
-  assert.ok(!/\n\s*#offense-journal[ ,]*\{/.test(feuille),
-    'l\'Offense a sa propre règle de bouton');
-  assert.ok(!/\n\s*#chantier-journal \{/.test(feuille),
-    'le Chantier a sa propre règle de bouton');
-  // ⚠ AUCUNE RÈGLE PROPRE AUX PANNEAUX : ils portent `panneau-detail`, et rien.
-  for (const id of ['chantier-journal-panneau', 'offense-journal-panneau']) {
-    assert.ok(!new RegExp(`#${id} \\{`).test(feuille), `${id} a sa propre règle`);
-    assert.match(html, new RegExp(`id="${id}" class="panneau-detail"`));
-  }
+  // ⚠ ET LES DEUX ANCIENNES RÈGLES SONT PARTIES AVEC LEURS BOUTONS. Une règle
+  // qui ne peint plus rien se réécrit sans qu'on s'aperçoive qu'elle ne fait rien.
+  assert.ok(!/#chantier-journal|#offense-journal/.test(feuille),
+    'la feuille garde une règle pour un bouton qui n\'existe plus');
+  // ⚠ AUCUNE RÈGLE PROPRE AU PANNEAU : il porte `panneau-detail`, et rien.
+  assert.ok(!/#journal-panneau \{/.test(feuille), '#journal-panneau a sa propre règle');
+  assert.match(html, /id="journal-panneau" class="panneau-detail"/);
 });
 
 // ---------------------------------------------------------------------------

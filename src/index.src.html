@@ -148,7 +148,10 @@
   }
   /* Le retour à la base. Même habillage que le « Fermer » du panneau : ce lot
      n'invente pas un troisième style de bouton pour cet écran. */
-  #monde-recentrer {
+  /* ⚠ UNE RÈGLE, DEUX SÉLECTEURS : le bouton des gisements est le jumeau de
+     celui-ci — même geste, même coin, même habillage. Une seconde déclaration se
+     serait tue au premier réglage. */
+  #monde-recentrer, #monde-poi {
     flex: 0 0 auto; padding: 4px 8px; font-size: 10px;
     letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
@@ -261,7 +264,12 @@
     font-size: 16px; line-height: 1;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
   }
-  #raid-bas { flex: 0 0 auto; background: #1E2124; border-top: 2px solid #4E5742; }
+  /* ⚠ `relative` POUR LA LIGNE D'AVIS, qui s'y pose au lieu de la pousser —
+     point 5, 10/09. Voir `#raid-avis`. */
+  #raid-bas {
+    flex: 0 0 auto; position: relative;
+    background: #1E2124; border-top: 2px solid #4E5742;
+  }
   /* ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et caché tant que le mode
      Réparer n'est pas armé — Ethan, 01/09. */
   #raid-tout-reparer {
@@ -305,7 +313,23 @@
      toucher » serait invisible au doigt. C'est la faute du lot ÉCRAN-ACTIONS,
      et la garde des classes existe depuis. */
   #raid-boutons button.arme { background: #8C9A72; color: #161914; }
-  #raid-avis { margin: 0; padding: 2px 8px; font-size: 10px; color: #8C9A72; }
+  /* ⚠⚠ ELLE SE POSE SUR LE BAS DE L'ÉCRAN AU LIEU DE LE POUSSER — Ethan, 10/09,
+     point 5 : « idem en préparation raid ». Elle était dans le flux de
+     `#raid-bas`, entre la rangée de boutons et les vagues : armer un mode la
+     faisait paraître, `#raid-bas` grandissait, et le CANEVAS au-dessus perdait
+     d'autant — donc le décor de la cible se recadrait et les unités bougeaient.
+     C'est le même défaut que sur l'Offense, et le même remède que
+     `#chantier-avis` depuis le lot ÉCRAN-DÉFENSE.
+     ⚠ ELLE PASSE DONC SOUS LES VAGUES, ET C'EST VOULU : `bottom: 0` de
+     `#raid-bas` est le bas de l'écran, exactement là où `#chantier-avis` se
+     range. Un message d'état se lit au bord, pas au milieu d'une grille.
+     ⚠ `pointer-events: none` : elle couvre le bas de la quatrième vague, où vit
+     le glisser-déposer. Sans elle, elle avalerait ces touchers-là. */
+  #raid-avis {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
+    pointer-events: none;
+    margin: 0; padding: 2px 8px; font-size: 10px; color: #8C9A72;
+  }
   #raid-vagues { padding: 4px 6px 6px; }
   #ecran-raid .vague { margin-bottom: 3px; }
   #ecran-raid .emplacements { display: grid; gap: 2px; }
@@ -588,8 +612,17 @@
   /* La page de jeu : en-tête commun, écran du moment, barre du bas commune.
      ⚠ `#jeu` EXISTE POUR LE BANC. Il remplaçait deux écrans nommés un par un ;
      maintenant qu'il y en a trois et deux barres partagées, il en cache UN. */
+  /* ⚠⚠ `relative` POUR LE PANNEAU DU JOURNAL, ET POUR LUI SEUL — point 4,
+     10/09. `#journal-panneau` est un `.panneau-detail`, donc `position: absolute`
+     avec `left/right/bottom: 0` ; il lui faut un ancêtre positionné, et il est
+     frère de `#ecrans` — qui, lui, est déjà `relative` pour les panneaux des
+     écrans. Sans cette ligne il s'ancrerait au bloc englobant initial, donc à la
+     PAGE : il couvrirait aussi la marge système du bas, que `body` réserve.
+     ⚠ ET ELLE NE DÉPLACE RIEN D'AUTRE. Tout ce qui est `absolute` sous `#jeu`
+     vit dans `#ecrans` ou plus bas, donc trouve déjà un ancêtre positionné plus
+     proche : vérifié sélecteur par sélecteur avant d'écrire la ligne. */
   #jeu {
-    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column;
     background: #1E2124;
     font-family: "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
   }
@@ -616,6 +649,18 @@
     border: 0; border-right: 1px solid #1E2124; padding: 0;
   }
   #tete-onglets button:last-child { border-right: 0; }
+  /* ⚠⚠ LE JOURNAL NE PREND PAS UNE PART D'ONGLET — point 4, 10/09.
+     `#tete-onglets button { flex: 1 }` partage la barre en parts égales : le
+     sixième bouton aurait pris un sixième de la largeur, donc retiré un sixième
+     aux cinq onglets, dont les libellés sont déjà en 11 px sur 360 px CSS. Il est
+     borné à 32 px — la largeur d'un glyphe et de ses marges de doigt — et les
+     cinq onglets se partagent ce qui reste.
+     ⚠ ET LA HAUTEUR DE LA BARRE NE BOUGE PAS : `flex: 0 0 40px` est intact, donc
+     les 288 px de chrome que `chantier.test.js` somme sont inchangés. C'est la
+     condition pour que ce point ne coûte pas un pixel de champ.
+     ⚠ SON GLYPHE EST PLUS GROS QUE LE LIBELLÉ D'UN ONGLET — 16 px contre 11 —,
+     comme il l'était sur le champ : c'est un pictogramme, pas un mot. */
+  #tete-rapport { flex: 0 0 32px; font-size: 16px; text-transform: none; letter-spacing: 0; }
   #tete-onglets button.actif { color: #F5F3E8; background: #343A2C; box-shadow: inset 0 -2px 0 #8C9A72; }
   /* Les onglets à venir : rien derrière eux, et ça doit se voir. */
 
@@ -795,22 +840,6 @@
      répond à un geste et doit passer devant tout. */
   #chantier-bascule-bande {
     position: absolute; right: 6px; bottom: 6px; z-index: 2;
-    width: 40px; height: 40px; padding: 0;
-    font-size: 16px; line-height: 1;
-    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
-  }
-  /* ⚠⚠ LE BOUTON DU JOURNAL — UNE RÈGLE, DEUX SÉLECTEURS, lot JOURNAL 07/09.
-     Les deux écrans portent le même geste : l'écrire deux fois aurait donné deux
-     définitions dont une seule aurait suivi le premier réglage, la faute que
-     `ÉD T12` garde déjà pour le pointillé des emplacements.
-     ⚠ MÊME GÉOMÉTRIE ET MÊMES TEINTES QUE LA BASCULE, au coin OPPOSÉ : 40 px de
-     côté, `#343A2C` sur `#161914`. AUCUNE TEINTE NEUVE.
-     ⚠ ET SON `z-index` EST CELUI DE LA BASCULE. Les panneaux de détail sont à 2
-     eux aussi et viennent APRÈS dans le document : le panneau du journal
-     recouvre donc son propre bouton, ce qui est voulu — on le referme par
-     « Fermer », jamais en retouchant le bouton à l'aveugle. */
-  #chantier-journal, #offense-journal {
-    position: absolute; right: 6px; top: 6px; z-index: 2;
     width: 40px; height: 40px; padding: 0;
     font-size: 16px; line-height: 1;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
@@ -1580,6 +1609,28 @@
     flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
     gap: 8px; padding: 3px 8px; background: #343A2C;
   }
+  /* ⚠⚠ LES DEUX BARRES À BOUTON RÉSERVENT LEUR PLACE — Ethan, 10/09, point 5,
+     et c'est l'arbitrage que le commentaire ci-dessus laissait ouvert depuis le
+     07/09 : « le corriger demande de lui réserver sa place d'avance, ce qui coûte
+     cette hauteur en permanence ». Elle est réservée.
+
+     ⚠⚠ `visibility`, PAS `display` NI `position` — et le motif est écrit deux
+     paragraphes plus haut : elles portent un BOUTON, donc elles doivent recevoir
+     le toucher, et un calque en `pointer-events: none` posé sur la grille le
+     rendrait inerte. Sorties du flux comme les lignes d'avis, elles perdraient
+     leur geste ; `visibility: hidden` les laisse à leur place, occupant leur
+     hauteur, sans dessin et sans toucher.
+
+     ⚠⚠ ET C'EST UNE CLASSE, PAS L'ATTRIBUT `hidden` — c'est la moitié qu'on ne
+     peut pas oublier. `[hidden]` porte un `!important` en tête de feuille :
+     laissé sur l'élément, il l'emporterait sur `visibility` et la barre resterait
+     en `display: none` pour toujours, donc invisible ET sans place réservée. Les
+     deux balises perdent donc leur attribut et naissent avec cette classe-ci.
+
+     ⚠ UNE RÈGLE, DEUX SÉLECTEURS : les deux barres font la même chose sur deux
+     écrans, et une seconde déclaration se serait tue au premier réglage. C'est le
+     motif du pointillé des emplacements, qu'`ÉD T12` garde déjà. */
+  #chantier-reparation.repliee, #raid-tout-reparer.repliee { visibility: hidden; }
   #chantier-reserve { font-size: 9px; color: #F5F3E8; min-width: 0; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
   #chantier-tout-reparer {
@@ -1698,10 +1749,26 @@
   .mission.courante b { color: #F5B636; }
   .mission.courante span:not(.marque) { color: #F5F3E8; }
   #ecran-offense { min-height: 0; }
-  /* Le mot qui dit que la composition n'existe pas encore. Il n'est pas une
-     alerte — rien n'est cassé — donc il porte le métal, pas le rouge. */
+  /* Le mot qui dit ce qui est vrai à cet instant. Il n'est pas une alerte —
+     rien n'est cassé — donc il porte le métal, pas le rouge.
+
+     ⚠⚠ IL SE POSE SUR LE CHAMP AU LIEU DE LE POUSSER — Ethan, 10/09, point 5 :
+     « Appuyez sur réparer décale le sprite et les unités dans l'onglet armée ».
+     Il était `flex: 0 0 auto` DANS LE FLUX, au-dessus de `#offense-champ` :
+     armer un mode le faisait paraître, donc le champ PERDAIT sa hauteur, donc le
+     bassin se recadrait et les quatre vagues remontaient sous le doigt.
+     C'est très exactement le défaut que le lot ÉCRAN-DÉFENSE a corrigé sur
+     `#chantier-avis` le 07/09, mesuré alors à 44 px — et ce jumeau-ci ne l'avait
+     jamais reçu.
+     ⚠⚠ ET `pointer-events: none` EST LA MOITIÉ QUI COMPTE. Il couvre le haut de
+     la première vague : sans cette ligne il avalerait le toucher des
+     emplacements qu'il recouvre, ce qui est la faute mesurée du lot TUTORIEL.
+     Il ne porte que du texte, donc il n'a rien à recevoir.
+     ⚠ EN HAUT, ET PAS EN BAS COMME CELUI DU CHANTIER : c'est là qu'il était, et
+     un message qui change de coin en changeant de nature se cherche. */
   #offense-avis {
-    flex: 0 0 auto; margin: 0; padding: 6px 8px;
+    position: absolute; left: 0; right: 0; top: 0; z-index: 1;
+    pointer-events: none; margin: 0; padding: 6px 8px;
     background: #343A2C; color: #8C9A72; font-size: 10px; line-height: 1.3;
   }
   /* ⚠⚠ LE BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour combler le
@@ -1898,7 +1965,15 @@
     padding: 2px 1px; background: transparent;
     color: #F5F3E8; font: inherit; font-size: 8px; text-align: center; line-height: 1.05;
   }
-  #ecran-offense .unite:disabled { color: #68727E; }
+  /* ⚠⚠ `#ecran-offense .unite:disabled` A ÉTÉ RETIRÉE ICI LE 10/09, ET ELLE
+     ÉTAIT MORTE — mesuré, pas supposé. Le brief du point 14 la nomme comme la
+     règle à changer ; or `.unite` ne désigne QUE la vignette de palette, et
+     `ui/offense.js` n'écrit `disabled` sur aucune : ses deux seules mentions de
+     ce mot sont les commentaires qui l'interdisent — « la vignette éteinte n'est
+     PAS `disabled`, elle doit répondre au toucher pour DIRE ce qui la
+     verrouille », arbitrage du 28/08 que `RET T8` garde. La règle ne pouvait donc
+     jamais peindre, et la laisser à `#68727E` pendant que la règle vivante passe
+     à `#8C9A72` aurait mis deux gris pour le même état dans la même feuille. */
   #ecran-offense .unite .cout { font-size: 8px; color: #8C9A72; }
   /* La vignette armée. Même os que la case choisie du Chantier : un seul
      vocabulaire visuel pour « c'est ça que le prochain toucher va poser ». */
@@ -2049,15 +2124,39 @@
        en POURCENTAGE de lui : mesuré dans Chromium sur un livrable bâti depuis
        `origin/main`, les tourelles de cet écran se peignaient à 336 × 583 et
        jusqu'à 403 × 699 pixels CSS, par-dessus toute la page. Voir
-       `.couche-tournante`. */
+       `.couche-tournante`.
+
+       ⚠⚠ ELLE PASSE DE 28 À 44 px — Ethan, 10/09, point 13 : « Augmenter la
+       taille des sprite dans le menu recherche il y a de la place ». Elle
+       datait du lot RECHERCHE (30/08), où la vignette valait 28 partout ; la
+       palette du Chantier est passée à 52 le 08/09 et celle de l'Offense à 40
+       le 10/09, et cet écran-ci était resté le plus petit des trois.
+
+       ⚠⚠ ET CE QUE ÇA COÛTE EST MESURÉ, PAS DEVINÉ. La rangée est un `flex` à
+       `align-items: center` : sa hauteur est celle de son plus grand enfant, plus
+       les 2 × 6 px de `padding` de `.piece`. Le titre fait 11 px à `line-height:
+       1.2`, soit 13,2 par ligne et **26,4 au pire cas de deux lignes** — donc le
+       SPRITE gouvernait DÉJÀ à 28. Ce n'est pas un changement de régime, c'est le
+       même régime avec un nombre plus grand : la rangée passe de **40 à 56 px**,
+       et c'est le prix de la place qu'Ethan constate.
+
+       ⚠ ET CES 16 px SE PAIENT EN DÉFILEMENT, PAS EN ROGNAGE. Chaque panneau est
+       `overflow-y: auto` : les rangées plus hautes font défiler plus tôt, elles
+       ne se font pas couper — c'est la différence avec les palettes du bas, où
+       l'`overflow-y: hidden` de la bande rogne, et c'est pourquoi 44 se prend ici
+       quand 40 est le plafond là-bas. */
     position: relative;
-    flex: 0 0 28px; height: 28px; image-rendering: pixelated;
+    flex: 0 0 44px; height: 44px; image-rendering: pixelated;
     background-repeat: no-repeat;
   }
   /* Un module n'a pas de sprite : une pastille tient sa place, à la même
-     largeur, pour que les deux rangées s'alignent. */
+     largeur, pour que les deux rangées s'alignent.
+     ⚠⚠ ELLE SUIT LE SPRITE AU MÊME NOMBRE, ET LES DEUX SE RÈGLENT ENSEMBLE —
+     point 13, 10/09. Régler l'un sans l'autre décale la rangée d'un module de
+     celle de sa pièce, et c'est très exactement ce que « pour que les deux
+     rangées s'alignent » veut dire. Un test l'exige au pixel. */
   #ecran-recherche .pastille {
-    flex: 0 0 28px; height: 28px; display: flex; align-items: center;
+    flex: 0 0 44px; height: 44px; display: flex; align-items: center;
     justify-content: center; color: #8C9A72; font-size: 13px;
   }
   #ecran-recherche .acheter {
@@ -2156,20 +2255,80 @@
      ÉTROITE. À sept colonnes sur 360 px, une vignette fait 47 px : sans point
      de coupure, « Cuirassiers » déborde et se fait rogner par l'`overflow`
      du parent — le joueur lit « UIRASSIER ». Vu à l'essai, pas à la relecture. */
+  /* ⚠⚠ LE LIBELLÉ PORTE UNE OMBRE — Ethan, 10/09, point 14 : « Changer la
+     couleur de la police dans le menu offense on voit pas très bien à cause du
+     sprite derrière ». Le mot « derrière » dit la cause, et elle est réelle : la
+     couche tournante d'une pièce est un `<span>` en `absolute` qui DÉBORDE de son
+     `<i>` — c'est ce que `.couche-tournante` fait par construction —, et
+     l'`overflow: hidden` de la vignette la rogne à la case, pas au sprite. Le
+     texte se retrouve donc par-dessus du dessin.
+
+     ⚠⚠ ET AUCUNE COULEUR NE PEUT RÉPONDRE À ÇA — MESURÉ. Le libellé est déjà
+     `#F5F3E8`, la teinte la plus claire de la palette : il rend **14,53** de
+     contraste sur le fond de bande `#1E2124`, et **2,70** sur le kaki clair
+     `#8C9A72` d'un sprite. Le sprite porte les DEUX extrêmes de la rampe, donc
+     aucune teinte de texte ne contraste avec l'un sans se perdre dans l'autre.
+     Ce qui répond est une OMBRE, parce qu'elle suit le glyphe quel que soit ce
+     qu'il y a derrière : `#F5F3E8` sur `#161914` rend **15,95**.
+
+     ⚠ AUCUNE TEINTE NEUVE : `#161914` est le noir de fond du dépôt, déjà employé
+     par `#tete-onglets`, `#chantier-palette` et `#offense-palette` eux-mêmes. La
+     palette est close, et `banc.test.js` balaie ce fichier.
+
+     ⚠ ET LE COÛT LA PORTE AUSSI : il est sous le libellé, donc au-dessus du même
+     sprite, et il est plus sombre que lui — 5,38 contre 14,53. Le laisser nu
+     aurait corrigé la moitié de ce qu'Ethan voit. */
   #offense-palette .unite b {
     font-size: 7px; font-weight: 400; letter-spacing: 0.02em; text-transform: uppercase;
     text-align: center; line-height: 1.05; color: #F5F3E8;
+    text-shadow: 0 1px 0 #161914, 0 -1px 0 #161914, 1px 0 0 #161914, -1px 0 0 #161914;
     overflow-wrap: anywhere; hyphens: auto;
   }
-  #offense-palette .unite .cout { font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums; }
+  #offense-palette .unite .cout {
+    font-size: 8px; color: #8C9A72; font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 0 #161914, 0 -1px 0 #161914, 1px 0 0 #161914, -1px 0 0 #161914;
+  }
   /* ⚠ MÊME PASTILLE QUE LA PALETTE DU CHANTIER, MÊME RAISON — Ethan, 30/08 :
      « base def off ». Les trois barres du bas montrent désormais la pièce, pas
      un carré. Sans cadre de famille ici : une unité n'a pas de famille de coût,
      elle a un châssis, et ce châssis se lit à la silhouette. */
+  /* ⚠⚠ ELLE PASSE DE 26 À 40 px — Ethan, 10/09, point 7, précisé le jour même :
+     « Dans la barre de construction, en bas de l'ui ». Le sprite de cette
+     palette-ci faisait la MOITIÉ de celui du Chantier dans une case de même
+     largeur, et ce n'était pas un choix : le lot RETOUCHES a porté `.posable i`
+     de 26 à 52 le 08/09 pour « remplir la case en bas du menu bâtiment », et ce
+     jumeau-là n'a pas suivi. Les deux valaient 26 depuis le 30/08.
+
+     ⚠⚠ ET 40 SE CALCULE, IL NE SE RECOPIE PAS. `box-sizing: border-box` est posé
+     sur `*`, donc la bande de 86 rend `86 − 1` de liseré `− 2 × 5` de `padding`,
+     soit **75** pour la vignette ; celle-ci rend `75 − 2 × 1` de liseré `− 0` de
+     `padding` — elle porte `padding: 0 2px`, donc RIEN en vertical —, soit
+     **73** ; ses TROIS enfants sont séparés par DEUX `gap` de 2, soit **69**. Le
+     libellé se dimensionne sur son PIRE cas — deux lignes de 7 px, dont une
+     portant un `.picto` de `1.15em` —, soit `7 × (1,05 + 1,15) = 15,4` ; le coût
+     est UNE ligne de 8 px portant elle aussi un picto, soit `8 × 1,15 = 9,2`.
+     Reste **44,4 : on prend 40**, le plus grand multiple de huit qui tienne — un
+     sprite de 128 s'y réduit donc d'un facteur entier.
+
+     ⚠ ET LE PREMIER JET DE CE CALCUL ÉTAIT FAUX DE DEUX PIXELS, il faut le dire :
+     il retirait un `padding` vertical de 2 × 2 que la règle ne déclare pas, et
+     oubliait les deux `gap`. Il rendait 42,4 au lieu de 44,4. Le CHOIX ne bouge
+     pas — 48 ne tenait ni dans l'un ni dans l'autre — mais un nombre écrit se
+     recalcule avant d'être cru.
+
+     ⚠⚠ DONC PAS 52, ET C'EST MESURÉ. Recopier le nombre du Chantier déborderait
+     de 7,6 px et la vignette serait rognée par l'`overflow-y: hidden` de la
+     bande — le couple `PAL T1`/`PAL T2`. Les deux palettes n'ont PAS la même
+     place : celle-ci porte un troisième enfant, le coût en points d'armée, que
+     le Chantier n'a pas, et son libellé a un interligne de plus.
+
+     ⚠ `relative` POUR LA COUCHE TOURNANTE — et il était déjà là. Sans ancêtre
+     positionné, le `<span>` de la tourelle se cale sur `#ecrans` et se peint
+     par-dessus toute la page : mesuré au lot SPRITES-V2-JOUEUR, jusqu'à
+     403 × 699 px CSS. Ne pas le perdre en réécrivant la règle. */
   #offense-palette .unite i {
-    /* ⚠ `relative` POUR LA COUCHE TOURNANTE — voir `.couche-tournante`. */
     position: relative;
-    width: 26px; height: 26px; font-style: normal;
+    width: 40px; height: 40px; font-style: normal;
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;
   }
@@ -2178,17 +2337,38 @@
      pour DIRE ce qui la verrouille. Elle se grise donc par une classe, comme
      l'unique déjà posé du Chantier depuis le 28/08. */
   #offense-palette .unite.verrouillee { opacity: 0.45; border-color: #1E2124; }
-  #offense-palette .unite.verrouillee b { color: #68727E; }
+  /* ⚠⚠ LE LIBELLÉ ÉTEINT REMONTE DE `#68727E` À `#8C9A72` — point 14, 10/09, et
+     c'est la règle qui VIT. Mesuré : `#68727E` rend **3,31** de contraste sur le
+     fond de bande, et la vignette porte en plus `opacity: 0.45`, donc le nom
+     d'une unité verrouillée était le texte le moins lisible de la page. Le kaki
+     clair rend **5,38**, et il est déjà celui du coût juste en dessous et de
+     `#raid-avis` : aucune teinte neuve, aucun troisième gris.
+     ⚠ ET IL RESTE DISTINCT DU LIBELLÉ VIF, qui est `#F5F3E8` : l'éteint se lit
+     toujours comme éteint, il cesse seulement d'être illisible. */
+  #offense-palette .unite.verrouillee b { color: #8C9A72; }
 
   /* ⚠ MÊME FORME QUE `#chantier-reserve` — même corps, même ton, même famille
      de mots. Deux vocabulaires pour la même grandeur obligeraient le joueur à
      traduire d'un écran à l'autre. `flex: 0 0 auto` : aucune hauteur fixe à
      ajouter à la somme des barres. */
+  /* ⚠ LA BARRE PORTE LES DEUX, ET SA HAUTEUR N'EST PAS FIXE (`0 0 auto`) : la
+     garde des 288 px énumère les barres à hauteur fixe, et une de plus la ferait
+     tomber. C'est la géométrie de `#chantier-reparation`, au pixel. */
+  #offense-reparation {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 3px 8px; background: #343A2C;
+  }
   #offense-reserve {
-    flex: 0 0 auto; margin: 0; padding: 3px 8px; font-size: 9px;
-    background: #343A2C; color: #F5F3E8;
+    margin: 0; font-size: 9px; color: #F5F3E8; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-variant-numeric: tabular-nums;
+  }
+  /* ⚠ MÊME BOUTON QUE `#chantier-tout-reparer` — même geste, même mot, même
+     dessin. Aucune teinte neuve. */
+  #offense-tout-reparer {
+    flex: 0 0 auto; padding: 3px 10px; border: 0; border-radius: 2px;
+    background: #6A7658; color: #161914; font-size: 9px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
   }
   /* La barre contextuelle de l'Offense — jumelle de `#chantier-contexte`, même
      hauteur, mêmes quatre boutons, même modèle « armer puis toucher ». Elle ne
@@ -2250,6 +2430,25 @@
        défaut qui n'existe plus. -->
   <div id="tete-onglets">
     <button type="button" class="actif" id="onglet-base">Base</button>
+    <!-- ⚠⚠ LE JOURNAL DES RAIDS MONTE DANS LA BARRE — Ethan, 10/09, point 4 :
+         « Bouton rapport a deplacer en haut entre base et mission ». Il était
+         POSÉ SUR LE CHAMP, en deux exemplaires — un au Chantier, un à l'Offense —
+         avec DEUX panneaux pour la même `vueDuJournal`. Un journal n'appartient à
+         aucun écran : il dit ce qui est arrivé à la PARTIE.
+
+         ⚠⚠ SON IDENTIFIANT NE COMMENCE PAS PAR `onglet-`, ET C'EST DÉLIBÉRÉ. Ce
+         n'est pas un onglet : il n'a pas d'écran, il ne prend jamais `.actif`, et
+         `ONGLET_DE_L_ECRAN` de `ui/session.js` ne le connaît pas. La garde de la
+         barre sépare donc les deux populations — cinq onglets et un bouton — au
+         lieu de compter six boutons, ce qui l'aurait relâchée.
+
+         ⚠ ET IL NE COÛTE PAS UN PIXEL DE CHAMP : la barre garde ses 40 px, donc
+         les 288 px de chrome que `chantier.test.js` somme ne bougent pas. C'est
+         ce qui fait de ce point un DÉPLACEMENT et pas un ajout — deux boutons
+         posés sur deux champs deviennent un bouton dans une barre qui existait,
+         et les deux cases qu'ils couvraient sont rendues au joueur. -->
+    <button type="button" id="tete-rapport"
+            title="Journal des raids" aria-label="Journal des raids">▤</button>
     <button type="button" id="onglet-mission">Mission</button>
     <button type="button" id="onglet-recherche">Recherche</button>
     <button type="button" id="onglet-monde">Monde</button>
@@ -2349,33 +2548,16 @@
                il ne porte que du texte, donc il n'a rien à recevoir. -->
           <p id="chantier-garnison" hidden></p>
 
-          <!-- ⚠⚠ LE BOUTON DU JOURNAL — lot JOURNAL, 07/09, point 14. Ethan :
-               « Défense et offense : rajouter un bouton rapport, qui permet de
-               voir les 10 dernières attaques et raids subis. »
-               ⚠⚠ IL EST POSÉ SUR LE CHAMP, PAS DANS UNE BARRE, ET C'EST LA
-               CONSIGNE « tu compresses tout dans l'UI ». Une septième barre fixe
-               ferait tomber la garde des 288 px de chrome ; en `absolute`, il ne
-               coûte pas un pixel de hauteur. C'est le chemin de
-               `#chantier-bascule-bande`, au coin opposé et sous une règle
-               jumelle.
-               ⚠ ET IL COUVRE UNE CASE, comme la bascule en couvre une autre —
-               relevé, pas ignoré : c'est le prix d'un contrôle posé sur le
-               champ, et il est le même des deux côtés. -->
-          <button type="button" id="chantier-journal"
-                  title="Journal des raids" aria-label="Journal des raids">▤</button>
-        </div>
-
-        <!-- ⚠⚠ LE PANNEAU DU JOURNAL PORTE `panneau-detail`, ET RIEN D'AUTRE.
-             Son contenu est écrit par `peindreVueDuPanneau` — le rendu partagé
-             du Chantier, de l'Offense et de la fiche ennemie. Quatrième lecteur,
-             zéro ligne de feuille.
-             ⚠ ET IL N'A PAS DE BOUTON D'ACTION : un journal se lit. -->
-        <div id="chantier-journal-panneau" class="panneau-detail" hidden>
-          <div class="tete">
-            <b id="chantier-journal-titre" class="titre">—</b>
-            <button type="button" id="chantier-journal-fermer" class="fermer">Fermer</button>
-          </div>
-          <div id="chantier-journal-corps" class="corps"></div>
+          <!-- ⚠⚠ LE BOUTON DU JOURNAL A QUITTÉ CE CHAMP LE 10/09 — point 4,
+               « Bouton rapport a deplacer en haut entre base et mission ». Il
+               était ici, en `absolute` au coin haut-droit, et son jumeau était à
+               l'Offense : deux boutons, deux panneaux, une seule vue. Il vit
+               maintenant dans `#tete-onglets`, une fois, et son panneau est
+               `#journal-panneau`, frère de `#ecrans`.
+               ⚠ ET LA CASE QU'IL COUVRAIT EST RENDUE. Le prix d'un contrôle posé
+               sur le champ était relevé ici depuis le lot JOURNAL — « il couvre
+               une case, comme la bascule en couvre une autre » ; il ne se paie
+               plus, ni ici ni à l'Offense. -->
         </div>
         <!-- Le panneau de détail. Son CONTENU est écrit par `ui/chantier.js`
              depuis `lignesDuPanneau`, qui est pure et testée : rien de ce qui
@@ -2431,7 +2613,7 @@
            ⚠ LA RÉSERVE EST LÀ PARCE QU'UN JOUEUR QUI NE LA VOIT PAS NE COMPREND
            PAS POURQUOI RÉPARER REFUSE. Elle est écrite par `ui/chantier.js`
            depuis `plafondDeLaReserveDesBatiments` ; rien n'est calculé ici. -->
-      <div id="chantier-reparation" hidden>
+      <div id="chantier-reparation" class="repliee">
         <span id="chantier-reserve">—</span>
         <button type="button" id="chantier-tout-reparer">Tout réparer</button>
       </div>
@@ -2504,12 +2686,6 @@
       </div>
     </div>
     <div id="ecran-offense" hidden>
-      <!-- ⚠ CE PARAGRAPHE ÉTAIT GRAVÉ DANS LA PAGE, ET IL DISAIT QUE LA
-           COMPOSITION N'EXISTAIT PAS. Elle existe depuis le lot
-           GARNISON-ET-ARMÉE : la ligne est maintenant ÉCRITE PAR L'ÉCRAN, qui
-           y met ce qui est vrai à cet instant — l'explication du budget absent,
-           un refus, ou le rappel du mode en cours. Vide, elle se cache. -->
-      <p id="offense-avis" hidden></p>
       <!-- ⚠⚠ UNE ENVELOPPE POUR ANCRER LE PANNEAU, ET ELLE COPIE
            `#chantier-champ`. Ethan, 04/09 : « Quand on clique sur une unité en
            défense ou armé, afficher un onglet comme pour les bâtiments. » Le
@@ -2519,18 +2695,20 @@
            défile, s'y poser ferait glisser le panneau avec les vagues. -->
       <div id="offense-champ">
         <div id="offense-vagues"></div>
-        <!-- ⚠ LE MÊME BOUTON ET LE MÊME PANNEAU QUE LE CHANTIER — voir là-bas.
-             `vueDuJournal` est écrite UNE fois, dans `ui/chantier.js` ; deux
-             écrans l'appellent, et `JRN T8` refuse la seconde. -->
-        <button type="button" id="offense-journal"
-                title="Journal des raids" aria-label="Journal des raids">▤</button>
-        <div id="offense-journal-panneau" class="panneau-detail" hidden>
-          <div class="tete">
-            <b id="offense-journal-titre" class="titre">—</b>
-            <button type="button" id="offense-journal-fermer" class="fermer">Fermer</button>
-          </div>
-          <div id="offense-journal-corps" class="corps"></div>
-        </div>
+        <!-- ⚠ CE PARAGRAPHE ÉTAIT GRAVÉ DANS LA PAGE, ET IL DISAIT QUE LA
+             COMPOSITION N'EXISTAIT PAS. Elle existe depuis le lot
+             GARNISON-ET-ARMÉE : la ligne est maintenant ÉCRITE PAR L'ÉCRAN, qui
+             y met ce qui est vrai à cet instant — l'explication du budget absent,
+             un refus, ou le rappel du mode en cours. Vide, elle se cache.
+             ⚠⚠ ET ELLE A QUITTÉ LE FLUX POUR CETTE ENVELOPPE-CI LE 10/09 —
+             point 5 d'Ethan. Elle était au-dessus de `#offense-champ`, en
+             `flex: 0 0 auto` : paraître lui coûtait sa hauteur, donc le bassin se
+             recadrait et les vagues remontaient. `#offense-champ` est l'ancêtre
+             positionné, comme `#chantier-vue` l'est pour la ligne du Chantier ;
+             s'y poser est ce qui rend le paraître gratuit. -->
+        <p id="offense-avis" hidden></p>
+        <!-- ⚠ LE BOUTON DU JOURNAL A QUITTÉ CET ÉCRAN LE 10/09, avec celui du
+             Chantier et dans le même geste — point 4. Voir `#tete-rapport`. -->
         <!-- ⚠ LE MÊME PANNEAU QUE CELUI DU CHANTIER, à la classe près : les
              règles vivent sur `.panneau-detail`, et le rendu est la fonction
              `peindreVueDuPanneau` de `ui/chantier.js`. Deux DOM voisins dont un
@@ -2562,7 +2740,23 @@
            qui paraît avec un mode et pousse le champ quand il paraît.
            ⚠ ET CE N'EST PAS UNE CINQUIÈME BARRE FIXE : `flex: 0 0 auto`, donc la
            garde des 288 px ne la compte pas. -->
-      <p id="offense-reserve">—</p>
+      <!-- ⚠⚠ LA RÉSERVE ET « TOUT RÉPARER » PARTAGENT UNE BARRE — Ethan,
+           10/09, point 6 : « Rajouter un bouton tout réparer dans l'onglet
+           armée ». La réserve était seule dans le flux et coûtait déjà sa
+           hauteur ; le bouton se range à côté d'elle plutôt que sur une ligne à
+           lui, donc l'écran ne gagne pas un pixel de chrome.
+           ⚠⚠ ET IL EST LÀ EN PERMANENCE, PAS SOUS UN MODE. C'est la différence
+           avec `#chantier-reparation` et `#raid-tout-reparer`, qui paraissent le
+           mode Réparer armé : les faire paraître ici recréerait le défaut du
+           point 5 sur l'écran qu'il vient de réparer. Ce qui ne varie pas ne
+           recadre rien.
+           ⚠ LA FORME EST CELLE DE LA BARRE DU CHANTIER — même corps, même ton,
+           même famille de mots. Deux vocabulaires pour la même grandeur
+           obligeraient le joueur à traduire d'un écran à l'autre. -->
+      <div id="offense-reparation">
+        <p id="offense-reserve">—</p>
+        <button type="button" id="offense-tout-reparer">Tout réparer</button>
+      </div>
       <!-- ⚠ LA BARRE CONTEXTUELLE, NEUVE AU 29/08. Ethan : « on ne peut pas
            supprimer une unité en cliquant dessus. D'ailleurs les boutons
            réparer, améliorer etc. n'apparaissent pas dans le menu offense. »
@@ -2759,6 +2953,17 @@
                fixe reste à 288 px, comme les deux boutons de zoom l'ont fait
                avant lui — c'est la consigne « tu compresses tout dans l'ui ». -->
           <button type="button" id="monde-recentrer">Ma base</button>
+          <!-- ⚠⚠ LES GISEMENTS — Ethan, 10/09, point 11 : « rajouter un petit
+               bouton pour voir les POI acquis. Et non acquis avec coordonnées ».
+               La carte en porte soixante-dix, sept types dans dix bandes, et le
+               joueur n'avait aucun moyen de savoir lesquels il tient ni où sont
+               les autres : un message de quatre secondes lui disait qu'il venait
+               d'en prendre un, et rien de plus.
+               ⚠ IL SE POSE SUR LA CARTE, À CÔTÉ DE « MA BASE », ET N'AJOUTE PAS
+               DE BARRE — `#monde-outils` est déjà en `absolute` au coin haut et
+               en `flex` : le chrome fixe reste à 288 px. Même habillage que son
+               voisin ; cet écran n'invente pas un troisième style de bouton. -->
+          <button type="button" id="monde-poi">Gisements</button>
         </div>
         <div id="monde-panneau" hidden>
           <div class="tete">
@@ -2905,7 +3110,7 @@
       <div id="raid-bas">
         <!-- ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et il n'apparaît que
              le mode Réparer armé — Ethan, 01/09. -->
-        <button type="button" id="raid-tout-reparer" hidden>Tout réparer</button>
+        <button type="button" id="raid-tout-reparer" class="repliee">Tout réparer</button>
         <!-- ⚠⚠ LE BOUTON D'ATTAQUE A QUITTÉ LA RANGÉE — lot ASSAUT, 04/09.
              Ethan : « le bouton attaquer, il est vraiment en gros à droite. Il
              n'y a que ça qui déclenche l'attaque. » Il alignait six boutons de
@@ -3079,6 +3284,41 @@
        d'écran. Les trois se ressemblent maintenant, ce qui est ce qu'Ethan
        veut, et le contenu de l'écran dit lequel on regarde. -->
   <div id="barre-bas"></div>
+
+  <!-- ⚠⚠ LE PANNEAU DU JOURNAL EST GLOBAL, ET FRÈRE DE `#ecrans` — point 4,
+       10/09. Il y en avait DEUX, un par écran, qui peignaient la MÊME vue :
+       `vueDuJournal` est écrite une seule fois dans `ui/chantier.js`, et `JRN T8`
+       refusait déjà une seconde écriture. Ce qui restait dédoublé, c'était le
+       DOM et son câblage — donc deux endroits à corriger pour un seul journal.
+
+       ⚠⚠ IL EST HORS DU FLUX, ET C'EST LA LEÇON DU POINT 5 PRISE D'AVANCE.
+       `.panneau-detail` est `position: absolute` ; posé ici, il s'ancre sur
+       `#jeu`, qui devient `position: relative` pour lui et pour lui seul. Dans le
+       flux, il pousserait `#ecrans` — donc recadrerait TOUS les écrans à chaque
+       ouverture, ce que le point 5 fait justement corriger deux barres plus bas.
+
+       ⚠⚠ ET IL EST LE DERNIER ENFANT DE `#jeu`, PAS LE PREMIER — c'est l'ORDRE
+       DU DOCUMENT qui le met au-dessus, pas un `z-index` de plus. Les panneaux
+       des écrans sont des `.panneau-detail` eux aussi, donc au MÊME niveau 2 ;
+       ni `#jeu` ni `#ecrans` ne créent de contexte d'empilement — les deux sont
+       `position: relative` sans `z-index` —, si bien qu'à égalité c'est le
+       dernier écrit qui peint par-dessus. Posé AVANT `#ecrans`, le journal
+       serait passé SOUS la fiche d'un bâtiment restée ouverte.
+       ⚠ CONSÉQUENCE, DÉCLARÉE : ouvrir le journal ne FERME plus la fiche, il la
+       recouvre, et la refermer la rend. C'est un changement par rapport au lot
+       JOURNAL, où les deux vivaient dans le même conteneur et où l'écran devait
+       fermer l'un pour ouvrir l'autre. Ce qui motivait ce `fermerPanneau` était
+       qu'un panneau caché AVALAIT les touchers de l'autre ; ici le journal est
+       au-dessus, donc c'est lui qui les reçoit, et rien n'est volé.
+       ⚠ ET IL N'A PAS DE BOUTON D'ACTION : un journal se lit. C'est le
+       `bouton: null` que `peindreVueDuPanneau` attend. -->
+  <div id="journal-panneau" class="panneau-detail" hidden>
+    <div class="tete">
+      <b id="journal-titre" class="titre">—</b>
+      <button type="button" id="journal-fermer" class="fermer">Fermer</button>
+    </div>
+    <div id="journal-corps" class="corps"></div>
+  </div>
 
 </div>
 

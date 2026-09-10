@@ -37,7 +37,9 @@ import {
   creerEtat, charger, serialiser, tickJeu, rattraperJeu, reglerTutoriel, baseCourante,
 } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
-import { initialiserEcranChantier } from './chantier.js';
+import {
+  initialiserEcranChantier, vueDuJournal, peindreVueDuPanneau,
+} from './chantier.js';
 import { tousLesFonds, nomCssDuFond } from '../render/fond.js';
 import { initialiserPanneauDeTransfert } from './transfert.js';
 import { initialiserEcranOffense } from './offense.js';
@@ -1002,6 +1004,47 @@ export function initialiserSession(doc) {
   $('onglet-recherche').addEventListener('click', () => montrerEcran('recherche'));
   $('onglet-monde').addEventListener('click', () => montrerEcran('monde'));
 
+  // --- le journal des raids, une fois pour toute la page ---------------------
+  //
+  // ⚠⚠ IL EST MONTÉ DANS LA BARRE LE 10/09 — Ethan, point 4 : « Bouton rapport a
+  // deplacer en haut entre base et mission ». Il y avait DEUX boutons et DEUX
+  // panneaux, un par écran, qui peignaient la même `vueDuJournal` : le journal ne
+  // dit rien d'un écran, il dit ce qui est arrivé à la PARTIE.
+  //
+  // ⚠⚠ ET C'EST LA SESSION QUI LE CÂBLE, PAS UN ÉCRAN. `#tete-onglets` ne
+  // appartient à aucun d'eux — « un écran ne touche jamais `#tete-onglets`
+  // lui-même », et la garde d'`offense.test.js` balaie les six écrans pour le
+  // refuser. Le bouton vit dans la barre, donc son écouteur vit ici.
+  //
+  // ⚠ LA VUE EST IMPORTÉE, PAS RECOPIÉE. `vueDuJournal` reste écrite dans
+  // `ui/chantier.js`, où sont ses trois briques — `formaterEntier`,
+  // `direLaDuree` et `peindreVueDuPanneau` ; la déplacer ici ferait importer un
+  // écran par la session, donc un cycle. `JRN T8` refuse la seconde écriture.
+  const panneauJournal = $('journal-panneau');
+  const elementsJournal = {
+    titre: $('journal-titre'), corps: $('journal-corps'), bouton: null,
+  };
+  function fermerLeJournal() {
+    if (panneauJournal !== null) panneauJournal.hidden = true;
+  }
+  // ⚠ FERMÉ AU CÂBLAGE, ET PAS SEULEMENT PAR L'ATTRIBUT DU BALISAGE. C'est la
+  // discipline de `fermerPanneau` au Chantier : un `hidden` oublié à la prochaine
+  // reprise du balisage ouvrirait le journal au démarrage, par-dessus la grille,
+  // sans qu'aucun test le voie.
+  fermerLeJournal();
+  $('tete-rapport').addEventListener('click', () => {
+    if (etat === null || panneauJournal === null) return;
+    // ⚠ IL SE PEINT À L'OUVERTURE, PAS À CHAQUE IMAGE. Rien ne peut changer
+    // pendant qu'on le regarde : un rapport n'entre au journal qu'à la RÉSOLUTION
+    // d'un raid, et le joueur n'est alors pas en train de lire le journal.
+    peindreVueDuPanneau(
+      doc, elementsJournal,
+      vueDuJournal(etat.rapports, etat.horloge.nbTicks),
+    );
+    panneauJournal.hidden = false;
+  });
+  $('journal-fermer').addEventListener('click', fermerLeJournal);
+
   // --- le banc d'essai, derrière un appui long -------------------------------
   //
   // ARBITRÉ le 27/08 : le banc RESTE dans le HTML livré, caché derrière un geste
@@ -1353,7 +1396,20 @@ export function initialiserSession(doc) {
     // 04/09. L'écran de raid ANNONCE le déroulé, la session ÉCRIT le chrome :
     // `#tete-onglets` ne lui appartient pas, et un écran qui le masquerait
     // lui-même serait le premier à oublier de le rendre.
-    pendantLeDeroule: (enCours) => { derouleEnCours = enCours; appliquerLeChrome(); },
+    // ⚠⚠ ET LE PANNEAU DU JOURNAL SE FERME AVEC LES BARRES. Ethan, 04/09 :
+    // « quand on lance un raid, toutes les barres disparaissent. On voit juste
+    // la simulation en cours. » Le BOUTON part avec `#tete-onglets`, qui est
+    // dans `CHROME_MASQUE_PAR_LE_DEROULE` ; le PANNEAU, lui, n'y est pas — il
+    // est frère de `#ecrans` et non un bloc de chrome. Ouvert au moment où un
+    // combat démarre, il resterait affiché par-dessus la simulation, et son
+    // bouton de fermeture serait le seul reste d'une barre qu'on vient de
+    // masquer. On le ferme, on ne le masque pas : le rouvrir n'a de sens qu'au
+    // retour, et le retour repasse par le bouton.
+    pendantLeDeroule: (enCours) => {
+      derouleEnCours = enCours;
+      if (enCours) fermerLeJournal();
+      appliquerLeChrome();
+    },
     // ⚠ SEULE LA VRAIE ATTAQUE SONNE — l'écran le décide, pas la session : lui
     // seul sait si le déroulé est une simulation.
     sonDeGeste,

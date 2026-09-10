@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
+Dernière révision : **10/09/2026**, version 0.99.38 · build 140.
 
 ---
 
@@ -42,7 +42,188 @@ Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 09/09/2026 (après le lot PAQUETS), à confronter :**
+**Référence au 10/09/2026 (après le lot ÉCRANS), à confronter :**
+`npm test` rend **1532 pass / 0 fail** au sens de la garde de `documentation.test.js`
+— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1531 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. `npm run build` → `dist/index.html`, **9 147 308 octets**, 0 référence
+externe. Coût **+13 127 octets, SANS UN OCTET D'IMAGE NI DE SON**, mesuré poste
+par poste contre le livrable rebâti dans un `git worktree` depuis `origin/main` =
+`14dd4ac` (**9 134 181**) : **feuille +12 420 · JavaScript +1 057 · balisage
+−350 · images +0 · audio +0**, et la somme des cinq postes tombe EXACTEMENT sur
+le total — `data:` à **311 lignes / 306 URI** des deux côtés. Borne T10 inchangée
+à 9 300 000, marge **152 692 octets, 1,64 %**. Le lot touche `src/data/base.js`,
+`src/index.src.html`, `src/ui/chantier.js`, `src/ui/monde.js`,
+`src/ui/offense.js`, `src/ui/raid.js`, `src/ui/session.js` et huit fichiers de
+`test/` ; il n'en fait entrer AUCUN.
+⚠⚠ **ET LES ONZE MILLE OCTETS DE FEUILLE SONT DES COMMENTAIRES, MESURÉ.** Sur
+les +12 420, **+11 755 sont de la prose** et **+665 des règles** : `tools/build.js`
+inline la feuille TELLE QUELLE, sans retirer les `/* */`. Le livrable porte
+aujourd'hui **98 084 octets de commentaires CSS pour 43 833 de règles**. Ce n'est
+pas un défaut de ce lot — c'est le régime depuis toujours — mais c'est le premier
+qui le mesure, et la marge est descendue à 1,64 %. **Le levier existe et il est
+chiffré** : les retirer AU BUILD rendrait ~98 Kio sans toucher une ligne de
+source. C'est un lot d'outillage, pas une ligne ; **Ethan tranche.**
+⚠⚠ **HUIT POINTS D'ETHAN DU 10/09, HUIT TESTS, ZÉRO OCTET D'ART.** Points 3, 4,
+5, 6, 7, 11, 13 et 14 — tous d'interface. `src/sim/`, `src/render/`, `src/son/`,
+`art/` et `tools/` n'ont pas **un fichier** de changé, vérifié au diff, et
+`SAVE_VERSION` reste à **30**.
+⚠⚠ **LE CHANTIER SORT DE LA PALETTE, ET IL SORT D'UN BOUTON QUI NE POUVAIT PAS
+AGIR.** Point 3. Il est `unique: true` ET posé par `BASE_NEUVE` sur TOUTE base :
+sa vignette était donc grisée en permanence, sur toutes les bases, depuis
+toujours. `ORDRE_PALETTE` passe de 14 à **13**, et la garde de couverture cesse
+d'être « le roster » pour devenir **« le roster MOINS `BATIMENTS_DONNES` »** —
+une soustraction NOMMÉE et DÉRIVÉE de `BASE_NEUVE`, jamais une liste écrite à la
+main. ⚠ Et la garde « la palette GRISE un unique déjà posé » est **RETOURNÉE** :
+elle comptait UNE vignette grisée sur une base neuve, elle en exige **ZÉRO**, et
+la falsifiabilité passe par un CONTRASTE — la maquette, elle, en marque encore.
+⚠⚠ **ET `BATIMENTS_DONNES` A LEVÉ À L'EXÉCUTION APRÈS AVOIR PASSÉ
+`node --check`.** Posé 220 lignes AVANT `BASE_NEUVE`, il y lisait une zone morte
+temporelle : « Cannot access 'BASE_NEUVE' before initialization ». C'est la
+leçon §6 du dépôt payée une fois de plus — un `const` ne se lit pas avant d'être
+écrit. Il vit désormais **immédiatement sous sa source**.
+⚠⚠ **LE JOURNAL DEVIENT GLOBAL : UN BOUTON, UN PANNEAU, DEUX LECTEURS.**
+Point 4, « Bouton rapport a deplacer en haut entre base et mission ».
+`#tete-rapport` entre dans `#tete-onglets` — **il n'est PAS un `onglet-`**, et
+c'est ce qui l'écarte d'`ONGLET_DE_L_ECRAN` : nommé `onglet-rapport`, il aurait
+cherché un écran qui n'existe pas. `#chantier-journal`, `#offense-journal` et
+leurs DEUX panneaux sortent ; `ui/session.js` IMPORTE `vueDuJournal` et peint par
+`peindreVueDuPanneau`. `vueDuJournal` RESTE dans `ui/chantier.js` — elle a besoin
+de `formaterEntier`, `direLaDuree` et du rendu partagé, tous locaux, et la
+déménager aurait fait un CYCLE.
+⚠⚠ **ET `#journal-panneau` EST LE DERNIER ENFANT DE `#jeu`, PAS LE PREMIER.**
+Les `.panneau-detail` partagent `z-index: 2` et ne créent AUCUN contexte
+d'empilement — `position: relative` sans `z-index` n'en fait pas un —, donc à
+égalité c'est le DERNIER ÉCRIT qui peint par-dessus. Posé avant `#ecrans`, le
+journal serait passé SOUS la fiche d'un bâtiment restée ouverte, et « Fermer »
+n'aurait rien fermé. ⚠ **Conséquence DÉCLARÉE** : ouvrir le journal ne FERME plus
+la fiche, il la RECOUVRE — c'est un changement par rapport au lot JOURNAL, et il
+est sans danger : le panneau du dessus reçoit les touchers, rien n'est volé.
+⚠ **ET LE DÉROULÉ D'UN RAID LE REFERME**, par le crochet `pendantLeDeroule` :
+le combat masque tout le chrome, et un panneau laissé ouvert serait le seul
+élément d'interface à l'écran pendant le raid.
+⚠⚠ **ARMER UN MODE NE RECADRE PLUS LE DÉCOR, ET LES DEUX MOITIÉS N'ONT PAS LE
+MÊME REMÈDE.** Point 5. `#offense-avis` et `#raid-avis` quittent le flux —
+`position: absolute` plus `pointer-events: none`, exactement `#chantier-avis`
+depuis ÉCRAN-DÉFENSE, qui mesurait **44 px volés au champ**. Mais
+`#chantier-reparation` et `#raid-tout-reparer` portent un **BOUTON**, donc ils
+doivent RECEVOIR le toucher : ils ne peuvent pas sortir du flux, ils RÉSERVENT
+leur place. `.repliee` passe de `hidden` à **`visibility: hidden`**.
+⚠⚠ **ET L'ATTRIBUT `hidden` DEVAIT PARTIR DU BALISAGE, PAS SEULEMENT DU CODE.**
+La tête de feuille porte `[hidden] { display: none !important }` : un `hidden`
+laissé sur l'élément l'aurait emporté sur la classe, et le repli serait resté un
+RETRAIT. Les deux naissent donc `class="repliee"`, sans attribut.
+⚠ **ET LA MOITIÉ `#chantier-reparation` EST UN ÉCART DÉCLARÉ AU MOT D'ETHAN** :
+il ne nomme que l'armée et le raid. Le Chantier portait le même défaut, mesuré à
+**22 px** par ÉCRAN-DÉFENSE, qui l'avait laissé ouvert en écrivant « Ethan
+tranche ». Le lot le referme dans le même geste ; **une ligne le rouvre**.
+⚠⚠ **L'ARMÉE RÉPARE, ET LA TABLE DES ACTIONS N'A PLUS UNE SEULE LIGNE SANS
+MOTEUR.** Point 6. `#offense-tout-reparer` entre à côté de la réserve — et il est
+**PERMANENT**, pas sous mode, contrairement à celui du raid : l'écran d'armée n'a
+pas de mode « réparation » à ouvrir, et un bouton qu'il faut armer pour voir est
+un bouton qu'on ne trouve pas. ⚠ **ÉCART DÉCLARÉ, ET IL ÉTAIT FORCÉ** : le brief
+ne demandait que le bouton global, mais `ACTIONS_ARMEE.reparer` portait
+`agir: null` — un « Tout réparer » qui marche à côté d'un « Réparer » qui répond
+par une phrase aurait été le pire des deux états. Le geste unitaire gagne donc
+son moteur, `problemesDeLaReparationDUnePiece` et `reparerUnePiece`, qui
+existaient depuis le lot RÉSERVE.
+⚠ **ET `REPARATION_AILLEURS` DISPARAÎT AVEC SON DERNIER LECTEUR.** Elle disait
+« les unités se réparent sur l'écran de raid » : vrai jusqu'à ce lot, faux
+depuis. La garder « au cas où » l'aurait fait relire comme une règle.
+⚠⚠ **ET LA GARDE QUI LE MESURE A LU MA PROPRE PROSE, NEUVIÈME FOIS DU DÉPÔT.**
+Son premier jet cherchait `REPARATION_AILLEURS` dans la source BRUTE et tombait
+sur les DEUX commentaires qui nomment la constante pour dire qu'elle est partie.
+Elle lit la source DÉCOMMENTÉE, avec un appât dans chaque sens.
+⚠⚠ **LA VIGNETTE DE L'OFFENSE PASSE DE 26 À 40 PX, ET LE « ≥ 52 » DU BRIEF EST
+GÉOMÉTRIQUEMENT IMPOSSIBLE — MESURÉ, ÉCART DÉCLARÉ.** Point 7. La bande fait
+86 px et porte, EN PLUS du sprite, un libellé et un coût que celle du Chantier
+n'a pas : `86 − 1` de liseré `− 2 × 5` de `padding` = 75 pour la vignette, `− 2`
+de liseré et RIEN en `padding` vertical = 73, `− 2 × 2` de `gap` entre TROIS
+enfants = 69, moins le libellé 15,4 et le coût 9,2 — il reste **44,4**. À 52 la
+vignette déborderait de 7,6 px et serait rognée par l'`overflow-y: hidden` de la
+bande. **40** est le plus grand multiple de huit qui tienne, donc un sprite de
+128 s'y réduit d'un facteur entier. ⚠ **ET LE PREMIER JET DE CE CALCUL ÉTAIT
+FAUX DE DEUX PIXELS** — il retirait un `padding` vertical que la règle ne déclare
+pas et oubliait les deux `gap`, rendant 42,4. Le choix ne bouge pas ; le nombre
+écrit, si.
+⚠ **ET LE BRIEF SE TROMPAIT SUR LA PRÉMISSE** : il annonce que la vignette n'a
+« pas de taille explicite ». Mesuré, elle en a une — **26 px** — depuis le
+30/08 ; ce qui manquait, c'est qu'elle n'a pas suivi `.posable i` quand le lot
+RETOUCHES l'a portée à 52 le 08/09.
+⚠⚠ **LE TOAST DES GISEMENTS DEVIENT UN PANNEAU, ET LE PANNEAU EST LA LISTE.**
+Point 11. `vueDesPois` entre — PURE et EXPORTÉE — et rend les **soixante-dix**
+gisements dans l'ordre de `sim/poi.js`, chacun « Acquis » ou à sa coordonnée
+`rangée · colonne`. Elle LIT `carteDesPoi` et `poiEstAcquis` : recompter
+« ce type est dans `poisAcquis` » serait juste par accident sur une graine et
+faux de neuf bandes sur dix, et `EC T6` balaie **cinq graines** pour le dire.
+⚠⚠ **ET LES DEUX MOITIÉS DU POINT 11 SORTENT DU MÊME GESTE.** Ethan demande un
+pop-up ET « voir les POI acquis. Et non acquis avec coordonnées » : le message
+EST la liste, titrée par la nouvelle. `ouvrirLesPois(annonce)` sert le pop-up et
+le bouton `#monde-poi` ; un second chemin aurait donné deux panneaux qui disent
+la même chose, dont un seul suivrait le prochain réglage.
+⚠ **IL SE FERME AU BOUTON, JAMAIS À LA MINUTERIE** — « un pop-up qu'on n'a pas eu
+le temps de lire est un toast avec un cadre ». La boîte fabriquée à la main dans
+`#monde-outils`, sa minuterie et la fonction `toast()` SORTENT, et `DUREE_TOAST_MS`
+n'est plus importé par `ui/monde.js`. `PC T5` mesure les DEUX : **aucune
+minuterie n'est posée** — donc le retrait est franc, pas un délai très long — et
+faire échoir ce qui traîne ne referme rien.
+⚠⚠ **ET SIX TESTS EXISTANTS ONT CHANGÉ DE SONDE SANS PERDRE UNE ASSERTION.**
+`PC T5` à `PC T10` montaient l'écran par un montage qui EXIGEAIT la boîte du
+toast ; il surveille désormais les écritures du TITRE du panneau, et il **REFUSE
+le retour d'une boîte de message dans `#monde-outils`** — la falsification du
+point 11 prise par l'autre bout, qui fait tomber les six d'un coup. ⚠ Et
+l'assertion « il s'efface tout seul » est **RETOURNÉE**, pas retirée : c'est
+exactement la propriété qu'Ethan renverse.
+⚠ **LE BRIEF SE TROMPAIT SUR DEUX AUTRES POINTS, MESURÉS** : `#monde-panneau`
+n'est PAS un `.panneau-detail` et `ui/monde.js` n'emploie pas
+`peindreVueDuPanneau` — on a donc repris le motif d'`ouvrirRuine`, à la lettre ;
+et `#ecran-offense .unite:disabled` était une règle MORTE, retirée avec sa mesure
+écrite en commentaire.
+⚠ **LES SPRITES DE L'ARBRE PASSENT DE 28 À 44 PX, ET LA PASTILLE AVEC.**
+Point 13. Ce qui compte n'est pas le nombre mais l'ÉGALITÉ des deux : la pastille
+`◈` d'un module et le sprite d'une pièce tiennent la même colonne, et régler l'un
+sans l'autre décale toute la rangée d'un module. ⚠ Mesuré : la ligne fait deux
+lignes de 11 px à 1,2 d'interligne, soit **26,4** — c'était donc déjà le sprite
+qui gouvernait la hauteur à 28, et il la gouverne encore à 44. La rangée est un
+`flex` à `align-items: center` : elle grandit avec lui.
+⚠⚠ **LE LIBELLÉ DE L'OFFENSE GAGNE UNE OMBRE, PAS UNE COULEUR — MESURÉ AVANT DE
+TOUCHER QUOI QUE CE SOIT.** Point 14. L'os `#F5F3E8` rend **14,53** de contraste
+sur le fond `#1E2124` de la bande et **2,70** sur `#8C9A72` — sous les 3 qu'un
+texte de 11 px demande. ⚠ `#8C9A72` est le ton CLAIR de la rampe kaki, celle dont
+les sprites du joueur sont faits : c'est une teinte de la PALETTE, pas un pixel
+relevé — l'atlas est en WebP et Node n'a pas de décodeur (§3). Ce n'est donc pas la COULEUR qu'il faut changer,
+c'est le FOND : une ombre `#161914` des QUATRE côtés rend **15,95** contre l'os,
+et elle suit le texte où qu'il tombe. **Aucune teinte neuve** — `#161914` est
+l'ombre des pastilles de niveau depuis RETOUR-DE-RAID.
+⚠ **ET LE LIBELLÉ VERROUILLÉ PASSE DE `#68727E` À `#8C9A72`**, mesuré : cerné de
+noir, l'ancien ne se distinguait plus du repos. Contraste **3,31 → 5,38**, et le
+verrou garde son second signal, l'opacité.
+⚠⚠ **HUIT TESTS ENTRENT — `EC T1` À `EC T8` — ET LE COMPTE PASSE DE 1 524 À
+1 532.** Aucun test n'est supprimé, **aucune assertion assouplie** ; **onze
+gardes changent de cible et toutes se RESSERRENT** — la couverture de la palette,
+la garde du grisage, la barre d'onglets (qui compte désormais DEUX populations),
+le budget de 288 px, `ERGO T7 ter` et `FE T6` (qui gagnent `session.js`),
+`RÉPARER T11`, `RAID-A T5`, `JRN T8` et les six `PC T*`.
+⚠⚠ **DIX-NEUF FALSIFICATIONS, DIX-NEUF CHUTES, ZÉRO MUETTE.** Trois pour le
+point 11, deux par point ailleurs. La plus instructive est `F-EC3b` : remettre
+`display: none` sous `.repliee` fait tomber `EC T3` **et** `RÉPARER T11`, ce qui
+dit que la garde d'hier mesurait bien la même chose sous un autre nom.
+⚠ **LE BUDGET DE 288 PX EST INTACT, ET `#tete-rapport` EN EST EXCEPTÉ PAR UNE
+MESURE.** Son `flex: 0 0 32px` est une **LARGEUR** — il est enfant de
+`#tete-onglets`, qui est une RANGÉE —, pas une hauteur de barre. L'exception est
+NOMMÉE, et deux assertions la prouvent : `#tete-onglets` est bien `display: flex`
+sans `flex-direction: column`, et le balayage le TROUVE sans le filtre.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** C'est le lot le plus visuel depuis longtemps, et rien de
+ce qu'il change n'a été regardé : les tailles de vignette et de sprite, le
+contraste du libellé sur un sprite réel, la place que le journal prend par-dessus
+une fiche, le pop-up des gisements et ses soixante-dix lignes dans un panneau qui
+défile. **Tout ce qui précède est mesuré sur la FEUILLE, la SOURCE et les
+fonctions PURES.** Les trois nombres de contraste sont calculés, pas relevés.
+
+**Auparavant, après le lot PAQUETS :**
 `npm test` rend **1524 pass / 0 fail** au sens de la garde de `documentation.test.js`
 — c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1523 pass · 0 fail ·
 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort

@@ -25,7 +25,7 @@ import {
   traitDeLaFleche, traitRogne, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
   ciblageDuSite,
   RAYON_DU_BILAN, fenetreDuBilan, bilanDuTerritoire, lignesDuBilan,
-  clesDesPoisAcquis, phraseDesPoisAcquis,
+  clesDesPoisAcquis, phraseDesPoisAcquis, vueDesPois,
   ruineDeLaCase, nomDeLaRuine, lignesDeLaRuine, resteDeLaRuine, NOM_DU_VAINQUEUR,
 } from '../src/ui/monde.js';
 import {
@@ -37,10 +37,9 @@ import {
 import { poisDeLaFenetre } from '../src/sim/poi.js';
 import { dansLOctogoneDInfluence } from '../src/sim/points-attaque.js';
 import { direLaDuree } from '../src/sim/reparation.js';
-import { DUREE_TOAST_MS } from '../src/ui/chantier.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
-  palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU,
+  palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU, POI,
 } from '../src/data/sites.js';
 import { echelleDuCran, geometrieDuCran, NOMS_DU_SOL } from '../src/render/terrain.js';
 
@@ -585,7 +584,7 @@ test('emblèmes — le bord rouge est réservé à ce qui attaque le joueur', ()
 test('page — l\'onglet Monde est vivant, l\'écran existe, et l\'atlas y est inliné UNE fois', () => {
   const html = lire('dist', 'index.html');
   for (const id of ['onglet-monde', 'ecran-monde', 'monde-canvas',
-    'monde-champ', 'monde-outils', 'monde-recentrer',
+    'monde-champ', 'monde-outils', 'monde-recentrer', 'monde-poi',
     'monde-panneau', 'monde-panneau-titre', 'monde-panneau-fermer', 'monde-panneau-corps']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} manque à la page`);
   }
@@ -2328,7 +2327,12 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     'monde-panneau-attaquer',
     'monde-panneau-confirmation', 'monde-panneau-menace',
     'monde-panneau-confirmer', 'monde-panneau-renoncer',
-    'monde-recentrer', 'monde-base-2x2', 'monde-base-3x3',
+    'monde-recentrer',
+    // ⚠ LE BOUTON DES GISEMENTS — Ethan, 10/09, point 11. La confrontation
+    // ci-dessous le cherche AUSSI dans le balisage : la liste et la page se
+    // tiennent l'une l'autre, dans les deux sens.
+    'monde-poi',
+    'monde-base-2x2', 'monde-base-3x3',
     // ⚠ LES VINGT-DEUX PLANCHES SE DÉRIVENT, ELLES NE SE RECOPIENT PAS — lot
     // SOL-OUVRAGE. Elles étaient huit et écrites à la main ; le sol en porte
     // vingt-deux depuis que la carte bascule vers l'Ouvrage, et une liste
@@ -2415,11 +2419,16 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     },
     createElement: (tag) => faire(tag),
     // ⚠⚠ LES MINUTERIES ENTRENT AU LOT PANNEAUX-DE-LA-CARTE, ET ELLES SONT
-    // PILOTÉES PAR LE TEST. Le toast des gisements s'efface tout seul au bout de
-    // `DUREE_TOAST_MS` ; sans `setTimeout`, l'écran lèverait au premier message.
-    // Elles ne courent pas d'elles-mêmes — `echoir()` les fait toutes tomber —,
-    // parce qu'un test qui ATTEND quatre secondes est un test qu'on cesse de
-    // lancer.
+    // PILOTÉES PAR LE TEST. Elles ne courent pas d'elles-mêmes — `echoir()` les
+    // fait toutes tomber —, parce qu'un test qui ATTEND quatre secondes est un
+    // test qu'on cesse de lancer.
+    //
+    // ⚠⚠ ET L'ÉCRAN N'EN POSE PLUS AUCUNE DEPUIS LE LOT ÉCRANS (10/09). Elles
+    // servaient au toast des gisements, que le point 11 d'Ethan remplace par un
+    // pop-up ; elles RESTENT ici, et c'est ce qui rend « aucune minuterie n'est
+    // posée » MESURABLE dans `PC T5`. Les retirer ferait lever l'écran au lieu de
+    // le faire mentir, donc la falsification cesserait de porter sur la propriété
+    // qu'on garde.
     defaultView: {
       devicePixelRatio: dpr,
       requestAnimationFrame: () => 0,
@@ -3644,32 +3653,64 @@ const CARTE_ENTIERE = {
 };
 
 /**
- * Un écran monté, avec la boîte du toast déjà sous surveillance.
+ * Un écran monté, avec les écritures du TITRE du panneau sous surveillance.
  *
- * ⚠⚠ ON COMPTE LES ÉCRITURES, PAS L'ÉTAT FINAL. « Un seul toast » est une
- * propriété du NOMBRE de messages, pas du dernier : deux écritures de la même
- * phrase laisseraient la boîte dans un état identique, et une assertion sur son
+ * ⚠⚠ ON COMPTE LES ÉCRITURES, PAS L'ÉTAT FINAL. « Un seul message » est une
+ * propriété du NOMBRE d'annonces, pas de la dernière : deux ouvertures de la même
+ * liste laisseraient le panneau dans un état identique, et une assertion sur son
  * contenu passerait. C'est l'idiome du double appel de `JRN T6`, où deux
  * retournements s'annulaient.
+ *
+ * ⚠⚠ ET LA SONDE A CHANGÉ D'OBJET AU LOT ÉCRANS (10/09), PAS DE PROPRIÉTÉ.
+ * Elle surveillait la boîte de message que l'écran fabriquait à la main dans
+ * `#monde-outils` ; Ethan : « plutôt qu'un toast mieux vaut avoir un pop-up pour
+ * les POI ». Le message est devenu le PANNEAU de la carte, celui des sites et des
+ * ruines, dont le titre porte l'annonce. On compte donc les écritures du titre,
+ * et l'annonce se lit en retirant le titre de la liste — ce qui la mesure sans
+ * jamais recopier son gabarit.
+ *
+ * ⚠⚠ ET LE RETOUR DU TOAST SE REFUSE ICI, UNE FOIS POUR TOUTES LES MESURES QUI
+ * MONTENT CET ÉCRAN. C'est la falsification du point 11 prise par l'autre bout :
+ * remettre une boîte de message dans `#monde-outils` fait tomber les six tests
+ * qui passent par ce montage.
  */
-function ecranAvecToast(etat) {
+function ecranAvecPanneau(etat) {
   const m = fauxDocumentMonde();
   const raids = [];
   const ecran = initialiserEcranMonde(m.doc, {
     surEntreeRaid: (cible) => raids.push(cible),
   });
-  const boite = m.parId.get('monde-outils').children[0];
-  assert.ok(boite !== undefined, 'l\'écran ne pose aucune boîte de message dans `#monde-outils`');
+  assert.equal(m.parId.get('monde-outils').children.length, 0,
+    'l\'écran repose une boîte de message dans `#monde-outils` : le toast est revenu');
+  const titre = m.parId.get('monde-panneau-titre');
   const ecrits = [];
-  let texte = boite.textContent;
-  Object.defineProperty(boite, 'textContent', {
+  let texte = titre.textContent;
+  Object.defineProperty(titre, 'textContent', {
     configurable: true,
     get() { return texte; },
     set(v) { texte = v; ecrits.push(v); },
   });
   ecran.peindre(etat);
   return {
-    ...m, ecran, boite, ecrits, raids, dits: () => ecrits.filter((t) => t !== ''),
+    ...m,
+    ecran,
+    titre,
+    ecrits,
+    raids,
+    panneau: m.parId.get('monde-panneau'),
+    /**
+     * Les annonces portées par les écritures du titre, dans l'ordre.
+     *
+     * ⚠ LE TITRE DE LA LISTE SE DEMANDE À `vueDesPois`, il ne se recopie pas :
+     * un gabarit écrit ici serait la seconde vérité que §4 interdit, et il
+     * mentirait au premier renommage. Ce qui reste devant est l'annonce.
+     */
+    annonces: (jeu) => {
+      const suffixe = vueDesPois(jeu.graine, jeu.poisAcquis).titre;
+      return ecrits
+        .filter((t) => t.endsWith(suffixe) && t.length > suffixe.length)
+        .map((t) => t.slice(0, t.length - suffixe.length).trim());
+    },
   };
 }
 
@@ -3684,38 +3725,49 @@ test('PC T5 — un gisement acquis parle UNE fois, et le tick suivant se tait', 
   baseCourante(etat).position = { rangee: gisement.rangee, colonne: gisement.colonne };
   assert.deepEqual(etat.poisAcquis, [], 'montage : un gisement est déjà acquis');
 
-  const m = ecranAvecToast(etat);
+  const m = ecranAvecPanneau(etat);
   // ⚠⚠ LA PREMIÈRE MESURE EST MUETTE, ET C'EST LE §6 DU BRIEF : un rechargement
   // ne reparle pas. Ici la liste est vide, mais c'est le même chemin.
-  assert.deepEqual(m.dits(), [], 'l\'écran a parlé avant qu\'un gisement soit pris');
-  assert.equal(m.boite.hidden, true, 'la boîte de message est visible sans message');
-  // ⚠⚠ ET IL N'AVALE AUCUN TOUCHER. `#monde-outils` porte un `z-index` et
-  // intercepte le doigt pour son bouton ; un message posé dedans SANS
-  // `pointer-events: none` masquerait les cases de la carte sous lui — c'est la
-  // faute mesurée trois fois par le dépôt, la ligne d'avis du Chantier, le calque
-  // des traits et la mini-fenêtre du tutoriel.
-  assert.equal(m.boite.style.pointerEvents, 'none',
-    'la boîte de message avale le toucher de la carte sous elle');
+  assert.deepEqual(m.annonces(etat), [], 'l\'écran a parlé avant qu\'un gisement soit pris');
+  assert.equal(m.panneau.hidden, true, 'le pop-up est ouvert sans message');
 
   rattraperJeu(etat, 1);
   assert.deepEqual(etat.poisAcquis, [{ type: gisement.type, bande: gisement.bande }],
     'montage : le tick n\'a acquis aucun gisement');
 
   m.ecran.rafraichir(etat);
-  assert.deepEqual(m.dits(), [phraseDesPoisAcquis(1)], 'le gisement pris n\'a pas été annoncé');
-  assert.equal(m.boite.hidden, false, 'le message n\'est pas visible');
+  assert.deepEqual(m.annonces(etat), [phraseDesPoisAcquis(1)],
+    'le gisement pris n\'a pas été annoncé');
+  assert.equal(m.panneau.hidden, false, 'le pop-up n\'est pas visible');
+  // ⚠⚠ ET LES DEUX MOITIÉS DU POINT 11 SORTENT DU MÊME GESTE. Ethan demande un
+  // pop-up ET « voir les POI acquis, et non acquis avec coordonnées » : le
+  // message EST la liste, titrée par la nouvelle. Un pop-up qui ne dirait que la
+  // phrase renverrait chercher le bouton pour savoir lequel vient d'être pris.
+  assert.deepEqual(lignesDuCorps(m.parId), vueDesPois(etat.graine, etat.poisAcquis).lignes,
+    'le pop-up annonce le gisement sans montrer la liste');
 
   // ⚠ ET LE TICK SUIVANT SE TAIT. C'est la falsification du brief : deux ticks de
   // suite ne font qu'un seul message.
   rattraperJeu(etat, 1);
   m.ecran.rafraichir(etat);
-  assert.deepEqual(m.dits(), [phraseDesPoisAcquis(1)],
+  assert.deepEqual(m.annonces(etat), [phraseDesPoisAcquis(1)],
     'le second tick a réannoncé un gisement déjà pris');
 
-  // ⚠ ET IL S'EFFACE TOUT SEUL, comme celui de l'écran de la base et au bout du
-  // même délai — la minuterie est celle du faux document, on la fait échoir.
+  // ⚠⚠ ET IL NE S'EFFACE PAS TOUT SEUL — CETTE ASSERTION EST RETOURNÉE, PAS
+  // RETIRÉE. Elle exigeait qu'il s'efface au bout de `DUREE_TOAST_MS` ; le point
+  // 11 renverse exactement cette propriété-là, « plutôt qu'un toast mieux vaut
+  // avoir un pop-up ». Un pop-up qu'on n'a pas eu le temps de lire est un toast
+  // avec un cadre. Deux mesures, dans cet ordre : aucune minuterie n'a été posée
+  // — donc le retrait est franc et non contourné par un délai très long — et
+  // faire échoir tout ce qui traîne ne le referme pas.
+  assert.equal(m.minuteries.size, 0, 'le pop-up a posé une minuterie : il s\'efface encore tout seul');
   m.echoir();
-  assert.equal(m.boite.hidden, true, 'le message ne s\'efface pas de lui-même');
+  assert.equal(m.panneau.hidden, false, 'le pop-up s\'est effacé de lui-même : c\'est un toast avec un cadre');
+
+  // ⚠ IL SE FERME AU BOUTON, ET C'EST L'AUTRE MOITIÉ. Sans elle, « il ne se ferme
+  // pas tout seul » serait vrai d'un panneau qu'on ne peut plus fermer du tout.
+  m.parId.get('monde-panneau-fermer').envoyer('click', {});
+  assert.equal(m.panneau.hidden, true, 'le bouton « Fermer » ne referme pas le pop-up des gisements');
 });
 
 test('PC T6 — deux gisements dans le même tick font UN message, qui dit deux', () => {
@@ -3766,16 +3818,97 @@ test('PC T6 — deux gisements dans le même tick font UN message, qui dit deux'
   assert.ok(retenu !== null, 'montage : aucun centre n\'acquiert deux gisements d\'un coup');
 
   const jeu = monter(retenu);
-  const m = ecranAvecToast(jeu);
-  assert.deepEqual(m.dits(), [], 'l\'écran a parlé avant le tick');
+  const m = ecranAvecPanneau(jeu);
+  assert.deepEqual(m.annonces(jeu), [], 'l\'écran a parlé avant le tick');
 
   rattraperJeu(jeu, 1);
   assert.equal(jeu.poisAcquis.length, 2, 'montage : le tick n\'a pas acquis deux gisements');
 
   m.ecran.rafraichir(jeu);
-  assert.deepEqual(m.dits(), [phraseDesPoisAcquis(2)],
+  assert.deepEqual(m.annonces(jeu), [phraseDesPoisAcquis(2)],
     'deux gisements pris ensemble n\'ont pas fait UN message qui dit deux');
-  assert.match(m.boite.textContent, /2/, 'le message ne dit pas le nombre');
+  assert.match(m.titre.textContent, /2/, 'le message ne dit pas le nombre');
+  // ⚠ ET LA LISTE SUIT LE COMPTE. Le titre de `vueDesPois` dit « acquis / total » :
+  // deux gisements pris ensemble se voient dans le pop-up qui les annonce.
+  assert.ok(m.titre.textContent.endsWith(vueDesPois(jeu.graine, jeu.poisAcquis).titre),
+    'le pop-up n\'ouvre pas la liste des gisements');
+});
+
+// ---------------------------------------------------------------------------
+// EC T6 — la liste des soixante-dix gisements, acquis et non acquis
+// ---------------------------------------------------------------------------
+
+test('EC T6 — la liste dit les soixante-dix gisements, leurs coordonnées et ce qui est pris', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 11 : « rajouter un petit bouton pour voir les POI
+  // acquis. Et non acquis avec coordonnées ». `vueDesPois` est PURE et EXPORTÉE,
+  // donc éprouvable sans écran : le dépôt n'a pas de navigateur, et ce qui peut
+  // l'être doit l'être.
+  //
+  // ⚠⚠ ET LE BALAYAGE PORTE SUR CINQ GRAINES, C'EST LA FALSIFICATION DU BRIEF.
+  // Recompter l'acquisition dans l'écran — « ce type est dans `poisAcquis` » —
+  // donne un compte JUSTE par accident sur une graine et faux sur la suivante :
+  // `poiEstAcquis` compare le type ET la bande, et il y a dix bandes par type.
+  for (const graine of [1, 7, 20260906, 424242, 999983]) {
+    const liste = poisDeLaFenetre(graine, CARTE_ENTIERE);
+    const vue = vueDesPois(graine, []);
+    assert.equal(vue.lignes.length, liste.length,
+      `graine ${graine} : la liste ne porte pas les ${liste.length} gisements`);
+    assert.equal(liste.length, 70, `graine ${graine} : la carte n'en porte plus soixante-dix`);
+
+    // ⚠ L'ORDRE EST CELUI DE `sim/poi.js`, IL NE SE RECALCULE PAS. `tirerLesPoi`
+    // pose bande par bande puis type par type ; trier ici serait écrire une
+    // seconde fois un ordre qui existe, et deux ouvertures du panneau pourraient
+    // rendre deux listes.
+    assert.deepEqual(
+      vue.lignes.map((l) => l.quoi),
+      liste.map((poi) => `${POI[poi.type].nom} · bande ${poi.bande}`),
+      `graine ${graine} : l'ordre de la liste n'est plus celui du modèle`,
+    );
+
+    // ⚠ ET CHAQUE NON-ACQUIS DIT SA CASE — c'est la demande, mot pour mot.
+    for (const [rang, ligne] of vue.lignes.entries()) {
+      assert.equal(ligne.valeur, `${liste[rang].rangee} · ${liste[rang].colonne}`,
+        `graine ${graine}, rang ${rang} : la coordonnée n'est pas dite`);
+    }
+
+    // ⚠⚠ ET LE COMPTE DES ACQUIS SUIT `etat.poisAcquis`, MESURÉ SUR UNE PARTIE
+    // QUI EN A PRIS. On prend le gisement d'un type dans UNE bande, et on exige
+    // que la ligne de CETTE bande-là bascule et qu'aucune autre ne bouge : c'est
+    // exactement ce qu'un recalcul par type seul se tromperait de faire.
+    const pris = liste[Math.floor(liste.length / 3)];
+    const apres = vueDesPois(graine, [{ type: pris.type, bande: pris.bande }]);
+    const bascules = apres.lignes
+      .map((l, i) => (l.valeur !== vue.lignes[i].valeur ? i : -1))
+      .filter((i) => i >= 0);
+    assert.deepEqual(bascules, [liste.indexOf(pris)],
+      `graine ${graine} : prendre un gisement en bascule ${bascules.length}`);
+    assert.equal(apres.lignes[bascules[0]].valeur, 'Acquis',
+      `graine ${graine} : un gisement pris ne se dit pas acquis`);
+    assert.match(apres.titre, /1 \/ 70/, `graine ${graine} : le titre ne compte pas les acquis`);
+    assert.match(vue.titre, /0 \/ 70/, `graine ${graine} : le titre compte des acquis qui n'existent pas`);
+  }
+
+  // ⚠⚠ ET LE COMPTE ÉGALE `etat.poisAcquis.length` SUR UNE VRAIE PARTIE — c'est
+  // la seconde moitié du brief, et elle passe par le MOTEUR : la base est posée
+  // sur un gisement, `releverLesPoisAcquis` l'acquiert au tick, et le titre
+  // suit. Une vue nourrie d'une liste forgée à la main ne garderait qu'elle-même.
+  const etat = creerEtat(20260906);
+  const gisement = poisDeLaFenetre(etat.graine, CARTE_ENTIERE)[0];
+  baseCourante(etat).position = { rangee: gisement.rangee, colonne: gisement.colonne };
+  rattraperJeu(etat, 1);
+  assert.equal(etat.poisAcquis.length, 1, 'montage : le tick n\'a acquis aucun gisement');
+  const jouee = vueDesPois(etat.graine, etat.poisAcquis);
+  assert.equal(jouee.lignes.filter((l) => l.valeur === 'Acquis').length, etat.poisAcquis.length,
+    'le compte des acquises ne suit pas `etat.poisAcquis`');
+  assert.ok(jouee.titre.startsWith(`Gisements — ${etat.poisAcquis.length} / `),
+    `le titre ne dit pas le compte : « ${jouee.titre} »`);
+
+  // ⚠ ET LE BOUTON QUI L'OUVRE EXISTE, SANS ÊTRE UN SECOND PANNEAU. Il ouvre
+  // `#monde-panneau`, celui des sites et des ruines : un quatrième dessin dans
+  // le même coin aurait mis deux DOM voisins dont un seul serait éprouvé.
+  const html = lire('src', 'index.src.html');
+  assert.ok(html.includes('id="monde-poi"'), 'le bouton des gisements manque à la carte');
+  assert.ok(!/id="monde-poi-panneau"/.test(html), 'les gisements ont un panneau à eux');
 });
 
 // ---------------------------------------------------------------------------
@@ -3816,7 +3949,7 @@ function partieAvecRuine(etat, ou, vainqueur = JOUEUR, niveau = 20) {
     ruineFraiche(ou.rangee, ou.colonne, 'base', vainqueur, niveau, etat.horloge.nbTicks),
   );
   assert.equal(ruinesActives(etat).length, 1, 'montage : la ruine n\'est pas active');
-  const m = ecranAvecToast(etat);
+  const m = ecranAvecPanneau(etat);
   return { ...m, base: { ...baseCourante(etat).position }, halo: cadreDuHalo(m.appels) };
 }
 

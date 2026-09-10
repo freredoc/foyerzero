@@ -2073,22 +2073,33 @@ test('FE T6 — la mise en page est PARTAGÉE : trois fiches, un seul rendu', ()
   const declarations = (chantier.match(/export function peindreVueDuPanneau\(/g) ?? []).length;
   assert.equal(declarations, 1, 'le rendu partagé est déclaré plus d\'une fois');
 
-  const appels = ['src/ui/chantier.js', 'src/ui/offense.js', 'src/ui/raid.js']
+  const appels = ['src/ui/chantier.js', 'src/ui/offense.js', 'src/ui/raid.js',
+    'src/ui/session.js']
     .map((f) => [f, compter(f, /peindreVueDuPanneau\(/g)]);
-  // ⚠⚠ QUATRE APPELS DEPUIS LE LOT JOURNAL, ET LE COMPTE SE DÉTAILLE PLUTÔT
-  // QUE DE MONTER EN BLOC. `chantier.js` porte la DÉCLARATION, la fiche d'un
-  // bâtiment ET le journal des raids — trois occurrences ; `offense.js` porte sa
-  // fiche et le journal — deux ; `raid.js` porte la fiche d'une cible ennemie —
-  // une. Quatre lecteurs du même rendu, zéro seconde mise en page.
+  // ⚠⚠ QUATRE APPELS, ET LE COMPTE SE DÉTAILLE PLUTÔT QUE DE MONTER EN BLOC.
+  // `chantier.js` porte la DÉCLARATION et la fiche d'un bâtiment — deux
+  // occurrences ; `offense.js` porte sa fiche — une ; `raid.js` la fiche d'une
+  // cible ennemie — une ; `session.js` le JOURNAL DES RAIDS — une. Quatre
+  // lecteurs du même rendu, zéro seconde mise en page.
+  //
+  // ⚠⚠ LE JOURNAL A CHANGÉ DE FICHIER LE 10/09, PAS DE RENDU — point 4 d'Ethan.
+  // Il en était le second lecteur SUR LES DEUX ÉCRANS, donc il comptait deux
+  // fois ; il n'en est plus qu'UN, dans la session, parce que son bouton a
+  // quitté les champs pour la barre du haut. Le total des LECTEURS ne bouge pas
+  // — quatre —, et la seconde mise en page reste aussi introuvable qu'avant.
+  //
+  // ⚠ ET `session.js` ENTRE DANS CE COMPTE, QUI NE LE VOYAIT PAS. Sans cette
+  // ligne, le journal aurait pu s'y peindre à la main sans que rien ne tombe.
   assert.deepEqual(appels, [
-    ['src/ui/chantier.js', 3],
-    ['src/ui/offense.js', 2],
+    ['src/ui/chantier.js', 2],
+    ['src/ui/offense.js', 1],
     ['src/ui/raid.js', 1],
+    ['src/ui/session.js', 1],
   ], `les appels du rendu partagé ont changé : ${JSON.stringify(appels)}`);
 
   // ⚠⚠ ET AUCUNE SECONDE MISE EN PAGE N'EST ÉCRITE. La grille de paires porte
   // la classe `paires` ; elle ne doit être posée qu'à un seul endroit du dépôt.
-  for (const f of ['src/ui/raid.js', 'src/ui/offense.js']) {
+  for (const f of ['src/ui/raid.js', 'src/ui/offense.js', 'src/ui/session.js']) {
     assert.equal(compter(f, /'paires'/g), 0, `${f} écrit sa propre grille de paires`);
   }
   // ⚠⚠ ET LE COMPTE DE `className = 'ligne'` DE `raid.js` EST PINCÉ À UN, PAS À

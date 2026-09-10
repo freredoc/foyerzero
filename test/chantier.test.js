@@ -66,7 +66,7 @@ import {
   DEBITS, RETOUR_DEFENSES,
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
-  ORDRE_PALETTE,
+  ORDRE_PALETTE, BATIMENTS_DONNES,
   messageSansBatiment,
 } from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
@@ -611,15 +611,22 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   const posables = posablesDeLaBase(etat);
   const ids = posables.map((p) => p.id);
 
-  // La palette porte TOUS les bâtiments, tout le temps.
+  // La palette porte TOUS les bâtiments POSABLES, tout le temps.
   // ⚠⚠ CE SONT DES VIGNETTES, PAS DES BÂTIMENTS — lot BÂTIMENTS-QUATRE-ÉTATS.
-  // La palette en porte quatorze pour quinze bâtiments : les deux collecteurs
-  // partagent la leur, parce que le joueur n'en choisit pas un.
+  // La palette en porte TREIZE pour quinze bâtiments : les deux collecteurs
+  // partagent la leur, parce que le joueur n'en choisit pas un, et le Chantier
+  // n'en a plus — Ethan, 10/09, point 3.
   assert.deepEqual(ids.slice().sort(), [...ORDRE_PALETTE].slice().sort());
-  assert.equal(posables.length, 14);
+  assert.equal(posables.length, 13);
 
-  // Les trois uniques posés y sont, marqués…
-  for (const pose of ['chantierDeConstruction', 'caserne', 'complexeDeDefense']) {
+  // ⚠⚠ ET LE CHANTIER N'EST PLUS DE LA LISTE DES UNIQUES MARQUÉS — il n'a plus
+  // de vignette à marquer. Ce test en gardait TROIS ; il en garde DEUX, et il
+  // exige en plus que le troisième soit ABSENT, ce qui est plus fort que de
+  // l'avoir compté grisé : un Chantier revenu dans la palette fait tomber la
+  // ligne suivante, pas seulement le compte.
+  assert.ok(!ids.includes('chantierDeConstruction'),
+    'le Chantier a une vignette alors qu\'il est donné avec la base');
+  for (const pose of ['caserne', 'complexeDeDefense']) {
     assert.equal(posables.find((p) => p.id === pose).dejaPose, true, `${pose} est unique et posé`);
   }
   // …les deux uniques encore libres n'ont pas la marque…
@@ -641,12 +648,21 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
       `${multiple} devrait être posé`);
   }
 
-  // Falsifiable : sur une base NEUVE, seul le Chantier porte la marque. Un
-  // montage où tout serait posé — ou rien — ne distinguerait pas les deux cas.
+  // ⚠⚠ FALSIFIABLE PAR CONTRASTE, ET LE CONTRASTE A CHANGÉ DE SENS LE 10/09.
+  // Ce bloc disait « sur une base NEUVE, seul le Chantier porte la marque » : la
+  // marque du Chantier était la seule chose qui distinguait une base neuve d'une
+  // palette entièrement vive, et le point 3 vient de la retirer — le Chantier n'a
+  // plus de vignette à marquer.
+  //
+  // ⚠ UNE LISTE VIDE NE PROUVE DONC PLUS RIEN TOUTE SEULE : un `dejaPose`
+  // toujours faux la rendrait aussi. Ce qui discrimine est l'ÉCART entre les deux
+  // montages — la maquette en marque, la base neuve n'en marque aucune —, et les
+  // deux moitiés sont assertées ici pour qu'aucune ne parte sans l'autre.
   const paletteNeuve = posablesDeLaBase(creerEtat(7));
-  assert.deepEqual(
-    paletteNeuve.filter((p) => p.dejaPose).map((p) => p.id), ['chantierDeConstruction'],
-  );
+  assert.deepEqual(paletteNeuve.filter((p) => p.dejaPose).map((p) => p.id), [],
+    'une base neuve ne marque plus aucune vignette : le Chantier n\'en a plus');
+  assert.ok(posables.filter((p) => p.dejaPose).length > 0,
+    'le montage ne mesure rien : `dejaPose` ne marque plus personne nulle part');
 
   // Et l'écran LIT cette marque au lieu de recompter les uniques lui-même.
   //
@@ -696,12 +712,20 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   // vignettes ne se déplacent plus sous le doigt.
   const neuve = creerEtat(7);
   assert.equal(baseCourante(neuve).disposition.length, 1);
-  // ⚠ LA LONGUEUR EST CELLE DE LA PALETTE, PAS DU ROSTER — quatorze vignettes
-  // pour quinze bâtiments depuis le lot BÂTIMENTS-QUATRE-ÉTATS. Ce que ce test
-  // garde reste entier : elle ne bouge pas d'une pose à l'autre.
+  // ⚠ LA LONGUEUR EST CELLE DE LA PALETTE, PAS DU ROSTER — treize vignettes
+  // pour quinze bâtiments. Ce que ce test garde reste entier : elle ne bouge pas
+  // d'une pose à l'autre.
   assert.equal(posablesDeLaBase(neuve).length, ORDRE_PALETTE.length);
+  // ⚠⚠ ZÉRO GRISÉE, LÀ OÙ IL Y EN AVAIT UNE — ET C'EST LA MESURE DU POINT 3.
+  // La seule vignette grisée d'une base neuve ÉTAIT le Chantier, posé d'office :
+  // le joueur ouvrait le jeu devant une palette dont un bouton sur quatorze ne
+  // pouvait rien faire, et ne pourrait jamais rien faire. Il n'y en a plus, donc
+  // toutes les vignettes d'une base neuve offrent un geste.
   assert.equal(posablesDeLaBase(neuve).filter((p) => !p.dejaPose).length,
-    ORDRE_PALETTE.length - 1, 'une seule vignette devrait être grisée');
+    ORDRE_PALETTE.length, 'une base neuve ne devrait plus avoir de vignette grisée');
+  // ⚠ ET LE BÂTIMENT EST BIEN LÀ, LUI : c'est la vignette qui sort, pas la base
+  // neuve qui change. Sans cette ligne, vider `BASE_NEUVE` passerait aussi.
+  assert.equal(baseCourante(neuve).disposition[0].id, 'chantierDeConstruction');
   assert.deepEqual(resumeDeLaBase(neuve).emplacements, {
     poses: 1, ouverts: emplacementsDuNiveau(1),
   });
@@ -820,17 +844,37 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // disabled` et attendait `['Recherche']` ; une liste attendue VIDE aurait été
   // vraie aussi le jour où quelqu'un écrirait un onglet mort SANS la classe —
   // et la classe vient justement de disparaître de la feuille de style, faute
-  // de porteur. On asserte donc le POSITIF, sur les cinq boutons de la barre :
+  // de porteur. On asserte donc le POSITIF, sur les boutons de la barre :
   // chacun porte un identifiant (donc quelque chose l'écoute) et aucun n'est
   // éteint. Un onglet mort de plus tombe, quelle que soit la façon de l'écrire.
+  //
+  // ⚠⚠ LA BARRE PORTE SIX BOUTONS DONT CINQ ONGLETS DEPUIS LE 10/09 — point 4
+  // d'Ethan, « Bouton rapport a deplacer en haut entre base et mission ». Ce test
+  // comptait CINQ boutons ; le relâcher en « cinq ou six » aurait rendu la garde
+  // muette sur le seul défaut qu'elle attrape, un onglet mort de plus. Il compte
+  // donc DEUX populations séparées, et il exige que la seconde soit EXACTEMENT le
+  // bouton du rapport — un septième bouton, onglet ou non, fait tomber l'une ou
+  // l'autre des deux lignes.
   const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/);
   assert.ok(barre, 'la barre d\'onglets a disparu');
-  const onglets = [...barre[1].matchAll(/<button[^>]*>[^<]*</g)].map((m) => m[0]);
+  const boutons = [...barre[1].matchAll(/<button[^>]*>[^<]*</g)].map((m) => m[0]);
+  const onglets = boutons.filter((b) => /\sid="onglet-[a-z]+"/.test(b));
+  const horsOnglets = boutons.filter((b) => !/\sid="onglet-[a-z]+"/.test(b));
   assert.equal(onglets.length, 5, 'la barre ne porte plus cinq onglets');
-  for (const onglet of onglets) {
-    assert.match(onglet, /\sid="onglet-[a-z]+"/, `onglet sans identifiant : ${onglet}`);
-    assert.ok(!/\sdisabled/.test(onglet), `onglet désactivé : ${onglet}`);
-    assert.ok(!/class="[^"]*\bfutur\b/.test(onglet), `onglet encore « futur » : ${onglet}`);
+  assert.equal(horsOnglets.length, 1, 'la barre porte autre chose que le seul rapport');
+  assert.match(horsOnglets[0], /\sid="tete-rapport"/,
+    `le sixième bouton de la barre n'est pas le rapport : ${horsOnglets[0]}`);
+  // ⚠ ET IL N'EST PAS UN ONGLET : `ONGLET_DE_L_ECRAN` de `ui/session.js` ne le
+  // connaît pas, donc il ne prend jamais `.actif`. Le nommer `onglet-rapport`
+  // l'aurait fait compter parmi les cinq et cherché un écran qui n'existe pas.
+  assert.ok(!/id="onglet-rapport"/.test(html), 'le rapport s\'est déguisé en onglet');
+  // ⚠ LES SIX RÉPONDENT AU DOIGT — la garde vaut pour le rapport comme pour les
+  // onglets : un bouton `disabled` dans cette barre serait un contrôle inerte qui
+  // a l'air vif.
+  for (const bouton of boutons) {
+    assert.match(bouton, /\sid="[a-z-]+"/, `bouton sans identifiant : ${bouton}`);
+    assert.ok(!/\sdisabled/.test(bouton), `bouton désactivé : ${bouton}`);
+    assert.ok(!/class="[^"]*\bfutur\b/.test(bouton), `bouton encore « futur » : ${bouton}`);
   }
 
   // ⚠ LES TROIS BOUTONS D'ACTION NE SONT PLUS DÉSACTIVÉS, ET C'EST LE LOT.
@@ -887,6 +931,117 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // Le point d'entrée est la session, plus le banc : c'est ce qui garantit que
   // `initialiserBanc` n'est pas appelé au chargement.
   assert.ok(!/initialiserBanc\(document\)/.test(html), 'le banc est encore câblé au chargement');
+});
+
+// ---------------------------------------------------------------------------
+// EC T2 — le journal est GLOBAL : un bouton, un panneau, au-dessus des écrans
+// ---------------------------------------------------------------------------
+
+test('EC T2 — le journal est global, et il passe au-dessus des écrans', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 4 : « Bouton rapport a deplacer en haut entre base et
+  // mission ». `JRN T8` garde le compte — une vue, un lecteur, un panneau — et
+  // l'ORDRE du bouton dans la barre. Ce test-ci garde la STRUCTURE, qui est ce
+  // qui rend le déplacement possible : un panneau posé dans un écran ne peut pas
+  // s'ouvrir depuis un autre.
+  const html = sansCommentairesHtml(
+    readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'),
+  );
+
+  // ⚠⚠ IL EST FRÈRE DE `#ecrans`, DONC ENFANT DE `#jeu`. Mesuré par les
+  // PROFONDEURS de `<div>` : compter la présence ne dirait rien, le panneau
+  // pourrait être n'importe où dans la page. On compte les balises ouvrantes et
+  // fermantes entre le début de `#jeu` et chaque cible.
+  const profondeurA = (indice) => {
+    const avant = html.slice(html.indexOf('<div id="jeu">'), indice);
+    return (avant.match(/<div\b/g) ?? []).length - (avant.match(/<\/div>/g) ?? []).length;
+  };
+  const iEcrans = html.indexOf('<div id="ecrans">');
+  const iJournal = html.indexOf('<div id="journal-panneau"');
+  assert.ok(iEcrans > 0 && iJournal > 0, 'montage : un des deux blocs a disparu de la page');
+  assert.equal(profondeurA(iJournal), profondeurA(iEcrans),
+    'le journal n\'est pas au même niveau que `#ecrans` : il vit dans un écran');
+  assert.equal(profondeurA(iEcrans), 1, 'montage : `#ecrans` n\'est plus un enfant direct de `#jeu`');
+
+  // ⚠⚠ ET IL EST LE DERNIER, CE QUI N'EST PAS COSMÉTIQUE. Les `.panneau-detail`
+  // partagent `z-index: 2` et ne créent aucun contexte d'empilement — à égalité,
+  // c'est le DERNIER ÉCRIT qui peint par-dessus. Posé avant `#ecrans`, le journal
+  // passerait SOUS la fiche d'un bâtiment restée ouverte, et le joueur toucherait
+  // « Fermer » sans rien fermer.
+  assert.ok(iJournal > iEcrans, 'le journal est écrit avant les écrans : une fiche ouverte le recouvre');
+  const bas = html.indexOf('<div id="barre-bas">');
+  assert.ok(iJournal > bas, 'le journal est écrit avant la barre du bas');
+
+  // ⚠ ET LE DÉROULÉ D'UN RAID LE REFERME. Le combat masque tout le chrome ; un
+  // panneau laissé ouvert par-dessus resterait le seul élément d'interface à
+  // l'écran, et son bouton « Fermer » serait le seul geste possible pendant le
+  // raid. C'est le crochet `pendantLeDeroule` qui le dit, et lui seul.
+  const session = readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  const crochet = session.slice(session.indexOf('pendantLeDeroule'));
+  assert.match(crochet.slice(0, 200), /fermerLeJournal\(\)/,
+    'le déroulé d\'un raid laisse le journal ouvert par-dessus le combat');
+});
+
+// ---------------------------------------------------------------------------
+// EC T3 — armer un mode ne recadre plus le décor
+// ---------------------------------------------------------------------------
+
+test('EC T3 — armer un mode ne recadre plus le décor, sur les trois écrans', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 5 : « Appuyez sur réparer décale le sprite et les
+  // unités dans l'onglet armée idem en préparation raid ». La ligne d'avis du
+  // Chantier est hors du flux depuis ÉCRAN-DÉFENSE — 44 px volés au champ,
+  // mesurés ce jour-là ; ses deux jumelles ne l'étaient pas.
+  //
+  // ⚠⚠ C'EST UN TEST DE FEUILLE, PAS DE DOM, ET C'EST DÉLIBÉRÉ. Ce fichier a
+  // déjà payé la faute inverse : asserter qu'un élément EXISTE ne dit rien de ce
+  // qu'il COÛTE en hauteur. Un `#offense-avis` présent et en `flex: 0 0 auto`
+  // passerait n'importe quelle mesure de présence.
+  const feuille = sansCommentairesHtml(
+    readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'),
+  );
+  const regle = (selecteur) => {
+    const m = feuille.match(new RegExp(`${selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
+    assert.ok(m, `la règle « ${selecteur} » a disparu de la feuille`);
+    return m[1];
+  };
+  for (const id of ['chantier-avis', 'offense-avis', 'raid-avis']) {
+    const corps = regle(`#${id}`);
+    assert.match(corps, /position:\s*absolute/,
+      `#${id} est dans le flux : l'armer recadre le décor sous lui`);
+    // ⚠ ET LA MOITIÉ QUI COMPTE EST `pointer-events: none`. Une ligne posée sur
+    // le champ SANS elle avalerait le toucher des cases qu'elle couvre — la faute
+    // mesurée trois fois par le dépôt : la ligne d'avis du Chantier, le calque
+    // des traits et la mini-fenêtre du tutoriel.
+    assert.match(corps, /pointer-events:\s*none/,
+      `#${id} avale le toucher des cases sous lui`);
+  }
+  // ⚠ ET LEURS TROIS PARENTS SONT POSITIONNÉS : sans ancêtre, un `absolute` se
+  // cale sur `#ecrans` et la ligne se peint au milieu de la page.
+  for (const id of ['chantier-vue', 'offense-champ', 'raid-bas']) {
+    assert.match(regle(`#${id}`), /position:\s*relative/,
+      `#${id} n'est plus un ancêtre positionné : l'avis se cale sur toute la page`);
+  }
+
+  // ⚠⚠ LES DEUX BARRES QUI PORTENT UN BOUTON NE PEUVENT PAS, ELLES, QUITTER LE
+  // FLUX : un bouton doit RECEVOIR le toucher. Elles réservent donc leur place —
+  // `visibility: hidden` garde la hauteur, `display: none` la rend — et c'est le
+  // seul remède qui ne coûte rien quand le mode est désarmé.
+  const repliee = feuille.match(/([^{}]*\.repliee[^{}]*)\{([^}]*)\}/);
+  assert.ok(repliee, 'la règle du repli a disparu');
+  assert.match(repliee[2], /visibility:\s*hidden/, 'le repli ne passe plus par `visibility`');
+  assert.ok(!/display:\s*none/.test(repliee[2]),
+    'le repli est redevenu un `display: none` : la barre rend sa place et recadre le décor');
+  for (const id of ['chantier-reparation', 'raid-tout-reparer']) {
+    assert.ok(repliee[1].includes(`#${id}`), `#${id} n'est plus dans la règle du repli`);
+    // ⚠⚠ ET L'ATTRIBUT `hidden` NE DOIT PAS REVENIR. La tête de feuille porte
+    // `[hidden] { display: none !important }` : un `hidden` laissé dans le
+    // balisage l'emporterait sur la classe, et le repli redeviendrait un retrait.
+    assert.doesNotMatch(feuille, new RegExp(`id="${id}"[^>]*\\shidden`),
+      `#${id} porte encore l'attribut hidden : le !important de la tête de feuille l'emporte`);
+    assert.match(feuille, new RegExp(`id="${id}"[^>]*class="[^"]*repliee`),
+      `#${id} ne naît plus replié : la barre est visible avant qu'un mode soit armé`);
+  }
 });
 
 test('chantier — un tick de jeu fait monter le stock que l\'écran affiche', () => {
@@ -2287,10 +2442,16 @@ test('palette — UNE bande qui défile, la hauteur gardée, et l\'économie en 
   // scories en fonction du champ. » Quinze bâtiments, QUATORZE vignettes : les
   // deux collecteurs partagent la leur, parce que le joueur n'en choisit pas un —
   // il pose un collecteur, et le terrain dit lequel c'est.
-  assert.equal(posables.length, 14, 'le montage suppose quatorze vignettes');
+  assert.equal(posables.length, 13, 'le montage suppose treize vignettes');
   assert.equal(Object.keys(BASE_BATIMENTS).length, 15, 'le montage suppose quinze bâtiments');
-  assert.equal(posables.length, Object.keys(BASE_BATIMENTS).length - 1,
-    'une vignette par bâtiment, sauf les deux collecteurs qui en partagent une');
+  // ⚠ DEUX SOUSTRACTIONS, ET ELLES NE DISENT PAS LA MÊME CHOSE : les deux
+  // collecteurs partagent une vignette, et le Chantier n'en a aucune. Les écrire
+  // séparément est ce qui fait qu'on ne peut pas en perdre une en croyant
+  // corriger l'autre.
+  assert.equal(posables.length,
+    Object.keys(BASE_BATIMENTS).length - 1 - BATIMENTS_DONNES.length,
+    'une vignette par bâtiment, sauf les deux collecteurs qui en partagent une'
+    + ' et le Chantier qui est donné avec la base');
 
   // ⚠ LES QUATRE DE L'ÉCONOMIE D'ABORD, et l'ordre se lit dans la DONNÉE.
   assert.deepEqual(posables.slice(0, 4).map((p) => p.id),
@@ -2306,8 +2467,8 @@ test('palette — UNE bande qui défile, la hauteur gardée, et l\'économie en 
     [...new Set(ORDRE_PALETTE.flatMap(
       (v) => (VIGNETTES_MIXTES[v] ? Object.values(VIGNETTES_MIXTES[v].pose) : [v]),
     ))].sort(),
-    Object.keys(BASE_BATIMENTS).sort(),
-    'la palette ne couvre plus exactement le roster',
+    Object.keys(BASE_BATIMENTS).filter((b) => !BATIMENTS_DONNES.includes(b)).sort(),
+    'la palette ne couvre plus exactement le roster moins ce qui est donné',
   );
   assert.deepEqual(posables.map((p) => p.id), [...ORDRE_PALETTE],
     'la palette ne suit plus ORDRE_PALETTE');
@@ -2647,10 +2808,34 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
   // jamais avec celles du Chantier — c'est l'autre écran. Une de plus fait
   // tomber ce compte, ce qui force à REGARDER plutôt qu'à ajouter.
   const barresOffense = ['offense-contexte', 'offense-palette'];
+  // ⚠⚠ ET LE BALAYAGE COMPTE DES PIXELS DE `flex-basis`, PAS DES HAUTEURS — la
+  // nuance est apparue le 10/09 avec le bouton du rapport, et elle était là
+  // depuis le début. `flex: 0 0 Npx` vaut une HAUTEUR sur un enfant de `#jeu`,
+  // qui est une colonne, et une LARGEUR sur un enfant de `#tete-onglets`, qui est
+  // une rangée. `#tete-rapport` est du second genre : il ne coûte pas un pixel de
+  // hauteur, il prend 32 px de LARGEUR aux cinq onglets.
+  //
+  // ⚠ L'EXCEPTION EST DONC NOMMÉE **ET PROUVÉE**, pas seulement retirée du
+  // compte : on exige que son conteneur soit bien une rangée. Le jour où
+  // `#tete-onglets` passerait en colonne, ces 32 px deviendraient une hauteur, la
+  // ligne ci-dessous tomberait, et le chrome serait à recalculer.
+  const surLAxeDesLargeurs = ['tete-rapport'];
+  const teteOnglets = feuille.match(/#tete-onglets\s*\{([^}]*)\}/);
+  assert.ok(teteOnglets, 'la règle de #tete-onglets a disparu');
+  assert.match(teteOnglets[1], /display:\s*flex/,
+    '#tete-onglets n\'est plus un conteneur flex : #tete-rapport pourrait coûter une hauteur');
+  assert.doesNotMatch(teteOnglets[1], /flex-direction:\s*column/,
+    '#tete-onglets est passé en colonne : les 32 px du rapport sont devenus une hauteur');
   const fixes = [...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
-    .map((m) => m[1]);
+    .map((m) => m[1])
+    .filter((id) => !surLAxeDesLargeurs.includes(id));
   assert.deepEqual(fixes.slice().sort(), [...barres, ...barresOffense].sort(),
     'une barre à hauteur fixe est apparue ou a disparu : le chrome a changé');
+  // ⚠ ET L'EXCEPTION N'EST PAS VACUEUSE : sans elle le balayage retrouve bien le
+  // bouton du rapport, donc la ligne ci-dessus mesure quelque chose.
+  assert.ok([...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
+    .map((m) => m[1]).includes('tete-rapport'),
+  '#tete-rapport n\'a plus de largeur fixe : l\'exception ci-dessus ne sert plus');
 
   // ⚠ ET L'ÉCRAN OFFENSE SE MESURE AUSSI, DEPUIS QU'IL A SA BARRE CONTEXTUELLE
   // (29/08). Il partage l'en-tête et la barre du bas ; ce qui lui est propre,
@@ -4513,17 +4698,31 @@ test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent
   const horsImport = (code) => code
     .replace(/import \{[^}]*\} from '[^']*';/g, '')
     .replace(/export function peindreVueDuPanneau\(/g, 'DECLARATION(');
-  // ⚠⚠ DEUX APPELS PAR ÉCRAN DEPUIS LE LOT JOURNAL, ET LA GARDE CHANGE DE CIBLE
-  // SANS SE RELÂCHER. Elle exigeait « exactement UN » quand chaque écran n'avait
-  // qu'une fiche ; le journal des raids en est le SECOND lecteur, sur les deux
-  // écrans, et il passe par le MÊME rendu. Elle compte donc deux appels ET nomme
-  // ce que le second peint — un troisième, ou un journal qui se peindrait à la
-  // main, la fait tomber, ce qu'on lui demande.
+  // ⚠⚠ UN APPEL PAR ÉCRAN, PLUS UN DANS LA SESSION — 10/09, point 4, ET LA GARDE
+  // CHANGE DE CIBLE SANS SE RELÂCHER. Elle a exigé « exactement UN » quand chaque
+  // écran n'avait qu'une fiche, puis « exactement DEUX » quand le journal des
+  // raids est devenu son second lecteur sur les deux écrans. Le journal a
+  // maintenant quitté les écrans pour la barre du haut : chaque écran retombe à
+  // UN — sa fiche —, et la SESSION en compte un, le journal. Le total ne bouge
+  // pas ; ce qui change est OÙ il est lu, et cette garde le NOMME au lieu de le
+  // subir.
+  //
+  // ⚠ ET LA SESSION ENTRE DANS CE TEST, QUI NE LA REGARDAIT PAS. C'est un
+  // resserrement : le troisième lecteur du rendu partagé était hors garde, donc
+  // un journal repeint à la main dans `ui/session.js` serait passé.
+  const session = sansCommentaires(readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8'));
+  for (const [ou, code] of [['chantier', chantier], ['offense', offense], ['session', session]]) {
+    assert.equal((horsImport(code).match(/peindreVueDuPanneau\(/g) ?? []).length, 1,
+      `${ou} n'appelle pas exactement une fois \`peindreVueDuPanneau\``);
+  }
+  // ⚠ ET C'EST LA SESSION QUI PEINT LE JOURNAL, PAR LE RENDU PARTAGÉ. Les deux
+  // écrans ne le nomment plus du tout : un `elementsJournal` resté dans l'un
+  // d'eux serait le câblage orphelin d'un bouton qui n'existe plus.
+  assert.match(session, /peindreVueDuPanneau\(\s*\n?\s*doc, elementsJournal,/,
+    'la session ne peint pas le journal par le rendu partagé');
   for (const [ou, code] of [['chantier', chantier], ['offense', offense]]) {
-    assert.equal((horsImport(code).match(/peindreVueDuPanneau\(/g) ?? []).length, 2,
-      `${ou} n'appelle pas exactement deux fois \`peindreVueDuPanneau\``);
-    assert.match(code, /peindreVueDuPanneau\(\s*\n?\s*doc, elementsJournal,/,
-      `${ou} ne peint pas le journal par le rendu partagé`);
+    assert.doesNotMatch(code, /elementsJournal/,
+      `${ou} garde le câblage d'un journal qui a quitté cet écran`);
   }
   // La classe CSS est partagée, pas dédoublée : une règle par famille.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
@@ -5053,22 +5252,46 @@ test('RÉPARER T10 — le bilan arrive à l\'écran, y compris à zéro réparé
 test('RÉPARER T11 — le bouton global n\'apparaît que le mode Réparer armé', () => {
   // ⚠ MÊME DISCIPLINE QUE `raid-tout-reparer` — Ethan, 01/09 : « le bouton
   // n'apparaît que le mode Réparer armé, et au-dessus de la rangée ».
+  //
+  // ⚠⚠ LA SONDE A CHANGÉ LE 10/09, PAS LA PROPRIÉTÉ — point 5 d'Ethan. Ce test
+  // lisait `.hidden`, donc `display: none`, donc une barre qui POUSSAIT le champ
+  // en paraissant : c'est le défaut qu'Ethan fait corriger. Elle se replie
+  // désormais par une classe et garde sa place. Ce qui est gardé ici est le MÊME
+  // — elle ne se montre que le mode Réparer armé — mesuré sur le mécanisme qui le
+  // porte maintenant, et la moitié « elle garde sa place » s'AJOUTE dessous.
   const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
   abimerLeBatiment(etat, 1, 0.2);
   const { doc } = ecranMonte(etat);
   const barre = doc.getElementById('chantier-reparation');
-  assert.equal(barre.hidden, true, 'le bloc est visible sans mode armé');
+  const repliee = () => barre.classList.contains('repliee');
+  assert.equal(repliee(), true, 'le bloc est visible sans mode armé');
 
   doc.getElementById('chantier-reparer').click();
-  assert.equal(barre.hidden, false, 'armer Réparer ne montre pas le bloc');
+  assert.equal(repliee(), false, 'armer Réparer ne montre pas le bloc');
   // Une autre action le remasque : un seul mode à la fois.
   doc.getElementById('chantier-demolir').click();
-  assert.equal(barre.hidden, true, 'armer une autre action laisse le bloc à l\'écran');
+  assert.equal(repliee(), true, 'armer une autre action laisse le bloc à l\'écran');
   // Et le retoucher désarme, donc remasque.
   doc.getElementById('chantier-reparer').click();
-  assert.equal(barre.hidden, false);
+  assert.equal(repliee(), false);
   doc.getElementById('chantier-reparer').click();
-  assert.equal(barre.hidden, true, 'désarmer laisse le bloc à l\'écran');
+  assert.equal(repliee(), true, 'désarmer laisse le bloc à l\'écran');
+
+  // ⚠⚠ ET ELLE NE QUITTE JAMAIS LE FLUX — c'est ce que le point 5 achète, et
+  // c'est la moitié qu'aucune de ces quatre bascules ne mesure. Un `hidden`
+  // remis, ou une classe qui poserait `display: none`, rendraient les lignes
+  // ci-dessus VERTES et le défaut d'Ethan intact : la barre disparaîtrait pour de
+  // bon et le champ se recadrerait à chaque armement.
+  assert.equal(barre.hidden, false,
+    'la barre a repris l\'attribut `hidden` : elle pousse à nouveau le champ');
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = feuille.match(/#chantier-reparation\.repliee[^{]*\{([^}]*)\}/);
+  assert.ok(regle, 'la règle de repli de la barre a disparu');
+  assert.match(regle[1], /visibility:\s*hidden/,
+    'la barre se replie autrement que par `visibility` : elle reprendrait sa hauteur');
+  assert.doesNotMatch(regle[1], /display:\s*none/,
+    'la barre se replie par `display: none` : sa place n\'est plus réservée');
 });
 
 test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', () => {
