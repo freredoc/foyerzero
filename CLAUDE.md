@@ -42,150 +42,159 @@ Dernière révision : **10/09/2026**, version 0.99.38 · build 140.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 10/09/2026 (après le lot SON-ET-ARRIVÉE), à confronter :**
-`npm test` rend **1531 pass / 0 fail** au sens de la garde de `documentation.test.js`
-— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1530 pass · 0 fail ·
+**Référence au 10/09/2026 (après le lot ART-90), à confronter :**
+`npm test` rend **1527 pass / 0 fail** au sens de la garde de `documentation.test.js`
+— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1526 pass · 0 fail ·
 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
-en 0. `npm run build` → `dist/index.html`, **9 135 255 octets**, 0 référence
-externe. Coût **+1 074 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par
-poste contre le livrable rebâti sur l'arbre pristine de `main` = `14dd4ac`
-(**9 134 181**) : **JavaScript +1 074 · feuille +0 · balisage +0 · images +0 ·
-audio +0**, et la somme des cinq postes tombe EXACTEMENT sur le total — `data:`
-à **311 lignes / 306 URI** des deux côtés. Borne T10 inchangée à 9 300 000,
-marge **164 745 octets, 1,77 %**. Le lot touche `tools/sons.py`,
-`src/data/sons.js` (GÉNÉRÉ), `src/son/politique.js`, `src/render/scene.js`,
-`src/render/canvas2d.js`, `src/ui/raid.js`, `test/son.test.js`,
-`test/rendu.test.js`, et fait entrer `src/render/arrivee.js`.
-⚠⚠ **L'AMBIANCE DE BASE NE TOURNE PLUS, ET ELLE ÉTAIT SUR CINQ ÉCRANS.** Ethan,
-point 12 : « Enlever le son qui tourne tout le temps », puis « faut croire, il
-s'arrête jamais ». Il avait raison, et la cause est mécanique :
-`ambience_base_player_loop` était sur Chantier, Mission, Offense, Options et
-Recherche, et **une boucle n'a ni garde ni plafond** — `reconcilierLesBoucles`
-l'écrit, « elle a une raison de sonner, ou elle n'en a pas ». Elle ne s'arrêtait
-donc littéralement jamais tant que le joueur n'allait pas sur la carte.
-`AMBIANCE_PAR_ECRAN` ne porte plus que **`raid`**, et le son devient DORMANT :
-il reste au catalogue et sous son `data:` — **audio +0**, comme
-`ambience_calm_map_loop` avant lui. Les atteignables passent de **168 à 167**,
-les muets de 95 à **96**.
-⚠ **`raid` RESTE, ET C'EST UNE LECTURE, PAS UNE DICTÉE.** Le champ de bataille
-ne sonne que pendant un raid, donc il ne « tourne pas tout le temps ». **Si
-Ethan veut le silence complet, c'est cette ligne-ci qui part, et rien d'autre.**
-⚠⚠ **`BOUCLES_DE_BATIMENT` N'EST PAS TOUCHÉ, ET C'EST LE SECOND CANDIDAT À LA
-PHRASE D'ETHAN.** Ses quatre clés — **`aerodrome`, `caserne`, `centrale`,
-`depotDeVehicules`** — tournent aussi tant que le bâtiment est posé, sur
-n'importe quel écran. Elles sont motivées par une SITUATION, une usine qui
-tourne, et non par le fait d'être quelque part. **Ethan tranche** ; le relevé
-est fait, il n'y a pas à le refaire.
-⚠⚠ **LA GARDE DE CADENCE EST PAR BUS, ET LA GARDE PAR ÉVÉNEMENT NE POUVAIT PAS
-TENIR ÇA.** Point 10 : « il faudrait plutôt 3 son par seconde ». Mesuré :
-`weapon_ouvrage_aa`, `weapon_ouvrage_machinegun` et `weapon_*_rifle` portent
-`gardeMs: 22`, soit **quarante-cinq déclenchements par seconde pour ce seul
-événement**, et le bus `armes` en porte **vingt-sept** qu'une bande de défense
-fait tirer ensemble. `GARDE_PAR_BUS = { armes: 334 }` entre — **334 = ceil(1000/3)**,
-donc trois sons par seconde est un PLAFOND et non une moyenne, à 0,3 % près.
-**Mesuré après : exactement 3,00 sons par seconde** sur mille demandes de
-vingt-cinq événements différents, et les alertes restent à 31,2/s, indépendantes.
-⚠⚠ **ET L'ÉTAPE 2 bis SE POSE AVANT LE TIRAGE DE VARIANTE, JAMAIS APRÈS.**
-`tirer` fait avancer la graine du xorshift : refuser après avoir tiré
-consommerait un tirage pour un son qui ne sort pas, donc **déplacerait la suite
-des variantes de tous les sons suivants** — deux exécutions du même combat ne
-sonneraient plus pareil, et rien d'autre ne le dirait. `SB T2` compare les deux
-suites ET la graine ; la falsification qui déplace l'étape ne fait tomber que
-lui.
-⚠ **`creerVoix` NAÎT AVEC `gardesBus`, SANS `??` DE SECOURS**, et un test lit la
-source pour l'exiger : un repli masquerait une voix mal construite, dont la
-garde ne s'armerait jamais.
-⚠ **LES DEUX BOUCLES DU BUS `armes` SONT INTACTES** —
-`weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop`. La garde vit dans
-`demanderUnSon`, que les boucles ne traversent pas ; `SB T3` le vérifie plutôt
-que de le supposer, et la falsification qui la pose dans `reconcilierLesBoucles`
-— « un refus qui ne se rattrape pas » — ne fait tomber que lui.
-⚠⚠ **LES UNITÉS ARRIVENT D'UNE CASE PLUS BAS, EN FANTÔME, ET `src/sim/` N'A PAS
-UNE LIGNE DE CHANGÉE.** Point 9. `src/render/arrivee.js` entre, PUR : une rampe
-de **400 ms** — quatre ticks à 10 Hz, un dixième de l'intervalle entre deux
-vagues — qui va d'une case entière à zéro et de **350 ‰ à 1000 ‰** d'opacité.
-Les deux tombent EXACTEMENT sur leurs bouts. **Les deux cents témoins de combat
-et les huit raids de référence sont verts sans avoir été touchés**, ce qui est la
-mesure qui dit que le moteur n'a pas bougé.
-⚠⚠ **LE DÉCALAGE S'APPLIQUE EN PIXELS APRÈS LA PROJECTION, ET C'EST UNE MESURE,
-PAS UN GOÛT.** `yDeRangeeMilli` BORNE sa sortie au bord haut de la rangée 1 :
-mesuré, **`yDeRangeeMilli(p, 0)` et `yDeRangeeMilli(p, 1000)` rendent le même
-nombre**. Faire descendre l'entité par `rangeeMilli − 1000` l'écraserait donc sur
-sa propre case, et le fantôme n'existerait pas.
-⚠⚠ **`SB T5` A ÉTÉ VU ROUGE SUR L'ARBRE INTACT, ET SUR LA PROPRIÉTÉ — PAS SUR UN
-IMPORT.** Message mesuré : « l'unité apparaît directement sur sa case : y = 1863,
-case = 1863 ». C'est le défaut d'Ethan, au pixel. Le module pur est entré
-d'abord, sans câblage, pour que l'échec soit une ASSERTION et non un fichier
-manquant.
-⚠⚠ **LA GÉOMÉTRIE SOUS LA RANGÉE 1 EST MESURÉE, ET LE FANTÔME EST ROGNÉ DE 25 %
-AU PREMIER INSTANT.** Au déroulé, plein cadre 1080 × 2160 : **81 px de
-letterboxing sous la rangée 1**, et un fantôme une case plus bas (108 px)
-**déborde de 27 px**, soit un quart de sa hauteur — il est entier dès qu'il a
-monté 27 px, c'est-à-dire au bout de 100 ms. C'est l'effet voulu, « le véhicule
-émerge du bord » ; ni le canevas ni la projection n'ont été agrandis.
-⚠⚠ **LES ARRIVÉES SE NOTENT DANS `dessiner`, ET C'EST UN ÉCART AU BRIEF,
-MESURÉ.** Il demandait « AVANT `prendrePositions` », donc dans `avancerDUnTick` :
-mesuré, **la VAGUE 1 naît dans `creerCombat`**, avant qu'un tick n'ait tourné, et
-**la première image ne fait tourner aucun tick** (`derniereImageMs` nul, donc
-`ecoule` nul). La première vague — celle qu'Ethan voit apparaître — serait restée
-sans fantôme. Un seul point d'appel, juste avant de peindre, couvre la boucle
-d'images comme le pas-à-pas.
-⚠⚠ **LA CONDITION DE RANGÉE EST UNE CEINTURE VACUEUSE, ET IL FAUT LE DIRE DANS
-CE SENS-LÀ.** Le brief la demande pour écarter les passagères ; mesuré sur douze
-graines, **zéro attaquant sur 60 ne naît hors de la bande de déploiement**, et
-une passagère est créée AVEC son porteur, dans la bande — ce que `sim/combat.js`
-ne journalise qu'au débarquement est l'événement SONORE, pas l'entité. Ce qui
-l'écarte vraiment est l'EXPIRATION du stamp : débarquement mesuré au **tick 75**,
-soit 1 875 ms à ×4 contre 400 ms de montée, **marge ×4,69**. La condition reste
-pour le jour où un attaquant naîtrait ailleurs, et `SB T4` la garde sur un état
-FORGÉ — les deux falsifications étaient MUETTES sur un vrai combat, et le test a
-été resserré après la mesure.
-⚠ **LE PORTEUR ET SA PASSAGÈRE MONTENT ENSEMBLE**, la même rampe au nombre près :
-`visible` de `render/scene.js` ne regarde pas `embarquee`, donc l'exclure aurait
-posé la passagère à pleine opacité sur la case d'arrivée pendant que son porteur
-monte encore. `SB T5 bis` le mesure sur un vrai montage.
-⚠⚠ **`globalAlpha` EST POSÉ ET REMIS À UN, ET AUCUN TEST SANS NAVIGATEUR NE
-L'AURAIT VU.** C'est un ÉTAT du contexte : l'oublier repeindrait en translucide
-tout ce que la liste dessine ENSUITE. Il se remet APRÈS le `restore` de la
-branche tournante — `save` capture l'opacité, donc `restore` la remet à la valeur
-translucide. `SB T6` lit les écritures sur un enregistreur et exige la séquence
-`0.4 · save · drawImage · restore · 1`.
-⚠⚠ **`src/data/sons.js` EST GÉNÉRÉ, DONC `tools/sons.py` EST TOUCHÉ — ÉCART AU
-BRIEF, DÉCLARÉ.** Il excluait `tools/` ; or les deux tables du lot y sont écrites
-en Python, et un `--ecrire` ultérieur aurait **silencieusement rendu ses cinq
-écrans à l'ambiance** et **supprimé `GARDE_PAR_BUS`**, donc cassé l'import. La
-table est régénérée par `ecrire_la_table` SEULE — pas un `.opus` n'est réencodé,
-d'où **audio +0** —, et le générateur reproduisait le fichier commité **à
-l'octet** avant comme après, vérifié.
-⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 30.** `src/sim/` n'a pas une ligne de
-changée : une arrivée est un dessin, une cadence un réglage de sortie.
-⚠ **SEPT TESTS ENTRENT — `SB T1` à `T6`, plus `SB T5 bis` — ET LE COMPTE PASSE DE
-1 524 À 1 531.** **Aucune assertion n'a été retirée ni assouplie** ; **six tests
-existants changent de valeur ou de cible** — `SON T14` et `SON T20` réancrent le
-compte des atteignables (168 → 167) et des muets (95 → 96) en écrivant les deux
-nombres, `SON T15` et `SON T16` voient leur montage perdre sa PRÉMISSE et le
-reprennent sur des boucles DÉRIVÉES du pack, `SON-V T3` change de témoin — le
-chantier ne peut plus servir de témoin POSITIF —, et **`SON-V T2` est RETOURNÉ** :
-il figeait « six écrans sur sept gardent leur ambiance », il porte la règle neuve
-et **refuse l'ancienne de face**.
-⚠ **DIX FALSIFICATIONS, DIX CHUTES — ET DEUX ONT DÛ ÊTRE REPRISES.** Les
-conditions de CAMP et de RANGÉE de `arrive` se couvraient l'une l'autre sur un
-vrai combat : les deux falsifications étaient MUETTES, et `SB T4` a gagné un état
-forgé APRÈS la mesure. **Une falsification qui ne mord pas se vérifie avant d'être
-crue.**
-⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
-ne touche ni `art/`, ni un outil de la CHAÎNE GRAPHIQUE. ⚠ Il touche
-`tools/sons.py`, qui EST dans `CHAINE` — mais son mode `--ecrire` n'a pas été
-appelé, et pas un octet d'`art/sprites/son/` ne change : `ecrire_la_table` a été
-appelée seule, sans encodage. **L'écart est déclaré plutôt que glissé.**
-⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE DÉCLARE
-NON EXÉCUTÉ.** Le fantôme, sa translucidité et son rognage par le bas du canevas
-sont mesurés sur la LISTE D'AFFICHAGE et sur la GÉOMÉTRIE, jamais à l'écran ; le
-son n'a été mesuré que par la politique, qui est pure.
+en 0. `npm run build` → `dist/index.html`, **9 410 485 octets**, 0 référence
+externe. Coût **+276 304 octets, ENTIÈREMENT DES IMAGES**, mesuré poste par poste
+contre le livrable bâti sur l'arbre pristine de `main` = `14dd4ac` au premier
+`npm run check` de la session (**9 134 181**) : **images +276 304 · JavaScript
++0 · feuille +0 · balisage +0 · audio +0**, la somme des cinq postes tombant
+EXACTEMENT sur le total, et `data:` à **311 lignes / 306 URI** des deux côtés.
+⚠⚠ **LA BORNE T10 PASSE DE 9 300 000 À 9 600 000, ET C'EST ETHAN QUI L'A
+TRANCHÉ.** À 9 300 000 elle était franchie de **110 485 octets** : le lot ne
+pouvait pas sortir sans qu'elle bouge, et la réponse du 10/09 est « Q1 relever ».
+C'est la bonne moitié de l'arbitrage — §5 et `banc.test.js` disent tous deux
+qu'on ne rogne jamais pour passer dessous. **Les trois paliers de qualité WebP
+ont été mesurés sur cette machine et NE SONT PAS APPLIQUÉS** : q85 → 507 076
+octets, q80 → 452 618, q72 → 396 534. `QUALITE = 85` vaut pour les DIX-NEUF
+atlas. Marge **189 515 octets, 1,97 %**. Le lot touche `art/sources/` (huit
+fichiers permutés deux à deux), `art/sprites/bâtiment/` (162 PNG), les deux atlas
+`batiment`, `art/sprites/atlas-empreintes.json`, `tools/batiments_v2.py`,
+`tools/atlas.py`, `tools/planches.py`, `test/banc.test.js`,
+`test/pictogramme.test.js`, `package.json`, et fait entrer `test/art-90.test.js`
+et `RAPPORT-lotART-90.md` — **181 fichiers, et pas une ligne de `src/`**.
+⚠⚠ **LE QG DE DÉFENSE ET LE CENTRE DE COMMANDEMENT AVAIENT ÉCHANGÉ LEUR DESSIN,
+ET L'INVERSION ÉTAIT À LA SOURCE.** Ethan, point 1 : « Inversé sprite qg def
+centre de commandement ». **Regardé avant d'y toucher, pas déduit du brief** :
+`bat_j_qg_de_defense.png` portait une grosse coupole vitrée surmontée d'une
+antenne — un centre de commandement — et `bat_j_centre_de_commandement.png` des
+modules-tourelles autour d'un plateau hexagonal — un QG de défense. **Les huit
+fichiers sont permutés, pas les deux** : `tools/batiments_v2.py` compose le nom
+du sprite ET celui de la source depuis la MÊME clé, donc il n'y a aucune table
+d'appariement à retourner, et permuter le seul état intact laisserait un bâtiment
+qui CHANGE D'IDENTITÉ EN BRÛLANT. `AR T1` garde les quatre états, et l'ENSEMBLE
+des huit empreintes, ce qui refuse une copie autant qu'un demi-échange.
+⚠ **NI `BATIMENTS`, NI `PV`, NI `src/data/base.js` NE SONT TOUCHÉS**, et
+`art/sources-declarees.json` NON PLUS — vérifié : il ne porte que des NOMS, et
+les huit sont des deux côtés de la permutation, donc la liste est identique.
+⚠⚠ **LES VINGT BÂTIMENTS PRENNENT TOUS 29 GROS PIXELS SUR 32, ET L'EMPRISE CESSE
+D'ÊTRE UNE LECTURE DES PV.** Ethan, point 2 : « ils doivent tous prendre 90%
+d'emprise pour être bien visible sur tel », puis « Seulement bâtiment, pas
+unités ». `cible(pv)` de `final128.py` rendait **six emprises — 16 · 18 · 20 ·
+21 · 23 · 28** : la Raffinerie et l'Accumulateur tenaient la MOITIÉ de leur case,
+le Chantier 87,5 %. **Ce qui est perdu est dit** : la taille d'un bâtiment ne se
+lit plus, et ce qui distingue un gros d'un petit est désormais le dessin seul.
+⚠ **29 EXISTAIT DÉJÀ, ON LE LIT** — `EMPRISE_QUATRE_VINGT_DIX` de
+`tools/joueur_v2.py`, que les murs, les barrières et trois socles du joueur
+portent depuis SPRITES-V2-JOUEUR. 90 % de 32 font 28,8 ; l'écart à la consigne
+est de **0,2 gros pixel**, déclaré. `cible` n'a plus aucun appelant de
+production ; elle reste dans `final128.py`, dont le `__main__` historique
+l'emploie.
+⚠⚠ **LE PIÈGE DU LOT EST DE NE PAS RECOUDRE L'ATLAS, ET IL A ÉTÉ MESURÉ.**
+Régénérer les 162 PNG puis `npm run build` rend **le même nombre qu'avant, à
+l'octet** — `tools/build.js` n'inline pas les PNG, il inline les atlas cousus.
+`python3 tools/atlas.py --ecrire --forcer batiment` est obligatoire, et
+`--forcer` avec : sans lui l'outil imprime « ÉCART » et **n'écrit pas**.
+⚠⚠ **MAIS LE BRIEF SE TROMPAIT SUR CE QUI LE DIRAIT, ET C'EST MESURÉ.** Il
+posait que « la seule autre façon de s'en apercevoir est de rebâtir et de
+comparer 9 134 181 à lui-même » : **faux** — la garde « sprite — l'atlas cousu
+répond des sprites d'aujourd'hui » de `test/sprite.test.js` tombe alors, en
+nommant le premier sprite fautif et la commande à relancer. **`npm run check`
+suffit**, et c'est pourquoi `AR T3` mesure autre chose : que l'OUTIL ne dérive
+plus l'emprise des PV.
+⚠ **`src/data/atlas.js` NE BOUGE PAS D'UN OCTET** — la géométrie des cellules ne
+change pas, 83 sprites en 10 × 9 des deux côtés. Seul
+`art/sprites/atlas-empreintes.json` suit.
+⚠⚠ **`tools/verifier.py` ÉTAIT DÉJÀ ROUGE SUR L'ARBRE PRISTINE, ET IL FALLAIT LE
+MESURER AVANT D'ÉCRIRE UNE LIGNE.** Relevé sur `14dd4ac` : **1 110 identiques ·
+0 différent · 0 nouveau · 0 MANQUANT** en 673,5 s, code de sortie **1** sur la
+seule ligne `ATLAS` — `atlas.py --verifier` y rend **15 identiques · 5
+différents**, `batiment` aux deux grilles, `carte` aux deux, `interface-128`.
+C'est l'encodeur WebP de cette machine, et l'écart valait **8 octets en 64 et 178
+en 128** sur des images identiques. Le lot referme `batiment` en le réécrivant
+pour de bon et **laisse les trois autres exactement où il les a trouvés**.
+⚠⚠ **ET PILLOW 12.3.0 NE CASSE PLUS LA REPRODUCTIBILITÉ — LE §0 DU LOT
+PICTOGRAMMES DISAIT LE CONTRAIRE, ET C'EST PÉRIMÉ.** Il annonce « sous Pillow
+12.3.0 le même outil rend 0 identique / 32 différents sur un arbre PRISTINE ».
+**Mesuré le 10/09 sous Pillow 12.3.0, numpy 2.4.6, scipy 1.17.1 : 1 110
+identiques, 0 différent.** Les PNG de la chaîne se reproduisent à l'octet ; ce
+qui ne se reproduit pas est l'encodeur WebP des atlas, et lui seul.
+⚠ **UNE EXCEPTION SUR QUATRE-VINGT-UNE, MESURÉE PLUTÔT QU'ABSORBÉE PAR UNE
+TOLÉRANCE.** `bat_j_artillerie_anti_infanterie_tres_abime` sort à **114 sur 116**
+en grille 128 (et 57 sur 58 en grille 64, donc dans le ±1) ; les quatre-vingts
+autres tombent AU PIXEL sur les deux grilles. La cause est `eroder(m, 3)` de
+`conditionner`, qui ronge trois pixels du masque dans une boîte recadrée de
+993 px : sur ce dessin le panache de fumée est large de **3 px** sur ses
+premières lignes encrées — et même interrompu —, si bien que l'érosion emporte
+**12 lignes de la source, soit 1,55 px** de la grille 128. `AR T2` l'asserte
+ENCORE NÉCESSAIRE, l'idiome de `DETTES_ACCENT`.
+⚠ **ET LE SEUIL DE MESURE EST CELUI DE L'ENCRE, PAS 128.** Mesuré à alpha ≥ 128
+les quatre-vingt-un s'écartent de leur cible de **0 à −3 pixels** ; au seuil
+`SEUIL_ALPHA` de `tools/final128.py`, de **0 à ±1**. C'est la leçon d'EMBLÈME-CENTRÉ,
+et sans elle `AR T2` tomberait sur une chaîne parfaitement juste.
+⚠⚠ **TROIS COMMENTAIRES PÉRIMÉS SONT RÉÉCRITS, ET DEUX N'ÉTAIENT PAS AU BRIEF.**
+`tools/atlas.py` annonçait en DEUX endroits que la grille embarquée est la 64 et
+que « la 128 n'est lue par aucun écran » — faux depuis le lot GRILLE-128 du
+03/09, et **le fichier se contredisait lui-même**, le bloc de `COTE_INDEX` disant
+déjà la bascule. `tools/planches.py` affirmait que 28 est « la plus grande
+emprise que cette chaîne ait jamais produite » : ce lot la porte à 29.
+`EMPRISE_INTERFACE` reste à 28 — le monter relancerait les quatre-vingt-douze
+fichiers d'interface pour un demi-pixel, et **Ethan tranche**.
+⚠⚠ **UNE GARDE QUE `tools/batiments_v2.py` PROMETTAIT DEPUIS DEUX JOURS N'EXISTAIT
+PAS.** Son en-tête écrit que « `src/data/base.js` porte la même liste sous
+`SUFFIXE_ETAT_BATIMENT` — un test confronte les deux plutôt que de les croire
+d'accord » : **mesuré, aucun test ne le faisait**. `AR T3` la fait, à trois lignes
+de coût, et le renvoi la NOMME pour qu'on la retrouve au lieu de la croire.
+⚠ **TROIS TESTS ENTRENT — `AR T1` à `AR T3`, dans `test/art-90.test.js` — ET LE
+COMPTE PASSE DE 1 524 À 1 527.** **Aucune assertion n'a été retirée ni
+assouplie** ; **deux gardes changent de valeur** — `PIC T6` réancre les DEUX
+atlas `batiment` en écrivant le nombre d'avant à côté de celui d'après, et
+`PIC T7` remesure le livrable et la borne. **Les trois ont été vus ROUGES sur
+l'arbre pristine avant le lot**, avec leur message.
+⚠ **`AR T4` ET `AR T5` DU BRIEF NE SONT PAS DES TESTS, ET C'EST UN ÉCART
+DÉCLARÉ.** Leurs montages sont `python3 tools/atlas.py --verifier` et
+`python3 tools/verifier.py`, qui ne peuvent pas entrer dans `npm run check` — la
+CI n'a pas de Python, et §3 en fait un changement d'architecture. Ce sont des
+MESURES, rendues au rapport ; `AR T4` est par ailleurs le réancrage de `PIC T7`,
+qui est une édition et non un test neuf.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 30.** `src/` n'a pas une ligne de
+changée, `src/data/atlas.js` compris : un sprite est un dessin.
+⚠⚠ **`python3 tools/verifier.py` A ÉTÉ LANCÉ AVANT ET APRÈS, ET LES 162 PNG
+RÉGÉNÉRÉS SONT DANS LES « IDENTIQUES À L'OCTET ».** Avant comme après : **1 110
+identiques · 0 différent · 0 nouveau · 0 MANQUANT**, 673,5 s puis 555,3 s, code de
+sortie **1** sur la seule ligne `ATLAS`, préexistante. `atlas.py --verifier` passe
+de **15 identiques · 5 différents** à **17 · 3** : les deux qui sortent sont
+exactement les deux atlas `batiment`, et les trois qui restent — `carte-64`,
+`carte-128`, `interface-128` — sont **laissés où le lot les a trouvés**.
+`entrees.py --verifier` rend **501 / 501 et 152 / 152**, `art/sourcesstandby/` 34
+fichiers 0 lu, `art/reserve/` 10 fichiers 0 lu.
+⚠ **ET `--forcer` A ÉTÉ MESURÉ, PAS REPRIS DU BRIEF** : l'ancien atlas remis en
+place, `atlas.py --ecrire` seul imprime « ÉCART atlas-batiment-128.webp » et
+**n'écrit pas** — le fichier reste à 299 848 octets. L'arbre a été remis en l'état,
+empreintes à l'appui.
+⚠⚠ **LE DÉMARRAGE EST REMESURÉ, ET CE N'EST PAS L'APPAREIL D'ETHAN.** La condition
+que `banc.test.js` pose à sept mégaoctets est DUE — on est à 9,4. Chromium,
+géométrie du S25 FE (360 × 780 à dpr 3), **A/B ALTERNÉ** sur douze tours dont le
+premier écarté, onze couples retenus : `DOMContentLoaded` médian **583 → 607 ms**
+(+24, soit +4,1 % pour +3,0 % de livrable), premier rendu **124 → 124 ms**, zéro
+erreur de page. ⚠ **Les deux étendues se recouvrent** — 569–644 contre 586–636 —,
+donc l'écart est du même ordre que le bruit de la machine : ce qu'on peut en dire
+est que le démarrage ne se dégrade pas d'un ordre de grandeur. ⚠ Un premier essai
+en séries SÉPARÉES rendait 782 ms pour l'AVANT contre 601 pour l'APRÈS, c'est-à-dire
+le livrable le plus lourd plus rapide que l'autre : **deux séries à la suite
+mesurent la machine autant que le livrable**, et c'est pourquoi la mesure alterne.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI SUR UN ÉCRAN DE JEU, ET SE
+DÉCLARE NON EXÉCUTÉ.** Ce qui a été VU, ce sont les huit SOURCES du §1, en aperçu,
+pour établir l'inversion — la seule chose que le lot demandait de regarder pour
+décider. Les 162 sprites ne sont mesurés que par leur boîte d'encre, et **un
+bâtiment qui passe de 50 % à 90,6 % de sa case est exactement le genre de
+changement qu'il faut voir**. À regarder au premier essai d'Ethan.
 
 **Auparavant, après le lot PAQUETS :**
-`npm test` rend **1524 pass / 0 fail** au sens de la garde de `documentation.test.js`
-— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1523 pass · 0 fail ·
+`npm test` déclarait **1524** tests au sens de la garde de `documentation.test.js` ;
+le verdict mesuré était **1523 pass · 0 fail ·
 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
 en 0. `npm run build` → `dist/index.html`, **9 134 181 octets**, 0 référence
 externe. Coût **+3 085 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré contre le
@@ -8986,7 +8995,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 32 fichiers
+src/sim/                simulation déterministe, sans DOM — 34 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -9014,6 +9023,8 @@ src/sim/                simulation déterministe, sans DOM — 32 fichiers
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
   formation-de-raid.js  la copie de travail de l'armée : ranger, embarquer, débarquer
   voisinage-des-bases.js  ce qu'une base ENCOMBRE : le 3 × 3 qu'aucune autre ne partage
+  prix-du-raid.js       ce qu'un raid coûte : la distance, et ce que la CARTE peint
+  territoire-tenu.js    le refus partagé : une case tenue par l'Ouvrage ne se prend pas
   ⤷ ⚠⚠ `formation-de-raid.js` NE VA JAMAIS DANS L'ÉTAT, ET C'EST TOUT SON OBJET —
     lot FORMATION-ET-GARNISON, 08/09. Il rend une copie profonde de
     `baseCourante(etat).armee`, ALIGNÉE PAR INDICE, plus un `embarqueDans` par
@@ -9421,7 +9432,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   65 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   66 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -9432,7 +9443,7 @@ test/                   65 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage  paquets
+  voisinage  paquets  art-90
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

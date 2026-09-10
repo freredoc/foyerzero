@@ -33,6 +33,7 @@ import { niveauDesBatiments } from './niveau-de-base.js';
 import { distanceCarreeCases } from './points-attaque.js';
 import { baseCourante } from './base-courante.js';
 import { problemesDuVoisinageDesBases } from './voisinage-des-bases.js';
+import { problemesDuTerritoireTenu } from './territoire-tenu.js';
 
 /** Dixièmes de niveau par niveau — `niveauDesBatiments` rend des dixièmes. */
 const DIXIEMES_PAR_NIVEAU = 10;
@@ -40,37 +41,94 @@ const DIXIEMES_PAR_NIVEAU = 10;
 /** La portée d'un déplacement, AU CARRÉ — jamais de racine. */
 export const PORTEE_CARREE = DEPLACEMENT.porteeMaxCases * DEPLACEMENT.porteeMaxCases;
 
+/** Dixièmes de minute par minute — tout le calcul du délai s'y fait. */
+const DIXIEMES_PAR_MINUTE = 10;
+
+/** Minutes par heure — pour convertir les dixièmes de minute en ticks. */
+const MINUTES_PAR_HEURE = 60;
+
 /**
- * Le délai entre deux déplacements, en TICKS, au niveau où la base est.
+ * Le délai avant le prochain déplacement, en TICKS, pour ce niveau et cette
+ * distance.
  *
- * ⚠⚠ EN DIXIÈMES DE NIVEAU, ET C'EST LE PIÈGE DU LOT. `niveauDesBatiments` rend
- * `58` pour une base de niveau 5,8 ; le lire comme un entier ferait croire à une
- * base de niveau 58, donc rendrait le délai du niveau 50 dès le niveau 5,8 —
- * un délai DIX FOIS trop long. `sim/reparation.js` a payé exactement ce
- * piège-là avec `niveauDeLArmee` au lot RÉSERVE.
+ * ⚠⚠ LA DISTANCE EST ENTRÉE DANS LE BARÈME — lot RÈGLES-DE-CARTE, 10/09/2026.
+ * Ethan : « Deux choses : coût par distance et niv. Base 1h, puis chaque niveau
+ * de base rajoute 1min », puis, sur la forme exacte, « Q2 b » :
  *
- * ⚠ TOUT EN ENTIERS, ET LA DIVISION VIENT EN DERNIER. L'interpolation est
- * linéaire entre les deux bouts de `DEPLACEMENT.delaiHeures` ; multiplier avant
- * de diviser garde le calcul exact, et `TICKS_PAR_HEURE` fait de la sortie un
- * nombre de ticks entier, comparable à `etat.horloge.nbTicks` sans arrondi.
+ *     délai en minutes = 60 + niveau + (distance − 1)
  *
- * ⚠ ET LE NIVEAU EST BORNÉ AUX DEUX BOUTS. Une base vide rendrait `null`, une
- * base de niveau 50 rendrait 500 : hors de [10, 500], l'interpolation sortirait
- * du barème et rendrait un délai négatif ou plus long que celui du niveau 50.
+ * ⚠⚠ ET ÇA ABANDONNE LES 24 HEURES DU NIVEAU 50, qu'il faut dire avant tout le
+ * reste. L'ancien barème interpolait linéairement entre 1 h au niveau 1 et 24 h
+ * au niveau 50 ; le pire cas de la règle neuve — niveau 50, dix cases — rend
+ * `60 + 50 + 9 = 119 minutes`, soit **1 h 59**. Le plafond est divisé par douze,
+ * et `SESSION-RELEVE-BUTIN.md` §0 cesse d'être la règle sur ce point.
+ *
+ * ⚠⚠ EN DIXIÈMES DE NIVEAU, ET C'EST LE PIÈGE QUE CE DÉPÔT A DÉJÀ PAYÉ DEUX
+ * FOIS. `niveauDesBatiments` rend `86` pour une base de niveau 8,6 ; le lire
+ * comme un entier ferait croire à une base de niveau 86, donc rendrait un délai
+ * bien plus long. `sim/reparation.js` l'a payé avec `niveauDeLArmee` au lot
+ * RÉSERVE ; ce module-ci le documentait déjà au lot DÉPLACEMENT.
+ *
+ * ⚠ TOUT EN ENTIERS, LA DIVISION EN DERNIER. Le calcul se fait en DIXIÈMES DE
+ * MINUTE — `600 + dixièmes + 10 × (distance − 1)` — et ne se convertit en ticks
+ * qu'une fois. Une base de niveau 8,6 coûte ainsi 68,6 min à distance 1, et non
+ * 68 ni 69 : arrondir le niveau avant de l'ajouter perdrait exactement ce que
+ * les dixièmes servent à porter.
+ *
+ * ⚠⚠ ET LE NIVEAU RESTE BORNÉ AUX DEUX BOUTS, `[10, 500]` DIXIÈMES, COMME
+ * AVANT — ET LA BORNE EST INERTE AUJOURD'HUI, MESURÉ. `niveauDesBatiments` rend
+ * une MOYENNE de niveaux qu'`ameliorer` plafonne déjà à `NIVEAU.plafond`, et
+ * `verifierEtat` refuse au chargement une disposition qui sortirait de là : la
+ * retirer ne fait tomber AUCUN test, vérifié à la falsification. Elle est écrite
+ * quand même parce qu'elle protège le seul bout par lequel un nombre absurde
+ * pourrait entrer — un `??` sur une base vide —, et parce qu'un barème qui rend
+ * une durée négative ne lèverait pas : il déverrouillerait le déplacement.
  *
  * @param {object} etat
+ * @param {number} distance distance PARCOURUE, en cases entières, ≥ 1
  * @returns {number} ticks, entier ≥ 0
  */
-export function delaiDeplacementTicks(etat) {
-  const laBase = baseCourante(etat);
-  const { depart, niveau50 } = DEPLACEMENT.delaiHeures;
+export function delaiDeplacementTicks(etat, distance) {
+  return delaiPourLaBase(baseCourante(etat), distance);
+}
+
+/**
+ * Le même barème, mais sur UNE BASE plutôt que sur l'état.
+ *
+ * ⚠⚠ ELLE PREND UNE BASE, ET C'EST CE QUI PERMET À LA MIGRATION DE L'APPELER.
+ * La v30 → v31 doit donner à chaque base la durée qu'elle aurait contractée, et
+ * une migration travaille sur une SAUVEGARDE — pas sur un état monté, donc pas
+ * sur `baseCourante`. Lui faire recopier la formule aurait mis deux écritures du
+ * barème au dépôt, et la seconde se serait tue au premier réglage d'Ethan. C'est
+ * le motif de `problemesDeLEffectif`, qui prend une liste et non un état.
+ *
+ * ⚠ ELLE NE LIT QUE `disposition`, donc elle ne peut rien savoir de la position :
+ * la distance lui est DONNÉE. C'est voulu — la distance parcourue est un fait du
+ * geste, pas une propriété de la base.
+ *
+ * @param {{disposition: Array}} laBase
+ * @param {number} distance distance PARCOURUE, en cases entières, ≥ 1
+ * @returns {number} ticks, entier ≥ 0
+ */
+export function delaiPourLaBase(laBase, distance) {
+  if (!Number.isInteger(distance) || distance < 1
+    || distance > DEPLACEMENT.porteeMaxCases) {
+    throw new RangeError(
+      `delaiPourLaBase : distance « ${distance} » — entier de 1 à `
+      + `${DEPLACEMENT.porteeMaxCases} attendu`,
+    );
+  }
+  const { base, parNiveau, parCaseAuDela } = DEPLACEMENT.delaiMinutes;
   const plancher = DIXIEMES_PAR_NIVEAU;
   const plafond = GEOGRAPHIE.niveauPlafond * DIXIEMES_PAR_NIVEAU;
   const brut = niveauDesBatiments(laBase.disposition) ?? plancher;
   const dixiemes = Math.min(plafond, Math.max(plancher, brut));
-  const portee = plafond - plancher;
-  const heuresMilli = (depart * (plafond - dixiemes) + niveau50 * (dixiemes - plancher));
-  return Math.round((TICKS_PAR_HEURE * heuresMilli) / portee);
+  const dixiemesDeMinute = base * DIXIEMES_PAR_MINUTE
+    + parNiveau * dixiemes
+    + parCaseAuDela * DIXIEMES_PAR_MINUTE * (distance - 1);
+  return Math.round(
+    (TICKS_PAR_HEURE * dixiemesDeMinute) / (MINUTES_PAR_HEURE * DIXIEMES_PAR_MINUTE),
+  );
 }
 
 /**
@@ -87,6 +145,23 @@ export function delaiDeplacementTicks(etat) {
  * tick 0 », ce qui est vrai par accident aujourd'hui — l'horloge y démarre — et
  * cesserait de l'être le jour où une partie commencerait ailleurs.
  *
+ * ⚠⚠ ELLE NE RECALCULE PLUS LE DÉLAI, ELLE LE RELIT — lot RÈGLES-DE-CARTE,
+ * 10/09/2026, ET C'EST LE BUMP DE `SAVE_VERSION`. Tant que le délai ne dépendait
+ * que du NIVEAU, le recalculer ici était juste : la base n'avait qu'un niveau, et
+ * c'était celui-là. Depuis qu'il dépend de la DISTANCE PARCOURUE, le recalcul ne
+ * sait plus quelle distance a été parcourue — un saut de dix cases se
+ * déverrouillerait au tarif d'un saut d'une case. La base porte donc
+ * `dernierDeplacementDelaiTicks`, écrit au moment du saut, à côté de l'horodatage.
+ *
+ * ⚠ ET C'EST UNE DURÉE FIGÉE, PAS UN COMPTE À REBOURS. La soustraction reste
+ * `ecoules >= du ? 0 : du - ecoules` : deux nombres relus contre l'horloge, donc
+ * rien qui puisse diverger au rattrapage. Un résiduel qui décroîtrait tick par
+ * tick serait exactement ce que `rattraperJeu` passe son temps à éviter.
+ *
+ * ⚠ ET FIGÉE VEUT DIRE QU'AMÉLIORER SA BASE NE RALLONGE PAS UNE ATTENTE DÉJÀ
+ * COMMENCÉE. C'est la bonne lecture : le joueur a contracté SON délai en
+ * sautant, et monter un bâtiment ensuite ne peut pas le punir rétroactivement.
+ *
  * @param {object} etat
  * @returns {number} ticks restants, 0 si aucun
  */
@@ -94,8 +169,9 @@ export function ticksAvantProchainDeplacement(etat) {
   const laBase = baseCourante(etat);
   const dernier = laBase.dernierDeplacementTick;
   if (dernier === null || dernier === undefined) return 0;
+  const du = laBase.dernierDeplacementDelaiTicks;
+  if (du === null || du === undefined) return 0;
   const ecoules = etat.horloge.nbTicks - dernier;
-  const du = delaiDeplacementTicks(etat);
   return ecoules >= du ? 0 : du - ecoules;
 }
 
@@ -167,6 +243,32 @@ export function problemesDuDeplacement(etat, cible) {
   // c'est-à-dire ferait dire à la règle que la base s'encombre elle-même.
   for (const p of problemesDuVoisinageDesBases(etat, cible, laBase)) problemes.push(p);
 
+  // ⚠⚠ LA MÊME RÈGLE QU'À LA FONDATION, ET LA MÊME ÉCRITURE — lot
+  // RÈGLES-DE-CARTE, 10/09/2026. Ethan : « Je ne dois pas pouvoir poser ma base
+  // dans [le] territoire ouvrage ». Elle vivait dans `problemesDeLaFondation` et
+  // manquait ICI, si bien qu'on fondait loin puis qu'on sautait dans le violet
+  // au geste suivant : le contournement était à un toucher, exactement comme
+  // celui que VOISINAGE-ET-MENACE a fermé deux jours plus tôt.
+  //
+  // ⚠ APRÈS LE VOISINAGE ET AVANT LE DÉLAI, PARCE QUE L'ORDRE DES REFUS EST
+  // CELUI DANS LEQUEL LE JOUEUR LES LIT. Ce qui tient à la CASE se dit d'abord —
+  // hors carte, sur place, trop loin, encombrement, territoire —, et le délai
+  // vient en dernier : c'est la seule raison qui s'en ira toute seule.
+  //
+  // ⚠⚠ ET `casesAtteignables` SUIT PAR CONSTRUCTION : elle INTERROGE cette
+  // fonction au lieu de réécrire ses règles. C'est ce que `VM T8` garde depuis
+  // VOISINAGE — « elle ne propose plus une case qui sera refusée » —, et ce lot
+  // le vérifie plutôt que de le croire.
+  //
+  // ⚠⚠ CE QUE LA RÈGLE COÛTE EST MESURÉ, PAS DEVINÉ. Passé la rangée 275 le
+  // joueur est IMMOBILISÉ : 20 graines sur 20 rendent ZÉRO destination aux
+  // rangées 250, 200, 150, 100 et 50, contre une médiane de 6 avant le lot. La
+  // porte de sortie tient — raser des bases de l'Ouvrage voisines rouvre le
+  // territoire, 15 fois sur 15 — mais elle demande **4 à 10 rasages**, là où le
+  // lot VOISINAGE en mesurait UN. Voir `RAPPORT-lotREGLES-DE-CARTE.md` §3 :
+  // c'est un chiffre d'arbitrage, et il revient à Ethan.
+  for (const p of problemesDuTerritoireTenu(etat, cible)) problemes.push(p);
+
   const reste = ticksAvantProchainDeplacement(etat);
   if (reste > 0) {
     problemes.push({
@@ -184,6 +286,12 @@ export function problemesDuDeplacement(etat, cible) {
  * `sim/points-attaque.js`, dont c'est la copie de contrat. On ne l'importe pas :
  * ce module-ci n'a pas besoin du reste de `points-attaque.js`, et la boucle
  * tient en trois lignes. ⚠ Si une TROISIÈME arrivait, il faudrait les réunir.
+ *
+ * ⚠⚠ ET ELLE NE SERT PLUS QU'À ÉCRIRE UNE PHRASE DEPUIS LE LOT RÈGLES-DE-CARTE :
+ * elle FACTURE aussi. `deplacerLaBase` la lit pour le barème du délai, et c'est
+ * voulu — la distance qui se paie doit être celle que l'écran annonce. La
+ * mesurer en Tchebychev ferait payer « 7 cases » à un saut que le refus
+ * `trop-loin` chiffre à dix, et le joueur lirait deux nombres pour un geste.
  */
 function casesEnLigneDroite(carre) {
   let n = 0;
@@ -288,8 +396,13 @@ export function deplacerLaBase(etat, cible) {
       `deplacement impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
+  const distance = casesEnLigneDroite(distanceCarreeCases(laBase.position, cible));
   const bilan = poserLaBaseSur(etat, cible.rangee, cible.colonne);
   laBase.dernierDeplacementTick = etat.horloge.nbTicks;
+  // ⚠⚠ LES DEUX S'ÉCRIVENT ENSEMBLE, ET LA DISTANCE SE PREND AVANT LE SAUT.
+  // `poserLaBaseSur` écrit `position` : la mesurer après rendrait zéro, donc le
+  // délai le plus court du barème, à tous les coups et en silence.
+  laBase.dernierDeplacementDelaiTicks = delaiDeplacementTicks(etat, distance);
   return bilan;
 }
 
