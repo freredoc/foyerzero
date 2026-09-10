@@ -343,8 +343,8 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
  * dix autres tranquilles.
  */
 const TAILLES_D_AVANT = {
-  'atlas-batiment-128.webp': 299848,
-  'atlas-batiment-64.webp': 107050,
+  'atlas-batiment-128.webp': 507076, // 299848 avant ART-90
+  'atlas-batiment-64.webp': 185210, // 107050 avant ART-90
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
   'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
@@ -383,6 +383,23 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // ⚠ `unite` MAIGRIT de 140 972 à 96 784 octets à la grille 128 — neuf sprites
   // en moins et treize redessinés —, `chassis` et `tourelle_unite` DOUBLENT, un
   // camp de plus chacun.
+  //
+  // ⚠⚠ DEUX DE PLUS SONT RÉANCRÉS AU LOT ART-90, 10/09, ET LE NOMBRE D'AVANT EST
+  // ÉCRIT À CÔTÉ DE CELUI D'APRÈS. Les vingt bâtiments passent d'une emprise
+  // tirée de leurs PV — de 16 à 28 gros pixels sur 32 — à **29** pour tous, soit
+  // 90,6 % de la case : les quatre-vingt-un sprites de la famille sont donc
+  // redessinés plus grands, et l'atlas s'alourdit de +69 % à la grille 128.
+  // **Aucun sprite n'entre ni ne sort** — 83 des deux côtés —, et les SEIZE
+  // autres lignes n'ont pas bougé d'un octet : `--forcer batiment` nomme la
+  // seule famille que le lot réécrit.
+  //
+  // ⚠ ET LA LIGNE `batiment` ÉTAIT DÉJÀ DANS LES « DIFFÉRENTS » DE
+  // `atlas.py --verifier` AVANT LE LOT — 5 ÉCART sur un arbre pristine, mesuré :
+  // `batiment` aux deux grilles, `carte` aux deux, `interface-128`. C'est
+  // l'encodeur WebP de cette machine, et l'écart valait 8 octets en 64 comme 178
+  // en 128 sur des images identiques. Le lot le referme pour `batiment` en le
+  // réécrivant pour de bon, et **laisse les trois autres exactement où il les a
+  // trouvés**.
   for (const [fichier, octets] of Object.entries(TAILLES_D_AVANT)) {
     assert.equal(statSync(join(SPRITES, fichier)).size, octets,
       `${fichier} a changé de taille : la famille neuve a déplacé un atlas d'avant`);
@@ -400,7 +417,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 134 922 octets, la marge sur la borne T10 est de 1,78 %', () => {
+test('PIC T7 — le livrable pèse 9 410 485 octets, la marge sur la borne T10 est de 1,97 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -522,22 +539,36 @@ test('PIC T7 — le livrable pèse 9 134 922 octets, la marge sur la borne T10 e
   // dans la même session : **images +0 · feuille +0 · balisage +0 · audio +0**,
   // `data:` à **311 lignes / 306 URI** des deux côtés.
   //
-  // ⚠⚠ REMESURÉ AU LOT RÈGLES-DE-CARTE, 10/09, ET C'EST ENCORE UN LOT SANS UNE
-  // SEULE IMAGE. **9 134 181 → 9 134 922, soit +741, ENTIÈREMENT DU
-  // JAVASCRIPT** — le prix du raid qui lit la carte, le délai en minutes, le
-  // refus de territoire au déplacement et la durée figée au saut. Mesuré poste
-  // par poste contre le livrable rebâti sur l'arbre pristine de `main` =
-  // `14dd4ac` : **JavaScript +741 · feuille +0 · balisage +0 · images +0 ·
-  // audio +0**, la somme des cinq postes tombant EXACTEMENT sur le total des
-  // deux côtés, et `data:` à **311 lignes / 306 URI** de part et d'autre.
+  // ⚠⚠ REMESURÉ AU LOT ART-90, 10/09, ET LA BORNE MONTE POUR LA PREMIÈRE FOIS
+  // DEPUIS SOL-SATELLITE. Les vingt bâtiments quittent la courbe des PV — six
+  // emprises de 16 à 28 gros pixels sur 32 — pour une emprise unique de **29**,
+  // soit 90,6 % de la case (Ethan, point 2 du 10/09). **9 134 181 →
+  // 9 410 485, soit +276 304**, mesuré contre le livrable bâti sur l'arbre
+  // pristine de `14dd4ac` au premier `npm run check` de la session, et ventilé :
+  // **images +276 304 · JavaScript +0 · feuille +0 · balisage +0 · audio +0**,
+  // la somme des cinq postes tombant EXACTEMENT sur le total, `data:` à **311
+  // lignes / 306 URI** des deux côtés.
   //
-  // ⚠ LA MARGE PERD 741 OCTETS ET RESTE À 1,78 % À LA DEUXIÈME DÉCIMALE —
-  // 165 819 puis **165 078**. Le seuil de cent cinquante mille tient encore.
-  const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 9_134_922;          // mesuré le 10/09, lot RÈGLES-DE-CARTE, base `14dd4ac`
-  const MARGE = BORNE - MESURE;      // 165 078 octets
-  assert.equal(MARGE, 165_078);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.78);
+  // ⚠⚠ AUCUNE RESSOURCE N'ENTRE : C'EST LA MÊME IMAGE QUI S'ALOURDIT.
+  // `atlas-batiment-128.webp` passe de 299 848 à 507 076 octets — un sprite
+  // dessiné plus grand porte plus de pixels dessinés, donc plus d'entropie. Même
+  // motif qu'au lot BÂTIMENTS-QUATRE-ÉTATS, où l'atlas de la même famille était
+  // passé de 114 650 à 299 848 sans qu'une ligne `data:` bouge.
+  //
+  // ⚠⚠ ET LE PIÈGE DU LOT EST DE NE PAS RECOUDRE L'ATLAS. Régénérer les 162 PNG
+  // puis rebâtir rend **le même nombre qu'avant, à l'octet** : `tools/build.js`
+  // n'inline pas les PNG, il inline les atlas cousus. Mesuré : sans
+  // `python3 tools/atlas.py --ecrire --forcer batiment`, `dist/index.html` reste
+  // à 9 134 181. ⚠ Le brief du lot posait que « la seule autre façon de s'en
+  // apercevoir est de rebâtir et de comparer 9 134 181 à lui-même » : **c'est
+  // faux, et c'est mesuré** — la garde « sprite — l'atlas cousu répond des
+  // sprites d'aujourd'hui » de `test/sprite.test.js` tombe alors, et elle dit
+  // quoi relancer. `npm run check` suffit.
+  const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
+  const MESURE = 9_410_485;          // mesuré le 10/09, lot ART-90, base `14dd4ac`
+  const MARGE = BORNE - MESURE;      // 189 515 octets
+  assert.equal(MARGE, 189_515);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.97);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

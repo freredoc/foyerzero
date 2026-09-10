@@ -847,8 +847,44 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // Auparavant, au lot MUR-PEINT, la borne valait 5 700 000 : Ethan avait fait
   // peindre le mur de contour DANS le fond de base et livré huit décors de
   // 1080 × 2160, +2 154 705 octets, q75 et pleine résolution.
+  //
+  // ⚠⚠ ET ELLE PASSE DE 9 300 000 À 9 600 000 AU LOT ART-90, 10/09. Ethan,
+  // point 2 : « Les bâtiments sont encore trop petit, ils doivent tous prendre
+  // 90% d'emprise pour être bien visible sur tel », puis, sur le périmètre :
+  // « Seulement bâtiment, pas unités ». Les vingt bâtiments quittent la courbe
+  // des PV — six emprises de 16 à 28 gros pixels sur 32 — pour une emprise
+  // unique de **29**, soit 90,6 % de la case.
+  //
+  // ⚠⚠ CE QUI ENTRE EST DE L'ENTROPIE, PAS UNE RESSOURCE. Aucune image neuve :
+  // c'est le MÊME atlas qui s'alourdit, parce qu'un sprite dessiné plus grand
+  // porte plus de pixels dessinés. `atlas-batiment-128.webp` passe de 299 848 à
+  // **507 076 octets**, soit **+276 304 en base64**, et le livrable de
+  // 9 134 181 à **9 410 485**. Ventilé : **images +276 304 · JavaScript +0 ·
+  // feuille +0 · balisage +0 · audio +0**, la somme des cinq postes tombant
+  // EXACTEMENT sur le total, et les `data:` restant à **311 lignes / 306 URI**
+  // des deux côtés. C'est le motif du lot BÂTIMENTS-QUATRE-ÉTATS, vu une
+  // seconde fois.
+  //
+  // ⚠⚠ À 9 300 000 LA BORNE ÉTAIT FRANCHIE DE 110 485 OCTETS : le lot ne pouvait
+  // pas sortir sans qu'elle bouge. **Ethan a tranché le 10/09 : « Q1
+  // relever »** — et c'est la bonne moitié de l'arbitrage, `CLAUDE.md` §5 et le
+  // paragraphe ci-dessus disant tous deux qu'on ne rogne jamais pour passer
+  // dessous. Les trois paliers de qualité WebP ont été mesurés et **ne sont pas
+  // appliqués** : q85 → 507 076 octets, q80 → 452 618, q72 → 396 534.
+  // `QUALITE = 85` de `tools/atlas.py` vaut pour les DIX-NEUF atlas ; la baisser
+  // pour celui-ci dégraderait les dix-huit autres.
+  //
+  // ⚠⚠ LA CONDITION DE REMESURE DU DÉMARRAGE EST DUE, ET ELLE A ÉTÉ FAITE — MAIS
+  // PAS SUR L'APPAREIL. On est à 9,4 Mo, très au-dessus des sept mégaoctets que
+  // le paragraphe ci-dessus pose comme point de remesure. Mesuré dans Chromium à
+  // la place, géométrie 360 × 780 à dpr 3, onze chargements par côté dont le
+  // premier écarté (chauffe), médiane : voir `RAPPORT-lotART-90.md`. **Ce n'est
+  // PAS l'appareil d'Ethan** — le dépôt n'a pas de Galaxy S25 FE (§3), et un
+  // test appareil non exécuté se déclare non exécuté.
+  //
+  // ⚠ LA MARGE EST DE 189 515 OCTETS, 1,97 %.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 9_300_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 9_600_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

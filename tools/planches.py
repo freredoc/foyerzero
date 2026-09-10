@@ -182,13 +182,22 @@ INTERFACE = [
 
 # L'emprise d'un pictogramme, en gros pixels d'une grille de 32.
 #
-# ⚠⚠ 28, ET C'EST LE PLAFOND DES BÂTIMENTS, PAS UNE VALEUR NEUVE. `cible(pv)` de
-# `final128.py` rend 16 pour le plus petit bâtiment et 28 pour le plus grand :
-# 28 est donc la plus grande emprise que cette chaîne ait jamais produite, soit
-# 87,5 % de la case. Un pictogramme se lit petit et n'a rien à côté de lui : il
-# prend tout ce que la chaîne sait donner, et les 12,5 % restants sont la marge
-# qui l'empêche de toucher le bord — sans elle, l'érosion de `conditionner`
-# mordrait dans le dessin.
+# ⚠⚠ 28, ET C'ÉTAIT LE PLAFOND DES BÂTIMENTS QUAND CE NOMBRE A ÉTÉ CHOISI.
+# `cible(pv)` de `final128.py` rendait 16 pour le plus petit bâtiment et 28 pour
+# le plus grand : 28 était alors la plus grande emprise que cette chaîne ait
+# jamais produite, soit 87,5 % de la case. Un pictogramme se lit petit et n'a
+# rien à côté de lui : il prend tout ce que la chaîne sait donner, et les 12,5 %
+# restants sont la marge qui l'empêche de toucher le bord — sans elle, l'érosion
+# de `conditionner` mordrait dans le dessin.
+#
+# ⚠⚠ CE PLAFOND-LÀ A BOUGÉ AU LOT ART-90, 10/09, ET CELUI-CI N'A PAS SUIVI —
+# DÉLIBÉRÉMENT. Les vingt bâtiments prennent désormais 29, comme les murs et les
+# socles du joueur depuis SPRITES-V2-JOUEUR : 28 n'est plus la plus grande
+# emprise de la chaîne. La phrase ci-dessus se lit donc au PASSÉ. Ce que 28 dit
+# encore est ce qui a toujours compté ici : un pictogramme prend presque toute sa
+# case, et garde la marge que l'érosion demande. **Le monter à 29 relancerait les
+# quatre-vingt-douze fichiers d'interface pour un demi-pixel** — c'est un
+# arbitrage d'Ethan, et il ne s'est pas posé.
 #
 # ⚠ ET IL N'Y A PAS DE `cote_ref` : `produire` passe le défaut `None`, donc
 # CHAQUE cellule est normalisée séparément. C'est juste ici et faux ailleurs —
