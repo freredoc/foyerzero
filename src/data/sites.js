@@ -590,21 +590,50 @@ export const GEOGRAPHIE = {
   rayonAttaque: 10, // fixe
   niveauBase: 'moyenne des niveaux de ses bâtiments',
   compositionBase: 'deux niveaux adjacents, répartis pour atteindre la moyenne',
-  // ⚠⚠ CE COUPLE EST LU PAR `sim/deplacement.js` DEPUIS LE LOT DÉPLACEMENT
-  // (02/09/2026), et il ne s'y recopie pas. Il vient de `SESSION-RELEVE-BUTIN.md`
-  // §0 — « délai entre deux déplacements de base : 1 h au départ → 24 h au
-  // niveau 50 » — et il dormait ici depuis, sans lecteur.
-  delaiEntreSautsHeures: { depart: 1, niveau50: 24 },
+  // ⚠⚠ TROIS COEFFICIENTS, PLUS DEUX BOUTS D'INTERPOLATION — lot RÈGLES-DE-CARTE,
+  // 10/09/2026, point 15 d'Ethan : « coût par distance et niv. Base 1h, puis
+  // chaque niveau de base rajoute 1min », et sur la forme exacte, « Q2 b », soit
+  //
+  //     délai en minutes = 60 + niveau + (distance − 1)
+  //
+  // ⚠⚠ ET CE QUE ÇA COÛTE EST À DIRE AVANT TOUT LE RESTE : LES 24 HEURES DU
+  // NIVEAU 50 SONT ABANDONNÉES. Le couple d'avant était
+  // `delaiEntreSautsHeures: { depart: 1, niveau50: 24 }` et venait de
+  // `SESSION-RELEVE-BUTIN.md` §0 — « 1 h au départ → 24 h au niveau 50 ». Sur la
+  // règle neuve, le PIRE cas du jeu — niveau 50, dix cases — rend
+  // `60 + 50 + 9 = 119 minutes`, soit **1 h 59** : le plafond du barème est
+  // divisé par douze, et ce relevé cesse d'être la règle. Les deux exemples
+  // d'Ethan confirment que c'est bien (b) qu'il a voulue (niveau 20, distance 1
+  // → 1 h 20) ; c'est UNE table qui change, et il peut revenir dessus.
+  //
+  // ⚠ LE NOM CHANGE PARCE QUE LA GRANDEUR CHANGE. Ce ne sont plus deux bouts
+  // d'une interpolation en HEURES, ce sont trois coefficients en MINUTES.
+  // Garder l'ancien nom ferait lire « heures » là où on écrit des minutes.
+  //
+  // ⚠ `parNiveau` SE PAIE AU DIXIÈME DE NIVEAU, et ce n'est pas un détail :
+  // `niveauDesBatiments` rend une moyenne en DIXIÈMES — 86 pour une base de
+  // niveau 8,6 —, donc une base de 8,6 coûte 68,6 min et non 68 ni 69.
+  // `sim/deplacement.js` travaille en dixièmes de minute pour cette raison, et
+  // ne divise qu'en dernier.
+  //
+  // ⚠ `parCaseAuDela` COMPTE LES CASES AU-DELÀ DE LA PREMIÈRE : un saut d'une
+  // case ne paie rien de distance, un saut de dix en paie neuf. La distance est
+  // celle que le joueur LIT à l'écran — euclidienne, arrondie au supérieur —,
+  // jamais Tchebychev : facturer une diagonale comme une ligne droite mentirait
+  // à la phrase qui dit « 7 cases ».
+  delaiDeplacementMinutes: { base: 60, parNiveau: 1, parCaseAuDela: 1 },
   blocageApresAttaqueHeures: 1,
   blocageApresRasageHeures: 24,
   avantPostesParBaseJoueur: { min: 1, max: 2, niveauRelatif: 1, renouvelables: true },
 };
 
 // --- déplacement de la base ---------------------------------------------------
-// Ce que le joueur peut faire de sa base, et à quel rythme. Deux nombres, et
-// aucun n'est neuf : la portée vient d'Ethan le 02/09 (« 10 cases au
-// maximum »), le délai dormait dans `GEOGRAPHIE.delaiEntreSautsHeures` depuis
-// `SESSION-RELEVE-BUTIN.md` §0 sans que personne ne le lise.
+// Ce que le joueur peut faire de sa base, et à quel rythme. La portée vient
+// d'Ethan le 02/09 (« 10 cases au maximum ») ; le délai vient de lui aussi, le
+// 10/09 — « coût par distance et niv. Base 1h, puis chaque niveau de base
+// rajoute 1min ». Il dormait auparavant dans `GEOGRAPHIE.delaiEntreSautsHeures`,
+// deux bouts d'une interpolation en heures, et il a changé de GRANDEUR : voir
+// `delaiDeplacementMinutes` ci-dessus, qui dit ce que le changement abandonne.
 //
 // ⚠⚠ LE DÉLAI N'EST PAS RECOPIÉ ICI, IL EST RÉFÉRENCÉ. Deux tables pour une
 // grandeur, c'est une occasion de divergence, et `CLAUDE.md` §4 l'interdit :
@@ -620,15 +649,21 @@ export const DEPLACEMENT = {
   porteeMaxCases: 10,
 
   /**
-   * Le barème du délai, aux deux bouts, en HEURES — interpolé linéairement
-   * entre eux sur le niveau de la base.
+   * Le barème du délai, en MINUTES : une base, un coût par niveau, un coût par
+   * case au-delà de la première.
+   *
+   * ⚠ IL CHANGE DE NOM AVEC LA GRANDEUR — lot RÈGLES-DE-CARTE, 10/09/2026. Il
+   * s'appelait `delaiHeures` et référençait deux bouts d'interpolation ; ce
+   * sont maintenant trois coefficients, et en minutes. Un nom qui dit « heures »
+   * sur des minutes se relit faux une fois, et se corrige de travers la fois
+   * d'après.
    *
    * ⚠ LE NIVEAU D'UNE BASE EST LA MOYENNE DES NIVEAUX DE SES BÂTIMENTS, et
    * `niveauDesBatiments` la rend EN DIXIÈMES. Le lire comme un entier donnerait
    * un délai dix fois faux — c'est le piège que `sim/reparation.js` a déjà payé
    * avec `niveauDeLArmee`.
    */
-  delaiHeures: GEOGRAPHIE.delaiEntreSautsHeures,
+  delaiMinutes: GEOGRAPHIE.delaiDeplacementMinutes,
 };
 
 /**

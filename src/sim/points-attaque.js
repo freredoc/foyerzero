@@ -303,13 +303,20 @@ export const RAYON_ATTAQUE_CARRE = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAtt
 /**
  * La case décalée de (dr, dc) est-elle dans la ZONE D'INFLUENCE de rayon donné ?
  *
- * ⚠⚠ C'EST LA SEULE ÉCRITURE DE CETTE FORME DANS LE DÉPÔT, ET ELLE SERT LES DEUX
- * CÔTÉS. `estEnTerritoireAllie` la FACTURE — le tarif de raid à +1 par case au
- * lieu de +3 —, la boucle `peindre` de `sim/territoire.js` la DESSINE. CLAUDE.md
- * l'écrit depuis EUCLIDE : « ce sont `estEnTerritoireAllie` ET la boucle de
- * `territoire.js` qui changent, ensemble » ; en changer un seul ferait payer le
- * tarif de proximité sur des cases que la carte ne montre pas comme siennes.
- * Depuis ce lot-ci il n'y a plus deux lignes à changer ensemble, il y en a UNE.
+ * ⚠⚠ C'EST LA SEULE ÉCRITURE DE CETTE FORME DANS LE DÉPÔT, ET ELLE N'A PLUS
+ * QU'UN LECTEUR — lot RÈGLES-DE-CARTE, 10/09/2026. Elle en avait deux :
+ * `estEnTerritoireAllie` la FACTURAIT, la boucle `peindre` de
+ * `sim/territoire.js` la DESSINE. Ce bloc écrivait alors « il n'y a plus deux
+ * lignes à changer ensemble, il y en a UNE », et il avait raison de la FORME et
+ * tort du PARTAGE : réunir les deux géométries a laissé DEUX règles
+ * d'appartenance. Le prix demande maintenant la propriété — `campDeLaCase`, avec
+ * ses sommes de force et le PLANCHER d'Ethan —, donc l'octogone n'est plus qu'une
+ * enveloppe de DESSIN, et l'accord à tenir a disparu par le haut : le prix ne lit
+ * plus cette forme du tout.
+ *
+ * ⚠ NE PAS LA CROIRE MORTE POUR AUTANT. `campDeLaCase` et `territoireDeLaFenetre`
+ * l'appellent toutes deux — l'une pour une case, l'autre pour une fenêtre — et
+ * c'est ce qui les tient d'accord ; `TL T1` les confronte case par case.
  *
  * ⚠⚠ UN OCTOGONE, DICTÉ CASE PAR CASE PAR ETHAN LE 03/09/2026 : « un carré de
  * 5x5 avec chaque coin rogné (4 cases) ; ouvrage idem rogné mais 7x7 donc 3
@@ -337,10 +344,10 @@ export const RAYON_ATTAQUE_CARRE = GEOGRAPHIE.rayonAttaque * GEOGRAPHIE.rayonAtt
  */
 export function distanceOctogonaleDInfluence(dr, dc) {
   // ⚠ LES ÉCARTS SE VALIDENT ICI, PARCE QU'ILS ÉTAIENT VALIDÉS AVANT. Jusqu'au
-  // lot EUCLIDE, `estEnTerritoireAllie` passait par `distanceCarreeCases`, qui
-  // LÈVE sur une case non entière. Sans cette garde, une case mal formée ferait
-  // rendre `NaN` aux comparaisons, donc `false` — la cible sortirait du
-  // territoire en silence et le raid coûterait le tarif lointain sans rien dire.
+  // lot EUCLIDE, le prix passait par `distanceCarreeCases`, qui LÈVE sur une
+  // case non entière. Sans cette garde, une case mal formée ferait rendre `NaN`
+  // aux comparaisons, donc `false` — la case sortirait du territoire en silence,
+  // et la carte la peindrait neutre sans rien dire.
   if (!Number.isInteger(dr) || !Number.isInteger(dc)) {
     throw new TypeError(`distanceOctogonaleDInfluence : écarts « ${dr}, ${dc} » — entiers attendus`);
   }
@@ -422,52 +429,30 @@ export function casesArrondiesAuSuperieur(carreDeLaDistance) {
   return n;
 }
 
-/**
- * La cible est-elle en TERRITOIRE ALLIÉ ?
- *
- * ⚠ LE TERRITOIRE EST LA ZONE D'INFLUENCE, celle qui existe déjà dans
- * `GEOGRAPHIE` : rayon 2 autour d'une base du joueur, « fixe, ne croît jamais »
- * dans le relevé. Arbitré le 29/08 : « on garde deux ». Conséquence assumée et
- * mesurable : le tarif à +1 ne touche que les cases à 1 ou 2 cases, donc 11 ou
- * 12 points, et tout le reste de la carte est à +3.
- *
- * ⚠ C'EST L'UNION DES ZONES DE TOUTES LES BASES, pas celle de la base qui
- * attaque. Ethan : « sauf si tu as plein de bases les unes à côté des autres, et
- * dans ce cas il n'y a pas de problème ». Le territoire est au JOUEUR ; la
- * distance, elle, se mesure depuis la base qui part.
- *
- * ⚠⚠ EN OCTOGONE DEPUIS LE 03/09/2026, ET LES DEUX CÔTÉS N'ONT PLUS À BASCULER
- * ENSEMBLE : ILS PARTAGENT LA MÊME FONCTION. Cette fonction et la boucle
- * `peindre` de `sim/territoire.js` portent la MÊME zone — l'une la facture,
- * l'autre la dessine — et appellent toutes deux `dansLOctogoneDInfluence`.
- * EUCLIDE avait laissé les deux en Tchebychev, BASES-1 les a passées au disque
- * en changeant DEUX lignes d'accord ; il n'y en a plus qu'une à changer.
- *
- * ⚠ LE PRIX CHANGE DANS L'AUTRE SENS, ET IL N'EST PAS COMPENSÉ. Le disque de
- * BASES-1 avait fait passer 3,33 % des cibles de +1 à +3 par case ; l'octogone
- * en rend une partie — huit cases par base reviennent au tarif de proximité.
- * Voir le rapport du lot pour la mesure sur les mêmes 150 graines.
- *
- * ⚠ LA DISTANCE DU BARÈME, ELLE, RESTE EN CASES DE GRILLE — `coutDUnRaid`
- * ci-dessous emploie toujours `distanceTchebychev`. C'est l'arbitrage d'EUCLIDE,
- * intact : la PORTÉE est un disque, le PRIX se compte en cases de grille, et un
- * raid en diagonale ne renchérit pas pour la seule raison qu'il est en diagonale.
- *
- * @param {{ rangee: number, colonne: number }} cible
- * @param {Array<{ position: object }>} bases
- * @returns {boolean}
- */
-export function estEnTerritoireAllie(cible, bases) {
-  if (!Array.isArray(bases) || bases.length === 0) {
-    throw new RangeError('estEnTerritoireAllie : au moins une base est attendue');
-  }
-  const rayon = GEOGRAPHIE.rayonInfluenceJoueur;
-  return bases.some((base) => dansLOctogoneDInfluence(
-    base.position.rangee - cible.rangee,
-    base.position.colonne - cible.colonne,
-    rayon,
-  ));
-}
+// ---------------------------------------------------------------------------
+// ⚠⚠ `estEnTerritoireAllie` A ÉTÉ RETIRÉE ICI — lot RÈGLES-DE-CARTE, 10/09/2026,
+// ET SON NOM ÉTAIT DEVENU FAUX. Elle rendait « la cible est-elle dans l'octogone
+// d'une de mes bases ? » et s'appelait « est-elle en territoire allié ? ». Tant
+// que le prix était la seule chose qui posât la question, les deux phrases se
+// valaient ; depuis que la CARTE répond la propriété — force des deux camps, et
+// le PLANCHER d'Ethan par-dessus —, elles disent deux choses différentes, et
+// c'est le point 8 du 10/09 : une base ennemie posée à deux cases de chez soi
+// tombait dans l'octogone allié et se facturait au tarif de chez soi, pendant
+// que la carte la peignait à l'Ouvrage. Mesuré avant le retrait : **6,41 % des
+// cibles à portée**, sur vingt graines et cinq rangées.
+//
+// ⚠ ELLE PART AVEC SON DERNIER LECTEUR, ELLE NE RESTE PAS EN ORPHELINE.
+// `coutDUnRaid` était le seul, et il vit désormais dans `sim/prix-du-raid.js`,
+// où il lit `campDeLaCase`. Une fonction exportée que personne n'appelle est la
+// prochaine à mentir — c'est ce que le lot TERRITOIRE a écrit en retirant
+// `epaisseurDeFrontiere`, et ce que `CRAN_PAR_DEFAUT` a redit au lot CARTE-B.
+//
+// ⚠⚠ ET LA GÉOMÉTRIE, ELLE, NE PART PAS : `dansLOctogoneDInfluence` juste
+// au-dessus garde son lecteur de production — la boucle `peindre` de
+// `sim/territoire.js` — et les assertions qui gardaient la FORME sont réancrées
+// sur elle, dans `test/points-attaque.test.js` et `test/euclide.test.js`. Ce
+// qui disparaît est l'UNION des octogones du joueur, pas l'octogone.
+// ---------------------------------------------------------------------------
 
 /**
  * Le coût d'un raid, en points, à distance et territoire connus.
@@ -500,19 +485,17 @@ export function coutDuRaid(distance, enTerritoireAllie) {
   return fixe + (enTerritoireAllie ? parCaseAllie : parCaseEnnemiOuNeutre) * distance;
 }
 
-/**
- * Le coût d'un raid tel que l'écran le montrera : une base qui part, une case
- * visée, et l'état pour dire ce qui est à nous.
- *
- * @param {object} etat
- * @param {{ position: object }} baseAttaquante
- * @param {{ rangee: number, colonne: number }} cible
- * @returns {number} coût en points
- */
-export function coutDUnRaid(etat, baseAttaquante, cible) {
-  const distance = distanceTchebychev(baseAttaquante.position, cible);
-  return coutDuRaid(distance, estEnTerritoireAllie(cible, basesDuJoueur(etat)));
-}
+// ⚠⚠ `coutDUnRaid` A DÉMÉNAGÉ DANS `sim/prix-du-raid.js` — lot RÈGLES-DE-CARTE,
+// 10/09/2026, ET C'EST UN CYCLE D'IMPORT QUI L'A EXIGÉ. Elle demande désormais
+// « à qui la CARTE donne-t-elle cette case ? », donc `campDeLaCase` de
+// `sim/territoire.js` — or `territoire.js` importe déjà
+// `distanceOctogonaleDInfluence` d'ICI. La lui faire lire aurait refermé la
+// boucle, et sous ESM un cycle ne lève pas toujours : il rend un `undefined`
+// silencieux au premier appel. On sort donc la fonction plutôt que de tordre
+// l'import — motif exact de `base-courante.js` au lot BASES-0.
+//
+// ⚠ `coutDuRaid` RESTE ICI, ET RESTE PURE. Le barème ne connaît pas l'état ; ce
+// qui l'a quitté, c'est la question posée au monde, pas la réponse.
 
 // ---------------------------------------------------------------------------
 // Payer

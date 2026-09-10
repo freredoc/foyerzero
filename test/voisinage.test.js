@@ -156,11 +156,28 @@ test('VM T4 — le déplacement refuse les mêmes huit cases', () => {
   // permis, et le geste l'effaçait de la carte.
   assert.ok(porteLeCode(problemesDuDeplacement(etat, ouvrage)),
     'la case exacte d\'une base de l\'Ouvrage doit être refusée au déplacement');
-  // et la couronne 2 reste atteignable, sinon le test ne mesure rien
+  // et la couronne 2 échappe au VOISINAGE, sinon le test ne mesure rien
+  //
+  // ⚠⚠ LA DISCRIMINATION PORTE SUR LE CODE, PLUS SUR LA LISTE VIDE — lot
+  // RÈGLES-DE-CARTE, 10/09/2026. Elle cherchait une case de la couronne 2 SANS
+  // AUCUN problème ; il n'y en a plus, et pas parce que le voisinage aurait
+  // grossi : le déplacement refuse désormais une case TENUE par l'Ouvrage, et la
+  // base laissée vivante par ce montage tient son octogone de rayon 3 — donc
+  // toute la couronne 2. Ce que ce test mesure est le RAYON du voisinage, qui
+  // vaut un ; il le mesure donc sur SON code, et la falsification garde toute sa
+  // force — une règle de voisinage élargie à deux cases le fait tomber.
   const libre = couronne(ouvrage, 2).find(
-    (c) => problemesDuDeplacement(etat, c).length === 0,
+    (c) => !porteLeCode(problemesDuDeplacement(etat, c)),
   );
-  assert.ok(libre, 'le montage ne discrimine pas : aucune case de la couronne 2 n\'est libre');
+  assert.ok(libre,
+    'le montage ne discrimine pas : la couronne 2 porte le code de voisinage');
+  // ⚠ ET ELLE EST BIEN REFUSÉE POUR UNE AUTRE RAISON, QUI EST LA BONNE : le
+  // territoire. Sans cette ligne, on ne saurait pas si la couronne 2 est libre
+  // ou refusée par la règle d'à côté, et le rapport ne pourrait pas le dire.
+  assert.ok(
+    problemesDuDeplacement(etat, libre).some((p) => p.code === 'territoire-ennemi'),
+    'la couronne 2 devrait être tenue par la base de l\'Ouvrage restée vivante',
+  );
 });
 
 test('VM T5 — la base qui bouge ne se refuse pas elle-même', () => {

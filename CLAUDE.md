@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
+Dernière révision : **10/09/2026**, version 0.99.39 · build 141.
 
 ---
 
@@ -42,7 +42,159 @@ Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 09/09/2026 (après le lot PAQUETS), à confronter :**
+**Référence au 10/09/2026 (après le lot RÈGLES-DE-CARTE), à confronter :**
+⚠⚠ **LES 24 HEURES DU NIVEAU 50 SONT ABANDONNÉES, ET C'EST LA PREMIÈRE CHOSE À
+DIRE.** Le délai entre deux déplacements de base interpolait linéairement de 1 h
+au niveau 1 à **24 h** au niveau 50 ; Ethan tranche le 10/09 — « Q2 b » —
+`délai en minutes = 60 + niveau + (distance − 1)`. Le PIRE cas de la règle neuve
+est **1 h 59** (niveau 50, dix cases) : le plafond est divisé par douze, et
+`GEOGRAPHIE.delaiEntreSautsHeures` disparaît de `src/data/sites.js` — elle ne
+passe pas à une autre valeur, elle change de NOM en même temps que d'unité,
+`delaiDeplacementMinutes: { base: 60, parNiveau: 1, parCaseAuDela: 1 }`.
+`npm test` rend **1532 pass / 0 fail** au sens de la garde de `documentation.test.js`
+— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1531 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. `npm run build` → `dist/index.html`, **9 134 922 octets**, 0 référence
+externe. Coût **+741 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste
+contre le livrable rebâti sur l'arbre pristine de `main` = `14dd4ac`
+(**9 134 181**) : **JavaScript +741 · feuille +0 · balisage +0 · images +0 ·
+audio +0**, la somme des cinq postes tombant EXACTEMENT sur le total des deux
+côtés, et `data:` à **311 lignes / 306 URI** de part et d'autre. Borne T10
+inchangée à 9 300 000, marge **165 078 octets, 1,78 %**. Le lot touche
+`src/data/sites.js`, `src/sim/deplacement.js`, `src/sim/fondation.js`,
+`src/sim/points-attaque.js`, `src/sim/raid.js`, `src/sim/state.js`,
+`src/sim/territoire.js`, la ligne d'import de `src/ui/monde.js` et de
+`src/ui/raid.js`, seize fichiers de `test/`, et fait entrer
+`src/sim/prix-du-raid.js` et `src/sim/territoire-tenu.js`.
+⚠⚠ **LE PRIX D'UN RAID LIT ENFIN LA CARTE, ET LA DIVERGENCE QUE CE DÉPÔT NOMMAIT
+DEPUIS TERRITOIRE-FORCE EST FERMÉE.** Ethan, 10/09, capture à l'appui : « une
+base ouvrage à côté de ma base est à 12 points alors qu'elle est en territoire
+ouvrage ». `estEnTerritoireAllie` demandait « cette case est-elle dans l'OCTOGONE
+du joueur » ; `campDeLaCase` répond « à qui la carte la donne-t-elle ». Les deux
+étaient la même question avant TERRITOIRE-FORCE et ne le sont plus depuis : le
+partage se fait à la SOMME DES FORCES, avec le PLANCHER d'Ethan — « le territoire
+où la base se trouve ne change pas » —, et l'octogone ne pouvait pas le voir.
+⚠⚠ **MESURÉ AVANT D'ÉCRIRE UNE LIGNE, 20 GRAINES × 5 RANGÉES, 5 508 CIBLES :
+353 DÉSACCORDS, SOIT 6,41 %, ET TOUS DANS LE MÊME SENS — LE PRIX MONTE.** Écarts
+**+2 sur 132 cibles, +4 sur 221, jamais une baisse** ; prix moyen **27,905 →
+28,114**, médiane **28 des deux côtés**. Par rangée : 6,43 % (250) · 6,38 % (200)
+· 6,22 % (150) · 6,51 % (100) · 6,52 % (50). **Aucun barème n'a été touché** —
+`POINTS_ATTAQUE.coutRaid` est intact, c'est la QUESTION posée qui change.
+⚠⚠ **`src/sim/prix-du-raid.js` ENTRE, ET C'EST UN CYCLE D'IMPORTS QUI L'A
+EXIGÉ.** `territoire.js` importe `distanceOctogonaleDInfluence` de
+`points-attaque.js` : y faire lire `campDeLaCase` aurait refermé le PREMIER cycle
+de `src/sim/`. Précédents exacts : `base-courante.js` au lot BASES-0,
+`saveur.js` au lot RETOUCHES. `coutDuRaid(distance, enTerritoireAllie)` ne bouge
+pas d'un caractère et reste PURE ; c'est `coutDUnRaid` — celle qui interroge
+l'état — qui déménage, et ses quatre appelants suivent leur import.
+⚠⚠ **`estEnTerritoireAllie` EST RETIRÉE, PAS GARDÉE SANS LECTEUR.** Elle n'avait
+plus qu'un lecteur de production, la ligne même que ce lot change, et **son nom
+était devenu faux** : « en territoire allié » désigne désormais ce que la carte
+peint. La laisser aurait mis au dépôt deux réponses à une question dont il n'y a
+qu'une définition. Ses deux assertions se réancrent sur
+`dansLOctogoneDInfluence`, qui reste et qui dit la GÉOMÉTRIE.
+⚠⚠ **ET LE PARAGRAPHE DE `territoire.js` QUI DÉCLARAIT LA DIVERGENCE CLOSE EST
+RÉÉCRIT.** Il disait « il n'y a plus qu'une écriture de la forme, donc plus
+d'accord à tenir » : vrai de la FORME de l'octogone, faux du PARTAGE, et c'est
+très exactement l'écart qu'Ethan a vu. **Un commentaire qui déclare close une
+divergence ouverte est pire que pas de commentaire.**
+⚠⚠ **LE DÉLAI DE DÉPLACEMENT SE COMPTE EN DIXIÈMES DE MINUTE, ET C'EST CE QUI
+GARDE LE NIVEAU 8,6.** `niveauDesBatiments` rend **86** pour une base de niveau
+8,6 ; le lire comme un entier ferait un délai de 86 minutes au lieu de 8,6. Tout
+le calcul se fait en entiers — `600 + dixièmes + 10 × (distance − 1)` — et ne se
+convertit en ticks qu'une fois. **Table de contrôle MESURÉE, pas recopiée :**
+niveau 1 / distance 1 → **610** (1 h 01) · 5 / 4 → **680** (1 h 08) · **8,6 / 1 →
+686** (1 h 08,6) · 20 / 1 → **800** (1 h 20) · 50 / 10 → **1190** (1 h 59).
+⚠ **LA LIGNE « 5 / 4 » REND 1 h 08 LÀ OÙ ETHAN ÉCRIT « 1h04 »**, et c'est SA
+propre règle qui le dit : `60 + 5 + 3`. On mesure la formule qu'il a choisie, on
+ne la bricole pas pour tomber sur son exemple. **À signaler s'il voulait dire
+autre chose.**
+⚠⚠ **LA DISTANCE EST EUCLIDIENNE ARRONDIE AU SUPÉRIEUR, PAS TCHEBYCHEV, ET LA
+DIAGONALE EST LE SEUL ENDROIT QUI LES DÉPARTAGE.** Un saut de (7, 7) fait SEPT
+cases de Tchebychev et **DIX** en ligne droite. La falsification qui prend
+Tchebychev **n'a PAS mordu au premier relevé** — aucun montage du dépôt ne
+sautait en diagonale — et c'est elle qui a fait écrire la dernière moitié de
+`RC T5`.
+⚠⚠ **`SAVE_VERSION` PASSE À 31, ET LE BUMP EST OBLIGATOIRE.** Le délai dépend
+désormais de la DISTANCE PARCOURUE : `ticksAvantProchainDeplacement` ne peut plus
+le recalculer, puisqu'elle ne sait pas de combien la base a sauté. La base porte
+donc `dernierDeplacementDelaiTicks`, la durée **CONTRACTÉE au saut**, figée.
+Conséquence mesurée et voulue : **améliorer sa base ne rallonge plus l'attente en
+cours** — un recalcul à la lecture la faisait grandir sous les yeux du joueur.
+**La sauvegarde grandit de 36 octets EXACTEMENT, sur les vingt-cinq graines du
+témoin** (`,"dernierDeplacementDelaiTicks":null`).
+⚠⚠ **ET LA MIGRATION 30 → 31 CONTRACTE LA DURÉE LA PLUS COURTE, JAMAIS UNE
+ATTENTE INVENTÉE.** Une v30 porte l'INSTANT du dernier saut et jamais son
+amplitude : trois lectures étaient possibles, et c'est la distance **1** qui est
+prise — **une migration ne doit jamais enfermer un joueur derrière une attente
+qu'il n'a pas contractée.** Elle peut le libérer plus tôt, elle ne peut pas le
+retenir plus longtemps. Une base qui n'a jamais sauté reçoit `null`, jamais zéro.
+⚠⚠ **ON NE DÉPLACE PLUS SA BASE EN TERRITOIRE DE L'OUVRAGE, ET LE REFUS EST
+ÉCRIT UNE FOIS POUR DEUX GESTES.** Ethan, point 16 : « Je ne dois pas pouvoir
+poser ma base dans [le] territoire ouvrage ». La règle existait à la FONDATION et
+manquait au DÉPLACEMENT — on fondait loin, puis on sautait dans le violet au
+geste suivant. `src/sim/territoire-tenu.js` entre, sur le modèle EXACT de
+`voisinage-des-bases.js` du lot VOISINAGE, et `problemesDeLaFondation` comme
+`problemesDuDeplacement` l'appellent. Le message est celui de la fondation, mot
+pour mot.
+⚠⚠ **L'ORDRE DES TROIS REFUS EST VOISINAGE, PUIS TERRITOIRE, PUIS DÉLAI, ET IL
+EST GARDÉ.** La falsification qui le déplace **n'a pas mordu au premier relevé** :
+le montage dégagé ne porte AUCUNE case qui cumule deux refus, par construction.
+Mesuré sur une partie ORDINAIRE, graine 2026 rangée 200 : **432 cases portent
+voisinage ET territoire à la fois**, et `RC T7` s'y ancre désormais.
+⚠⚠ **ET CE QUE LA RÈGLE COÛTE EST MESURÉ, PAS DEVINÉ — C'EST LE CHIFFRE À
+ARBITRER.** Destinations médianes, 20 graines, avant → après : rangée **295 :
+261 → 261** (le départ n'est pas touché d'une case) · 290 : 307 → 270 · 285 :
+218 → 173 · 280 : 124 → 83 · 275 : 44 → 14 · **250 et au-delà : 6 → 0, avec
+20 graines sur 20 à zéro**. La part des situations sans AUCUNE destination passe
+de **1,0 % à 50,0 %**.
+⚠⚠ **LA PORTE DE SORTIE TIENT, 15 FOIS SUR 15, ET ELLE COÛTE PLUS CHER QU'AU LOT
+VOISINAGE.** Raser une base de l'Ouvrage voisine la met dans `casesRasees`, donc
+elle cesse de peindre : le disque se rouvre. Mais il faut **4 à 10 rasages** là
+où il en fallait UN au lot VOISINAGE — la règle porte sur l'INFLUENCE, qui va à
+trois cases, pas sur le 3 × 3. **Ethan tranche** s'il juge la porte trop chère.
+⚠ **ET MÊME UNE BASE DE NIVEAU 50 N'A AUCUNE DESTINATION À LA RANGÉE 250** :
+mesuré, chaque case du disque y porte déjà `voisinage`. Le refus de territoire ne
+retire donc rien de plus dans le haut de la carte — il mord entre les rangées 275
+et 290, exactement là où le joueur peut encore bouger.
+⚠⚠ **L'INVARIANT QUI PRIME SUR TOUT EST INTACT, REJOUÉ DES DEUX CÔTÉS : 0
+DIVERGENCE SUR 5 GRAINES, 72 h, SÉRIALISATION IDENTIQUE À L'OCTET.**
+`tickJeu` × 2 592 000 et `rattraperJeu(2 592 000)` rendent le même état avant le
+lot (1 368 octets) comme après (1 404) — et l'écart de 36 octets EST le champ qui
+entre.
+⚠⚠ **LES DEUX CENTS TÉMOINS DE COMBAT NE BOUGENT PAS, ET `test/temoins-combat.js`
+N'A PAS UNE LIGNE DE CHANGÉE.** Le lot ne touche ni le moteur de combat, ni le
+placement, ni une garnison : il change un PRIX, un DÉLAI et un REFUS.
+⚠⚠ **LE TÉMOIN DE BASES-0 GAGNE UNE DIX-HUITIÈME COUCHE, `DEPLACES_PAR_REGLES_DE_CARTE`
+— SEPT COUPLES SUR 350.** `attaque` et `rapports` aux phases 11, 12 et 13,
+`rapports` seul à la 14 : **les dix premières phases sont identiques AU BIT**.
+⚠⚠ **ET L'ATTRIBUTION EST PARFAITE, MESURÉE RAID PAR RAID : le raid LOINTAIN
+bouge sur 25 graines sur 25, le raid de PROXIMITÉ sur 0 sur 25.** Le premier vise
+la rangée 201, en plein territoire de l'Ouvrage — il renchérit ; le second vise un
+camp du joueur, que la carte peint au joueur des DEUX côtés de la règle. C'est
+la mesure qui dit que le lot ne touche qu'au prix, et rien d'autre.
+⚠ **QUATORZE FALSIFICATIONS, TREIZE CHUTES, ET DEUX ONT DÛ ÊTRE REPRISES APRÈS
+MESURE** — l'ordre des refus et la distance en Tchebychev, ci-dessus, qui ont
+chacune fait écrire une moitié de test. La quatorzième se DÉCLARE : le bornage du
+niveau à `[10, 500]` dixièmes est INERTE aujourd'hui — `ameliorer` plafonne déjà
+et `verifierEtat` refuse au chargement —, il est écrit parce qu'un barème qui
+rendrait une durée négative ne lèverait pas, il déverrouillerait le déplacement.
+⚠ **HUIT TESTS ENTRENT — `RC T1` à `RC T7`, plus un dans `points-attaque.test.js`
+— ET LE COMPTE PASSE DE 1 524 À 1 532.** **Aucune assertion n'a été retirée ni
+assouplie** ; **trois gardes sont RETOURNÉES** — `EUCLIDE` sur l'unique écriture
+de la géométrie, `EUCLIDE T6 bis`, et `BASES-1 T2`, qui prédisait le prix depuis
+l'octogone et le prédit depuis `campDeLaCase`. `VM T8` n'est pas touchée d'un
+caractère, et `VM T4` gagne la moitié qui manquait.
+⚠⚠ **`RC T1` ET `RC T2` ONT ÉTÉ VUS ROUGES SUR L'ARBRE INTACT, ET POUR LA BONNE
+RAISON.** Rejoués dans un `git worktree` sur `main` = `14dd4ac`, avec l'ancien
+corps de `coutDUnRaid` recopié à l'identique : **22 pass / 2 fail**, et le message
+des deux est `12 !== 16` — le nombre exact de la capture d'Ethan.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Le lot ne change aucun
+pixel : il change un prix, un délai et un refus dans le modèle.
+
+**Auparavant, après le lot PAQUETS :**
 `npm test` rend **1524 pass / 0 fail** au sens de la garde de `documentation.test.js`
 — c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1523 pass · 0 fail ·
 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
@@ -8845,7 +8997,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 32 fichiers
+src/sim/                simulation déterministe, sans DOM — 34 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -8873,6 +9025,8 @@ src/sim/                simulation déterministe, sans DOM — 32 fichiers
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
   formation-de-raid.js  la copie de travail de l'armée : ranger, embarquer, débarquer
   voisinage-des-bases.js  ce qu'une base ENCOMBRE : le 3 × 3 qu'aucune autre ne partage
+  prix-du-raid.js       ce qu'un raid coûte : la distance, et ce que la CARTE peint
+  territoire-tenu.js    le refus partagé : une case tenue par l'Ouvrage ne se prend pas
   ⤷ ⚠⚠ `formation-de-raid.js` NE VA JAMAIS DANS L'ÉTAT, ET C'EST TOUT SON OBJET —
     lot FORMATION-ET-GARNISON, 08/09. Il rend une copie profonde de
     `baseCourante(etat).armee`, ALIGNÉE PAR INDICE, plus un `embarqueDans` par

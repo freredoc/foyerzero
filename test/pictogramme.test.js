@@ -400,7 +400,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 134 181 octets, la marge sur la borne T10 est de 1,78 %', () => {
+test('PIC T7 — le livrable pèse 9 134 922 octets, la marge sur la borne T10 est de 1,78 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -521,10 +521,22 @@ test('PIC T7 — le livrable pèse 9 134 181 octets, la marge sur la borne T10 e
   // contre le livrable rebâti sur l'arbre pristine de `598d23a` (`git stash`)
   // dans la même session : **images +0 · feuille +0 · balisage +0 · audio +0**,
   // `data:` à **311 lignes / 306 URI** des deux côtés.
+  //
+  // ⚠⚠ REMESURÉ AU LOT RÈGLES-DE-CARTE, 10/09, ET C'EST ENCORE UN LOT SANS UNE
+  // SEULE IMAGE. **9 134 181 → 9 134 922, soit +741, ENTIÈREMENT DU
+  // JAVASCRIPT** — le prix du raid qui lit la carte, le délai en minutes, le
+  // refus de territoire au déplacement et la durée figée au saut. Mesuré poste
+  // par poste contre le livrable rebâti sur l'arbre pristine de `main` =
+  // `14dd4ac` : **JavaScript +741 · feuille +0 · balisage +0 · images +0 ·
+  // audio +0**, la somme des cinq postes tombant EXACTEMENT sur le total des
+  // deux côtés, et `data:` à **311 lignes / 306 URI** de part et d'autre.
+  //
+  // ⚠ LA MARGE PERD 741 OCTETS ET RESTE À 1,78 % À LA DEUXIÈME DÉCIMALE —
+  // 165 819 puis **165 078**. Le seuil de cent cinquante mille tient encore.
   const BORNE = 9_300_000;           // T10 de `banc.test.js`, relevée au lot SOL-SATELLITE
-  const MESURE = 9_134_181;          // mesuré le 09/09, lot PAQUETS, base `598d23a`
-  const MARGE = BORNE - MESURE;      // 165 819 octets
-  assert.equal(MARGE, 165_819);
+  const MESURE = 9_134_922;          // mesuré le 10/09, lot RÈGLES-DE-CARTE, base `14dd4ac`
+  const MARGE = BORNE - MESURE;      // 165 078 octets
+  assert.equal(MARGE, 165_078);
   assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.78);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des

@@ -32,15 +32,15 @@ import {
   territoireDeLaFenetre, RAYONS, JOUEUR, OUVRAGE,
 } from '../src/sim/territoire.js';
 import {
-  ruineFraiche, ruinesActives, TICKS_DE_RUINE,
+  ruineFraiche, ruinesActives, TICKS_DE_RUINE, caseRasee,
 } from '../src/sim/ruines.js';
 import { poisDeLaFenetre } from '../src/sim/poi.js';
-import { dansLOctogoneDInfluence } from '../src/sim/points-attaque.js';
+import { dansLOctogoneDInfluence, distanceTchebychev } from '../src/sim/points-attaque.js';
 import { direLaDuree } from '../src/sim/reparation.js';
 import { DUREE_TOAST_MS } from '../src/ui/chantier.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
-  palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU,
+  palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU, DEPLACEMENT,
 } from '../src/data/sites.js';
 import { echelleDuCran, geometrieDuCran, NOMS_DU_SOL } from '../src/render/terrain.js';
 
@@ -3213,6 +3213,50 @@ test('CARTE-C T1 bis — et l\'écran peint bien une flèche qui reste dans le c
  * qui poserait « rangée 198, colonne 16 » ne garderait que lui-même, et le
  * dépôt a payé cette faute-là cinq fois.
  */
+/**
+ * Rase juste assez de bases de l'Ouvrage pour qu'UNE destination s'ouvre.
+ *
+ * ⚠⚠ IL A FALLU CE MONTAGE À PARTIR DU LOT RÈGLES-DE-CARTE, 10/09/2026, ET
+ * C'EST LA RÈGLE QUI L'A EXIGÉ. Le déplacement refuse désormais une case TENUE
+ * par l'Ouvrage — point 16 d'Ethan —, et passé la rangée 275 la carte est à eux :
+ * mesuré sur vingt graines et cinq rangées, **ZÉRO destination sur 20/20**.
+ * Les deux tests ci-dessous parlent d'un PANNEAU — ce qu'il annonce quand on vise
+ * une case —, et sans cette ouverture ils mesureraient la densité du peuplement
+ * au lieu de ce qu'ils annoncent.
+ *
+ * ⚠ C'EST LA PORTE DE SORTIE DU JEU, PAS UNE ASTUCE DE TEST. Raser une base de
+ * l'Ouvrage la met dans `casesRasees`, son influence s'éteint, et le territoire
+ * s'ouvre : c'est très exactement ce que le joueur doit faire pour se déplacer,
+ * et le lot l'a mesuré 15 fois sur 15. Le montage joue donc ce que le jeu
+ * demande.
+ *
+ * ⚠ IL RASE LE MOINS POSSIBLE, ET IL REND LE COMPTE. Raser large rendrait la
+ * carte neutre autour de la base, donc effacerait le CONTESTE que `PC T1`
+ * existe pour mesurer. Le compte rendu est asserté par les appelants : s'il
+ * monte, c'est que la carte a changé et il faut le savoir.
+ *
+ * @returns {number} combien de bases ont dû tomber
+ */
+function ouvrirUneDestination(etat, boite = 6) {
+  const p = baseCourante(etat).position;
+  // ⚠ LE RAYON COUVRE LE DISQUE DE DÉPLACEMENT PLUS L'INFLUENCE ENNEMIE : une
+  // base au-delà ne peut tenir aucune case atteignable.
+  const rayon = DEPLACEMENT.porteeMaxCases + GEOGRAPHIE.rayonInfluenceEnnemie + 1;
+  const voisines = basesDeLaFenetre(etat.graine, {
+    premiereRangee: p.rangee - rayon, derniereRangee: p.rangee + rayon,
+    premiereColonne: p.colonne - rayon, derniereColonne: p.colonne + rayon,
+  }).sort((a, b) => distanceTchebychev(a, p) - distanceTchebychev(b, p));
+  const dedans = () => casesAtteignables(etat).filter(
+    (k) => Math.abs(k.rangee - p.rangee) <= boite && Math.abs(k.colonne - p.colonne) <= boite,
+  ).length;
+  let n = 0;
+  while (dedans() === 0 && n < voisines.length) {
+    etat.basesRasees.push(caseRasee(voisines[n].rangee, voisines[n].colonne));
+    n += 1;
+  }
+  return n;
+}
+
 function armerEtViser(etat, ecart = 0) {
   const { doc, appels, dpr, parId } = fauxDocumentMonde();
   const deplacements = [];
@@ -3376,6 +3420,11 @@ test('DÉ T10 — le compte annoncé est celui de la case VISÉE, pas de la posi
   for (let graine = 1; graine <= 300 && montage === null; graine += 1) {
     const etat = partiePeuplee(graine, false);
     baseCourante(etat).position.rangee = 200;
+    // ⚠ MÊME OUVERTURE QU'À `PC T1`, ET POUR LA MÊME RAISON — lot
+    // RÈGLES-DE-CARTE : sans elle, `casesAtteignables` rend la liste VIDE à la
+    // rangée 200 et ce test chercherait un montage qui n'existe plus sur aucune
+    // des trois cents graines.
+    ouvrirUneDestination(etat);
     const ici = nombreDAttaquantes(etat, baseCourante(etat).position);
     const atteignables = casesAtteignables(etat)
       .filter((k) => Math.abs(k.rangee - baseCourante(etat).position.rangee) <= 6
@@ -3476,9 +3525,18 @@ test('PC T1 — le bilan annoncé est celui que la carte peint', () => {
   // +3**, et sa voisine 19/17/+2 — elle discrimine. C'est aussi le seul endroit
   // où ce que le panneau annonce APPREND quelque chose au joueur, un solde
   // plutôt qu'un zéro mécanique.
+  //
+  // ⚠⚠ ET DEPUIS LE LOT RÈGLES-DE-CARTE, IL FAUT OUVRIR LA PORTE POUR ENTRER.
+  // Le déplacement refuse une case tenue par l'Ouvrage, et à la rangée 250 il
+  // les tient TOUTES : mesuré, zéro destination, même avec une base de niveau
+  // 50. Une SEULE base rasée suffit ici — la plus proche — et elle en ouvre
+  // deux : le contesté de la carte, que ce test existe pour mesurer, est intact
+  // à un rasage près. Le compte est asserté pour qu'un élargissement se voie.
   const etat = creerEtat(20260906);
   baseCourante(etat).position = { rangee: 250, colonne: 16 };
   for (const batiment of baseCourante(etat).disposition) batiment.niveau = 20;
+  assert.equal(ouvrirUneDestination(etat), 1,
+    'la carte a changé : il faut désormais raser plus d\'une base pour bouger');
   const avant = serialiser(etat, 0);
   const m = armerEtViser(etat);
 

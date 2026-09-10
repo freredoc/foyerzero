@@ -14,8 +14,12 @@ import { dirname, join } from 'node:path';
 import {
   distanceCarreeCases, distanceTchebychev, estAPorteeDAttaque,
   casesArrondiesAuSuperieur, RAYON_ATTAQUE_CARRE, dansLOctogoneDInfluence,
-  estEnTerritoireAllie,
 } from '../src/sim/points-attaque.js';
+// ⚠ `estEnTerritoireAllie` A ÉTÉ RETIRÉE AU LOT RÈGLES-DE-CARTE, 10/09/2026 : le
+// prix lit la CARTE et non l'octogone, donc l'union des octogones du joueur n'a
+// plus de lecteur — et son nom mentait. Les assertions qui passaient par elle
+// sont réancrées sur `campDeLaCase`, qui EST le chemin de production désormais.
+import { campDeLaCase, JOUEUR } from '../src/sim/territoire.js';
 import {
   horsDeLaGarde, hachageDeCase, estBaseOuvrage, VOISINES_EXCLUES,
 } from '../src/sim/peuplement.js';
@@ -380,13 +384,20 @@ test('EUCLIDE T6 bis — la zone d\'influence LÈVE aussi sur une case non enti�
   //
   // ⚠ FALSIFIÉ : retirer les deux lignes de garde de `dansLOctogoneDInfluence`
   // ne faisait tomber AUCUN test avant celui-ci.
-  const bases = [{ position: { rangee: 100, colonne: 16 } }];
-  assert.equal(estEnTerritoireAllie({ rangee: 100, colonne: 16 }, bases), true);
-  for (const cible of [
-    { rangee: 100.5, colonne: 16 },
-    { rangee: 100, colonne: 16.5 },
-  ]) {
-    assert.throws(() => estEnTerritoireAllie(cible, bases), /entiers attendus/);
+  //
+  // ⚠⚠ ET LE CHEMIN QUI Y MÈNE A CHANGÉ, DONC LE TEST AUSSI — lot
+  // RÈGLES-DE-CARTE, 10/09/2026. Il passait par `estEnTerritoireAllie`, qui est
+  // partie avec son dernier lecteur ; il passe désormais par `campDeLaCase`, qui
+  // EST le chemin de production — le prix du raid, la fondation et le
+  // déplacement l'interrogent tous les trois. **C'est un RESSERREMENT** : le
+  // test exerçait un enrobage, il exerce maintenant la fonction que le jeu
+  // appelle pour de bon.
+  const etat = creerEtat(7);
+  const ici = etat.bases[0].position;
+  assert.equal(campDeLaCase(etat, ici.rangee, ici.colonne), JOUEUR,
+    'montage sans mordant : la case de la base n\'est pas au joueur');
+  for (const [r, c] of [[ici.rangee + 0.5, ici.colonne], [ici.rangee, ici.colonne + 0.5]]) {
+    assert.throws(() => campDeLaCase(etat, r, c), /entiers attendus/);
   }
   assert.throws(() => dansLOctogoneDInfluence(1.5, 0, 2), /entiers attendus/);
   assert.throws(() => dansLOctogoneDInfluence(0, Number.NaN, 2), /entiers attendus/);
@@ -581,10 +592,25 @@ test('EUCLIDE — les zones d\'influence sont un OCTOGONE, et une seule écritur
   // maintenant qu'aucun des deux N'ÉCRIVE la forme — les deux doivent APPELER la
   // même fonction. Une forme écrite deux fois est la divergence que CLAUDE.md
   // nomme depuis EUCLIDE, et deux appels ne peuvent plus diverger.
+  //
+  // ⚠⚠ QUATRIÈME RETOURNEMENT, ET IL RETIRE UN LECTEUR AU LIEU D'EN AJOUTER UN —
+  // lot RÈGLES-DE-CARTE, 10/09/2026, point 8 d'Ethan. Le BARÈME ne demande plus
+  // la zone du tout : le prix d'un raid lit la PROPRIÉTÉ — `campDeLaCase`, avec
+  // ses sommes de force et le plancher — et non plus l'octogone. L'accord à
+  // tenir a donc disparu par le haut, et ce que ce test garde change de nature :
+  // il exigeait que les DEUX appellent la même fonction, il exige maintenant que
+  // le prix ne la nomme PLUS et que la carte la nomme SEULE. **C'est plus
+  // strict, pas plus lâche** : une union d'octogones qui reviendrait facturer le
+  // territoire le fait tomber, et la forme reste interdite d'écriture double.
   const barème = decommentee('src/sim/points-attaque.js');
   const carte = decommentee('src/sim/territoire.js');
-  assert.match(barème, /dansLOctogoneDInfluence\(/,
-    'le barème ne demande pas la zone à la fonction commune');
+  const prix = decommentee('src/sim/prix-du-raid.js');
+  assert.doesNotMatch(prix, /dansLOctogoneDInfluence|distanceOctogonaleDInfluence/,
+    'le prix d\'un raid est revenu lire l\'octogone au lieu de la carte');
+  assert.match(prix, /campDeLaCase\(/,
+    'le prix d\'un raid ne demande plus le camp à la carte');
+  assert.doesNotMatch(barème, /estEnTerritoireAllie/,
+    'l\'union des octogones du joueur est revenue dans le barème');
   // ⚠⚠ TROISIÈME RETOURNEMENT, ET LE TEST SE RESSERRE ENCORE. Au lot
   // TERRITOIRE-FORCE, la boucle de peinture a besoin de la DISTANCE et plus
   // seulement de l'appartenance : le partage du chevauchement se fait sur
@@ -607,6 +633,10 @@ test('EUCLIDE — les zones d\'influence sont un OCTOGONE, et une seule écritur
     'le barème refait le calcul de zone à la main');
   assert.doesNotMatch(barème, /distanceTchebychev\(base\.position, cible\)/,
     'le territoire allié se mesure encore en Tchebychev dans le barème');
+  // ⚠ ET LE PRIX NON PLUS NE LE REFAIT PAS DANS SON COIN — même interdiction,
+  // sur le module qui a hérité de la question.
+  assert.doesNotMatch(prix, /base\.position\.rangee - cible\.rangee/,
+    'le prix refait le calcul de zone à la main');
 
   // ⚠⚠ LES DEUX FIGURES SE COMPTENT, ELLES NE SE LISENT PAS. Ethan a dicté un
   // 5 × 5 dont chaque coin perd UNE case et un 7 × 7 dont chaque coin en perd
@@ -654,10 +684,12 @@ test('EUCLIDE — les zones d\'influence sont un OCTOGONE, et une seule écritur
   assert.ok(5 > GEOGRAPHIE.rayonInfluenceJoueur ** 2,
     'le montage ne mesure rien : (2, 1) était déjà dans le disque');
 
-  // ⚠ ET LE BARÈME, LUI, COMPTE TOUJOURS EN CASES DE GRILLE. C'est l'autre
+  // ⚠ ET LE PRIX, LUI, COMPTE TOUJOURS EN CASES DE GRILLE. C'est l'autre
   // lecture d'EUCLIDE, celle-là INTACTE : la PORTÉE est un disque, le PRIX se
   // compte en cases de grille, et un raid en diagonale ne renchérit pas pour la
-  // seule raison qu'il est en diagonale.
-  assert.match(barème, /distanceTchebychev\(baseAttaquante\.position, cible\)/,
-    'le barème du raid ne compte plus la distance en cases de grille');
+  // seule raison qu'il est en diagonale. ⚠ Elle change simplement de FICHIER au
+  // lot RÈGLES-DE-CARTE : la ligne vit dans `sim/prix-du-raid.js`, avec le reste
+  // de la question posée au monde.
+  assert.match(prix, /distanceTchebychev\(baseAttaquante\.position, cible\)/,
+    'le prix d\'un raid ne compte plus la distance en cases de grille');
 });

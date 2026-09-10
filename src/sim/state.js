@@ -44,6 +44,11 @@ import {
 import {
   GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT, APRES_RAID,
 } from '../data/sites.js';
+// ⚠ LE BARÈME DU DÉLAI DE DÉPLACEMENT, POUR LA SEULE MIGRATION v30 → v31.
+// `deplacement.js` n'importe PAS ce module-ci — il passe par `base-courante.js`
+// pour ça —, et `state.js` en dépendait déjà par `raid-ouvrage.js` : l'arête
+// existe, elle n'est pas neuve, et elle ne referme aucune boucle.
+import { delaiPourLaBase } from './deplacement.js';
 import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
 import {
@@ -66,7 +71,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 30;
+export const SAVE_VERSION = 31;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -82,11 +87,18 @@ export const SAVE_VERSION = 30;
  * `reserveReparationBatiments`, la quatrième réserve de temps. Il en était onze
  * jusque-là, et le compte est écrit ici parce qu'il se relit — pas parce qu'un
  * test le garde.
+ *
+ * ⚠⚠ LE TREIZIÈME EST ENTRÉ AU LOT RÈGLES-DE-CARTE, 10/09/2026 :
+ * `dernierDeplacementDelaiTicks`, la DURÉE contractée au dernier saut. Elle ne
+ * se recalcule pas — depuis que le délai dépend de la distance PARCOURUE, rien
+ * dans l'état ne dirait quelle distance a été parcourue, et un saut de dix cases
+ * se déverrouillerait au tarif d'un saut d'une case.
  */
 export const CHAMPS_DE_BASE = Object.freeze([
   'position', 'fondation', 'disposition', 'garnison', 'armee', 'economie',
   'champs', 'obstacles', 'satellites', 'reserveReparation',
   'reserveReparationBatiments', 'dernierDeplacementTick',
+  'dernierDeplacementDelaiTicks',
 ]);
 
 /**
@@ -117,6 +129,7 @@ export const CHAMPS_DE_BASE = Object.freeze([
  * @property {Record<string, number>} reserveReparation Trois stocks de CHÂSSIS, en TICKS.
  * @property {number} reserveReparationBatiments Le quatrième stock, celui des BÂTIMENTS.
  * @property {number|null} dernierDeplacementTick `null` = jamais déplacée.
+ * @property {number|null} dernierDeplacementDelaiTicks Durée CONTRACTÉE au dernier saut.
  */
 
 /**
@@ -267,6 +280,21 @@ function creerBase(position, disposition) {
     // y démarre — et cesserait de l'être le jour où une partie commencerait
     // ailleurs. `ticksAvantProchainDeplacement` distingue les deux de face.
     dernierDeplacementTick: null,
+    // ⚠⚠ ET LA DURÉE QU'IL A CONTRACTÉE — lot RÈGLES-DE-CARTE, 10/09. Les deux
+    // s'écrivent ENSEMBLE dans `deplacerLaBase`, et se lisent ensemble dans
+    // `ticksAvantProchainDeplacement`. Depuis que le barème du délai dépend de la
+    // DISTANCE parcourue, l'horodatage seul ne suffit plus : rien dans l'état ne
+    // dirait de combien la base a sauté, donc le recalcul rendrait le délai le
+    // plus court du barème, à tous les coups et en silence.
+    //
+    // ⚠ UNE DURÉE FIGÉE, PAS UN COMPTE À REBOURS : elle ne décroît pas, on la
+    // soustrait à l'écoulé. C'est ce qui la rend insensible au chemin par lequel
+    // l'horloge y est arrivée — donc au rattrapage hors ligne.
+    //
+    // ⚠ `null` COMME SON HORODATAGE, ET POUR LA MÊME RAISON : une base neuve n'a
+    // contracté aucun délai. Zéro se lirait « délai nul déjà purgé », ce qui est
+    // vrai par accident et cesserait de l'être.
+    dernierDeplacementDelaiTicks: null,
   };
 }
 
@@ -533,15 +561,16 @@ function verifierEtat(etat) {
   // `problemesDesReserves` et `problemesDeLaReserveDesBatiments`, qui rendent un
   // message qui parle de RÉSERVE — les exiger ici les ferait échouer d'abord,
   // sur « champ absent », et le refus cesserait de dire ce qui manque vraiment.
-  // `dernierDeplacementTick`, lui, n'a jamais été vérifié : une base qui ne
-  // l'a pas ne s'est jamais déplacée, ce que `ticksAvantProchainDeplacement`
-  // lit déjà comme `null`.
+  // `dernierDeplacementTick` et `dernierDeplacementDelaiTicks`, eux, n'ont
+  // jamais été vérifiés : une base qui ne les a pas ne s'est jamais déplacée, ce
+  // que `ticksAvantProchainDeplacement` lit déjà comme `null` des deux côtés.
   //
   // ⚠ ILS SE RETIRENT DE LA LISTE COMMUNE, ils ne se recopient pas. Une seconde
   // liste écrite à la main cesserait d'être juste au premier champ qu'une base
   // gagnerait, et la divergence ne se verrait qu'au chargement.
   const HORS_EXIGENCE = new Set([
     'reserveReparation', 'reserveReparationBatiments', 'dernierDeplacementTick',
+    'dernierDeplacementDelaiTicks',
   ]);
   for (const base of etat.bases) {
     for (const champ of CHAMPS_DE_BASE) {
@@ -3187,6 +3216,55 @@ const MIGRATIONS = {
   29: (s) => {
     s.version = 30;
     s.sitesEntames = {};
+  },
+
+  /**
+   * v30 → v31 — lot RÈGLES-DE-CARTE, 10/09/2026 : la DURÉE contractée au
+   * dernier saut entre dans la base.
+   *
+   * ⚠⚠ LE DÉLAI NE SE RECALCULE PLUS, DONC IL DOIT ÊTRE ÉCRIT. Point 15
+   * d'Ethan : le délai dépend désormais du niveau ET de la distance parcourue.
+   * `ticksAvantProchainDeplacement` le recalculait à chaque lecture ; depuis
+   * qu'il dépend de la distance, rien dans l'état ne dirait de combien la base a
+   * sauté, et un saut de dix cases se déverrouillerait au tarif d'un saut d'une
+   * case. Le champ est donc écrit au moment du geste, à côté de l'horodatage.
+   *
+   * ⚠⚠ ET LA MIGRATION POSE LA VALEUR LA PLUS COURTE POSSIBLE : celle du niveau
+   * SEUL, distance 1. Une v30 ne dit pas de combien sa base a sauté — le champ
+   * n'existait pas —, et lui inventer une distance longue enfermerait le joueur
+   * derrière une attente qu'il n'a jamais contractée. Une migration ne punit
+   * pas ; c'est le même raisonnement que la v16 → v17, qui créditait ZÉRO plutôt
+   * que douze heures de réserve.
+   *
+   * ⚠⚠ ET ELLE NE PEUT QUE RACCOURCIR L'ATTENTE, JAMAIS L'ALLONGER — mesuré, pas
+   * supposé. L'ancien barème rendait de 1 h au niveau 1 à 24 h au niveau 50 ; le
+   * neuf rend 1 h 01 à 1 h 50 sur la même plage à distance 1. Les deux se
+   * croisent une seule fois, tout en bas — un niveau 1 attendait 60 min et en
+   * attend 61 —, donc une v30 chargée juste après un saut peut voir son attente
+   * s'allonger d'une minute au plus, et raccourcir de vingt-deux heures au plus.
+   * `RC T6` mesure les deux bouts.
+   *
+   * ⚠ ET ELLE NE POSE RIEN SUR UNE BASE QUI NE S'EST JAMAIS DÉPLACÉE. « Absent »
+   * vaut `null` vaut « aucune attente » : lui écrire une durée ferait porter à
+   * une base neuve un délai qu'elle n'a pas contracté, et
+   * `ticksAvantProchainDeplacement` sortirait de toute façon sur l'horodatage
+   * `null`. Les deux champs vont ensemble, dans les deux sens.
+   *
+   * ⚠ LE BARÈME S'APPELLE, IL NE SE RECOPIE PAS — `delaiPourLaBase` de
+   * `sim/deplacement.js`, la même fonction que le geste. Recopier la formule ici
+   * la ferait diverger au premier réglage d'Ethan, et personne ne verrait
+   * pourquoi une vieille partie attend autrement qu'une neuve.
+   *
+   * @param {object} s
+   */
+  30: (s) => {
+    s.version = 31;
+    for (const base of s.bases ?? []) {
+      base.dernierDeplacementDelaiTicks = (base.dernierDeplacementTick === null
+        || base.dernierDeplacementTick === undefined)
+        ? null
+        : delaiPourLaBase(base, 1);
+    }
   },
 };
 

@@ -11,13 +11,27 @@ import assert from 'node:assert/strict';
 import {
   DIVISEUR_REGENERATION, plafondDuNiveau, plafondVise, creerPointsAttaque,
   releverPlafond, regenerer, avancerPointsAttaque, distanceTchebychev,
-  estEnTerritoireAllie, coutDuRaid, coutDUnRaid, manquePourPayer, payer,
+  dansLOctogoneDInfluence, coutDuRaid, manquePourPayer, payer,
   basesDuJoueur,
 } from '../src/sim/points-attaque.js';
+// ⚠⚠ `coutDUnRaid` A DÉMÉNAGÉ ET `estEnTerritoireAllie` A ÉTÉ RETIRÉE — lot
+// RÈGLES-DE-CARTE, 10/09/2026. Le prix lit désormais la CARTE, donc
+// `campDeLaCase` ; `points-attaque.js` ne peut pas la lire sans refermer un
+// cycle d'import, d'où le module à part. Et l'union des octogones du joueur
+// n'était plus « le territoire allié » : son nom mentait, elle est partie avec
+// son dernier lecteur. Les assertions qui gardaient la FORME sont réancrées sur
+// `dansLOctogoneDInfluence`, qui, elle, garde son lecteur de production.
+import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
 import { creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION } from '../src/sim/state.js';
 import { POINTS_ATTAQUE, GEOGRAPHIE } from '../src/data/sites.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { campDeLaCase, JOUEUR, NEUTRE } from '../src/sim/territoire.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Une armée dont la moyenne vaut exactement le niveau demandé, en dixièmes. */
 function armeeAuNiveau(...niveaux) {
@@ -181,28 +195,64 @@ test('barème — 10 fixes, +1 par case chez soi, +3 ailleurs', () => {
 });
 
 test('territoire — le rayon est celui de GEOGRAPHIE, et il vaut 2', () => {
-  const bases = [base(100, 10)];
   assert.equal(GEOGRAPHIE.rayonInfluenceJoueur, 2, 'arbitré le 29/08 : « on garde deux »');
+  const rayon = GEOGRAPHIE.rayonInfluenceJoueur;
 
-  // ⚠⚠ LA DIAGONALE À 2 N'EST PLUS CHEZ SOI — lot BASES-1, 02/09/2026, ET LA
-  // VALEUR ATTENDUE CHANGE POUR UNE RAISON ÉCRITE. La zone d'influence est passée
-  // du carré au DISQUE, des deux côtés à la fois : ici pour le barème du raid, et
-  // dans `peindre` de `sim/territoire.js` pour ce que la carte montre. (2, 2) est
-  // à 8 en distance au carré, au-delà de 4 : elle est dehors.
-  assert.ok(!estEnTerritoireAllie({ rangee: 102, colonne: 12 }, bases),
+  // ⚠⚠ CE TEST MESURAIT LA FORME À TRAVERS `estEnTerritoireAllie`, ET IL LA
+  // MESURE DÉSORMAIS EN FACE — lot RÈGLES-DE-CARTE, 10/09/2026. La fonction est
+  // partie avec son dernier lecteur ; la GÉOMÉTRIE, elle, est intacte et garde
+  // le sien, la boucle `peindre` de `sim/territoire.js`. Aucune assertion n'est
+  // perdue : ce sont les mêmes quatre cases, contre la même zone, sans le
+  // détour d'un enrobage. ⚠ Les écarts se prennent BASE MOINS CIBLE, dans
+  // l'ordre où `estEnTerritoireAllie` les passait — la distance est symétrique,
+  // mais garder l'ordre garde le test comparable à ce qu'il était.
+  const ecart = (r, c) => [100 - r, 10 - c];
+
+  // ⚠⚠ LA DIAGONALE À 2 N'EST PAS CHEZ SOI — lot BASES-1, 02/09/2026, puis
+  // l'OCTOGONE du 03/09 qui rogne les coins autrement. (2, 2) est à distance
+  // d'octogone `max(2, 2, 2 + 2 − 1) = 3`, au-delà de 2 : elle est dehors.
+  assert.ok(!dansLOctogoneDInfluence(...ecart(102, 12), rayon),
     'la diagonale à 2 est redevenue chez soi : la zone est repassée au carré');
   // Les cases droites, elles, ne bougent pas : c'est ce qui distingue les deux
   // métriques, et c'est mesuré des deux côtés.
-  assert.ok(estEnTerritoireAllie({ rangee: 102, colonne: 10 }, bases), 'la case droite à 2 est chez soi');
-  assert.ok(estEnTerritoireAllie({ rangee: 101, colonne: 11 }, bases), 'la diagonale à 1 est chez soi');
-  assert.ok(!estEnTerritoireAllie({ rangee: 103, colonne: 10 }, bases), 'à 3 cases on n\'y est plus');
+  assert.ok(dansLOctogoneDInfluence(...ecart(102, 10), rayon), 'la case droite à 2 est chez soi');
+  assert.ok(dansLOctogoneDInfluence(...ecart(101, 11), rayon), 'la diagonale à 1 est chez soi');
+  assert.ok(!dansLOctogoneDInfluence(...ecart(103, 10), rayon), 'à 3 cases on n\'y est plus');
+});
 
-  // ⚠ CONSÉQUENCE MESURÉE, et elle contredit l'exemple oral d'Ethan : un camp à
-  // trois cases coûte 19, pas 13, parce qu'à rayon 2 le tarif à +1 ne couvre
-  // que les cases à 1 et 2. Le tarif bon marché ne va donc jamais au-delà de 12.
-  const etat = { bases: [{ position: { rangee: 100, colonne: 10 }, armee: [] }], baseCourante: 0 };
-  assert.equal(coutDUnRaid(etat, base(100, 10), { rangee: 103, colonne: 10 }), 19);
-  assert.equal(coutDUnRaid(etat, base(100, 10), { rangee: 102, colonne: 10 }), 12);
+test('territoire — le prix se paie sur la CARTE, plus sur l\'octogone', () => {
+  // ⚠⚠ CE BLOC A CHANGÉ DE RÉFÉRENCE, ET SES DEUX NOMBRES AVEC — lot
+  // RÈGLES-DE-CARTE, 10/09/2026, point 8 d'Ethan. Il mesurait « un camp à trois
+  // cases coûte 19, à deux cases 12 », le second au tarif de chez soi parce que
+  // la cible tombait dans l'octogone du joueur. Sur une VRAIE carte, cette
+  // cible-là est une base de l'Ouvrage, donc la carte la peint en violet — par
+  // le plancher, « le territoire où la base se trouve ne change pas » — et le
+  // tarif d'ailleurs s'applique : 16, pas 12. C'est la capture d'Ethan, au point.
+  //
+  // ⚠ ET LE MONTAGE PASSE PAR `creerEtat`, PLUS PAR UN OBJET FORGÉ À LA MAIN.
+  // `campDeLaCase` interroge la GRAINE — bases de l'Ouvrage, ruines, horloge —,
+  // donc un `{ bases, baseCourante }` nu ne peut pas lui répondre. C'est le prix
+  // à payer pour que le prix lise la carte, et c'est le bon sens de l'échange :
+  // un montage qui ne connaît pas la carte n'a pas à décider d'un tarif.
+  const etat = creerEtat(7);
+  const laBase = baseCourante(etat);
+  const ici = laBase.position;
+
+  // Une case NEUTRE au départ — la garde du peuplement écarte l'Ouvrage de
+  // quinze cases — se paie au tarif d'ailleurs, comme une case ennemie : le
+  // barème n'a que deux colonnes, et son second nom dit que le neutre y est.
+  const loin = { rangee: ici.rangee - 3, colonne: ici.colonne };
+  assert.equal(campDeLaCase(etat, loin.rangee, loin.colonne), NEUTRE,
+    'montage sans mordant : la case attendue neutre ne l\'est pas');
+  assert.equal(coutDUnRaid(etat, laBase, loin), 19);
+
+  // Et la case de la base elle-même est au JOUEUR — plancher —, donc au tarif
+  // de chez soi. Elle n'est pas raidable, mais elle prouve que le tarif allié
+  // existe encore et qu'il se lit sur la carte.
+  const chezSoi = { rangee: ici.rangee - 2, colonne: ici.colonne };
+  assert.equal(campDeLaCase(etat, chezSoi.rangee, chezSoi.colonne), JOUEUR,
+    'la case à deux cases de la base n\'est pas peinte au joueur');
+  assert.equal(coutDUnRaid(etat, laBase, chezSoi), 12);
 });
 
 test('territoire — c\'est l\'UNION des zones, pas celle de la base qui attaque', () => {
@@ -216,10 +266,21 @@ test('territoire — c\'est l\'UNION des zones, pas celle de la base qui attaque
   assert.equal(distanceTchebychev(attaquante.position, cible), 6);
   assert.equal(distanceTchebychev(seconde.position, cible), 2);
 
-  assert.ok(!estEnTerritoireAllie(cible, [attaquante]), 'montage sans mordant');
-  assert.ok(estEnTerritoireAllie(cible, [attaquante, seconde]));
-  assert.equal(coutDuRaid(6, estEnTerritoireAllie(cible, [attaquante, seconde])), 16);
-  assert.equal(coutDuRaid(6, estEnTerritoireAllie(cible, [attaquante])), 28);
+  // ⚠⚠ CE QUE CE TEST MESURAIT A CHANGÉ DE PORTEUR, ET IL FALLAIT LE DIRE —
+  // lot RÈGLES-DE-CARTE, 10/09/2026. « L'union des zones » était une propriété
+  // d'`estEnTerritoireAllie`, qui bouclait sur toutes les bases ; elle est
+  // désormais une propriété de `campDeLaCase`, qui SOMME les forces de toutes
+  // les bases du joueur — `forcesDuJoueur` les parcourt toutes. L'union n'a donc
+  // pas disparu : elle est devenue une somme, ce qui est plus fort qu'un `some`.
+  // Ce qui reste ici est la GÉOMÉTRIE de la zone, mesurée sur les deux bases.
+  const dans = (b) => dansLOctogoneDInfluence(
+    b.position.rangee - cible.rangee, b.position.colonne - cible.colonne,
+    GEOGRAPHIE.rayonInfluenceJoueur,
+  );
+  assert.ok(!dans(attaquante), 'montage sans mordant');
+  assert.ok(dans(seconde), 'la seconde base ne couvre pas la cible : le montage ne mesure rien');
+  assert.equal(coutDuRaid(6, dans(attaquante) || dans(seconde)), 16);
+  assert.equal(coutDuRaid(6, dans(attaquante)), 28);
 });
 
 test('territoire — le singulier d\'aujourd\'hui tient en UNE fonction', () => {
@@ -300,4 +361,44 @@ test('migration — v9 → v10 donne le plein, et le plafond de l\'armée sauveg
   // Une v9 sans armée retombe sur le plafond de base, plein lui aussi.
   const nu = migrer({ version: 9, armee: [] });
   assert.deepEqual(nu.attaque, { points: 100, plafond: 100, residu: 0 });
+});
+
+// ---------------------------------------------------------------------------
+// RC T3 — aucun cycle d'import
+// ---------------------------------------------------------------------------
+
+test('RC T3 — `prix-du-raid` se charge seul, et aucun cycle ne se referme', async () => {
+  // ⚠⚠ SOUS ESM, UN CYCLE NE LÈVE PAS TOUJOURS : IL REND UN `undefined`
+  // SILENCIEUX. `territoire.js` importe `distanceOctogonaleDInfluence` d'ici ;
+  // faire lire `campDeLaCase` à `points-attaque.js` aurait refermé la boucle, et
+  // le premier appel aurait rendu « campDeLaCase n'est pas une fonction » — ou
+  // pire, rien du tout selon l'ordre d'évaluation des modules. C'est pour ça que
+  // ce test APPELLE et compare, au lieu de se contenter de l'import.
+  const { coutDUnRaid: prix } = await import('../src/sim/prix-du-raid.js');
+  assert.equal(typeof prix, 'function');
+  const etat = creerEtat(7);
+  const laBase = baseCourante(etat);
+  const cible = { rangee: laBase.position.rangee - 4, colonne: laBase.position.colonne };
+  const rendu = prix(etat, laBase, cible);
+  assert.ok(Number.isInteger(rendu) && rendu > 0, `le prix rendu n'est pas un nombre : ${rendu}`);
+  assert.equal(rendu, coutDuRaid(4, campDeLaCase(etat, cible.rangee, cible.colonne) === JOUEUR));
+
+  // ⚠ ET LA BOUCLE EST FERMÉE PAR LA SOURCE AUSSI : ce que `territoire.js`
+  // importe ne doit jamais importer `territoire.js`. Une seule des deux moitiés
+  // laisserait passer un cycle qui ne se manifeste qu'à l'exécution, ou un cycle
+  // écrit qui ne se manifeste pas encore.
+  const lire = (f) => readFileSync(join(RACINE, 'src/sim', f), 'utf8');
+  const importesPar = (src) => [...src.matchAll(/from '\.\/([a-z-]+\.js)'/g)].map((m) => m[1]);
+  for (const module of importesPar(lire('territoire.js'))) {
+    assert.ok(
+      !importesPar(lire(module)).includes('territoire.js'),
+      `cycle d'import : territoire.js ↔ ${module}`,
+    );
+  }
+  // ⚠ ET `prix-du-raid.js` N'EST IMPORTÉ PAR AUCUN DES DEUX, sans quoi le cycle
+  // se refermerait par lui.
+  for (const f of ['territoire.js', 'points-attaque.js']) {
+    assert.ok(!importesPar(lire(f)).includes('prix-du-raid.js'),
+      `${f} importe prix-du-raid.js : le cycle se referme par le module qui l'évitait`);
+  }
 });

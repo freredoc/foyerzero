@@ -20,7 +20,8 @@
 import { FONDATION } from '../data/sites.js';
 import { estSurLaCarte } from './carte.js';
 import { distanceCarreeCases } from './points-attaque.js';
-import { campDeLaCase, OUVRAGE, JOUEUR } from './territoire.js';
+import { JOUEUR } from './territoire.js';
+import { problemesDuTerritoireTenu } from './territoire-tenu.js';
 import { poiDeLaCase } from './poi.js';
 import { siteDeLaCase, butinSiToutTombe } from './site-de-la-case.js';
 import { problemesDuVoisinageDesBases } from './voisinage-des-bases.js';
@@ -190,12 +191,13 @@ export function problemesDeLaFondation(etat, cible) {
     });
   }
 
-  if (campDeLaCase(etat, cible.rangee, cible.colonne) === OUVRAGE) {
-    problemes.push({
-      code: 'territoire-ennemi',
-      message: 'Cette case est tenue par l\'Ouvrage.',
-    });
-  }
+  // ⚠⚠ LA MÊME RÈGLE QU'AU DÉPLACEMENT, ET LA MÊME ÉCRITURE — lot
+  // RÈGLES-DE-CARTE, 10/09/2026. Le bloc vivait ici en clair ; il est extrait
+  // dans `sim/territoire-tenu.js` et les DEUX gestes l'appellent. Sans cela, on
+  // fondait loin puis on sautait dans le violet au geste suivant, et le
+  // contournement était à un toucher — c'est le trou que VOISINAGE-ET-MENACE a
+  // fermé deux jours plus tôt pour la règle d'à côté.
+  for (const p of problemesDuTerritoireTenu(etat, cible)) problemes.push(p);
   return problemes;
 }
 
