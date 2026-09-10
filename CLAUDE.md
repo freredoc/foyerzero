@@ -251,6 +251,49 @@ donc le solde est +7 − 1 = +6. **Aucune assertion n'a été retirée ni assoup
 `AR T3` (motif borné, plus un appât), `PIC T6` et `PIC T7` (réancrés),
 `DÉPLACEMENT T7` et `RC T4` (barème retourné, les deux règles mortes falsifiées
 de face), et trois montages remontés au-dessus du plancher.
+⚠⚠ **ET `main` A ÉTÉ FUSIONNÉ ROUGE, À `ece1e39`, AVANT QUE LE CORRECTIF NE
+SOIT PRIS.** La PR #128 a été fusionnée le 10/09 à 12 h 06 UTC sur `ece1e39`,
+quand le correctif était poussé depuis huit minutes sous `487e21b` : le
+commit de fusion `2ef0c65` a pour parents `d68c4d1` et `ece1e39`, et **pas**
+`487e21b`. `main` porte donc l'appel à `python3` et **son job `web` échoue**.
+Une PR de suite le referme — la branche est REPARTIE de `origin/main` et le
+correctif y est reporté, une PR fusionnée ne se rouvrant pas.
+⚠⚠ **LA CI EST TOMBÉE SUR CE LOT, ET LA CAUSE ÉTAIT ÉCRITE DANS CE FICHIER
+DEPUIS LE MATIN MÊME.** Le premier jet de `test/emprises-et-delai.test.js` lisait
+la table des paliers en APPELANT l'outil — `python3 -c "import batiments_v2 …"`,
+**au chargement du module** —, plus quatre appels dans `ED T2` et `ED T3`. Il
+passait ici, où Pillow, numpy et scipy sont installés POUR CE LOT ; il a levé en
+CI, où `npm ci` n'installe qu'esbuild. ⚠⚠ **ET LE COMPTE LE DIT AU TEST PRÈS,
+AVANT MÊME DE LIRE UN JOURNAL : 1 556 − 7 + 1 = 1 550**, ce que la CI a rendu —
+un fichier qui ne se CHARGE pas ne compte aucun de ses tests et vaut UN échec.
+⚠ Le téléchargement des journaux est refusé par le proxy de sortie (403 sur
+`productionresultssa4.blob` comme sur `results-receiver.actions`) : c'est
+l'arithmétique qui a nommé le fautif, et une reproduction sous un `python3`
+factice qui l'a confirmé.
+⚠⚠ **ET LE §0 D'ART-90 LE DISAIT EN TOUTES LETTRES, ÉCRIT LE MATIN MÊME** :
+« `AR T4` ET `AR T5` DU BRIEF NE SONT PAS DES TESTS […] **la CI n'a pas de
+Python**, et §3 en fait un changement d'architecture. » C'est le §0.6 pris par
+l'autre bout — la réponse était dans le dépôt, et ce lot ne l'a pas cherchée.
+⚠⚠ **LA RÈGLE EST DONC REJOUÉE EN JAVASCRIPT, PAS RECOPIÉE**, l'idiome de
+`SON T1` : les trois constantes, `EMPRISE_DEFAUT` — résolu par le NOM qu'il
+porte —, `BATIMENTS`, `EMPRISE_PAR_BATIMENT` et `VIGNETTES` se lisent dans la
+source décommentée, et `emprise_du_batiment` devient
+`NOMMEES[cle] ?? EMPRISE_DEFAUT`. **Zéro appel à `python3` dans tout `test/`.** ⚠ Il y reste un
+`execFileSync`, dans `banc.test.js`, et il lance **node** — un sous-processus
+n'est pas le problème, un sous-processus PYTHON l'est.
+⚠ **CE QUI EST PERDU SE DÉCLARE** : le test ne prouve plus que la fonction Python
+s'EXÉCUTE ainsi, il prouve que sa source la DÉCRIT ainsi ; ce qui l'exerce pour de
+bon reste `verifier.py`, qui rejoue la chaîne et compare les 86 PNG à l'octet.
+⚠⚠ **ET CE QUI EST GAGNÉ N'EST PAS RIEN** : `ED T2` exige désormais que le roster
+lu dans l'outil **plus les vignettes** soit EXACTEMENT l'ensemble des clés des
+sprites cousus — un bâtiment retiré de `BATIMENTS` sans que ses sprites sortent
+fait tomber le test, ce que la version qui exécutait Python ne voyait pas. Trois
+témoins au chargement interdisent une lecture vide. **Neuf falsifications, neuf
+chutes**, dont trois au chargement — ce sont les témoins, et ils doivent être
+bruyants. ⚠ **Contre-épreuve dans l'environnement de la CI** : sous un `python3`
+qui n'existe pas, `npm test` rend **1 556 · 1 555 pass · 0 fail · 1 skipped**.
+⚠ **`dist/index.html` NE BOUGE PAS D'UN OCTET — 9 404 978 des deux côtés**, donc
+version et build ne sont PAS bumpés (§5) : le correctif ne touche que `test/`.
 ⚠⚠ **`python3 tools/verifier.py` A ÉTÉ LANCÉ AVANT ET APRÈS, ET L'AVANT L'A ÉTÉ
 DANS UN `git worktree` PRISTINE ISOLÉ** — `CLAUDE.md` interdit de le lancer sur un
 arbre qu'on modifie, et le lot avait dix minutes de travail à faire pendant.
@@ -11325,6 +11368,23 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   déclenchent rien, quatre vraies violations sont attrapées.
   ⚠ **La leçon reste vraie ailleurs** : `\b` est ASCII, et le projet écrit son
   code en français. Tout nouveau motif de mot doit être borné en Unicode.
+- ⚠⚠ **UN TEST QUI EXÉCUTE LA CHAÎNE PYTHON NE TOURNE PAS EN CI, ET IL PASSE
+  ICI.** Payé le 10/09 au lot EMPRISES-ET-DÉLAI : `test/emprises-et-delai.test.js`
+  appelait `python3 -c "import batiments_v2 …"` au CHARGEMENT du module. Cette
+  machine porte Pillow, numpy et scipy — installés par les lots d'art pour jouer
+  `tools/verifier.py` — et la CI fait `npm ci` et rien d'autre. §3 le dit depuis
+  toujours ; le §0 d'ART-90 aussi, écrit le matin même.
+  ⚠⚠ **ET LA SIGNATURE SE LIT DANS LE COMPTE, SANS OUVRIR UN JOURNAL** : un
+  fichier qui ne se CHARGE pas ne compte AUCUN de ses tests et vaut **UN** échec,
+  donc `déclarés − N + 1`. 1 556 ici, 1 550 en CI, sept tests dans le fichier :
+  l'arithmétique nomme le fautif. C'est d'autant plus utile que les journaux de
+  run ne sont **pas téléchargeables** depuis ce conteneur — 403 du proxy de
+  sortie sur le stockage d'artefacts, et l'outil MCP n'en rend que la queue.
+  ⚠ **CE QUI REMPLACE L'EXÉCUTION EST UNE LECTURE REJOUÉE**, l'idiome de `SON T1` :
+  on lit la source de l'outil et on refait sa règle en JavaScript. Ce n'est pas
+  une recopie — la table reste dans l'outil — et ça se CONFRONTE à l'atlas, donc
+  au dessin réellement cousu. Ce qu'on perd est l'exercice de la fonction Python,
+  et ça se déclare.
 - **Un montage de test doit tenir dans le budget** — sinon il ne prouve rien.
   Huit Faucheuses au niveau 30 font 202 points pour un budget de 190.
 - **`[hidden]` ne cache rien contre un sélecteur d'id.** `#banc-arsenal` fixe

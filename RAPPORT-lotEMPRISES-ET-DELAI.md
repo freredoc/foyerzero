@@ -397,10 +397,10 @@ RÈGLES-DE-CARTE et porte toujours une durée en ticks.
 
 | test | verdict | montage effectif |
 |---|---|---|
-| **`ED T1`** | **PASS** | les **81** sprites de `art/sprites/bâtiment/64` ET de `/128`, boîte d'encre au seuil `SEUIL_ALPHA` LU dans `tools/final128.py` ; la table des paliers est obtenue en EXÉCUTANT `emprise_du_batiment` pour chaque clé, jamais recopiée. Exige **trois emprises distinctes** — c'est la falsification de face de l'ancienne règle « tous à 29 ». Tolérance panache reconduite nommément (1 sprite, grille 128, cause érosion). |
-| **`ED T2`** | **PASS** | les trois paliers deux à deux différents, `EMPRISE_DEFAUT === 29`, toute clé hors table rend 29 ; la garde anti-faute-de-frappe est exercée **pour de bon** par monkeypatch d'une clé absente + `assert.throws` ; l'absence de l'import `joueur_v2` est mesurée sur la source **DÉCOMMENTÉE**, par le STATEMENT, avec un témoin et un appât. |
-| **`ED T3`** | **PASS** | `taches()` rend pour `bat_j_collecteur_mixte` **la même emprise** que pour `bat_j_collecteur_quartz` — les DEUX SORTIES comparées, jamais l'une à un nombre. Prouve d'abord que le collecteur n'est PAS au défaut, puis **forge** `EMPRISE_PAR_BATIMENT['collecteur_quartz'] = 21` et exige que la vignette suive. |
-| **`ED T4`** | **PASS** | boîtes de `ruine_j` et `ruine_o` en 64 ET en 128, exigées à `2 × 31` ; puis balayage de `tools/*.py` : **une seule définition** de `EMPRISE_QUATRE_VINGT_DIX_HUIT`, et `ruines.py` l'IMPORTE. |
+| **`ED T1`** | **PASS** | les **81** sprites de `art/sprites/bâtiment/64` ET de `/128`, boîte d'encre au seuil `SEUIL_ALPHA` LU dans `tools/final128.py` ; la table des paliers est LUE dans `tools/batiments_v2.py` et sa règle rejouée en JavaScript, jamais recopiée (voir §7 bis). Exige **trois emprises distinctes** — c'est la falsification de face de l'ancienne règle « tous à 29 ». Tolérance panache reconduite nommément (1 sprite, grille 128, cause érosion). |
+| **`ED T2`** | **PASS** | les trois paliers deux à deux différents, `EMPRISE_DEFAUT === 29`, toute clé hors table rend 29 ; la garde anti-faute-de-frappe est mesurée par son INVARIANT (toute clé de la table est du roster) et par sa SOURCE (la levée existe, avec son appât) ; le roster lu est confronté à l'ATLAS — roster **plus** vignettes, exactement ; l'absence de l'import `joueur_v2` est mesurée sur la source **DÉCOMMENTÉE**, par le STATEMENT, avec un témoin et un appât. |
+| **`ED T3`** | **PASS** | `taches()` CALCULE l'emprise de la vignette par `emprise_du_batiment(emprunte)` — l'APPEL est lu dans la source, avec un appât qui refuse un nombre à sa place. Prouve d'abord que le collecteur n'est PAS au défaut, puis mesure les PIXELS : la boîte de `bat_j_collecteur_mixte` égale celle de `bat_j_collecteur_quartz` ET vaut `2 × 27` en grille 64. |
+| **`ED T4`** | **PASS** | boîtes de `ruine_j` et `ruine_o` en 64 ET en 128, exigées à `2 × 31` ; puis balayage de `tools/*.py` en Node : **une seule définition** de `EMPRISE_QUATRE_VINGT_DIX_HUIT`, et `ruines.py` l'IMPORTE. |
 | **`ED T5`** | **PASS** | `atlas-empreintes.json` confronté au disque, SHA-256 par sprite ET par atlas, pour la famille `batiment` aux deux grilles. La garde historique de `test/sprite.test.js` est verte elle aussi. |
 | **`ED T6`** | **PASS** | les onze lignes ci-dessus, plus le chemin de l'interpolation **REFAIT à la main** (783 → 817 → 622) et non recopié, plus l'interdiction de `Math.pow` dans `src/sim/` et `src/data/`, plus la table lue à **50 entrées** exactement. |
 | **`ED T7`** | **PASS** | **5 000 points** balayés — 500 dixièmes de niveau × 10 distances, dont les neuf premiers exercent la borne `[10, 500]`, soit **4 910 distincts**. Monotonie large sur les DEUX axes, plancher tenu à 600, et le point où le plancher cesse de mordre mesuré à **4,2** exactement. |
@@ -459,7 +459,112 @@ garnison, et le scénario de BASES-0 ne déplace pas de base.
 
 ---
 
-## 8. Les falsifications — 13 mordent, 1 déclarée inerte
+## 7 bis. ⚠⚠ LA CI EST TOMBÉE, ET C'ÉTAIT LE LOT — LES TESTS N'EXÉCUTENT PLUS PYTHON
+
+Le premier jet de `test/emprises-et-delai.test.js` lisait la table des paliers en
+APPELANT l'outil : `python3 -c "import batiments_v2 …"`, **au chargement du
+module**, plus quatre autres appels dans `ED T2` et `ED T3`, plus un `grep` dans
+`ED T4`. Il passait ici. Il a mis la CI au ROUGE, deux fois, sur `ece1e39`.
+
+### Le compte le dit exactement
+
+| | déclarés | pass | fail | skipped |
+|---|---|---|---|---|
+| ici, `npm run check` | 1 556 | 1 555 | 0 | 1 |
+| CI, job `web` | **1 550** | 1 548 | **1** | 1 |
+
+**1 556 − 7 + 1 = 1 550.** Quand un fichier ne se CHARGE pas, `node --test` ne
+compte aucun de ses tests et le compte pour **UN** test en échec : les sept
+`ED T*` disparaissent, un échec les remplace. Le compte tombe au test près, et
+c'est lui qui a nommé le fautif avant que le moindre journal ne soit lisible —
+le téléchargement des journaux de run est refusé par le proxy de sortie
+(`403` sur `productionresultssa4.blob.core.windows.net` comme sur
+`results-receiver.actions.githubusercontent.com`), et l'outil MCP n'en rend que
+la queue.
+
+### La cause, reproduite plutôt que déduite
+
+Un `python3` factice posé en tête de `PATH`, qui écrit
+`ModuleNotFoundError: No module named 'PIL'` et sort en 1 :
+
+```
+# Error: Command failed: python3 -c import sys, json; sys.path.insert(0, "tools"); …
+not ok 1 - test/emprises-et-delai.test.js
+# tests 1 · # pass 0 · # fail 1
+```
+
+Cette machine porte Pillow, numpy et scipy — **installés par ce lot même** pour
+jouer `tools/verifier.py` (§9). La CI, elle, fait `npm ci` et rien d'autre :
+son `web` n'a ni les trois paquets, ni de raison de les avoir.
+
+⚠⚠ **ET LE DÉPÔT LE DISAIT DÉJÀ, EN TOUTES LETTRES.** §3 de `CLAUDE.md` :
+« elle n'entre PAS dans `npm run check`, et c'est délibéré ». Et le §0 du lot
+ART-90, écrit le matin même : « `AR T4` ET `AR T5` DU BRIEF NE SONT PAS DES
+TESTS […] **la CI n'a pas de Python**, et §3 en fait un changement
+d'architecture. Ce sont des MESURES, rendues au rapport. » **La réponse était
+dans le dépôt, et ce lot ne l'a pas cherchée** — c'est le §0.6 de `CLAUDE.md`
+pris par l'autre bout, et il a coûté un aller-retour de CI.
+
+### Ce qui remplace l'exécution
+
+La règle est **REJOUÉE en JavaScript**, pas recopiée : les trois constantes,
+`EMPRISE_DEFAUT` (résolu par le NOM qu'il porte, jamais supposé), la liste
+`BATIMENTS`, la table `EMPRISE_PAR_BATIMENT` et `VIGNETTES` se lisent dans la
+source décommentée, et `emprise_du_batiment` devient
+`NOMMEES[cle] ?? EMPRISE_DEFAUT`. C'est l'idiome de `SON T1`, qui refait en
+JavaScript ce que `tools/sons.py` fait en Python plutôt que de retaper sa table.
+
+⚠ **CE QUI EST PERDU SE DÉCLARE** : le test ne prouve plus que la fonction
+Python s'EXÉCUTE ainsi, il prouve que sa source la DÉCRIT ainsi. Ce qui l'exerce
+pour de bon reste `python3 tools/verifier.py`, qui rejoue la chaîne entière et
+compare les 86 PNG à l'octet (§9) — une MESURE du rapport, comme `AR T4`.
+
+⚠⚠ **ET CE QUI EST GAGNÉ N'EST PAS RIEN, PARCE QUE LA LECTURE EST CONFRONTÉE À
+L'ATLAS.** `ED T2` exige désormais que le roster lu dans l'outil, **plus les
+vignettes**, soit EXACTEMENT l'ensemble des clés des sprites cousus. Un bâtiment
+retiré de `BATIMENTS` sans que ses sprites sortent — ou l'inverse — fait tomber
+le test ; la version qui exécutait Python ne le voyait pas. Trois témoins au
+chargement empêchent en plus une lecture vide de rendre les gardes vertes sur
+rien : vingt clés au roster, au moins deux exceptions, trois paliers deux à deux
+différents.
+
+### Les neuf falsifications du correctif — neuf chutes
+
+| # | falsification | tests qui tombent |
+|---|---|---|
+| F-A | `centrale` montée au palier haut | `ED T1`, `ED T2` |
+| F-B | `EMPRISE_DEFAUT` passe au 85 % | `ED T1`, `ED T2`, `ED T3` |
+| F-C | coquille `collecteur_scorries` dans la table | `ED T2` |
+| F-D | la levée anti-coquille retirée de l'outil | `ED T2` |
+| F-E | `27` écrit en dur dans `taches()` | `ED T3` |
+| F-F | un bâtiment retiré de `BATIMENTS` | le fichier, au chargement |
+| F-G | `joueur_v2` réimporté | `ED T2` |
+| F-H | `VIGNETTES` vidée | le fichier, au chargement |
+| F-I | deux paliers rendus égaux | le fichier, au chargement |
+
+⚠ **F-F, F-H et F-I tombent AU CHARGEMENT, et c'est voulu** : ce sont les
+témoins de la lecture, et une lecture vide doit être bruyante plutôt que de
+laisser sept gardes passer sur une table vide.
+
+### La contre-épreuve, dans l'environnement de la CI
+
+Un `python3` qui n'existe pas, posé en tête de `PATH` : **`npm test` rend
+1 556 déclarés · 1 555 pass · 0 fail · 1 skipped**. Les trois occurrences de
+« python3 » qui restent dans le fichier sont de la PROSE — deux commentaires et
+un message de refus.
+
+⚠ **ET LE COMPTE EST PRÉCIS : `test/` PORTE ENCORE UN `execFileSync`, DANS
+`banc.test.js`, ET IL LANCE `node`** — `tools/build.js`, sous `FZ_SORTIE`. Un
+sous-processus n'est pas le problème ; **un sous-processus PYTHON l'est**, parce
+que la chaîne d'art n'est pas installée en CI. Ce qui a été retiré, c'est le
+seul appel à `python3` de tout `test/`, et il était dans ce lot.
+
+⚠ **`dist/index.html` NE BOUGE PAS D'UN OCTET** — 9 404 978 des deux côtés du
+correctif : il ne touche qu'un fichier de `test/`. **Version et build ne sont
+donc PAS bumpés**, §5 de `CLAUDE.md` — pousser une mise à jour aux appareils
+pour un livrable identique n'a pas de sens.
+
+## 8. Les falsifications du lot — 13 mordent, 1 déclarée inerte
 
 ### Côté délai — 7 mordent, 0 muette
 
@@ -486,9 +591,11 @@ garnison, et le scénario de BASES-0 ne déplace pas de base.
 
 ⚠ **F10 mord DANS L'OUTIL, et c'est le bon endroit** — `emprise_du_batiment`
 LÈVE avant qu'un seul PNG ne soit écrit, exactement comme `atlas.py` refuse
-d'écraser ce qui ne se reproduit pas. Le fichier de test tombe en bloc parce
-qu'il exécute le Python à son chargement ; ce n'est pas un test NOMMÉ qui
-tombe, et il fallait le dire plutôt que de le compter comme tel.
+d'écraser ce qui ne se reproduit pas. ⚠⚠ **ET ELLE A ÉTÉ REJOUÉE APRÈS LE
+CORRECTIF DU §7 bis, SOUS SA FORME NEUVE** : la coquille `collecteur_scorries`
+ajoutée à la table fait tomber `ED T2` par l'invariant, et le retrait de la
+levée le fait tomber par la source. Les deux mordent, et c'est `ED T2` NOMMÉ qui
+tombe, non plus le fichier en bloc.
 
 ### F15 — le piège d'ART-90
 
