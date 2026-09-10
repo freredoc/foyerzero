@@ -291,6 +291,25 @@ COMMENTAIRE_CABLAGE = """/**
  * par SUBSTITUTION `_player_` → `_ouvrage_`, vérifiée douze fois sur douze.
  */"""
 
+COMMENTAIRE_BOUCLES = """/**
+ * Les boucles qu'un BÂTIMENT posé fait tourner — et il n'y en a plus aucune.
+ *
+ * ⚠⚠ VIDE DEPUIS LE 10/09, SUR ARBITRAGE D'ETHAN : « Oui » à « faut-il couper
+ * aussi les boucles de bâtiment ? ». Elle portait `caserne`,
+ * `depotDeVehicules` et `aerodrome` sur `building_player_factory_loop`, et
+ * `centrale` sur `building_reactor_loop`.
+ *
+ * ⚠⚠ VIDE ET NON SUPPRIMÉE. `bouclesDesirees` de `src/son/cablage.js` la lit, et
+ * une garde confronte ses clés au roster de `src/data/base.js` : la retirer
+ * demanderait de toucher le câblage, et surtout ferait disparaître l'endroit où
+ * une boucle se remet. Le jour où Ethan en veut une, c'est UNE ligne ici.
+ *
+ * ⚠⚠ ET APRÈS ELLE, L'ÉCRAN DE LA BASE EST ENTIÈREMENT SILENCIEUX.
+ * `AMBIANCE_PAR_ECRAN` ne porte plus que `raid` ; tout ce qui reste de boucles
+ * au dépôt ne tourne que pendant un combat. C'est voulu, et c'est assez
+ * inhabituel pour être écrit.
+ */"""
+
 COMMENTAIRE_ROULEMENT = """/**
  * Le roulement d'une pièce qui avance, PAR CHÂSSIS et par camp.
  *
@@ -569,25 +588,38 @@ COMMENTAIRE_MEMOIRE = """/**
 # l'audio en moins et un `data:` en moins, donc une ventilation d'octets et un
 # arbitrage à part.
 #
-# ⚠⚠ ET `BOUCLES_DE_BATIMENT` N'EST PAS TOUCHÉ — voir la table juste en dessous.
-# Ses quatre boucles tournent aussi tant que le bâtiment est posé, donc elles
-# sont le SECOND candidat à la phrase d'Ethan ; mais elles sont motivées par une
-# SITUATION — une usine qui tourne — et non par le simple fait d'être quelque
-# part. Le rapport les nomme pour qu'il tranche sans qu'on refasse le relevé.
+# ⚠⚠ ET `BOUCLES_DE_BATIMENT` EST VIDE DEPUIS LE 10/09 — ETHAN A TRANCHÉ. Ce
+# paragraphe disait « n'est pas touché […] le rapport les nomme pour qu'il
+# tranche sans qu'on refasse le relevé » : le relevé a servi, la question a été
+# posée — « faut-il couper aussi les boucles de bâtiment ? » — et la réponse est
+# **« Oui »**. Un commentaire qui laisse ouverte une question déjà tranchée
+# envoie la refaire ; celui-ci est donc réécrit plutôt que laissé.
 AMBIANCE_PAR_ECRAN = {
     'raid': 'ambience_battlefield_distant_loop',
 }
 
-# ⚠⚠ LES DEUX BOUCLES DE BÂTIMENT QUE LA BASE SAIT DIRE, ET RIEN D'AUTRE. Une
-# boucle par TYPE présent, jamais par bâtiment : six usines ne font pas six fois
-# le même bruit. Les trois autres boucles du pack sont muettes et le rapport dit
-# pourquoi — il n'y a ni file de construction, ni réparation qui DURE (c'est un
-# stock depuis le lot RÉSERVE), ni état « base attaquée » qui persiste.
+# ⚠⚠ AUCUNE BOUCLE DE BÂTIMENT — ETHAN, 10/09 : « Oui ». La table portait
+# `caserne`, `depotDeVehicules` et `aerodrome` sur `building_player_factory_loop`
+# et `centrale` sur `building_reactor_loop` ; les quatre se taisent.
+#
+# ⚠⚠ VIDE, PAS SUPPRIMÉE, ET C'EST DÉLIBÉRÉ. Elle a un lecteur —
+# `bouclesDesirees` de `src/son/cablage.js` — et une garde qui confronte ses clés
+# au roster de `src/data/base.js`. La retirer demanderait de toucher le câblage,
+# et surtout ferait disparaître l'ENDROIT où une boucle se remet : le jour où
+# Ethan en voudra une, c'est une ligne ici, et rien d'autre.
+#
+# ⚠⚠ ET APRÈS ELLE, L'ÉCRAN DE LA BASE EST ENTIÈREMENT SILENCIEUX. Mesuré :
+# `AMBIANCE_PAR_ECRAN` ne porte plus que `raid` depuis le lot ÉCRANS, et ce qui
+# reste de boucles au dépôt — `ROULEMENT_PAR_CHASSIS`, les boucles d'arme — ne
+# tourne que PENDANT un combat. Un joueur posé sur sa base n'entend donc plus
+# rien du tout : c'est ce qu'Ethan demande, et c'est assez inhabituel pour être
+# écrit ici plutôt que découvert.
+#
+# ⚠ LES DEUX SONS PERDENT LEUR DERNIER LECTEUR ET RESTENT AU LIVRABLE, comme
+# `ambience_base_player_loop` et `ambience_calm_map_loop` avant eux. Les sortir
+# serait de l'audio en moins et deux `data:` en moins, donc une ventilation
+# d'octets et un arbitrage à part — nommé au rapport, pas fait.
 BOUCLES_DE_BATIMENT = {
-    'caserne': 'building_player_factory_loop',
-    'depotDeVehicules': 'building_player_factory_loop',
-    'aerodrome': 'building_player_factory_loop',
-    'centrale': 'building_reactor_loop',
 }
 
 # ⚠⚠ LA TAILLE D'UN EFFONDREMENT SE LIT SUR LES PV, ET C'EST UNE PROPOSITION.
@@ -1039,7 +1071,8 @@ def ecrire_la_table(pack):
     for ecran in sorted(AMBIANCE_PAR_ECRAN):
         exiger_une_boucle(AMBIANCE_PAR_ECRAN[ecran], 'AMBIANCE_PAR_ECRAN[%s]' % ecran)
         lignes.append("  %s: '%s'," % (ecran, AMBIANCE_PAR_ECRAN[ecran]))
-    lignes += ['};', '', 'export const BOUCLES_DE_BATIMENT = {']
+    lignes += ['};', '', COMMENTAIRE_BOUCLES,
+               'export const BOUCLES_DE_BATIMENT = {']
     for bat in sorted(BOUCLES_DE_BATIMENT):
         exiger_une_boucle(BOUCLES_DE_BATIMENT[bat], 'BOUCLES_DE_BATIMENT[%s]' % bat)
         lignes.append("  %s: '%s'," % (bat, BOUCLES_DE_BATIMENT[bat]))

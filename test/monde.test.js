@@ -42,6 +42,10 @@ import {
   palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU, POI, DEPLACEMENT,
 } from '../src/data/sites.js';
 import { echelleDuCran, geometrieDuCran, NOMS_DU_SOL } from '../src/render/terrain.js';
+import {
+  LARGEUR_PX as MINI_LARGEUR, HAUTEUR_PX as MINI_HAUTEUR, TEINTES,
+  bandesDuSol, basculeDuSol, marqueursDeLaMiniCarte, pixelDeLaCase,
+} from '../src/render/mini-carte.js';
 
 /** Le manifeste des huit planches — Node n'a pas de décodeur WebP. */
 const MANIFESTE_SOL = JSON.parse(
@@ -2332,6 +2336,11 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     // ci-dessous le cherche AUSSI dans le balisage : la liste et la page se
     // tiennent l'une l'autre, dans les deux sens.
     'monde-poi',
+    // ⚠ LA MINI-CARTE — Ethan, 10/09, point 12. Quatre identifiants : le bouton
+    // qui ouvre, le panneau qui couvre le champ, le corps qui défile et le
+    // canevas de 1080 × 1920. Le « Fermer » du panneau en est un cinquième.
+    'monde-mini', 'monde-mini-panneau', 'monde-mini-corps', 'monde-mini-canvas',
+    'monde-mini-fermer',
     'monde-base-2x2', 'monde-base-3x3',
     // ⚠ LES VINGT-DEUX PLANCHES SE DÉRIVENT, ELLES NE SE RECOPIENT PAS — lot
     // SOL-OUVRAGE. Elles étaient huit et écrites à la main ; le sol en porte
@@ -3801,8 +3810,23 @@ test('PC T5 — un gisement acquis parle UNE fois, et le tick suivant se tait', 
   // pop-up ET « voir les POI acquis, et non acquis avec coordonnées » : le
   // message EST la liste, titrée par la nouvelle. Un pop-up qui ne dirait que la
   // phrase renverrait chercher le bouton pour savoir lequel vient d'être pris.
-  assert.deepEqual(lignesDuCorps(m.parId), vueDesPois(etat.graine, etat.poisAcquis).lignes,
-    'le pop-up annonce le gisement sans montrer la liste');
+  //
+  // ⚠⚠ MAIS LA LISTE EST CELLE DE CE QUI VIENT D'ÊTRE PRIS, ET CETTE ASSERTION
+  // EST RETOURNÉE — lot ARRIVÉE-CARTE-ET-BUILD, 10/09. Elle exigeait
+  // `vueDesPois(graine, poisAcquis)` tout court, c'est-à-dire **les
+  // soixante-dix** : Ethan, à « une acquisition annonce donc la carte entière —
+  // le filtrer ? », répond **« Oui »**. Elle exige désormais la SÉLECTION.
+  const prisALInstant = clesDesPoisAcquis(etat.poisAcquis);
+  assert.deepEqual(lignesDuCorps(m.parId),
+    vueDesPois(etat.graine, etat.poisAcquis, prisALInstant).lignes,
+    'le pop-up n\'annonce pas ce qui vient d\'être pris');
+
+  // ⚠⚠ ET LE MONTAGE DISCRIMINE : la liste filtrée est STRICTEMENT plus courte
+  // que la carte entière. Sans cette ligne, une sélection qui ne filtrerait rien
+  // passerait l'égalité ci-dessus et le lot n'aurait rien changé.
+  assert.ok(lignesDuCorps(m.parId).length
+    < vueDesPois(etat.graine, etat.poisAcquis).lignes.length,
+    'le pop-up dit encore la carte entière : la sélection ne filtre rien');
 
   // ⚠ ET LE TICK SUIVANT SE TAIT. C'est la falsification du brief : deux ticks de
   // suite ne font qu'un seul message.
@@ -4115,4 +4139,288 @@ test('PC T10 — une ruine qui expire ferme son panneau, sans jamais dire un dé
   assert.equal(ruinesActives(etat).length, 0, 'montage : la ruine n\'a pas expiré');
   assert.equal(m.parId.get('monde-panneau').hidden, true,
     'le panneau d\'une ruine expirée reste ouvert');
+});
+
+// ---------------------------------------------------------------------------
+// AC T5 — le pop-up d'acquisition ne dit que ce qui vient d'être pris
+// ---------------------------------------------------------------------------
+
+test('AC T5 — le pop-up dit ce qui vient d\'être pris, le bouton dit les soixante-dix', () => {
+  // ⚠⚠ ETHAN, 10/09, POINT 11 : « Oui » à « une acquisition annonce donc la
+  // carte entière — la filtrer ? ». Le pop-up et le bouton passent par le MÊME
+  // panneau — c'est ce qu'`ouvrirLesPois` garde —, et depuis ce lot ils ne
+  // disent plus la même LISTE : l'un ce qui vient d'entrer, l'autre tout.
+  //
+  // ⚠⚠ LE TEST COMPARE L'ORDRE, PAS SEULEMENT LA LONGUEUR, ET C'EST LA
+  // FALSIFICATION QUE LE BRIEF NOMME. Refiltrer en RETRIANT rend un compte juste
+  // et un ordre faux : l'ordre des gisements EST le résultat de `tirerLesPoi`,
+  // le panneau complet le porte, et le pop-up doit porter le même. Sans cette
+  // comparaison, un `[...selection]` — qui rendrait l'ordre d'INSERTION dans
+  // l'ensemble, c'est-à-dire l'ordre où les POI ont été relevés — passerait.
+  for (const graine of [1, 7, 42, 2026, 31_415]) {
+    const liste = poisDeLaFenetre(graine, {
+      premiereRangee: 1,
+      derniereRangee: GEOGRAPHIE.carte.hauteur,
+      premiereColonne: 1,
+      derniereColonne: GEOGRAPHIE.carte.largeur,
+    });
+    assert.equal(liste.length, 70, `la graine ${graine} ne porte plus soixante-dix gisements`);
+
+    // Le pop-up : une sélection de trois gisements pris à des rangs ÉLOIGNÉS —
+    // 0, 37 et 61 — pour que « le bon ordre » ne puisse pas tomber juste par
+    // hasard sur trois voisins.
+    const pris = [liste[0], liste[37], liste[61]];
+    // ⚠⚠ LA SÉLECTION EST CONSTRUITE À L'ENVERS, ET C'EST CE QUI REND LA
+    // FALSIFICATION MORDANTE — la première écriture de ce test la construisait
+    // dans l'ordre du tirage, si bien qu'un `[...selection].map(…)` rendait le
+    // MÊME ordre et passait. Mesuré : la garde était muette.
+    //
+    // ⚠ ET CE N'EST PAS UN MONTAGE ARTIFICIEL. `signalerLesPoisNeufs` remplit
+    // son ensemble en parcourant `clesDesPoisAcquis(etat.poisAcquis)`, et
+    // `poisAcquis` est TRIÉ par `releverLesPoisAcquis` — par type et par bande,
+    // jamais par rang de tirage. L'ordre d'insertion de l'ensemble diffère donc
+    // de celui du tirage dans le cas courant, et c'est très exactement pour ça
+    // que le pop-up FILTRE la liste au lieu de MAPPER l'ensemble.
+    const selection = clesDesPoisAcquis([...pris].reverse());
+    assert.deepEqual([...selection], pris.map((poi) => `${poi.type}:${poi.bande}`).reverse(),
+      'le montage ne construit plus la sélection à l\'envers : la garde d\'ordre est muette');
+
+    // Le bouton : aucune sélection, donc les soixante-dix, dans l'ordre du
+    // tirage. ⚠ IL PORTE LES MÊMES ACQUIS QUE LE POP-UP : c'est la SÉLECTION
+    // qui les sépare, jamais l'état de la partie, et comparer les deux sur deux
+    // parties différentes ne dirait rien.
+    const tout = vueDesPois(graine, pris);
+    assert.equal(tout.lignes.length, 70,
+      `le bouton n'annonce plus les soixante-dix sur la graine ${graine}`);
+    assert.deepEqual(
+      tout.lignes.map((l) => l.quoi),
+      liste.map((poi) => `${POI[poi.type].nom} · bande ${poi.bande}`),
+      `le bouton ne suit plus l'ordre du tirage sur la graine ${graine}`,
+    );
+    assert.equal(vueDesPois(graine, []).lignes.length, 70,
+      'le bouton n\'annonce plus les soixante-dix sur une partie neuve');
+
+    const vue = vueDesPois(graine, pris, selection);
+    assert.equal(vue.lignes.length, 3,
+      `le pop-up annonce ${vue.lignes.length} lignes au lieu de trois`);
+    assert.deepEqual(
+      vue.lignes.map((l) => l.quoi),
+      pris.map((poi) => `${POI[poi.type].nom} · bande ${poi.bande}`),
+      `le pop-up ne suit pas l'ordre du tirage sur la graine ${graine}`,
+    );
+
+    // ⚠ ET LE TITRE DIT TOUJOURS LE COMPTE TOTAL, dans les deux cas : c'est le
+    // seul endroit où le joueur lit « j'en ai trois sur soixante-dix », et le
+    // filtrage de la LISTE ne doit pas amputer le TITRE.
+    assert.equal(vue.titre, tout.titre,
+      'le pop-up et le bouton ne rendent pas le même titre');
+    assert.match(vue.titre, /3 \/ 70$/, `titre inattendu : ${vue.titre}`);
+
+    // ⚠ UNE SÉLECTION VIDE REND UNE LISTE VIDE, elle ne retombe pas sur tout.
+    // C'est la faute qu'un `selection ?? liste` commettrait en silence.
+    assert.deepEqual(vueDesPois(graine, pris, new Set()).lignes, [],
+      'une sélection vide rend la carte entière');
+  }
+
+  // ⚠⚠ ET LA VALEUR D'UNE LIGNE DIFFÈRE SELON LE CHEMIN, ce qui est le second
+  // effet du point 11 : le bouton dit « Acquis » sur ce qui est pris et les
+  // coordonnées sur le reste ; le pop-up, lui, ne parle QUE d'acquis, donc il
+  // donne les coordonnées — c'est l'endroit où le joueur veut savoir où c'est.
+  const liste = poisDeLaFenetre(7, {
+    premiereRangee: 1,
+    derniereRangee: GEOGRAPHIE.carte.hauteur,
+    premiereColonne: 1,
+    derniereColonne: GEOGRAPHIE.carte.largeur,
+  });
+  const pris = [liste[12]];
+  assert.equal(vueDesPois(7, pris).lignes[12].valeur, 'Acquis',
+    'le bouton ne marque plus « Acquis » sur un gisement pris');
+  assert.equal(vueDesPois(7, pris, clesDesPoisAcquis(pris)).lignes[0].valeur,
+    `${liste[12].rangee} · ${liste[12].colonne}`,
+    'le pop-up ne donne pas les coordonnées de ce qui vient d\'être pris');
+});
+
+// ---------------------------------------------------------------------------
+// AC T6 — la mini-carte place ses marqueurs au bon endroit
+// ---------------------------------------------------------------------------
+
+test('AC T6 — la mini-carte pose ses cases et ses marqueurs dans le cadre', () => {
+  // ⚠⚠ LA CONVERSION EST PURE ET EXPORTÉE, ET C'EST TOUT CE QUI REND LA
+  // MINI-CARTE ÉPROUVABLE. Le canevas ne fait que peindre ce que
+  // `render/mini-carte.js` rend ; sans cette séparation, rien de ce qui suit ne
+  // se mesurerait dans un dépôt qui n'a pas de navigateur (`CLAUDE.md` §3).
+  const { largeur, hauteur } = GEOGRAPHIE.carte;
+
+  // ⚠⚠ LES QUATRE COINS TOMBENT AUX QUATRE COINS, ET C'EST LA FALSIFICATION QUE
+  // LE BRIEF NOMME : inverser rangée et colonne rend une carte plausible et
+  // fausse — les marqueurs restent dans le cadre, la densité a l'air juste —, et
+  // seuls les coins l'attrapent. Une carte de 31 × 300 lue à l'envers donnerait
+  // une colonne 300 qui n'existe pas, donc un `x` bien au-delà de 1 080.
+  const hautGauche = pixelDeLaCase(1, 1);
+  assert.deepEqual({ x: hautGauche.x, y: hautGauche.y }, { x: 0, y: 0 },
+    'le coin haut-gauche n\'est pas à l\'origine');
+
+  const basDroite = pixelDeLaCase(hauteur, largeur);
+  assert.equal(basDroite.x + basDroite.largeur, MINI_LARGEUR,
+    'la dernière colonne ne finit pas au bord droit');
+  assert.equal(basDroite.y + basDroite.hauteur, MINI_HAUTEUR,
+    'la dernière rangée ne finit pas au bord bas');
+
+  const hautDroite = pixelDeLaCase(1, largeur);
+  const basGauche = pixelDeLaCase(hauteur, 1);
+  assert.equal(hautDroite.y, 0, 'le coin haut-droit n\'est pas en haut');
+  assert.equal(basGauche.x, 0, 'le coin bas-gauche n\'est pas à gauche');
+  assert.equal(hautDroite.x, basDroite.x, 'les deux coins droits ne sont pas alignés');
+  assert.equal(basGauche.y, basDroite.y, 'les deux coins bas ne sont pas alignés');
+
+  // ⚠ LES CASES PAVENT SANS TROU NI RECOUVREMENT — c'est ce que l'arrondi de
+  // BORD achète, et c'est ce qu'un arrondi de LARGEUR perdrait une fois sur deux.
+  for (let colonne = 1; colonne < largeur; colonne += 1) {
+    const a = pixelDeLaCase(1, colonne);
+    const b = pixelDeLaCase(1, colonne + 1);
+    assert.equal(a.x + a.largeur, b.x, `trou ou recouvrement entre les colonnes ${colonne} et ${colonne + 1}`);
+  }
+  for (let rangee = 1; rangee < hauteur; rangee += 1) {
+    const a = pixelDeLaCase(rangee, 1);
+    const b = pixelDeLaCase(rangee + 1, 1);
+    assert.equal(a.y + a.hauteur, b.y, `trou ou recouvrement entre les rangées ${rangee} et ${rangee + 1}`);
+  }
+
+  // ⚠ ET LA CASE EST ÉTIRÉE, comme Ethan l'a validé : ~34,8 px de large sur 6,4
+  // de haut. La mesure est écrite pour qu'un retour à l'échelle uniforme — un
+  // ruban de 198 px sur 1 080 — fasse tomber ce test plutôt que de passer.
+  assert.equal(pixelDeLaCase(1, 1).largeur, 35);
+  assert.equal(pixelDeLaCase(1, 1).hauteur, 6);
+  assert.ok(pixelDeLaCase(1, 1).largeur > 4 * pixelDeLaCase(1, 1).hauteur,
+    'la case n\'est plus étirée : la carte est redevenue un ruban');
+
+  // ⚠⚠ LES SOIXANTE-DIX GISEMENTS, ET TOUT LE RESTE, TOMBENT DANS LE CADRE. Un
+  // marqueur ponctuel DÉBORDE de sa case — mesuré à l'écran, à une rangée de
+  // haut ils se perdaient dans les 17,2 % de bases de l'Ouvrage — et ce débord
+  // est BORNÉ au canevas : la première et la dernière rangée sont les deux cas
+  // où un débord non borné sortirait.
+  for (const graine of [1, 7, 2026]) {
+    for (const position of [{ rangee: 1, colonne: 1 }, { rangee: hauteur, colonne: largeur },
+      { rangee: 295, colonne: 16 }]) {
+      const marqueurs = marqueursDeLaMiniCarte({
+        graine,
+        poisAcquis: [],
+        positions: [position],
+        rasees: null,
+      });
+      const gisements = marqueurs.filter((m) => m.genre === 'poi');
+      assert.equal(gisements.length, 70,
+        `la graine ${graine} ne rend plus soixante-dix marqueurs de gisement`);
+      assert.ok(marqueurs.some((m) => m.genre === 'base'), 'la base du joueur n\'est pas marquée');
+      assert.ok(marqueurs.filter((m) => m.genre === 'ouvrage').length > 1000,
+        'les bases de l\'Ouvrage ne sont plus marquées');
+      for (const m of marqueurs) {
+        assert.ok(m.x >= 0 && m.y >= 0, `marqueur ${m.genre} hors cadre en haut ou à gauche`);
+        assert.ok(m.x + m.largeur <= MINI_LARGEUR,
+          `marqueur ${m.genre} déborde à droite : ${m.x} + ${m.largeur}`);
+        assert.ok(m.y + m.hauteur <= MINI_HAUTEUR,
+          `marqueur ${m.genre} déborde en bas : ${m.y} + ${m.hauteur}`);
+        // ⚠ ET LE MARQUEUR EST AU-DESSUS DE SA CASE — le débord ne le DÉPLACE
+        // pas, il l'épaissit : la case reste dans le rectangle.
+        const sien = pixelDeLaCase(m.rangee, m.colonne);
+        assert.equal(m.x, sien.x, `le marqueur ${m.genre} a changé de colonne`);
+        assert.ok(m.y <= sien.y && m.y + m.hauteur >= sien.y + sien.hauteur,
+          `le marqueur ${m.genre} ne couvre plus sa case`);
+      }
+    }
+  }
+
+  // ⚠⚠ ET UN MARQUEUR PONCTUEL EST PLUS HAUT QUE LA TEXTURE, ce qui est la
+  // propriété qu'on a achetée en le faisant déborder. Une carte de 9 300 cases
+  // porte ~1 590 bases de l'Ouvrage — **17,2 % de la surface, mesuré au pixel
+  // dans Chromium** —, et à une rangée de haut les soixante-dix gisements y
+  // faisaient la même taille que le bruit dans lequel ils devaient trancher.
+  // ⚠ LA GARDE EST UN RAPPORT, PAS UNE TAILLE : figer « dix-neuf pixels »
+  // figerait la hauteur du canevas et le nombre de rangées d'un seul coup.
+  const auMilieu = marqueursDeLaMiniCarte({
+    graine: 7, poisAcquis: [], positions: [{ rangee: 150, colonne: 16 }],
+  });
+  const hauteurDe = (genre) => auMilieu.find((m) => m.genre === genre).hauteur;
+  assert.ok(hauteurDe('poi') > hauteurDe('ouvrage'),
+    'un gisement ne se distingue plus de la texture des bases de l\'Ouvrage');
+  assert.ok(hauteurDe('base') > hauteurDe('poi'),
+    'la base du joueur ne se distingue plus d\'un gisement');
+  assert.equal(hauteurDe('ouvrage'), pixelDeLaCase(150, 16).hauteur,
+    'une base de l\'Ouvrage déborde de sa case : la texture est devenue un aplat');
+
+  // ⚠⚠ L'ORDRE DE DESSIN EST LE RÉSULTAT : les bases de l'Ouvrage d'abord (la
+  // texture), les gisements ensuite, la base du joueur en DERNIER. Elle est
+  // unique sur 9 300 cases, et une case que l'Ouvrage tient la recouvrirait.
+  const marqueurs = marqueursDeLaMiniCarte({
+    graine: 7, poisAcquis: [], positions: [{ rangee: 295, colonne: 16 }],
+  });
+  const genres = [...new Set(marqueurs.map((m) => m.genre))];
+  assert.deepEqual(genres, ['ouvrage', 'poi', 'base'], 'l\'ordre de dessin a changé');
+
+  // ⚠⚠ ACQUIS ET NON ACQUIS SE DISTINGUENT, ET PAR DES TEINTES QUE LA CARTE
+  // EMPLOIE DÉJÀ. Les quatre se LISENT dans `EMBLEMES_CARTE` : le fichier de la
+  // mini-carte ne porte pas un seul `#`, ce qui est la seule façon de tenir
+  // « aucune teinte neuve » sans avoir à le promettre.
+  const liste = poisDeLaFenetre(7, {
+    premiereRangee: 1, derniereRangee: hauteur, premiereColonne: 1, derniereColonne: largeur,
+  });
+  const avecAcquis = marqueursDeLaMiniCarte({
+    graine: 7, poisAcquis: [liste[3]], positions: [],
+  }).filter((m) => m.genre === 'poi');
+  assert.equal(avecAcquis.filter((m) => m.acquis).length, 1, 'un seul gisement doit être acquis');
+  assert.equal(avecAcquis[3].teinte, TEINTES.poiAcquis, 'le gisement acquis n\'a pas changé de teinte');
+  assert.equal(avecAcquis[0].teinte, TEINTES.poi, 'un gisement non acquis a changé de teinte');
+  assert.notEqual(TEINTES.poi, TEINTES.poiAcquis, 'les deux états ne se distinguent plus');
+  assert.equal(TEINTES.ouvrage, EMBLEMES_CARTE.base.fond);
+  assert.equal(TEINTES.poi, EMBLEMES_CARTE.poiQuartz.bord);
+  assert.equal(TEINTES.poiAcquis, EMBLEMES_CARTE.camp.bord);
+  assert.equal(TEINTES.base, EMBLEMES_CARTE.baseJoueur.bord);
+  const sourceMini = readFileSync(join(RACINE, 'src', 'render', 'mini-carte.js'), 'utf8');
+  assert.equal(sourceMini.match(/#[0-9A-Fa-f]{6}/g), null,
+    'la mini-carte porte une teinte écrite : elle doit les LIRE dans EMBLEMES_CARTE');
+
+  // ⚠⚠ ET LES RASÉES NE SE DESSINENT PLUS. Une base rasée est RETIRÉE de la
+  // carte pour toujours — `siteDeLaCase` y rend `null` — et la mini-carte lit la
+  // même clé que lui. Sans ce filtre, elle montrerait des bases que la grande
+  // carte ne montre plus.
+  const uneOuvrage = marqueurs.find((m) => m.genre === 'ouvrage');
+  const sansElle = marqueursDeLaMiniCarte({
+    graine: 7,
+    poisAcquis: [],
+    positions: [],
+    rasees: new Set([`${uneOuvrage.rangee}:${uneOuvrage.colonne}`]),
+  }).filter((m) => m.genre === 'ouvrage');
+  assert.equal(sansElle.length,
+    marqueurs.filter((m) => m.genre === 'ouvrage').length - 1,
+    'une base rasée se dessine encore sur la mini-carte');
+
+  // ⚠⚠ LE FOND EST UN APLAT PAR BANDE DE NIVEAUX — celles-là mêmes que le
+  // panneau des gisements nomme sur chaque ligne. Elles pavent la hauteur sans
+  // trou, et leurs dix tons sont DISTINCTS : deux bandes de même teinte ne se
+  // liraient plus comme deux bandes.
+  const bandes = bandesDuSol();
+  assert.equal(bandes.reduce((s, b) => s + b.hauteur, 0), MINI_HAUTEUR,
+    'les bandes ne pavent pas la hauteur');
+  assert.equal(new Set(bandes.map((b) => b.teinte)).size, bandes.length,
+    'deux bandes du sol portent la même teinte');
+  for (let i = 1; i < bandes.length; i += 1) {
+    assert.equal(bandes[i - 1].y + bandes[i - 1].hauteur, bandes[i].y,
+      `trou ou recouvrement entre les bandes ${bandes[i - 1].bande} et ${bandes[i].bande}`);
+  }
+  for (const b of bandes) {
+    assert.ok(TERRAIN_CARTE.rampes.joueur.includes(b.teinte)
+      || TERRAIN_CARTE.rampes.ouvrage.includes(b.teinte),
+    `la bande ${b.bande} porte une teinte hors des deux rampes : ${b.teinte}`);
+  }
+
+  // ⚠⚠ ET LA BASCULE OCRE → VIOLET TOMBE OÙ LE VRAI SOL LA MET. `TONS_DU_SOL`
+  // change de rampe à mi-liste ; `partDeTeinteDeLaRangee` — la fonction qui
+  // peint le sol pour de bon — franchit 0,5 quelque part sur la carte. Rien dans
+  // le code ne les oblige à s'accorder : c'est une MESURE, et si elles cessent
+  // de s'accorder, la mini-carte ment sur l'endroit où le sol de l'Ouvrage
+  // commence. C'est ce test qui le dira.
+  const bascule = basculeDuSol();
+  assert.equal(bascule.selonLesTons, bascule.selonLeSol,
+    `la mini-carte bascule à la bande ${bascule.selonLesTons}, le sol à la ${bascule.selonLeSol}`);
+  assert.equal(bascule.selonLesTons, 6, 'la bascule a changé de bande sans qu\'on le dise');
 });

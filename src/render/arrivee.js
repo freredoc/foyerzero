@@ -1,8 +1,15 @@
-// L'ARRIVÉE D'UNE UNITÉ D'ASSAUT — le fantôme qui monte, lot SON-ET-ARRIVÉE.
+// L'ARRIVÉE D'UNE UNITÉ D'ASSAUT — elle roule depuis la case du dessous.
 //
 // Ethan, 10/09 : « Lors des raids faire apparaître les unités une case en
 // dessous fantôme pour qu'on voit les véhicules arrivés pour pas qu'ils
 // apparaissent directement sur la bande du bas. »
+//
+// ⚠⚠ PUIS, LE MÊME JOUR : « Ils arrivent trop rapidement, et on les voit spawn.
+// Ils doivent spawn en dessous et arriver », ET SURTOUT **« Ne pas faire de
+// fantôme. »** Les trois moitiés de la demande se séparent donc nettement : le
+// DÉCALAGE reste — c'est lui qui fait émerger le véhicule —, l'OPACITÉ part, et
+// la DURÉE cesse d'être décrétée. Ce module ne fabrique plus de fantôme : il
+// fait rouler une unité à pleine matière depuis une case plus bas.
 //
 // ⚠⚠ MODULE PUR, ET IL NE TOUCHE PAS `src/sim/`. C'est la contrainte qui prime
 // sur tout : l'invariant du dépôt veut que `tickJeu × N` et `rattraperJeu(N)`
@@ -29,33 +36,73 @@
 // écrasée sur sa propre case, et le fantôme n'existerait pas. Le décalage est
 // une grandeur de DESSIN, il s'ajoute après la projection.
 
-import { GRILLE } from '../data/combat.js';
+import { GRILLE, UNITES } from '../data/combat.js';
 import { MILLI_PAR_CASE } from '../sim/grille.js';
+import { TICK_MS } from '../sim/clock.js';
 
 /**
- * La durée de la montée, en millisecondes de temps RÉEL.
+ * La durée de l'arrivée d'UNE entité, en millisecondes de temps réel.
  *
- * ⚠ 400 ms SE CALCULE, ET LE CALCUL EST CELUI-CI : quatre ticks à 10 Hz, soit
- * un dixième de l'intervalle entre deux vagues (`GRILLE.intervalleVagueSec`
- * vaut 5 s). Assez long pour être vu, trop court pour retarder le combat — et
- * une vague entière est arrivée bien avant que la suivante ne paraisse.
+ * ⚠⚠ ELLE SE DÉRIVE DE L'UNITÉ, ELLE NE SE DÉCRÈTE PLUS — Ethan, 10/09 : « Ils
+ * arrivent trop rapidement ». Elle valait `ARRIVEE_MS = 400` pour tout le monde,
+ * quatre ticks, et c'était un nombre choisi. C'est désormais **exactement le
+ * temps que l'unité met à franchir une case à son propre pas**.
  *
- * ⚠ EN TEMPS RÉEL, PAS EN TICKS, et c'est ce qui la rend juste aux trois
- * vitesses du simulateur. Comptée en ticks, elle durerait quatre fois moins
- * longtemps à ×4, c'est-à-dire cent millisecondes : le fantôme deviendrait un
- * clignotement.
+ * ⚠⚠ ET C'EST UNE CONTRAINTE MESURÉE, PAS UNE ÉLÉGANCE. Une unité avance de
+ * `vitesseMilli` par tick, une case vaut `MILLI_PAR_CASE`, un tick vaut
+ * `TICK_MS` : traverser une case lui prend **1 667 ms à `vitesse: 60`** — la
+ * plus lente du roster — et **833 ms à 120**. Une arrivée plus longue que ça
+ * ferait mentir le sprite de PLUS D'UNE CASE sur la position réelle d'une unité
+ * qui tire déjà et qu'on tire déjà. Le retard est donc borné à une case **par
+ * construction**, et il l'est pour chaque unité séparément.
+ *
+ * ⚠⚠ LA VITESSE SE LIT DANS `UNITES`, ET LE BRIEF SE TROMPAIT — MESURÉ AVANT
+ * D'ÉCRIRE UNE LIGNE. Il posait « `vitesseMilli` EST SUR L'ENTITÉ,
+ * `src/sim/combat.js` le pose au montage ; le lire, ne pas le recalculer depuis
+ * `UNITES` ». **C'est faux** : le littéral d'entité de `ajouterEntite` ne porte
+ * pas ce champ — la vitesse vit sur le PROFIL, qui est PARTAGÉ par toutes les
+ * pièces d'un identifiant, et `profil` n'est pas exporté. La première écriture a
+ * levé sur sept tests de `raid-ecran.test.js`, avec « vitesseMilli
+ * « undefined » », sur de VRAIS montages passés par `creerCombat`.
+ *
+ * ⚠⚠ ET CE N'EST PAS UNE SECONDE ÉCRITURE POUR AUTANT, ce qui est le fond de
+ * l'interdiction du brief. `profilUnite` fait `entierDeDonnees(u.vitesse, …)` :
+ * `UNITES[id].vitesse` EST la source dont le profil dérive. On lit donc la même
+ * table que lui, pas une copie — et `arrivee.js` importait déjà `GRILLE` de ce
+ * fichier. Passer par `src/sim/` pour exporter `profil` était l'autre voie, et
+ * elle est **interdite au territoire de ce lot**.
+ *
+ * ⚠ ET C'EST LA VITESSE NOMINALE QU'ON VEUT, pas l'effective. `vitesseObstacleMilli`
+ * et le Booster changent le pas EN COURS DE ROUTE ; la durée, elle, est
+ * contractée à la naissance et ne bouge plus — voir `creerArrivees`.
+ *
+ * ⚠⚠ ET CE QUI N'EST PAS UNE UNITÉ LÈVE, IL NE REND PAS `Infinity`. Un bâtiment
+ * et une défense n'ont aucune entrée dans `UNITES` : sans garde, la division
+ * rendrait `Infinity`, la rampe ne tomberait jamais à zéro, et l'entité resterait
+ * une case sous sa case POUR TOUJOURS, sans qu'une seule erreur ne soit levée.
+ * ⚠ Le cas n'est pas atteignable aujourd'hui — `arrive` filtre déjà sur le camp
+ * `attaque` et sur la bande de déploiement — mais **un fait de programme se dit
+ * par une levée, pas par une chance** : la garde s'écrit quand même, et `AC T3`
+ * la mesure.
+ *
+ * ⚠ LE CALCUL EST ENTIER JUSQU'À LA DIVISION, comme partout dans ce module :
+ * `MILLI_PAR_CASE × TICK_MS` vaut 100 000, et c'est ce numérateur-là qu'on
+ * divise. Écrire `MILLI_PAR_CASE / vitesse * TICK_MS` ferait passer un flottant
+ * par un arrondi de plus pour le même résultat.
+ *
+ * @param {{id: string}} entite
+ * @returns {number} la durée, en millisecondes de temps réel
  */
-export const ARRIVEE_MS = 400;
-
-/**
- * L'opacité de départ du fantôme, en millièmes.
- *
- * ⚠ EN MILLIÈMES ET EN ENTIERS — le dépôt ne fait pas de flottant dans le rendu,
- * pour la raison qui vaut partout ailleurs : deux exécutions doivent rendre la
- * même liste d'affichage au nombre près, et un flottant accumulé ne le garantit
- * pas. Même unité que `alphaMilli` de `render/interpolation.js`.
- */
-export const OPACITE_ARRIVEE = 350;
+export function dureeDArrivee(entite) {
+  const vitesse = UNITES[entite?.id]?.vitesse;
+  if (!Number.isFinite(vitesse) || vitesse <= 0) {
+    throw new RangeError(
+      `dureeDArrivee : « ${entite?.id} » n'a pas de vitesse dans UNITES `
+      + `(« ${vitesse} ») — ce qui ne roule pas n'arrive pas`,
+    );
+  }
+  return Math.round((MILLI_PAR_CASE * TICK_MS) / vitesse);
+}
 
 /** L'opacité pleine, en millièmes — la valeur que porte tout autre sprite. */
 export const OPACITE_PLEINE = 1000;
@@ -72,7 +119,16 @@ export const OPACITE_PLEINE = 1000;
  * relevé » se lit exactement « indice ≥ vus ». C'est le même fait sur lequel
  * `positionAffichee` s'appuie déjà pour ne pas interpoler une entité neuve.
  *
- * @returns {{vus: number, depuis: Map<number, number>}}
+ * ⚠⚠ ET `depuis` PORTE DEUX NOMBRES DEPUIS LE LOT ARRIVÉE-CARTE-ET-BUILD :
+ * l'instant du stamp ET LA DURÉE CONTRACTÉE. La durée dépend de l'unité, donc
+ * elle ne peut plus être une constante du module ; et elle est FIGÉE au moment
+ * de l'arrivée plutôt que relue à chaque image, exactement comme
+ * `dernierDeplacementDelaiTicks` l'est au moment du saut. La relire ferait
+ * changer l'arrivée EN COURS DE ROUTE le jour où une unité ralentit sous un
+ * obstacle — `vitesseObstacleMilli` existe —, et la rampe s'étirerait sous les
+ * yeux du joueur.
+ *
+ * @returns {{vus: number, depuis: Map<number, {ms: number, dureeMs: number}>}}
  */
 export function creerArrivees() {
   return { vus: 0, depuis: new Map() };
@@ -145,7 +201,11 @@ function arrive(e) {
 export function noterLesArrivees(arrivees, etat, maintenantMs) {
   for (let i = arrivees.vus; i < etat.entites.length; i += 1) {
     const e = etat.entites[i];
-    if (arrive(e)) arrivees.depuis.set(e.indice, maintenantMs);
+    // ⚠ LA DURÉE SE CONTRACTE ICI, UNE FOIS. C'est le seul endroit qui voit
+    // l'entité au moment où elle naît, donc le seul qui puisse figer sa vitesse
+    // d'alors ; `etatDeLArrivee` ne reçoit qu'un indice et ne pourrait pas la
+    // retrouver sans relire l'état, ce que ce module ne fait pas.
+    if (arrive(e)) arrivees.depuis.set(e.indice, { ms: maintenantMs, dureeMs: dureeDArrivee(e) });
   }
   arrivees.vus = etat.entites.length;
 }
@@ -154,16 +214,26 @@ export function noterLesArrivees(arrivees, etat, maintenantMs) {
  * Où en est l'arrivée de cette entité — ou `null` si elle n'arrive pas (ou
  * plus).
  *
- * `decalageMilli` va d'une case entière à ZÉRO, `opacite` de 350 ‰ à 1000 ‰, les
- * deux linéairement sur `ARRIVEE_MS`.
+ * `decalageMilli` va d'une case entière à ZÉRO, linéairement, sur la durée que
+ * l'entité a CONTRACTÉE en naissant.
  *
- * ⚠⚠ LA RAMPE TOMBE EXACTEMENT SUR ZÉRO ET SUR MILLE À `ARRIVEE_MS`, ET C'EST
- * CE QUI COMPTE. Une rampe qui n'arriverait pas juste laisserait l'unité posée
- * un dixième de case sous sa case, à quatre-vingt-dix-neuf pour cent d'opacité —
- * POUR TOUJOURS, puisque plus rien ne la corrigerait ensuite. Les deux
- * expressions sont donc écrites en ENTIERS, avec la division en dernier : à
- * `ecoule = ARRIVEE_MS`, le numérateur du décalage est nul et celui de l'opacité
- * vaut exactement son dénominateur.
+ * ⚠⚠ ELLE NE REND PLUS D'OPACITÉ — Ethan, 10/09 : **« Ne pas faire de
+ * fantôme. »** Le second champ valait `OPACITE_ARRIVEE` (350 ‰) et montait à
+ * 1 000 ; il n'existe plus, et une unité en arrivée se dessine **au même alpha
+ * que tout le reste**. Ce qui reste est le seul mouvement : elle roule depuis la
+ * case du dessous, à pleine matière.
+ *
+ * ⚠ `OPACITE_PLEINE` ET LE CHAMP `alpha` DE `sprite()` RESTENT, EUX. Le champ est
+ * générique, il vaut mille par défaut, et `SB T6` garde la restauration de
+ * `globalAlpha`. Retirer la plomberie parce que son premier client s'en va
+ * obligerait le suivant à la réécrire — et un `globalAlpha` non restauré est une
+ * faute qu'aucun test sans navigateur ne verrait deux fois.
+ *
+ * ⚠⚠ LA RAMPE TOMBE EXACTEMENT SUR ZÉRO À L'ÉCHÉANCE, ET C'EST CE QUI COMPTE.
+ * Une rampe qui n'arriverait pas juste laisserait l'unité posée un dixième de
+ * case sous sa case — POUR TOUJOURS, puisque plus rien ne la corrigerait
+ * ensuite. L'expression est donc écrite en ENTIERS, division en dernier : à
+ * `ecoule === dureeMs`, le numérateur est nul.
  *
  * ⚠ LE DÉCALAGE EST VERS LE BAS DE LA GRILLE, ET LE SENS DE LECTURE N'EST PAS
  * DEVINABLE. Sur cet écran la bande de déploiement — rangées 1 et 2 — est EN
@@ -175,19 +245,18 @@ export function noterLesArrivees(arrivees, etat, maintenantMs) {
  * ⚠ UN INSTANT ANTÉRIEUR AU STAMP REND LE DÉPART, il ne lève pas et ne rend pas
  * un décalage plus grand qu'une case. Le pas-à-pas du simulateur peut dessiner
  * deux fois le même instant, et une horloge d'image n'est pas garantie
- * strictement croissante ; le fantôme doit rester dans sa case, pas sauter.
+ * strictement croissante ; l'unité doit rester dans sa case, pas sauter.
  *
- * @returns {{decalageMilli: number, opacite: number} | null}
+ * @returns {{decalageMilli: number} | null}
  */
 export function etatDeLArrivee(arrivees, indice, maintenantMs) {
   const depuis = arrivees.depuis.get(indice);
   if (depuis === undefined) return null;
-  const ecoule = Math.min(Math.max(maintenantMs - depuis, 0), ARRIVEE_MS);
-  if (maintenantMs - depuis > ARRIVEE_MS) return null;
+  const { ms, dureeMs } = depuis;
+  const ecoule = Math.min(Math.max(maintenantMs - ms, 0), dureeMs);
+  if (maintenantMs - ms > dureeMs) return null;
   return {
-    decalageMilli: Math.round((MILLI_PAR_CASE * (ARRIVEE_MS - ecoule)) / ARRIVEE_MS),
-    opacite: OPACITE_ARRIVEE
-      + Math.round(((OPACITE_PLEINE - OPACITE_ARRIVEE) * ecoule) / ARRIVEE_MS),
+    decalageMilli: Math.round((MILLI_PAR_CASE * (dureeMs - ecoule)) / dureeMs),
   };
 }
 
@@ -201,7 +270,7 @@ export function etatDeLArrivee(arrivees, indice, maintenantMs) {
  * il ne saurait pas quoi faire d'un instant, et lui en donner un aurait mis le
  * temps dans le module qui décrit une image.
  *
- * @returns {Map<number, {decalageMilli: number, opacite: number}>}
+ * @returns {Map<number, {decalageMilli: number}>}
  */
 export function arriveesALEcran(arrivees, maintenantMs) {
   const table = new Map();

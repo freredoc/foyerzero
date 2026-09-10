@@ -100,6 +100,15 @@ import {
 // le brief lui-même se propose de défaire plus tard.
 import { direLaDuree } from '../sim/reparation.js';
 import { dessinerLimiteDUneCase } from '../render/limite.js';
+// ⚠⚠ LA MINI-CARTE NE CALCULE RIEN ICI. Le module rend une GÉOMÉTRIE — les
+// bandes du sol, le rectangle d'une case — et une LISTE de marqueurs ; cet
+// écran ne fait que peindre ce qu'il rend. C'est le motif de `listeAffichage` et
+// de `render/terrain.js`, et c'est ce qui rend la mini-carte éprouvable dans un
+// dépôt qui n'a pas de navigateur.
+import {
+  LARGEUR_PX as MINI_LARGEUR, HAUTEUR_PX as MINI_HAUTEUR,
+  bandesDuSol, bordY, marqueursDeLaMiniCarte,
+} from '../render/mini-carte.js';
 import { dessinerRuineDUneCase } from '../render/embleme.js';
 import { PALETTE } from '../render/scene.js';
 import { baseCourante } from '../sim/base-courante.js';
@@ -1426,8 +1435,29 @@ export function lignesDuBilan(bilan) {
  */
 export function clesDesPoisAcquis(poisAcquis) {
   const cles = new Set();
-  for (const acquis of poisAcquis ?? []) cles.add(`${acquis.type}:${acquis.bande}`);
+  for (const acquis of poisAcquis ?? []) cles.add(cleDuPoi(acquis));
   return cles;
+}
+
+/**
+ * La clé d'un gisement — son TYPE et sa BANDE, jamais sa position.
+ *
+ * ⚠⚠ ELLE S'ÉCRIT ICI ET NULLE PART AILLEURS — lot ARRIVÉE-CARTE-ET-BUILD,
+ * 10/09. `clesDesPoisAcquis` la composait dans son corps ; depuis que
+ * `vueDesPois` reçoit une SÉLECTION faite de ces clés-là, deux endroits auraient
+ * eu à s'accorder sur un séparateur. Ils s'accorderaient jusqu'au jour où l'un
+ * des deux changerait, et la sélection ne retiendrait plus rien — **en silence**,
+ * puisqu'un filtre qui ne retient rien rend une liste vide et pas une erreur.
+ *
+ * ⚠ TYPE ET BANDE, ET C'EST LA MÊME PAIRE QUE `poiEstAcquis` COMPARE. Un
+ * gisement acquis l'est pour toujours et pour toute la bande : sa position ne
+ * fait pas partie de son identité.
+ *
+ * @param {{type: string, bande: number}} poi
+ * @returns {string}
+ */
+export function cleDuPoi(poi) {
+  return `${poi.type}:${poi.bande}`;
 }
 
 /**
@@ -1483,20 +1513,55 @@ export function phraseDesPoisAcquis(nombre) {
  * `lignesDuSite` écrit déjà la position d'un site dans cette forme-là ; en
  * inventer une seconde ferait lire deux grammaires sur le même écran.
  *
+ * ⚠⚠ ET ELLE PREND UNE SÉLECTION DEPUIS LE LOT ARRIVÉE-CARTE-ET-BUILD — Ethan,
+ * 10/09, à « le pop-up s'ouvre sur soixante-dix lignes, une acquisition annonce
+ * donc la carte entière — le filtrer ? » : **« Oui »**. Les DEUX chemins qui
+ * ouvrent ce panneau cessent de dire la même chose :
+ *
+ * - l'**ACQUISITION** passe l'ensemble des clés qui viennent d'entrer, et la vue
+ *   n'annonce que celles-là — le joueur veut savoir ce qu'il vient de prendre,
+ *   et rien d'autre ;
+ * - le **BOUTON** passe `null` et garde les soixante-dix : là, il demande l'état
+ *   des lieux.
+ *
+ * ⚠⚠ LA SÉLECTION EST UN ENSEMBLE DE CLÉS, PAS UNE LISTE DE GISEMENTS, et c'est
+ * ce qui la rend juste. `poisConnus` — la mémoire de session qui porte la
+ * différence entre deux relevés — EST déjà un `Set` de ces clés-là : lui faire
+ * traverser une seconde forme serait une conversion de plus à tenir d'accord.
+ *
+ * ⚠⚠ ET FILTRER N'EST PAS L'OCCASION DE RETRIER. L'ordre reste celui de
+ * `tirerLesPoi`, parce qu'on filtre la liste ENTIÈRE au lieu de parcourir la
+ * sélection : parcourir la sélection rendrait l'ordre d'insertion d'un `Set`,
+ * donc l'ordre où les gisements sont ENTRÉS, et deux ouvertures du panneau
+ * pourraient rendre deux ordres. `AC T5` compare l'ordre, pas seulement la
+ * longueur.
+ *
+ * ⚠ LE TITRE DIT TOUJOURS L'ÉTAT DES LIEUX, dans les deux cas — c'est le
+ * dénominateur que le joueur veut voir en prenant un gisement. Ce qui change,
+ * c'est ce que l'appelant met DEVANT : `ouvrirLesPois` préfixe la nouvelle.
+ *
+ * ⚠ ET UN GISEMENT DE LA SÉLECTION DIT SA COORDONNÉE, PAS « Acquis ». Il vient
+ * d'être pris — l'annoncer « acquis » serait redire le titre, quand ce que le
+ * joueur cherche est OÙ.
+ *
  * @param {number} graine
  * @param {Array<{type: string, bande: number}>} poisAcquis
- * @returns {{titre: string, sections: Array<object>}} la forme de `peindreLesLignes`
+ * @param {Set<string> | null} selection les clés à retenir, ou `null` pour tout
+ * @returns {{titre: string, lignes: Array<object>}} la forme de `peindreLesLignes`
  */
-export function vueDesPois(graine, poisAcquis) {
+export function vueDesPois(graine, poisAcquis, selection = null) {
   const liste = carteDesPoi(graine).liste;
   const acquis = liste.filter((poi) => poiEstAcquis(poisAcquis, poi));
+  const retenus = selection === null
+    ? liste
+    : liste.filter((poi) => selection.has(cleDuPoi(poi)));
   return {
     titre: `Gisements — ${acquis.length} / ${liste.length}`,
-    lignes: liste.map((poi) => ({
+    lignes: retenus.map((poi) => ({
       // ⚠ LE NOM VIENT DE `POI`, il ne se recompose pas — c'est la table qui fait
       // foi sur les libellés, et `EMBLEMES_CARTE` l'y lit déjà pour l'étiquette.
       quoi: `${POI[poi.type].nom} · bande ${poi.bande}`,
-      valeur: poiEstAcquis(poisAcquis, poi)
+      valeur: selection === null && poiEstAcquis(poisAcquis, poi)
         ? 'Acquis'
         : `${poi.rangee} · ${poi.colonne}`,
     })),
@@ -1650,6 +1715,9 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauConfirmer = $('monde-panneau-confirmer');
   const panneauRenoncer = $('monde-panneau-renoncer');
   const panneauAttaquer = $('monde-panneau-attaquer');
+  const miniPanneau = $('monde-mini-panneau');
+  const miniCanvas = $('monde-mini-canvas');
+  const miniCorps = $('monde-mini-corps');
   // ⚠⚠ LE MESSAGE DES GISEMENTS N'EST PLUS UN TOAST — Ethan, 10/09, point 11 :
   // « Plutôt qu'un toast mieux vaut avoir un pop-up pour les POI ». Il y avait
   // ici un `<div>` fabriqué à la main, posé dans `#monde-outils`, vidé par une
@@ -2873,8 +2941,13 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       poisConnus = cles;
       return;
     }
-    let neufs = 0;
-    for (const cle of cles) if (!poisConnus.has(cle)) neufs += 1;
+    // ⚠⚠ ON RETIENT LES CLÉS, PLUS SEULEMENT LEUR NOMBRE — lot
+    // ARRIVÉE-CARTE-ET-BUILD, 10/09. Le compte suffisait tant que le pop-up
+    // disait la carte entière ; il ne dit plus que ce qui vient d'entrer, et un
+    // nombre ne sait pas LESQUELS. C'est exactement ce que cette boucle voyait
+    // déjà passer et jetait.
+    const neufs = new Set();
+    for (const cle of cles) if (!poisConnus.has(cle)) neufs.add(cle);
     poisConnus = cles;
     // ⚠ UN SEUL MESSAGE, MÊME POUR PLUSIEURS. Un déplacement fait entrer tout un
     // octogone d'un coup : trois pop-up à la file sur un téléphone, c'est deux de
@@ -2885,7 +2958,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // et de quoi voir « les POI acquis. Et non acquis avec coordonnées ». Le
     // message EST donc la liste, titrée par la nouvelle : le joueur apprend qu'il
     // vient d'en prendre un et voit lequel sans un geste de plus.
-    if (neufs > 0) ouvrirLesPois(phraseDesPoisAcquis(neufs));
+    if (neufs.size > 0) ouvrirLesPois(phraseDesPoisAcquis(neufs.size), neufs);
   }
 
   // --- le panneau ------------------------------------------------------------
@@ -3209,10 +3282,126 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * second chemin pour la seconde moitié aurait donné deux panneaux qui disent la
    * même chose, dont un seul suivrait le prochain réglage.
    *
+   * ⚠⚠ ET DEPUIS LE 10/09 LES DEUX NE DISENT PLUS LA MÊME LISTE. `selection`
+   * porte les clés qui viennent d'entrer ; le bouton passe `null` et garde les
+   * soixante-dix. Ethan, à « une acquisition annonce donc la carte entière — le
+   * filtrer ? » : **« Oui »**. Les deux arguments vont ENSEMBLE — une annonce
+   * sans sélection redirait la carte entière sous un titre qui parle d'un seul
+   * gisement — et c'est le même appel qui les pose tous les deux.
+   *
    * ⚠ RIEN N'EST RECALCULÉ ICI : `vueDesPois` est PURE, elle lit `sim/poi.js`, et
    * elle est éprouvée sans écran. L'écran ne fait que poser ce qu'elle rend.
    */
-  function ouvrirLesPois(annonce = null) {
+  /**
+   * La mini-carte — l'empreinte de ce qu'elle montre, pour ne pas la repeindre.
+   *
+   * ⚠⚠ ELLE NE SE DESSINE QU'À L'OUVERTURE, ET C'EST UNE MESURE. Le canevas fait
+   * 1080 × 1920, soit 2,07 mégapixels ; le repeindre à chaque image coûterait
+   * 1 659 rectangles et deux mégapixels de remplissage soixante fois par seconde
+   * pour un panneau qu'on regarde trois secondes. Un dessin à l'ouverture, un
+   * autre si l'état change, et rien de plus.
+   *
+   * ⚠ LES QUATRE TERMES NE FONT QUE CROÎTRE, DONC LEUR LONGUEUR SUFFIT.
+   * `poisAcquis` ne se vide jamais — « un POI pris reste pris » —, `basesRasees`
+   * non plus — la purge d'une entrée périmée est INTERDITE, elle ferait
+   * reparaître la base. La graine ne bouge pas de la partie. Seule la position
+   * d'une base bouge vraiment, et elle est écrite en clair.
+   */
+  function empreinteDeLaMiniCarte(etat) {
+    const bases = etat.bases.map((b) => `${b.position.rangee}:${b.position.colonne}`).join(',');
+    return `${etat.graine}|${bases}|${(etat.poisAcquis ?? []).length}`
+      + `|${(etat.basesRasees ?? []).length}`;
+  }
+
+  let empreinteMiniCarte = null;
+
+  /**
+   * Le dessin de la mini-carte : les bandes du sol, puis les marqueurs.
+   *
+   * ⚠⚠ AUCUNE PLANCHE DE SOL ICI, ET C'EST LE POINT LE PLUS COÛTEUX DU §4. Les
+   * vingt-deux planches pèsent 2,2 Mo en base64 et se dessinent à 704 pixels de
+   * côté : à SIX pixels de haut par rangée, il n'en resterait qu'un bruit. Le
+   * sol est donc rendu en APLATS, un par bande de niveaux — celles-là mêmes que
+   * le panneau des gisements nomme sur chaque ligne.
+   *
+   * ⚠ RIEN D'AUTRE NE SE DESSINE : ni territoire peint, ni emblème de site, ni
+   * satellite. À six pixels de haut, une carte chargée est une carte illisible,
+   * et c'est la consigne du brief à la lettre.
+   *
+   * ⚠ LE CANEVAS SE DIMENSIONNE ICI, EN PIXELS D'APPAREIL, et il n'est pas
+   * question de `devicePixelRatio` : 1080 × 1920 est le TAMPON qu'Ethan demande.
+   * C'est le CSS qui décide de la surface, et `height: auto` lui garde le 1:1 sur
+   * un écran de 360 px de large à `devicePixelRatio` 3.
+   */
+  function dessinerLaMiniCarte() {
+    if (etatCourant === null) return;
+    miniCanvas.width = MINI_LARGEUR;
+    miniCanvas.height = MINI_HAUTEUR;
+    const g = miniCanvas.getContext('2d');
+    for (const bande of bandesDuSol()) {
+      g.fillStyle = bande.teinte;
+      g.fillRect(0, bande.y, MINI_LARGEUR, bande.hauteur);
+    }
+    const marqueurs = marqueursDeLaMiniCarte({
+      graine: etatCourant.graine,
+      poisAcquis: etatCourant.poisAcquis,
+      positions: etatCourant.bases.map((b) => b.position),
+      rasees: casesRasees(etatCourant),
+    });
+    for (const m of marqueurs) {
+      g.fillStyle = m.teinte;
+      g.fillRect(m.x, m.y, m.largeur, m.hauteur);
+    }
+    empreinteMiniCarte = empreinteDeLaMiniCarte(etatCourant);
+  }
+
+  /**
+   * Ouvre la mini-carte, et ne la redessine que si ce qu'elle montre a bougé.
+   *
+   * ⚠ ELLE FERME LE PANNEAU DE SITE. Les deux ne se lisent pas ensemble — la
+   * mini-carte couvre le champ — et laisser une fiche ouverte dessous ferait
+   * reparaître un « Attaquer » armé sur une cible qu'on ne voit plus.
+   */
+  function ouvrirLaMiniCarte() {
+    if (etatCourant === null) return;
+    desarmerLeDeplacement();
+    fermerPanneau();
+    if (empreinteMiniCarte !== empreinteDeLaMiniCarte(etatCourant)) dessinerLaMiniCarte();
+    miniPanneau.hidden = false;
+    cadrerLaMiniCarteSurLaBase();
+  }
+
+  /**
+   * Le cadrage d'ouverture : la base courante, au milieu de ce qui est visible.
+   *
+   * ⚠⚠ ELLE S'OUVRE SUR SOI, ET C'EST UNE MESURE QUI L'A EXIGÉ. Relevé dans
+   * Chromium à la géométrie du S25 FE : le canevas s'affiche sur **640 px CSS**
+   * de haut pour un corps qui en montre **588** — il reste 52 px sous le pli. La
+   * base de départ est rangée 295 sur 300, donc EXACTEMENT sous ce pli : ouvrir
+   * en haut de page montrait tout sauf l'endroit où le joueur se trouve.
+   *
+   * ⚠ L'ÉCHELLE SE MESURE, ELLE NE SE SUPPOSE PAS. Le tampon fait 1 920 px et le
+   * CSS décide de la hauteur affichée : le rapport des deux est le seul lien
+   * entre une rangée et un défilement, et écrire `devicePixelRatio` à sa place
+   * serait juste sur un écran de 360 px de large et faux partout ailleurs.
+   *
+   * ⚠ ET LE NAVIGATEUR BORNE `scrollTop` DE LUI-MÊME — une valeur négative vaut
+   * zéro, une valeur trop grande vaut le maximum. Le calcul n'a donc rien à
+   * borner, et le faux document des tests n'a rien à apprendre.
+   */
+  function cadrerLaMiniCarteSurLaBase() {
+    const hauteurCss = miniCanvas.clientHeight;
+    if (!hauteurCss) return;
+    const echelle = hauteurCss / MINI_HAUTEUR;
+    const y = bordY(baseCourante(etatCourant).position.rangee) * echelle;
+    miniCorps.scrollTop = y - miniCorps.clientHeight / 2;
+  }
+
+  function fermerLaMiniCarte() {
+    miniPanneau.hidden = true;
+  }
+
+  function ouvrirLesPois(annonce = null, selection = null) {
     if (etatCourant === null) return;
     // ⚠ CE QUI APPARTIENT À UN SITE S'EN VA, ET LA LISTE EST EXHAUSTIVE — c'est
     // ce qu'`ouvrirRuine` fait juste en dessous, et pour la même raison : le
@@ -3223,7 +3412,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     ciblageOuvert = null;
     ruineOuverte = null;
     deplacementEnAttente = null;
-    const vue = vueDesPois(etatCourant.graine, etatCourant.poisAcquis);
+    const vue = vueDesPois(etatCourant.graine, etatCourant.poisAcquis, selection);
     panneauTitre.textContent = annonce === null ? vue.titre : `${annonce} ${vue.titre}`;
     peindreLesLignes(vue.lignes);
     panneauPrix.hidden = true;
@@ -3353,6 +3542,13 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     ouvrirLesPois();
   });
 
+  // ⚠⚠ LA MINI-CARTE — point 12, 10/09. Même geste que ses deux voisins : elle
+  // désarme le déplacement avant d'ouvrir, sans quoi le mode resterait armé
+  // derrière un panneau qui couvre tout le champ, et le premier toucher après la
+  // fermeture déplacerait la base.
+  $('monde-mini').addEventListener('click', ouvrirLaMiniCarte);
+  $('monde-mini-fermer').addEventListener('click', fermerLaMiniCarte);
+
   $('monde-panneau-fermer').addEventListener('click', () => {
     // ⚠ FERMER DÉSARME AUSSI. Sans ça, le mode resterait armé sous un panneau
     // fermé, et le prochain toucher sur la carte déplacerait la base sans que
@@ -3440,6 +3636,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   /** L'écran quitte la scène : la boucle de complétion n'a plus à tourner. */
   function masquer() {
     visible = false;
+    // ⚠ LA MINI-CARTE SE REFERME EN SORTANT. `peindre` recadre la vue à chaque
+    // ouverture depuis le 06/09 : rouvrir l'écran sur un panneau resté ouvert
+    // d'il y a deux écrans montrerait une mini-carte par-dessus une carte qu'on
+    // vient de recentrer, et le joueur ne verrait pas le recentrage.
+    fermerLaMiniCarte();
     if (idImage !== null) {
       fenetre.cancelAnimationFrame(idImage);
       idImage = null;

@@ -151,10 +151,46 @@
   /* ⚠ UNE RÈGLE, DEUX SÉLECTEURS : le bouton des gisements est le jumeau de
      celui-ci — même geste, même coin, même habillage. Une seconde déclaration se
      serait tue au premier réglage. */
-  #monde-recentrer, #monde-poi {
+  #monde-recentrer, #monde-poi, #monde-mini {
     flex: 0 0 auto; padding: 4px 8px; font-size: 10px;
     letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+  }
+  /* ⚠⚠ LA MINI-CARTE COUVRE LE CHAMP — Ethan, 10/09, « une mini carte qui passe
+     sur 1080 1920 avec les poi ». Elle se pose sur `#monde-champ` en `absolute`,
+     donc elle n'ajoute AUCUNE barre : le chrome fixe reste à 288 px, comme les
+     deux boutons de zoom et le panneau de site avant elle. Son `z-index` passe
+     au-dessus de celui du panneau (3) : les deux ne se lisent pas ensemble. */
+  #monde-mini-panneau {
+    position: absolute; inset: 0; z-index: 4;
+    display: flex; flex-direction: column; background: #161914;
+  }
+  /* Même en-tête que le panneau d'un site — un seul habillage pour cet écran. */
+  #monde-mini-panneau .tete {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; background: #343A2C; border-bottom: 1px solid #161914;
+  }
+  #monde-mini-titre { flex: 1; min-width: 0; font-size: 12px; color: #F5F3E8; }
+  #monde-mini-fermer {
+    flex: 0 0 auto; padding: 4px 10px; font-size: 11px;
+    background: #1E2124; color: #8C9A72; border: 1px solid #161914;
+  }
+  /* ⚠⚠ LE CANEVAS S'AFFICHE À SA LARGEUR, ET C'EST LE CORPS QUI DÉFILE. Son
+     tampon fait 1080 × 1920 pixels D'APPAREIL ; à `devicePixelRatio` 3 cela vaut
+     360 × 640 px CSS — la largeur exacte d'un téléphone, et 640 px de haut pour
+     un cadre qui en montre environ 430. `height: auto` garde donc le rapport, et
+     le 1:1 avec le tampon partout où l'écran fait 360 px de large.
+     ⚠ L'AUTRE LECTURE — étirer le canevas à la hauteur du cadre — a été écartée :
+     la carte est DÉJÀ écrasée d'un facteur 5,4 par la demande d'Ethan (une case
+     fait 34,8 px de large sur 6,4 de haut), et la réécraser d'un tiers rendrait
+     une rangée sur trois illisible. Le panneau défile, il ne comprime pas.
+     ⚠ `image-rendering: pixelated` : une rangée fait six pixels de haut et un
+     marqueur de gisement en fait six sur trente-cinq — un lissage les rendrait
+     à un gris uniforme, ce qui est exactement l'inverse de ce qu'on dessine. */
+  #monde-mini-corps { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  #monde-mini-corps::-webkit-scrollbar { display: none; }
+  #monde-mini-canvas {
+    display: block; width: 100%; height: auto; image-rendering: pixelated;
   }
   /* Le panneau d'un site — même grammaire que celui du Chantier : il se pose
      sur le champ, il ne le remplace pas. Le joueur doit garder sous les yeux
@@ -649,18 +685,37 @@
     border: 0; border-right: 1px solid #1E2124; padding: 0;
   }
   #tete-onglets button:last-child { border-right: 0; }
-  /* ⚠⚠ LE JOURNAL NE PREND PAS UNE PART D'ONGLET — point 4, 10/09.
-     `#tete-onglets button { flex: 1 }` partage la barre en parts égales : le
-     sixième bouton aurait pris un sixième de la largeur, donc retiré un sixième
-     aux cinq onglets, dont les libellés sont déjà en 11 px sur 360 px CSS. Il est
-     borné à 32 px — la largeur d'un glyphe et de ses marges de doigt — et les
-     cinq onglets se partagent ce qui reste.
+  /* ⚠⚠ LE JOURNAL PORTE UN MOT, ET IL N'A PLUS AUCUNE RÈGLE À LUI — Ethan,
+     10/09 : « Pas d'emoji mais un mot journal comme les autres boutons ». La
+     règle `#tete-rapport` disparaît ENTIÈREMENT : elle posait `flex: 0 0 32px`,
+     `font-size: 16px`, `text-transform: none` et `letter-spacing: 0`, c'est-à-dire
+     exactement les quatre déclarations qui faisaient d'un pictogramme autre chose
+     qu'un libellé. Il prend donc sa part de `#tete-onglets button` comme les cinq
+     autres.
+     ⚠⚠ ET IL NE DEVIENT PAS UN ONGLET POUR AUTANT. Son identifiant reste
+     `tete-rapport` — il ne commence pas par `onglet-` —, il ne prend jamais
+     `.actif`, et `ONGLET_DE_L_ECRAN` de `ui/session.js` ne le connaît pas : il n'a
+     pas d'écran, il ouvre un panneau. La garde de la barre sépare les deux
+     populations, cinq onglets et un bouton, au lieu de compter six boutons.
+     ⚠⚠ ET LA POLICE NE DESCEND PAS — MESURÉE, PAS SUPPOSÉE. Le brief prédisait
+     que six mots à 11 px ne tiendraient pas dans 360 px CSS et qu'il faudrait
+     baisser les six. Relevé dans Chromium à la géométrie du S25 FE, police
+     réelle « Roboto Condensed », `letter-spacing: 0.06em`, capitales : BASE
+     31,66 + JOURNAL 54,11 + MISSION 51,45 + RECHERCHE 73,44 + MONDE 45,11 +
+     OPTIONS 53,75 = **309,52 px**, plus six bordures d'un pixel = **315,52 px sur
+     360**, soit 87,6 % de la barre et 44,5 px de mou. **Zéro coupure, zéro
+     débordement.** Baisser la police aurait rapetissé cinq libellés justes pour
+     un débordement qui n'a pas lieu.
+     ⚠ ET ELLE TIENT PLUS ÉTROIT QUE LA CIBLE : mesuré à 412, 393, 360 et 320 px
+     CSS, les six tiennent aux quatre largeurs — à 320 il reste 4,5 px. C'est en
+     dessous de 320 que le mur arrive, et aucun téléphone en service n'y est.
+     ⚠ CE QUI TRAVAILLE EST `flex: 1 1 0%` AVEC `min-width: auto` : RECHERCHE, le
+     plus long, garde sa largeur de contenu et les cinq autres se partagent le
+     reste. Mesuré avant le lot, à cinq onglets et un glyphe : RECHERCHE tenait
+     déjà 74,44 px contre 63,39 aux autres. Le partage n'a jamais été égal, et
+     c'est ce qui donne le mou.
      ⚠ ET LA HAUTEUR DE LA BARRE NE BOUGE PAS : `flex: 0 0 40px` est intact, donc
-     les 288 px de chrome que `chantier.test.js` somme sont inchangés. C'est la
-     condition pour que ce point ne coûte pas un pixel de champ.
-     ⚠ SON GLYPHE EST PLUS GROS QUE LE LIBELLÉ D'UN ONGLET — 16 px contre 11 —,
-     comme il l'était sur le champ : c'est un pictogramme, pas un mot. */
-  #tete-rapport { flex: 0 0 32px; font-size: 16px; text-transform: none; letter-spacing: 0; }
+     les 288 px de chrome que `chantier.test.js` somme sont inchangés. */
   #tete-onglets button.actif { color: #F5F3E8; background: #343A2C; box-shadow: inset 0 -2px 0 #8C9A72; }
   /* Les onglets à venir : rien derrière eux, et ça doit se voir. */
 
@@ -2448,7 +2503,7 @@
          posés sur deux champs deviennent un bouton dans une barre qui existait,
          et les deux cases qu'ils couvraient sont rendues au joueur. -->
     <button type="button" id="tete-rapport"
-            title="Journal des raids" aria-label="Journal des raids">▤</button>
+            title="Journal des raids">Journal</button>
     <button type="button" id="onglet-mission">Mission</button>
     <button type="button" id="onglet-recherche">Recherche</button>
     <button type="button" id="onglet-monde">Monde</button>
@@ -2964,6 +3019,35 @@
                en `flex` : le chrome fixe reste à 288 px. Même habillage que son
                voisin ; cet écran n'invente pas un troisième style de bouton. -->
           <button type="button" id="monde-poi">Gisements</button>
+          <!-- ⚠⚠ LA MINI-CARTE — Ethan, 10/09 : « faire un bouton une mini
+               carte qui passe sur 1080 1920 avec les poi ». La grande carte
+               montre au plus une trentaine de rangées sur trois cents : le
+               joueur n'avait aucun moyen de voir d'un coup où il est, où sont
+               les gisements et jusqu'où l'Ouvrage descend.
+               ⚠ TROISIÈME BOUTON DE LA MÊME BOÎTE, MÊME RÈGLE ET MÊME
+               HABILLAGE : `#monde-outils` est déjà en `absolute` au coin haut
+               et en `flex`, donc le chrome fixe reste à 288 px et cet écran
+               n'invente toujours pas un second style de bouton. -->
+          <button type="button" id="monde-mini">Mini-carte</button>
+        </div>
+        <!-- ⚠⚠ LE PANNEAU DE LA MINI-CARTE — il COUVRE le champ, il ne se
+             pose pas dessus. C'est le seul panneau de cet écran dans ce cas, et
+             c'est voulu : une carte du monde entier lue à travers la moitié
+             haute d'un écran ne dit plus rien. Il passe donc AU-DESSUS du
+             panneau de site (`z-index: 3`), qu'il masque le temps qu'on le
+             regarde.
+             ⚠ LE CANEVAS N'A NI `width` NI `height` ICI : ils valent
+             1080 × 1920 et se posent dans `ui/monde.js`, où ils se lisent dans
+             `render/mini-carte.js`. Les écrire dans le balisage ferait deux
+             vérités sur la même géométrie. -->
+        <div id="monde-mini-panneau" hidden>
+          <div class="tete">
+            <b id="monde-mini-titre">Mini-carte</b>
+            <button type="button" id="monde-mini-fermer">Fermer</button>
+          </div>
+          <div id="monde-mini-corps">
+            <canvas id="monde-mini-canvas"></canvas>
+          </div>
         </div>
         <div id="monde-panneau" hidden>
           <div class="tete">

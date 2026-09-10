@@ -2808,34 +2808,39 @@ test('mise en page — le chrome fixe tient dans l\'écran, et rien ne défile d
   // jamais avec celles du Chantier — c'est l'autre écran. Une de plus fait
   // tomber ce compte, ce qui force à REGARDER plutôt qu'à ajouter.
   const barresOffense = ['offense-contexte', 'offense-palette'];
-  // ⚠⚠ ET LE BALAYAGE COMPTE DES PIXELS DE `flex-basis`, PAS DES HAUTEURS — la
-  // nuance est apparue le 10/09 avec le bouton du rapport, et elle était là
-  // depuis le début. `flex: 0 0 Npx` vaut une HAUTEUR sur un enfant de `#jeu`,
-  // qui est une colonne, et une LARGEUR sur un enfant de `#tete-onglets`, qui est
-  // une rangée. `#tete-rapport` est du second genre : il ne coûte pas un pixel de
-  // hauteur, il prend 32 px de LARGEUR aux cinq onglets.
+  // ⚠⚠ ET L'EXCEPTION DU BOUTON DU RAPPORT A DISPARU AVEC SA LARGEUR — lot
+  // ARRIVÉE-CARTE-ET-BUILD, 10/09. Elle existait parce que `flex: 0 0 Npx` vaut
+  // une HAUTEUR sur un enfant de `#jeu`, qui est une colonne, et une LARGEUR sur
+  // un enfant de `#tete-onglets`, qui est une rangée : `#tete-rapport` était du
+  // second genre, il ne coûtait pas un pixel de hauteur et prenait 32 px de
+  // largeur aux cinq onglets. Ethan a demandé « pas d'emoji mais un mot journal
+  // comme les autres boutons » : la règle entière est partie, donc l'exception
+  // n'a plus d'objet — et **elle est RETIRÉE, pas gardée sans porteur**, ce que
+  // sa propre assertion de non-vacuité exigeait en tombant.
   //
-  // ⚠ L'EXCEPTION EST DONC NOMMÉE **ET PROUVÉE**, pas seulement retirée du
-  // compte : on exige que son conteneur soit bien une rangée. Le jour où
-  // `#tete-onglets` passerait en colonne, ces 32 px deviendraient une hauteur, la
-  // ligne ci-dessous tomberait, et le chrome serait à recalculer.
-  const surLAxeDesLargeurs = ['tete-rapport'];
+  // ⚠⚠ ET CE QUI LA REMPLACE EST PLUS FORT : LE BALAYAGE EST DÉSORMAIS SANS
+  // EXCEPTION. Tout `flex: 0 0 Npx` de la feuille est une hauteur de barre, et
+  // le compte se fait sur la liste ENTIÈRE. Un bouton borné en largeur qui
+  // reviendrait dans `#tete-onglets` ferait tomber cette ligne au lieu d'être
+  // exempté d'avance, et il faudrait alors ré-écrire l'exception EN LA PROUVANT.
+  const fixes = [...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
+    .map((m) => m[1]);
+  assert.deepEqual(fixes.slice().sort(), [...barres, ...barresOffense].sort(),
+    'une barre à hauteur fixe est apparue ou a disparu : le chrome a changé');
+  // ⚠ ET `#tete-onglets` RESTE UNE RANGÉE, ce qui est ce qui rend la phrase
+  // « tout `flex: 0 0 Npx` est une hauteur » vraie. Le jour où il passerait en
+  // colonne, un enfant borné y coûterait une hauteur sans que ce compte le voie.
   const teteOnglets = feuille.match(/#tete-onglets\s*\{([^}]*)\}/);
   assert.ok(teteOnglets, 'la règle de #tete-onglets a disparu');
   assert.match(teteOnglets[1], /display:\s*flex/,
-    '#tete-onglets n\'est plus un conteneur flex : #tete-rapport pourrait coûter une hauteur');
+    '#tete-onglets n\'est plus un conteneur flex');
   assert.doesNotMatch(teteOnglets[1], /flex-direction:\s*column/,
-    '#tete-onglets est passé en colonne : les 32 px du rapport sont devenus une hauteur');
-  const fixes = [...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
-    .map((m) => m[1])
-    .filter((id) => !surLAxeDesLargeurs.includes(id));
-  assert.deepEqual(fixes.slice().sort(), [...barres, ...barresOffense].sort(),
-    'une barre à hauteur fixe est apparue ou a disparu : le chrome a changé');
-  // ⚠ ET L'EXCEPTION N'EST PAS VACUEUSE : sans elle le balayage retrouve bien le
-  // bouton du rapport, donc la ligne ci-dessus mesure quelque chose.
-  assert.ok([...feuille.matchAll(/#([a-zA-Z-]+)\s*\{[^}]*flex:\s*0 0 \d+px/g)]
-    .map((m) => m[1]).includes('tete-rapport'),
-  '#tete-rapport n\'a plus de largeur fixe : l\'exception ci-dessus ne sert plus');
+    '#tete-onglets est passé en colonne : un enfant borné y coûterait une hauteur');
+  // ⚠ ET LE BOUTON DU RAPPORT N'A PLUS AUCUNE RÈGLE À LUI — c'est ce qui fait de
+  // lui « un bouton comme les autres », et c'est la moitié que le balayage
+  // ci-dessus ne peut pas voir : il ne cherche que les largeurs bornées.
+  assert.doesNotMatch(feuille, /#tete-rapport\s*\{/,
+    '#tete-rapport a retrouvé une règle à lui : il cesse d\'être un bouton comme les autres');
 
   // ⚠ ET L'ÉCRAN OFFENSE SE MESURE AUSSI, DEPUIS QU'IL A SA BARRE CONTEXTUELLE
   // (29/08). Il partage l'en-tête et la barre du bas ; ce qui lui est propre,
@@ -4238,7 +4243,14 @@ test('décor — l\'écran choisit son fond sur la FONDATION, et il n\'y a plus 
   // d'être un fond du jeton — `background-image` ne sait pas tourner — pour
   // devenir un enfant en position absolue que `transform` fait pivoter. Un
   // sprite tourné en fractionnaire est le cas où `pixelated` compte le plus.
-  assert.equal((feuilleNue.match(/image-rendering:\s*pixelated/g) ?? []).length, 8,
+  //
+  // ⚠⚠ ET LE NEUVIÈME ENTRE AU LOT ARRIVÉE-CARTE-ET-BUILD, 10/09 : c'est le
+  // canevas de la mini-carte. Une rangée y fait SIX pixels de haut et un
+  // marqueur de gisement six sur trente-cinq ; le canevas s'affiche à sa largeur
+  // et non à celle du cadre, donc il est rééchantillonné dès que l'écran ne fait
+  // pas 360 px CSS de large. Un lissage rendrait ces six pixels à un gris — le
+  // cas où `pixelated` compte le plus, pour la seconde fois.
+  assert.equal((feuilleNue.match(/image-rendering:\s*pixelated/g) ?? []).length, 9,
     'le compte des `image-rendering: pixelated` a bougé sans qu\'on le dise');
 
   // ⚠⚠ LE DÉCOR SE CHOISIT SUR `fondation`, PAS SUR `position`. C'est l'IDENTITÉ
@@ -6994,4 +7006,209 @@ test('PAL T8 — et le GESTE passe aussi : la palette ne ment pas', () => {
     assert.equal(p.raison, 'se débloque par la recherche',
       `« ${p.id} » : verrouillé pour autre chose que la recherche`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// AC T7 — la barre du haut porte six mots, et ils tiennent
+// ---------------------------------------------------------------------------
+
+test('AC T7 — six libellés en toutes lettres, aucun glyphe, et ils tiennent dans 360 px', () => {
+  // ⚠⚠ ETHAN, 10/09 : « Pas d'emoji mais un mot journal comme les autres
+  // boutons ». Le bouton du rapport portait `▤` et une règle à lui — 32 px de
+  // large, 16 px de police, ni capitales ni interlettrage. Les quatre
+  // déclarations sont parties ensemble : ce sont exactement celles qui faisaient
+  // d'un pictogramme autre chose qu'un libellé.
+  const html = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/);
+  assert.ok(barre, 'la barre d\'onglets a disparu');
+
+  const libelles = [...barre[1].matchAll(/<button[^>]*>([^<]*)</g)].map((m) => m[1].trim());
+  assert.deepEqual(libelles, ['Base', 'Journal', 'Mission', 'Recherche', 'Monde', 'Options'],
+    'les six libellés de la barre ont changé');
+
+  // ⚠⚠ AUCUN GLYPHE, ET LA GARDE PORTE SUR LA CLASSE DE CARACTÈRES, PAS SUR `▤`.
+  // Refuser le seul caractère qu'on vient de retirer serait une garde qui ne
+  // regarde que le passé : ce qui doit rester vrai, c'est qu'un libellé de cette
+  // barre est fait de LETTRES. Un `☰`, un `📖` ou un `⚑` tombent aussi.
+  for (const libelle of libelles) {
+    assert.match(libelle, /^[A-Za-zÀ-ÿ]+$/,
+      `« ${libelle} » n'est pas un mot : la barre a retrouvé un glyphe`);
+  }
+
+  // ⚠ ET LE BOUTON DU RAPPORT N'A PLUS DE RÈGLE À LUI, ni de `aria-label` : le
+  // texte visible EST son nom accessible depuis qu'il en a un. Un `aria-label`
+  // laissé là ferait dire au lecteur d'écran autre chose que ce qui est écrit.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  assert.doesNotMatch(feuille, /#tete-rapport\s*\{/,
+    '#tete-rapport a retrouvé une règle à lui');
+  assert.doesNotMatch(barre[1], /aria-label/,
+    'un libellé écrit en clair n\'a pas besoin d\'un `aria-label`');
+
+  // ⚠⚠ LA LARGEUR SE CALCULE, ELLE NE SE MESURE PAS SANS NAVIGATEUR — ET C'EST
+  // DIT PLUTÔT QUE CONTOURNÉ. Le dépôt n'a ni jsdom ni moteur de rendu
+  // (`CLAUDE.md` §3) : ce test ne peut donc borner que par le HAUT, avec une
+  // avance par caractère qui MAJORE ce qu'un rendu réel donne.
+  //
+  // ⚠ LE MAJORANT EST **8,5 px**, ET IL VIENT D'UNE MESURE. Relevé dans Chromium
+  // à la géométrie du S25 FE — 360 × 780 CSS, `devicePixelRatio` 3, police
+  // réelle « Roboto Condensed », `font-size: 11px`, `letter-spacing: 0.66px`,
+  // capitales — les six libellés rendent **309,52 px pour 39 caractères**, soit
+  // **7,937 px par caractère**. 8,5 laisse 7 % de marge sur cette avance, ce qui
+  // couvre une police de repli plus large que Roboto Condensed.
+  //
+  // ⚠ ET LES SIX BORDURES D'UN PIXEL COMPTENT : `#tete-onglets button` porte
+  // `border-right: 1px`, et `:last-child` la retire — cinq bordures, plus celle
+  // de la barre. Total mesuré **315,52 px sur 360**, soit **44,48 px de mou**.
+  const AVANCE_MAX_PX = 8.5;
+  const BORDURES_PX = 6;
+  const LARGEUR_CSS = 360;
+  const caracteres = libelles.reduce((s, l) => s + l.length, 0);
+  assert.equal(caracteres, 39, 'le nombre de caractères de la barre a changé : remesurer');
+  const majorant = caracteres * AVANCE_MAX_PX + BORDURES_PX;
+  assert.ok(majorant < LARGEUR_CSS,
+    `${caracteres} caractères majorés à ${majorant.toFixed(1)} px : la barre ne tient plus dans ${LARGEUR_CSS}`);
+
+  // ⚠⚠ ET LE MAJORANT EST SERRÉ, CE QUI EST CE QUI LUI DONNE SA VALEUR. Il reste
+  // **quarante et un caractères** de place au plus : renommer un onglet en un
+  // mot plus long fait tomber ce test au dépôt, et non chez le joueur sous la
+  // forme d'un libellé coupé. La police, elle, NE DESCEND PAS — le brief le
+  // prédisait, la mesure le contredit, et rapetisser cinq libellés justes pour
+  // un sixième qui tient aurait été un réglage sans cause.
+  const maxCaracteres = Math.floor((LARGEUR_CSS - BORDURES_PX) / AVANCE_MAX_PX);
+  assert.equal(maxCaracteres, 41, 'le majorant a bougé : le calcul écrit au-dessus est périmé');
+  assert.ok(caracteres <= maxCaracteres);
+
+  // ⚠ LA POLICE DES SIX EST CELLE DE LA RÈGLE PARTAGÉE, ET ELLE VAUT ONZE.
+  const regle = feuille.match(/#tete-onglets button\s*\{([^}]*)\}/);
+  assert.ok(regle, 'la règle partagée des boutons de la barre a disparu');
+  assert.match(regle[1], /font-size:\s*11px/, 'la police de la barre a changé sans qu\'on le dise');
+  assert.match(regle[1], /text-transform:\s*uppercase/, 'les libellés ne sont plus en capitales');
+  assert.match(regle[1], /flex:\s*1/, 'les six ne se partagent plus la barre');
+
+  // ⚠ ET LA HAUTEUR DE LA BARRE NE BOUGE PAS : les 288 px de chrome que ce
+  // fichier somme ailleurs en dépendent, et le §5 du brief l'exige nommément.
+  assert.match(feuille, /#tete-onglets \{[^}]*flex: 0 0 40px/,
+    '#tete-onglets a changé de hauteur : le chrome fixe n\'est plus à 288 px');
+});
+
+// ---------------------------------------------------------------------------
+// AC T8 — le livrable n'a plus de commentaire CSS, et il a toujours ses images
+// ---------------------------------------------------------------------------
+
+test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autre', () => {
+  // ⚠⚠ LE CSS N'EST PAS MINIFIÉ, ET C'EST LE FAIT QUE `PIC T7` MESURE DEPUIS LE
+  // LOT PALETTES-ET-DEFENSE : `tools/build.js` passe `minify: true` à esbuild
+  // pour le JavaScript SEUL, si bien qu'un commentaire de JS ne pèse RIEN dans
+  // le livrable et qu'un commentaire de feuille y part à l'octet. Ce dépôt en
+  // écrit beaucoup, et à dessein — ils portent la raison des règles. Ils sortent
+  // donc au BUILD, et restent dans la source.
+  const produit = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  const source = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+
+  const bloc = (texte, ouverture, fermeture) => {
+    const i = texte.indexOf(ouverture);
+    assert.ok(i >= 0, `bloc « ${ouverture} » introuvable`);
+    const d = i + ouverture.length;
+    const f = texte.indexOf(fermeture, d);
+    assert.ok(f > d, `bloc « ${fermeture} » introuvable`);
+    return texte.slice(d, f);
+  };
+  const feuilleProduite = bloc(produit, '<style>', '</style>');
+  const feuilleSource = bloc(source, '<style>', '</style>');
+
+  // ⚠⚠ ZÉRO `/*` DANS LA FEUILLE PRODUITE. Le scanner n'en laisse aucun : ni
+  // dans une règle, ni entre deux règles, ni au bout d'une ligne.
+  assert.equal(feuilleProduite.includes('/*'), false,
+    'un commentaire CSS a survécu au build');
+  // ⚠ ET LA SOURCE EN PORTE TOUJOURS BEAUCOUP — sans quoi « zéro dans le
+  // produit » serait vrai d'un lot qui aurait effacé les commentaires du DÉPÔT.
+  assert.ok((feuilleSource.match(/\/\*/g) ?? []).length > 100,
+    'la source a perdu ses commentaires : ils devaient sortir au BUILD, pas du dépôt');
+  // ⚠ ET LE BALISAGE AUSSI EST NU — les commentaires HTML sortaient déjà, et
+  // c'est ce qui rend la mesure de `PIC T7` ventilable poste par poste.
+  assert.equal(produit.includes('<!--'), false, 'un commentaire HTML a survécu au build');
+
+  // ⚠⚠ ET LA FEUILLE PRODUITE EST TOUJOURS UNE FEUILLE — c'est le témoin qui
+  // empêche « zéro commentaire » d'être vrai d'un bloc vide.
+  assert.ok(feuilleProduite.includes('#tete-onglets'),
+    'la feuille produite a perdu ses règles : le scanner a mangé le CSS');
+  assert.ok(feuilleProduite.length > 20_000,
+    `la feuille produite ne fait que ${feuilleProduite.length} octets`);
+
+  // ⚠⚠ ET LA SECONDE MOITIÉ EST LA MOITIÉ QUI COMPTE — le brief le dit en
+  // toutes lettres. Une expression régulière naïve mange le `/*` qui tombe dans
+  // une chaîne base64 et casse une image EN SILENCE : le HTML reste valide, la
+  // page se charge, et un sprite manque. C'est la seule chose qui distingue ce
+  // travail d'un travail raté, et elle se mesure sur les URI eux-mêmes.
+  const URI = /data:(image|audio)\/([A-Za-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)/g;
+  const uris = [...produit.matchAll(URI)];
+  assert.equal(uris.length, 306,
+    `le livrable porte ${uris.length} URI au lieu des 306 d'avant le lot`);
+
+  // ⚠ CHACUN SE DÉCODE : longueur base64 valide, et en-tête du format annoncé.
+  const ENTETES = {
+    webp: (b) => b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP',
+    png: (b) => b.slice(1, 4).toString('latin1') === 'PNG',
+    ogg: (b) => b.slice(0, 4).toString('latin1') === 'OggS',
+  };
+  const comptes = {};
+  for (const [, genre, format, base64] of uris) {
+    assert.equal(base64.length % 4, 0, `URI ${genre}/${format} : longueur base64 invalide`);
+    const octets = Buffer.from(base64, 'base64');
+    assert.ok(octets.length > 100, `URI ${genre}/${format} : ${octets.length} octets décodés`);
+    const cle = format === 'opus' || format === 'ogg' ? 'ogg' : format;
+    assert.ok(ENTETES[cle] !== undefined, `format inattendu dans le livrable : ${format}`);
+    assert.ok(ENTETES[cle](octets),
+      `URI ${genre}/${format} : l'en-tête n'est pas celui d'un ${format}`);
+    comptes[format] = (comptes[format] ?? 0) + 1;
+  }
+  // ⚠ ET LE PARTAGE EST FIGÉ : 263 sons, 41 WebP, 2 PNG. Un compte global juste
+  // masquerait une image devenue un son, ce qu'un scanner cassé peut produire.
+  // ⚠ LE TYPE MIME DES SONS EST `audio/ogg`, PAS `audio/opus` — l'Opus voyage
+  // dans un conteneur Ogg, et c'est son en-tête `OggS` que la ligne ci-dessus
+  // vérifie. Le mesurer plutôt que de l'écrire de mémoire a coûté un essai.
+  assert.deepEqual(comptes, { ogg: 263, webp: 41, png: 2 },
+    'la répartition des ressources du livrable a changé');
+
+  // ⚠⚠ ET AUCUN `data:` NE PORTE DE `/*`, CE QUI EST LA FAUTE EXACTE QU'ON
+  // ÉVITE. Mesuré : c'est possible — le base64 emploie `/` et `*` n'y est pas,
+  // mais `*/` n'a pas besoin d'exister pour qu'une expression régulière gloutonne
+  // mange tout entre le premier `/*` d'un commentaire et le `*/` suivant, en
+  // emportant les URI qui sont entre les deux. Le scanner, lui, saute les
+  // chaînes et les `url(…)` non guillemetées, et cette ligne mesure qu'il a eu
+  // raison de le faire.
+  for (const [uri] of uris) {
+    assert.equal(uri.includes('/*'), false, 'un URI porte « /* » : le scanner devait le sauter');
+  }
+
+  // ⚠⚠ ET LA FALSIFICATION QUI COMPTE MORD DANS L'OUTIL, PAS ICI — MESURÉ, ET
+  // C'EST LE FAIT LE PLUS UTILE DU §6. Remplacer tout le scanner de
+  // `tools/build.js` par une expression régulière non gloutonne ne fait tomber
+  // AUCUN test du dépôt, celui-ci compris : la feuille d'aujourd'hui ne porte ni
+  // chaîne ni adresse contenant une ouverture de commentaire — **173 chaînes,
+  // zéro ; 18 `url(…)`, toutes citées, zéro** —, et le retrait passe AVANT
+  // l'inlinage, donc il n'y a pas un octet de base64 sous ses yeux. Le naïf est
+  // juste aujourd'hui et faux demain, ce qui est le pire cas qu'une suite verte
+  // puisse laisser passer.
+  //
+  // ⚠⚠ D'OÙ LA GARDE DANS L'OUTIL, ET C'EST LE BON ENDROIT — l'idiome de
+  // `verifier_les_coupes` de `tools/planches.py` et d'`assert_bord` de
+  // `tools/bords.py`. `verifierLeScanner` confronte le scanner à une feuille
+  // témoin qui porte le piège, à chaque build : mesuré, le naïf y mange **la
+  // règle `#b` entière et son `data:`**, et le BUILD échoue au lieu de produire
+  // une page à l'image tronquée. Ce test-ci garde la garde : la retirer laisse
+  // le livrable juste et le lot suivant sans filet.
+  const build = readFileSync(join(RACINE, 'tools', 'build.js'), 'utf8');
+  assert.ok(build.includes('function verifierLeScanner()'),
+    'tools/build.js ne confronte plus son scanner à son propre piège');
+  assert.ok(build.includes('verifierLeScanner();'),
+    'la garde du scanner existe et n\'est plus appelée');
+
+  // ⚠ LE COMPTE DE LIGNES `data:`, LUI, A BOUGÉ — 311 → 307 —, et c'est voulu :
+  // les quatre qui partent sont des COMMENTAIRES qui nommaient `data:` sans en
+  // porter un. Le compte d'URI est le seul qui dise quelque chose sur les
+  // ressources ; celui des lignes dit aussi quelque chose sur la prose.
+  const lignesData = produit.split('\n').filter((l) => l.includes('data:')).length;
+  assert.equal(lignesData, 307,
+    `le livrable porte ${lignesData} lignes « data: » au lieu de 307`);
 });

@@ -99,9 +99,165 @@ if (js.includes('</script')) {
   echec('le bundle contient « </script » : injection inline impossible sans corruption du HTML');
 }
 
+// --- les commentaires de la feuille -------------------------------------------
+//
+// ⚠⚠ ETHAN, 10/09 : « Les virer du build. » Mesuré sur `src/index.src.html` :
+// la feuille pèse **140 123 octets sur 201 866**, soit 69,4 % de la source, et
+// ses **182 blocs `/* … */` en font 96 125** — presque la moitié. Ils portent
+// les arbitrages, les mesures et les raisons ; ils ne servent à personne dans le
+// livrable.
+//
+// ⚠⚠ ET LA SOURCE NE PERD PAS UNE LIGNE. C'est ce qui rend cette feuille
+// relisible, et un lot qui les supprimerait dans `src/` serait à refuser. Ils
+// sortent du LIVRABLE, jamais du dépôt.
+//
+// ⚠⚠ UNE EXPRESSION RÉGULIÈRE NAÏVE DÉTRUIRAIT LE LIVRABLE EN SILENCE, ET C'EST
+// POURQUOI CECI EST UN SCANNER. `/\/\*[\s\S]*?\*\//g` passée sur la page mangerait
+// aussi ce qui RESSEMBLE à un commentaire dans une chaîne CSS, dans une `url(…)`
+// et surtout dans un `data:` en base64 — un WebP encodé contient des `/*` par
+// accident, et la page sortirait avec une image tronquée que **rien dans
+// `npm run check` ne verrait**, les tests comptant les LIGNES `data:` et pas leur
+// contenu. Le parcours saute donc les chaînes et les adresses, caractère par
+// caractère, et ne retire un bloc que hors de celles-ci.
+//
+// ⚠⚠ ET LE PIÈGE DU BASE64 EST STRUCTURELLEMENT ABSENT ICI, MESURÉ — MAIS ON NE
+// COMPTE PAS DESSUS. Le retrait s'applique à `htmlSource`, donc AVANT que les
+// images et les sons ne soient inlinés : à cet instant la page ne porte que des
+// marqueurs `%ATLAS_X%`, et **pas un octet de base64**. C'est l'ORDRE qui met le
+// danger hors de portée ; le scanner est ce qui le garde hors de portée le jour
+// où quelqu'un déplacerait cet appel après l'inlinage.
+//
+// ⚠ ET LES DEUX SAUTS SONT INERTES AUJOURD'HUI, CE QUI SE DIT PLUTÔT QUE DE SE
+// TAIRE. Mesuré sur la feuille : **173 chaînes CSS, ZÉRO** contenant `/*` ou
+// `*/` ; **18 `url(…)`, toutes CITÉES**, zéro contenant `/*`. Les retirer ne
+// changerait donc pas un octet du livrable d'aujourd'hui — et c'est exactement
+// pour le livrable de demain qu'ils sont écrits.
+//
+// ⚠ ON NE MINIFIE RIEN D'AUTRE. Pas d'espaces, pas de sélecteurs, pas
+// d'`esbuild --minify` sur la feuille : **des tests LISENT le fichier bâti** —
+// `banc.test.js` y compte les `data:`, y cherche des teintes, y mesure des
+// règles. Minifier, c'est les casser tous d'un coup pour un gain que personne
+// n'a demandé.
+
+/**
+ * Le contenu d'un bloc `<style>`, sans ses commentaires.
+ *
+ * @param {string} css
+ * @returns {string}
+ */
+function feuilleSansCommentaires(css) {
+  let sortie = '';
+  let i = 0;
+  while (i < css.length) {
+    const c = css[i];
+
+    // Une chaîne CSS : recopiée ENTIÈRE, échappements compris. Ce qui est entre
+    // guillemets n'est pas du code, et un `/*` y est un caractère comme un autre.
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < css.length && css[j] !== c) {
+        if (css[j] === '\\') j += 1;
+        j += 1;
+      }
+      if (j >= css.length) {
+        echec(`feuille : chaîne ${c}…${c} non fermée à l'offset ${i}`);
+      }
+      sortie += css.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+
+    // Une `url(…)` NON CITÉE : tout jusqu'à la parenthèse fermante est une
+    // adresse. ⚠ Si elle est citée, on ne fait rien ici — la branche des chaînes
+    // s'en charge au tour suivant, et elle sait gérer une `)` à l'intérieur.
+    if ((c === 'u' || c === 'U') && css.slice(i, i + 4).toLowerCase() === 'url(') {
+      let j = i + 4;
+      while (j < css.length && /\s/.test(css[j])) j += 1;
+      if (css[j] !== '"' && css[j] !== "'") {
+        const fin = css.indexOf(')', j);
+        if (fin === -1) echec(`feuille : url( non fermée à l'offset ${i}`);
+        sortie += css.slice(i, fin + 1);
+        i = fin + 1;
+        continue;
+      }
+      sortie += css.slice(i, i + 4);
+      i += 4;
+      continue;
+    }
+
+    // Un commentaire : il saute. ⚠ NON FERMÉ, IL LÈVE — avaler la fin de la
+    // feuille en silence est très exactement la panne que ce scanner existe pour
+    // empêcher.
+    if (c === '/' && css[i + 1] === '*') {
+      const fin = css.indexOf('*/', i + 2);
+      if (fin === -1) echec(`feuille : commentaire /* non fermé à l'offset ${i}`);
+      i = fin + 2;
+      continue;
+    }
+
+    sortie += c;
+    i += 1;
+  }
+  return sortie;
+}
+
+/**
+ * Le scanner se confronte au piège qu'il existe pour éviter, à CHAQUE BUILD.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QUE LA FALSIFICATION ÉTAIT MUETTE, ET IL FAUT LE DIRE
+ * DANS CE SENS-LÀ. Remplacer tout ce scanner par une expression régulière non
+ * gloutonne — celle que le pavé au-dessus de la fonction cite — ne fait
+ * tomber AUCUN test du dépôt — mesuré — parce que la feuille d'aujourd'hui ne
+ * porte ni chaîne ni adresse contenant d'ouverture de commentaire, et parce que
+ * le retrait passe avant
+ * l'inlinage. Le naïf est donc JUSTE aujourd'hui et faux demain : c'est le pire
+ * cas qui soit, celui qu'aucune suite verte ne signale.
+ *
+ * ⚠⚠ LE PIÈGE EST DONC FOURNI PAR LE CONTRÔLE LUI-MÊME, ET MESURÉ DES DEUX
+ * CÔTÉS. Sur la feuille témoin ci-dessous, le naïf mange **la règle `#b`
+ * ENTIÈRE et son `data:`** — il coupe à l'ouverture de commentaire qui se trouve
+ * dans la CHAÎNE de `#a`, et reprend à la fermeture du vrai commentaire, quatre
+ * lignes plus loin — quand le scanner rend les quatre règles intactes. Un lot qui reviendrait à
+ * l'expression régulière fait donc échouer le BUILD, pas une capture d'écran.
+ *
+ * ⚠ C'EST LE BON ENDROIT POUR CETTE GARDE-LÀ, et c'est l'idiome que
+ * `verifier_les_coupes` de `tools/planches.py` et `assert_bord` de
+ * `tools/bords.py` portent déjà : un outil qui peut produire un livrable faux se
+ * confronte à son propre piège avant de produire.
+ */
+function verifierLeScanner() {
+  const temoin = [
+    '#a::after { content: "/* pas un commentaire"; }',
+    "#b { background-image: url('data:image/webp;base64,UklGRhY/*AAAA'); }",
+    '/* un vrai commentaire */',
+    '#c { color: red; }',
+  ].join('\n');
+  const nu = feuilleSansCommentaires(temoin);
+  for (const garde of ['#a', '#b', '#c', 'pas un commentaire', 'UklGRhY/*AAAA']) {
+    if (!nu.includes(garde)) {
+      echec(`feuille : le retrait des commentaires a mangé « ${garde} » — `
+        + 'le scanner a été remplacé par une expression régulière');
+    }
+  }
+  if (nu.includes('un vrai commentaire')) {
+    echec('feuille : le retrait des commentaires ne retire plus rien');
+  }
+}
+
+/** La page, feuille décommentée. ⚠ UN SEUL bloc `<style>`, et on l'exige. */
+function pageSansCommentairesDeFeuille(page) {
+  verifierLeScanner();
+  const blocs = [...page.matchAll(/<style>([\s\S]*?)<\/style>/g)];
+  if (blocs.length !== 1) {
+    echec(`${blocs.length} blocs <style> dans la page : le retrait des commentaires en attend un`);
+  }
+  const [entier, css] = blocs[0];
+  return page.replace(entier, `<style>${feuilleSansCommentaires(css)}</style>`);
+}
+
 // --- assemblage ---------------------------------------------------------------
 
-let html = htmlSource
+let html = pageSansCommentairesDeFeuille(htmlSource)
   .replace(motifEntree, () => `<script>${js}</script>`)
   .replaceAll(MARQUEUR_BALISES_SON, balisesSon)
   .replaceAll('%VERSION%', version)

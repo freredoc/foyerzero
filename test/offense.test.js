@@ -452,14 +452,26 @@ test('offense — le budget vient du Centre de commandement, et de lui seul', ()
  * c'est le commentaire qui RACONTE la disparition de l'ancien en-tête qui
  * ferait échouer la garde. Une garde ne doit lire que du code.
  */
-function pageSansCommentaires() {
-  return readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '');
+/**
+ * ⚠⚠ LE LIVRABLE N'A PLUS AUCUN COMMENTAIRE, ET CETTE FONCTION EST DEVENUE UN
+ * NO-OP — lot ARRIVÉE-CARTE-ET-BUILD, 10/09. Elle retirait la prose HTML et CSS
+ * de `dist/index.html` pour que les assertions d'absence ci-dessous ne tombent
+ * pas sur un identifiant cité dans un commentaire. Ethan : « Les virer du
+ * build. » `tools/build.js` retire désormais les DEUX, donc **mesuré : zéro `/*`
+ * et zéro `<!--` dans la page produite**.
+ *
+ * ⚠ ELLE EST DONC RETIRÉE, PAS GARDÉE VIDE : une fonction qui ne fait plus rien
+ * laisse croire qu'elle protège de quelque chose. Ce qui la remplace est plus
+ * fort — les assertions portent sur le fichier BRUT, et c'est l'absence totale
+ * de commentaire qui les rend honnêtes. Le témoin de non-vacuité qui prouvait
+ * que le décommenteur mordait est réécrit en conséquence.
+ */
+function pageBrute() {
+  return readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
 }
 
 test('offense — le HTML produit porte l\'écran, et il n\'a plus d\'en-tête à lui', () => {
-  const html = pageSansCommentaires();
+  const html = pageBrute();
   for (const attendu of ['ecran-offense', 'offense-avis', 'offense-vagues', 'offense-palette']) {
     assert.ok(html.includes(attendu), `élément « ${attendu} » absent du HTML final`);
   }
@@ -497,12 +509,25 @@ test('offense — le HTML produit porte l\'écran, et il n\'a plus d\'en-tête �
   // rangées de sol nu était la faute qu'on répare.
   assert.ok(!/>Assaut</.test(html), 'un bouton « Assaut » traîne encore dans la page');
 
-  // Falsifiable, dans les deux sens : le décommenteur retire la prose et rien
-  // d'autre, et le montage ne prouverait rien si la prose ne citait plus
-  // l'ancien identifiant.
-  assert.ok(pageSansCommentaires().includes('<div id="ecran-offense"'));
-  assert.ok(readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8').includes('offense-tete'),
-    'plus aucune prose ne cite l\'ancien en-tête : le décommenteur ne mesure plus rien');
+  // ⚠⚠ FALSIFIABLE DANS LES DEUX SENS, ET LE TÉMOIN A CHANGÉ DE NATURE — lot
+  // ARRIVÉE-CARTE-ET-BUILD. Il exigeait que la PROSE du livrable cite encore
+  // `offense-tete`, sans quoi le décommenteur ne mesurait rien ; les commentaires
+  // ne sont plus dans le livrable, donc ce témoin-là est mort avec eux. Ce qui le
+  // remplace est ce qui rend les assertions d'absence honnêtes MAINTENANT : la
+  // page produite ne porte **aucun** commentaire, d'aucune sorte, donc un
+  // identifiant qu'on n'y trouve pas est réellement absent et pas seulement
+  // « absent du code ».
+  assert.ok(html.includes('<div id="ecran-offense"'));
+  assert.doesNotMatch(html, /\/\*/, 'le livrable porte encore un commentaire CSS');
+  assert.doesNotMatch(html, /<!--/, 'le livrable porte encore un commentaire HTML');
+  // ⚠ ET LA SOURCE, ELLE, LES GARDE TOUS — c'est l'autre moitié, et c'est celle
+  // qu'un lot pourrait casser en croyant bien faire. Ils sortent du LIVRABLE,
+  // jamais du dépôt.
+  const source = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  assert.ok(source.includes('offense-tete'),
+    'la prose de la source ne cite plus l\'ancien en-tête : le retrait a mordu sur le dépôt');
+  assert.ok((source.match(/\/\*/g) ?? []).length > 100,
+    'la source a perdu ses commentaires de feuille : ils sortent du livrable, pas du dépôt');
 });
 
 test('offense — changer d\'écran n\'arrête PAS la boucle de jeu', () => {
