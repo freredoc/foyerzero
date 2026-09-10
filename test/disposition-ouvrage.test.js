@@ -565,7 +565,15 @@ test('DO T8 — un site entamé retrouve ses dégâts sur les mêmes bâtiments'
   // ⚠ LOT PAQUETS (09/09) : 99 → 102. Sur la graine 99 le raid ne touche plus
   // qu'UN bâtiment ; la 102 en laisse **sept touchés dont six détruits**, et les
   // deux branches restent exercées. Réancré par balayage des graines 99 à 140.
-  const etat = creerEtat(102);
+  //
+  // ⚠⚠ LOT MUR (10/09) : 102 → 106, ET LE MOTIF DU RÉANCRAGE EST L'INVERSE DU
+  // PRÉCÉDENT. Sur la 102 le raid rase désormais TOUT ce qu'il touche — sept
+  // touchés, sept détruits —, donc plus un seul bâtiment survivant abîmé et la
+  // seconde branche de `montageCourant` n'est plus exercée. Un raid qui ouvre
+  // ses brèches va plus loin. Balayage des mêmes graines 99 à 140 : dix-sept
+  // conviennent, la **106** en laisse **dix touchés dont six détruits**, donc
+  // quatre survivants abîmés — la marge la plus large des dix-sept.
+  const etat = creerEtat(106);
   const vagues = [Array.from({ length: GRILLE.largeur }, (_, k) => ({
     id: ['belier', 'pilon', 'broyeur', 'crecelle'][k % 4], colonne: k + 1, niveau: 25,
   }))];

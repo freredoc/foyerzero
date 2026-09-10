@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **10/09/2026**, version 0.99.40 · build 142.
+Dernière révision : **10/09/2026**, version 0.99.43 · build 145.
 
 ---
 
@@ -42,7 +42,189 @@ Dernière révision : **10/09/2026**, version 0.99.40 · build 142.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 10/09/2026 (après le lot ARRIVÉE-CARTE-ET-BUILD), à confronter :**
+**Référence au 10/09/2026 (après le lot MUR), à confronter :**
+⚠⚠ **ON S'ARRÊTE DEVANT LE MUR, ET ON NE FLUE PLUS DEDANS.** Ethan, 10/09, deux
+points relevés le même jour : « Un mur, tourelles, structure bloque. Donc une
+unité s'arrête avant, pas dedans. Ou peut-être que la hitbox est mal faite ? » et
+« Une unité anti-structure doit s'arrêter pour détruire mur barrière tourelles.
+C'est une cible de prédilection ». `npm test` rend **1571 pass / 0 fail** au sens
+de la garde de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le
+verdict mesuré est **1568 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par
+Ethan le 08/09), et `npm run check` sort en 0. `npm run build` →
+`dist/index.html`, **9 310 894 octets**, 0 référence externe. Coût **+142 octets,
+ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre le livrable rebâti
+dans un `git worktree` sur l'arbre pristine de `main` = `213d155`
+(**9 310 752**) : **feuille +0 · JavaScript +142 · balisage +0 · images +0 ·
+audio +0**, la somme des cinq postes tombant EXACTEMENT sur le total. **307
+lignes `data:` et 306 URI de part et d'autre.** Borne T10 **inchangée à
+9 600 000** — le lot ne fait entrer aucune ressource —, marge **289 106 octets,
+3,01 %**. Version et build passent à **0.99.43 · build 145**, le suivant
+disponible ; `main` n'a pas bougé sous le lot, vérifié au `git fetch`. Le lot
+touche `src/sim/combat.js`, `package.json`, quatorze fichiers de `test/` et les
+DEUX témoins, et fait entrer `test/mur.test.js` et `RAPPORT-lotMUR.md`. **Pas une
+ligne de `src/data/`, `src/ui/`, `src/render/`, `src/son/` ni `tools/`** —
+vérifié au diff.
+⚠⚠ **LES DEUX MOITIÉS NE SE RECOUVRENT PAS, ET C'EST TOUT LE LOT.** Le point 3
+tient les anti-structure, qui sortent d'`avancer` par le `return` de l'ARRÊT,
+avant toute avance ; le point 2 tient TOUTES LES AUTRES, celles qui restent
+BLOQUÉES devant le mur sans s'arrêter — elles ne peuvent pas le blesser utilement
+— et qui se RANGENT désormais sur leur case au lieu d'y fluer. `MUR T1` et
+`MUR T2` gardent la première, `MUR T3` et `MUR T4` la seconde, `MUR T5` le piège
+qui les relie.
+⚠⚠ **ET ELLES NE SONT QUE CINQ À S'ARRÊTER, PAS SIX — MESURÉ, PAS DÉDUIT.**
+`structureOuAviation` est la prédilection de SIX unités du roster ; le
+**Frappeur** est un aéronef `traversant`, et la garde aérienne de la première
+ligne de `doitSArreter` l'écarte AVANT que la prédilection ne soit lue.
+« L'aviation traversante ne s'arrête jamais » est antérieur au lot et n'a pas été
+touché : une pièce qui TRAVERSE le champ ne peut pas buter dessus. Le partage se
+DÉDUIT du roster dans `MUR T1`, il ne s'écrit pas — le jour où une anti-structure
+de plus vole, elle se range du bon côté toute seule.
+⚠⚠ **L'ARBITRAGE DU 04/09 EST RENVERSÉ, ET `estStructureDefensive` DISPARAÎT
+AVEC SON DERNIER LECTEUR.** Ce jour-là Ethan excluait « merlon et tourelles » de
+l'arrêt ; le 10/09 il les y remet nommément. La fonction n'avait qu'un appelant,
+et la garder « au cas où » l'aurait fait relire comme une règle. `ARRÊT T10` est
+**RETOURNÉ**, pas retiré : il exigeait l'exclusion, il exige maintenant son
+ABSENCE et falsifie l'ancienne règle de face. ⚠ Et le bloc de `doitSArreter`
+raconte les TROIS arbitrages dans l'ordre — 04/09, 06/09, 10/09 — en disant que
+le troisième renverse le premier : un futur lot qui « restaurerait » l'exclusion
+tombe sur cet avertissement avant d'écrire une ligne.
+⚠ **AUCUNE GARDE « ANTI-STRUCTURE SEULEMENT » N'A ÉTÉ ÉCRITE**, et c'est mesuré :
+la branche de prédilection discrimine déjà — `MUR T2` le montre sur les HUIT
+autres unités du roster, pas sur un échantillon. En ajouter une aurait été une
+seconde vérité sur la même grandeur.
+⚠⚠ **LE RANGEMENT EST UN TROISIÈME ÉTAT, ET IL PORTE UN PIÈGE QUI A COÛTÉ LE LOT
+ENTIER.** `structureImmobileDevant` répond « la case devant est tenue par une
+structure qui ne bougera pas » ; l'unité s'y range — `rangeeMilli` remis au
+millième de SA case — au lieu de fluer jusqu'à 999 millièmes dans celle du mur.
+**Mais le premier jet ne l'a mise QUE dans la branche de rangement** : or
+`peutAvancer` rend `true` quand `caseDestination === rangee`, donc `progresse`
+restait VRAI pour toujours, donc `forcee` n'était jamais calculée et
+**l'Écraseur cessait silencieusement de forcer** — écart 0 sur 120 ticks, mesuré.
+`progresse` porte donc `!bloqueeParUneStructure`, et `MUR T5` mesure le forçage
+PAR DIFFÉRENCE, au tick même du rangement.
+⚠⚠ **ET CE PIÈGE SE LIT DANS LE COMPTE DE TÉMOINS : 565 CONTRE 561.** Le **565**
+du brief est le chiffre de la variante BUGUÉE ; l'implémentation juste en rend
+**561**, et les quatre champs d'écart sont **six combats** qui cessent de buter
+sur le plafond de 900 ticks parce que l'Écraseur force à nouveau. Un compte de
+témoin qui ne tombe pas sur le nombre annoncé se mesure avant d'être corrigé.
+⚠⚠ **`test/temoins-combat.js` NE SE RECAPTURE PAS — DEUX COUCHES S'EMPILENT.**
+`COMBATS_DEPLACES_PAR_MUR` porte **124 combats et 583 champs**, lus par
+`JOURNAL T1` ; `COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS` porte **127 combats et
+686 champs** et devient la **CINQUIÈME** couche de `JOURNAL T1 bis`. ⚠ Elle
+n'ajoute **ZÉRO** champ neuf à l'union : les cent vingt de plus sont des combats
+que les couches d'avant nommaient déjà, sur d'autres valeurs. Les comptes de
+`T1 bis` ne bougent donc pas — **1 331 surchargés, 269 gardés** —, et c'est cette
+invariance qui dit que le lot ne touche qu'au déplacement.
+⚠⚠ **ET LE §4 DU BRIEF SE TROMPAIT SUR `JOURNAL T1 bis` : IL TOMBE AUSSI.** Il
+annonce que ce test « doit RESTER VERT sans nouvelle couche », et son §5 le liste
+pourtant parmi les vingt-neuf qui tombent — **le brief se contredit lui-même**.
+La mesure tranche : `T1 bis` rejoue les deux cents témoins d'AVANT le lot PAQUETS
+sur le moteur COURANT, donc le lot MUR le déplace exactement comme il déplace
+`T1`. Chacun a sa table.
+⚠ **LE TÉMOIN DE BASES-0 GAGNE `DEPLACES_PAR_MUR` — 20 couples, 8 phases** — et
+trois tables de rapport : `EMPREINTES_PAR_GRAINE_MUR` (**22 graines sur 25** ;
+les graines **15, 21 et 24** sont identiques AU BIT), `RAPPORTS_PROCHE_MUR`
+(10/25) et `RAPPORTS_OUVRAGE_MUR` (4/25). ⚠ Le repli `??` de `bases.test.js` est
+**NÉCESSAIRE et non décoratif** : sans lui, les trois graines inchangées seraient
+comparées à `undefined`.
+⚠⚠ **VINGT-HUIT DES VINGT-NEUF TESTS ANNONCÉS TOMBENT, PLUS UN TRENTIÈME QUE LE
+BRIEF NE CONNAÎT PAS.** `FG T15` et `MODULES-D T3` se réparent tout seuls — leur
+prémisse redevient vraie —, et `generateur.test.js T12` tombe sur la variante
+JUSTE et sur elle seule : son `ecartMax` passe de 0 à **1**. Un lot qui ne
+réancrerait que la liste du brief laisserait `main` rouge.
+⚠⚠ **UN DÉFAUT LATENT DE `volDeVie` EST TROUVÉ, MESURÉ, ET NON CORRIGÉ.**
+`MODULES-F T16` balaie les permutations de sa garnison : **0 sur 120 divergent
+sur `main`, 60 sur 120 avec le lot** — exactement celles qui échangent les rangs
+du Broyeur et du Créneau, pour 9 966 milli-PV. La cause est ANTÉRIEURE au lot :
+la part d'un overkill est servie **par indice de tireur croissant**, ce que
+`appliquerDegats` documente depuis MODULES-F, donc le résultat n'est pas
+invariant par permutation. Le lot ne fait que rendre le cas atteignable. **La
+prémisse du montage est réparée par balayage** — le bélier passe du niveau 30 au
+**26**, seul niveau de 26 à 35 où 0/120 divergent ET où le Vol de vie soigne
+encore mesurablement. **Ethan tranche** sur le défaut lui-même.
+⚠⚠ **SIX FALSIFICATIONS AU PREMIER GESTE, SIX CHUTES, ET LA SIXIÈME A ÉTÉ
+MUETTE AU PREMIER RELEVÉ.** Retirer la garde aérienne de `doitSArreter` laissait `MUR T1` VERT :
+sans elle le Frappeur ne se FIGE pas, il RALENTIT — il s'arrête le temps que le
+mur tienne, l'abat en six ticks, et l'arrêt lève avec sa cause. **2 400
+milli-cases sur dix ticks contre 960**, et l'assertion « elle a avancé » passait
+des deux côtés. La contre-épreuve est donc bornée par `mur().vivant`, comme celle
+des cinq autres, et elle mesure CHAQUE tick : **six pas de 240 contre six
+zéros**. *Une falsification qui ne mord pas se vérifie avant d'être crue*, et
+c'est la sixième fois du dépôt.
+⚠ **SEPT TESTS ENTRENT — `MUR T1` à `T6 bis` — ET LE COMPTE PASSE DE 1 564 À
+1 571.**
+**Aucune assertion n'a été retirée ni assouplie** ; **une garde est RETOURNÉE**
+(`ARRÊT T10`) et vingt-huit changent de valeur, **chacune en écrivant le nombre
+d'avant à côté de celui d'après et POURQUOI il a changé**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 31** — vérifié au diff : la règle est
+une décision de tick, et `rangeeMilli` n'entre pas dans la sauvegarde.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff. ⚠ Et cette
+machine n'a pas `python3` mais `python` : la commande de §0.5 est à adapter le
+jour où un lot d'art tournera ici.
+⚠⚠ **ET LE JUMEAU LATÉRAL EST CORRIGÉ DANS LE MÊME LOT — SECOND GESTE, SUR
+DEMANDE D'ETHAN.** Le premier jet n'avait corrigé qu'`avancer`, donc le camp qui
+ATTAQUE ; `seDecaler` — par où la défense des DEUX camps passe depuis le lot
+COLONNE — portait EXACTEMENT le même défaut sur l'axe des COLONNES. Mesuré et
+porté au rapport comme reste ouvert, puis tranché : **« 1. à corriger
+maintenant »**. Mesuré avant de toucher une ligne, défenseuse en colonne 4,
+merlon en colonne 5, cible en colonne 8 : elle partait de 4 000 et se figeait à
+**4 960** — 96 % dans la case du merlon, **le MÊME 960 millièmes** que le Meute à
+la verticale. Trois montages sur trois rendent le même nombre. Après : **4 000
+pile**.
+⚠⚠ **ET LE HELPER SE GÉNÉRALISE PLUTÔT QUE DE SE DOUBLER.**
+`structureImmobileDevant` devient **`structureImmobileSur(etat, p, occupation,
+rangee, colonne)`** : une écriture, DEUX lecteurs, l'appelant nommant la case
+qu'il regarde — `caseDevant, colonne` pour la verticale, `rangee, caseACote` pour
+la latérale. Une seconde fonction « à côté » aurait été deux lectures de la même
+grandeur, dont une seule aurait reçu la prochaine correction. **Aucun test ne
+nommait l'ancienne**, vérifié avant de renommer.
+⚠⚠ **LE PÉRIMÈTRE EST CELUI DE LA VERTICALE, ET C'EST UNE LECTURE DES MOTS
+D'ETHAN.** On ne se range que devant une STRUCTURE IMMOBILE : il nomme « un mur,
+tourelles, structure », et les trois sont à `vitesseMilli === 0`. Devant une
+alliée MOBILE, la case se libérera d'elle-même et ranger coûterait à chaque fois
+les millièmes qu'on vient de gagner. `MUR T6 bis` garde ce périmètre.
+⚠⚠ **ET SON MONTAGE A DÛ ÊTRE REPRIS APRÈS MESURE, DEUX FOIS.** (1) Le gêneur
+était un Guetteur — MOBILE, mais qui vise l'infanterie comme la décaleuse, donc
+il **s'écarte lui aussi** et libère la case : 5 920 mesuré, et le test ne disait
+plus rien. C'est une **Carapace** désormais, qui vise les véhicules et ne bouge
+pas d'un millième face à un assaut d'infanterie. *Un gêneur qui s'écarte ne gêne
+rien.* (2) Le montage posait tout en **rangée 5 ET colonne 5**, si bien
+qu'INTERVERTIR les deux arguments du helper ne changeait rien — falsification
+MUETTE. Rangée 3 désormais, et une assertion refuse le montage dégénéré.
+⚠⚠ **LE SECOND GESTE A UN PÉRIMÈTRE ÉTROIT, ET C'EST MESURÉ TEST PAR TEST.** Dix
+tests tombent, là où le premier en faisait tomber vingt-huit : les deux couches
+de témoins de combat (110/561 → **124/583**, 125/681 → **127/686**), les trois
+`BASES-0 T1`, et **cinq valeurs**. Dans le témoin de bases-0 il ne déplace que
+**trois champs de la phase 11 et la seule graine 13** — les comptes des quatre
+tables ne bougent pas d'une entrée. Une défenseuse ne se range que si une
+STRUCTURE la bloque en se décalant, et c'est rare.
+⚠ **ET LES DEUX COUCHES SONT RECALCULÉES, LA CAPTURE NE L'EST PAS.**
+`TEMOINS_COMBAT` n'a pas une ligne de changée ; ce qui est refait est la
+DESCRIPTION de ce que le lot déplace contre elle. **Contre-épreuve jouée** : le
+même générateur, sur le `combat.js` d'avant le second geste, rend EXACTEMENT
+110 combats / 561 champs et 125 / 681 — les nombres que le premier geste portait.
+⚠ **`JOURNAL T1 bis` GARDE SES 1 331 SURCHARGÉS ET SES 269 GARDÉS**, au champ
+près : les deux combats de plus n'apportent aucun champ neuf à l'union.
+⚠⚠ **QUATRE FALSIFICATIONS DE PLUS, DEUX CHUTES, ET LES DEUX MUETTES ONT ÉTÉ
+TRAITÉES DIFFÉREMMENT.** Le rangement latéral retiré fait tomber `MUR T6` ;
+élargi à TOUT blocage il fait tomber `MUR T4` **et** `MUR T6 bis`. Les arguments
+`(rangee, colonne)` intervertis ne mordaient pas — c'était le montage dégénéré,
+corrigé ci-dessus, et la falsification mord maintenant. La quatrième, `caseACote`
+pris à droite au lieu du sens du pas, **est INERTE et se déclare** : mesuré, le
+flottement n'existe QUE vers la droite — une case couvre
+`[c × 1 000, c × 1 000 + 999]`, donc le bord extrême dans le sens du pas vaut
+`+999` à droite mais EXACTEMENT la position rangée à gauche. Relevé des deux
+côtés sur soixante ticks : `6 000 → 6 000`, une seule position distincte. On
+écrit `+ sens` quand même — c'est ce que la ligne VEUT dire —, et le fait est
+inscrit à côté du code. *Un test qui ne peut tomber sur aucun état d'aujourd'hui
+se déclare, il ne se compte pas.*
+⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Ce que le lot change est précisément ce qu'Ethan a VU —
+une unité dessinée à 96 % dans la case du mur — et rien de ce qui précède n'a été
+regardé à l'écran : tout est mesuré sur `rangeeMilli`.
+
+**Auparavant, après le lot ARRIVÉE-CARTE-ET-BUILD :**
 ⚠⚠ **LE LOT REND QUATRE-VINGT-QUATORZE MILLE OCTETS, ET C'EST LE SECOND DE LA
 JOURNÉE À EN RENDRE.** `npm test` rend **1564 pass / 0 fail** au sens de la garde
 de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
@@ -10122,7 +10304,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   67 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   68 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -10133,7 +10315,7 @@ test/                   67 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage  paquets  art-90  emprises-et-delai
+  voisinage  paquets  art-90  emprises-et-delai  mur
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

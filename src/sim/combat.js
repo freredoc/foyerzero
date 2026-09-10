@@ -1978,32 +1978,11 @@ function retirerLesMorts(etat) {
 }
 
 /**
- * La cible est-elle une STRUCTURE DÉFENSIVE au sens de l'arbitrage du 04/09 —
- * « merlon et tourelles exclus » ?
- *
- * ⚠⚠ LE COUPLE, JAMAIS UN DES DEUX SEUL, ET C'EST CE QUI REND LE « EN PLUS »
- * POSSIBLE. Ni le genre ni la colonne ne suffisent : `genre === 'defense'`
- * couvre AUSSI les trois artilleries, que `COLONNE_PAR_TYPE_DEFENSE` range en
- * `vehicule` ; et `colonneMatrice === 'structureOuAviation'` couvre AUSSI les
- * bâtiments et les aéronefs. Mesuré sur les deux tables, le couple désigne
- * EXACTEMENT les murs, les barrières et les tourelles — les trois familles
- * qu'Ethan a nommées — et rien d'autre.
- *
- * ⚠ CONSÉQUENCE DÉCLARÉE : une artillerie n'est PAS exclue. Une unité
- * anti-véhicule s'arrête donc devant elle, comme devant un blindé. C'est la
- * lecture du brief à la lettre — « merlon et tourelles », pas « toute défense »
- * — et une ligne suffit à la renverser si Ethan tranche autrement.
- */
-function estStructureDefensive(pc) {
-  return pc.genre === 'defense' && pc.colonneMatrice === 'structureOuAviation';
-}
-
-/**
  * L'entité s'arrête-t-elle ? Elle s'arrête pour un BÂTIMENT, et pour sa CIBLE
- * DE PRÉDILECTION quand celle-ci n'est pas une structure défensive.
- * L'aviation traversante ne s'arrête jamais.
+ * DE PRÉDILECTION, quelle qu'elle soit. L'aviation traversante ne s'arrête
+ * jamais.
  *
- * ⚠⚠ DEUX ARBITRAGES, DANS L'ORDRE, ET LE SECOND N'ANNULE PAS LE PREMIER.
+ * ⚠⚠ TROIS ARBITRAGES, DANS L'ORDRE, ET LE TROISIÈME RENVERSE LE PREMIER.
  *
  * 04/09 — « Chaque unité s'arrête pour casser des bâtiments. Merlon et
  * tourelles exclus, sauf si ils empêchent d'avancer. » La règle d'AVANT ce
@@ -2017,14 +1996,46 @@ function estStructureDefensive(pc) {
  * 06/09 — « **Ajouter l'arrêt sur prédilection EN PLUS du bâtiment.** », sur le
  * défaut rapporté « un éclaireur ne s'arrête pas lorsqu'il rencontre une
  * infanterie ennemie ». La prédilection revient donc, mais elle ne remplace
- * rien : elle s'AJOUTE, et elle porte son exclusion avec elle.
+ * rien : elle s'AJOUTE — et elle portait alors son exclusion avec elle, tenue
+ * par un couple genre × colonne, `estStructureDefensive`.
  *
- * ⚠⚠ CE QUI A CHANGÉ ENTRE LES DEUX N'EST PAS LA DEMANDE, C'EST LE
- * DISCRIMINANT. Le 04/09 il n'existait aucun moyen d'écrire « la colonne, sauf
- * les murs et les tourelles » ; `estStructureDefensive` l'écrit, sur le COUPLE
- * genre × colonne. L'exclusion du 04/09 est donc tenue à la lettre par la
- * seconde branche, et le premier arbitrage survit intact dans la première —
- * `COL T2` et `COL T3` les gardent séparément.
+ * 10/09 — « Une unité anti-structure doit s'arrêter pour détruire mur barrière
+ * tourelles. C'est une cible de prédilection », précisé le même jour : « les
+ * unités anti-structure s'arrêtent devant les tourelles, les barbelés, les murs
+ * et les bâtiments. Les bâtiments de toute façon c'est tout le monde. »
+ * L'EXCLUSION DU 04/09 TOMBE. La seconde branche ne porte plus de « sauf », et
+ * `estStructureDefensive` est PARTIE avec son dernier lecteur plutôt que de
+ * rester morte dans le fichier.
+ *
+ * ⚠⚠ ET CE RENVERSEMENT N'EST PAS UNE RÉGRESSION À « RÉTABLIR ». Un lot futur
+ * retrouvera la trace de l'exclusion — dans `RAPPORT-lotARRET.md`, dans le
+ * commentaire d'`ARRÊT T2`, dans un témoin — et voudra remettre
+ * `!estStructureDefensive(pc)` en croyant réparer une régression. C'est
+ * exactement ce que ce bloc existe pour empêcher : le 04/09 demandait de ne PAS
+ * s'arrêter devant un mur, le 10/09 demande le contraire, les deux viennent
+ * d'Ethan, et la plus récente fait foi. `MUR T1` garde la règle neuve, `MUR T2`
+ * sa contre-épreuve.
+ *
+ * ⚠⚠ ET IL N'Y A AUCUNE GARDE « SEULEMENT LES ANTI-STRUCTURE » À ÉCRIRE — c'est
+ * le point à comprendre avant de toucher à cette fonction. La seconde branche
+ * ne se déclenche que si `pc.colonneMatrice === p.colonnePredilection`, et
+ * `structureOuAviation` n'est la prédilection que de SIX unités du roster,
+ * mesuré sur `UNITES` : perceurs, fouisseurs, bélier, pilon, frappeur, enclume.
+ * Toutes les autres continuent de ne pas s'arrêter devant un mur sans qu'une
+ * seule condition neuve existe. Une garde explicite serait une SECONDE écriture
+ * de la prédilection, et elle divergerait au premier réglage de roster.
+ *
+ * ⚠⚠ ET ELLES NE SONT QUE **CINQ** À S'ARRÊTER POUR DE BON — MESURÉ, PAS DÉDUIT.
+ * Le **Frappeur** est un aéronef `traversant` : la garde aérienne de la première
+ * ligne l'écarte AVANT que la prédilection ne soit lue, et une pièce qui traverse
+ * le champ ne peut pas buter dessus. Six prédilections, cinq arrêts. `MUR T1`
+ * asserte le partage plutôt que de le supposer, et il porte la contre-épreuve :
+ * le Frappeur, même mur, même colonne libre, continue d'avancer.
+ *
+ * ⚠ LES BÂTIMENTS RESTENT LA PREMIÈRE BRANCHE, ET ELLE VAUT POUR TOUT LE MONDE
+ * — « les bâtiments de toute façon c'est tout le monde », 10/09. Elle est
+ * antérieure aux trois arbitrages, aucun ne l'a touchée, et elle n'a jamais rien
+ * eu à voir avec la prédilection.
  *
  * ⚠ `colonnePredilection` VAUT `null` pour toute entité qui ne tire pas, et la
  * comparaison est écrite dans le sens qui protège du `null` : on refuse
@@ -2034,22 +2045,25 @@ function estStructureDefensive(pc) {
  * plus haut, et il vaut ici mot pour mot.
  *
  * ⚠⚠ « SAUF SI ILS EMPÊCHENT D'AVANCER » NE DEMANDE TOUJOURS AUCUN CODE, ET LE
- * MÉCANISME N'EST PAS CELUI QU'ON CROIT. Devant un merlon bloquant, l'unité ne
- * s'arrête pas au sens de cette fonction, mais `peutAvancer` la retient et elle
- * TIRE — donc `nuit(e)`, c'est-à-dire `aTire`, remet `ticksInutiles` à zéro et
- * elle ne se replie pas. `structureForcee` ne couvre QUE les porteurs de
- * l'Écraseur, qui rend `undefined` sans le module : c'est le tir, pas le
- * forçage, qui tient les autres pièces devant le mur.
+ * MÉCANISME S'EST DÉDOUBLÉ AU 10/09. Pour les SIX, la clause est absorbée : une
+ * anti-structure s'arrête devant le merlon qu'il barre ou non sa colonne, et
+ * elle sort d'`avancer` par le `return` de l'arrêt. Pour TOUTES LES AUTRES,
+ * rien n'a changé — elles ne s'arrêtent pas au sens de cette fonction, mais
+ * `peutAvancer` les retient et elles TIRENT, donc `nuit(e)`, c'est-à-dire
+ * `aTire`, remet `ticksInutiles` à zéro et elles ne se replient pas. Ce qui a
+ * changé pour elles est ailleurs : elles se RANGENT désormais sur leur case au
+ * lieu de fluer dans le mur — voir `structureImmobileSur`, lu par les deux axes.
  *
  * ⚠⚠ ET LE REPLI NE PEUT TOUJOURS PAS EMPIRER PAR CETTE FONCTION, PAR
- * CONSTRUCTION — vérifié explicitement au lot COLONNE plutôt que reconduit.
- * `doitSArreter` implique `e.aTire`, qui EST `nuit(e)` : la condition est
- * restée EN TÊTE, avant les deux branches, donc une bascule de faux à vrai ne
- * peut qu'ôter une chance de progresser à une entité qui nuit DÉJÀ, jamais lui
- * retirer sa raison de rester utile. Ce que la mesure doit chercher est l'autre
- * chemin — une unité arrêtée bloque sa colonne, et c'est l'alliée DERRIÈRE
- * elle, sans cible à portée, qui se replierait. Le lot COLONNE l'a mesuré sur
- * les 162 montages du banc plutôt que de le raisonner.
+ * CONSTRUCTION — vérifié explicitement au lot COLONNE plutôt que reconduit, et
+ * l'argument survit intact au renversement du 10/09. `doitSArreter` implique
+ * `e.aTire`, qui EST `nuit(e)` : la condition est restée EN TÊTE, avant les deux
+ * branches, donc une bascule de faux à vrai ne peut qu'ôter une chance de
+ * progresser à une entité qui nuit DÉJÀ, jamais lui retirer sa raison de rester
+ * utile. Ce que la mesure doit chercher est l'autre chemin — une unité arrêtée
+ * bloque sa colonne, et c'est l'alliée DERRIÈRE elle, sans cible à portée, qui
+ * se replierait. Le lot COLONNE l'a mesuré sur les 162 montages du banc plutôt
+ * que de le raisonner ; `ARRÊT T8` le garde depuis, et il est remesuré ici.
  */
 function doitSArreter(etat, e, p) {
   if (p.comportementAerien === 'traversant') return false;
@@ -2058,7 +2072,7 @@ function doitSArreter(etat, e, p) {
   if (pc.genre === 'batiment') return true;
   if (p.colonnePredilection === null) return false;
   if (pc.colonneMatrice !== p.colonnePredilection) return false;
-  return !estStructureDefensive(pc);
+  return true;
 }
 
 /**
@@ -2307,6 +2321,46 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
 }
 
 /**
+ * La case VISÉE porte-t-elle une STRUCTURE IMMOBILE — celle qui empêche de
+ * passer, et devant laquelle une unité doit se ranger plutôt que de fluer ?
+ *
+ * ⚠⚠ UNE SEULE ÉCRITURE, DEUX LECTEURS, ET C'EST LE SECOND GESTE DU LOT MUR.
+ * Elle a servi `avancer` seule pendant un premier jet ; `seDecaler` porte le
+ * MÊME défaut sur l'axe des COLONNES, et Ethan a demandé de le corriger le
+ * 10/09 après l'avoir vu mesuré. Une seconde fonction « à côté » aurait été
+ * deux lectures de la même grandeur, dont une seule recevrait la prochaine
+ * correction. L'appelant nomme la case qu'il regarde — `caseDevant, colonne`
+ * pour la verticale, `rangee, caseACote` pour la latérale — et rien d'autre ne
+ * change.
+ *
+ * ⚠⚠ « UNE STRUCTURE IMMOBILE », PAS « N'IMPORTE QUEL BLOCAGE », ET C'EST UNE
+ * MESURE, PAS UN CHOIX D'ÉCRITURE. Ranger l'entité dès que la case devant est
+ * occupée — alliée comprise — déplace 1 041 champs sur 1 600 et 198 combats sur
+ * 200 : tout embouteillage de colonne se met à claquer, et ce n'est pas ce
+ * qu'Ethan a nommé le 10/09. Restreint aux occupantes de `vitesseMilli === 0`
+ * il en déplace 339. `MUR T4` garde ce périmètre par sa moitié utile — deux
+ * alliées dans la même colonne, et la seconde GARDE sa position intermédiaire.
+ * `MUR T6 bis` garde le même périmètre sur l'axe latéral, avec une alliée
+ * mobile à côté au lieu d'un merlon.
+ *
+ * ⚠ LE DISCRIMINANT EST LA VITESSE, PAS LE GENRE, ET C'EST GRATUIT.
+ * `profilDefense` et `profilBatiment` posent tous deux `vitesseMilli: 0` :
+ * murs, barrières, tourelles, artilleries et bâtiments y tombent tous, sans
+ * qu'une table de genres soit écrite une seconde fois. C'est la même lecture
+ * que le `if (p.vitesseMilli === 0) continue;` de l'étape 7.
+ *
+ * ⚠ L'AVIATION N'EST JAMAIS RANGÉE : `!p.bloquant` sort en tête. Elle ignore
+ * l'occupation partout ailleurs — `peutAvancer`, `avancer` et `seDecaler` —, et
+ * la ranger devant un mur qu'elle survole serait un défaut neuf.
+ */
+function structureImmobileSur(etat, p, occupation, rangee, colonne) {
+  if (!p.bloquant) return false;
+  const indice = occupantDe(occupation, rangee, colonne);
+  if (indice === undefined) return false;
+  return profil(etat.entites[indice]).vitesseMilli === 0;
+}
+
+/**
  * L'entité peut-elle AVANCER ? Non dans deux cas, et deux seulement : elle est
  * sur la dernière rangée, ou sa case de destination est occupée par une entité
  * qu'elle ne peut pas écraser.
@@ -2544,6 +2598,24 @@ function seDecaler(etat, e, p, occupation, obstacles) {
 
   const rangee = caseDepuisMilli(e.rangeeMilli);
   const colonne = caseColonne(e);
+  // ⚠⚠ LA CASE À CÔTÉ, NOMMÉE UNE FOIS — le pendant exact de `caseDevant` dans
+  // `avancer`. Elle se prend dans le SENS DU DÉPLACEMENT et non à droite : une
+  // défenseuse se décale vers sa cible, qui peut être de l'un ou l'autre bord.
+  // Hors grille, `occupantDe` rend `undefined` et la garde tombe d'elle-même.
+  //
+  // ⚠⚠ ET AUCUN TEST NE PEUT DISTINGUER `+ sens` DE `+ 1` AUJOURD'HUI — MESURÉ,
+  // ET DÉCLARÉ PLUTÔT QUE TU. Le flottement n'existe QUE vers la droite : une case
+  // couvre `[c × 1 000, c × 1 000 + 999]`, donc le bord extrême dans le sens du pas
+  // vaut `+999` à droite mais EXACTEMENT la position rangée à gauche. Une pièce qui
+  // se décale vers la gauche depuis sa case ne rampe donc jamais : son premier pas
+  // franchit déjà la frontière, et il est refusé. Mesuré des deux côtés, soixante
+  // ticks : `6 000 → 6 000`, une seule position distincte, avec `+ sens` comme avec
+  // `+ 1`. On écrit quand même `+ sens`, parce que c'est ce que la ligne VEUT dire
+  // et que la symétrie cessera d'être gratuite le jour où une pièce partira d'un
+  // milieu de case. *Un test qui ne peut tomber sur aucun état d'aujourd'hui se
+  // déclare, il ne se compte pas.*
+  const caseACote = colonne + sens;
+  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, rangee, caseACote);
   // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
   // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
   // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
@@ -2563,6 +2635,30 @@ function seDecaler(etat, e, p, occupation, obstacles) {
 
   const caseDestination = caseDepuisMilli(destinationMilli);
   if (caseDestination === colonne) {
+    // ⚠⚠⚠ ELLE NE FLUE PLUS DANS LE MUR NON PLUS — ETHAN, 10/09, LE JUMEAU
+    // LATÉRAL DU POINT 2. Le premier jet du lot MUR n'a corrigé qu'`avancer`,
+    // donc le camp qui ATTAQUE ; la défense des DEUX camps passe ici depuis le
+    // lot COLONNE, et cette branche-ci portait EXACTEMENT le même défaut, tourné
+    // de quatre-vingt-dix degrés. Elle est le raccourci « je bouge dans ma
+    // propre case » : elle écrivait `colonneMilli` SANS jamais regarder
+    // l'occupation, si bien que la pièce rampait jusqu'au bord extrême de sa
+    // case, puis calait quand le pas suivant aurait franchi la frontière.
+    //
+    // ⚠⚠ MESURÉ AVANT DE TOUCHER UNE LIGNE, défenseuse en colonne 4, merlon en
+    // colonne 5, cible en colonne 8 : elle partait de 4 000 et se figeait à
+    // **4 960** — 96 % dans la case du merlon. Le MÊME 960 millièmes que le
+    // Meute à la verticale, qui montait à 2 960. Trois montages sur trois
+    // (`meute`, `guetteur`, `ratisseur`) rendent le même nombre.
+    //
+    // ⚠ ET LE PÉRIMÈTRE EST CELUI DE LA VERTICALE, PAS UN AUTRE : on ne se range
+    // que devant une STRUCTURE IMMOBILE. Ethan nomme « un mur, tourelles,
+    // structure » — les trois sont à `vitesseMilli === 0`. Devant une alliée
+    // MOBILE, la case se libérera d'elle-même, et ranger lui coûterait à chaque
+    // fois les millièmes qu'elle vient de gagner. `MUR T6 bis` mesure les deux.
+    if (bloqueeParUneStructure) {
+      e.colonneMilli = milliDepuisCase(colonne);
+      return;
+    }
     // Elle se décale À L'INTÉRIEUR de sa case : rien à réserver, rien à libérer.
     e.colonneMilli = destinationMilli;
     return;
@@ -2617,12 +2713,40 @@ function avancer(etat, e, p, occupation, obstacles) {
 
   const destinationMilli = e.rangeeMilli + vitesse;
   const caseDestination = caseDepuisMilli(destinationMilli);
+  // ⚠⚠⚠ LA CASE DEVANT, NOMMÉE UNE FOIS ET DONNÉE À SES DEUX LECTEURS — LE
+  // PIÈGE DE L'ÉCRASEUR, TROUVÉ PAR EXÉCUTION ET PAS PAR RELECTURE.
+  // `caseDestination` NE la désigne pas : une entité RANGÉE sur sa case repart
+  // de `rangee * 1 000`, donc `caseDestination` revaut `rangee` tant que la
+  // vitesse est sous 1 000 millièmes — et aucune ne l'atteint, 300 au plus.
+  // Laissé au forçage, il ferait chercher la structure SOUS l'entité
+  // elle-même : `structureForcee` y trouverait l'entité, la refuserait sur
+  // `occupante.camp === e.camp`, et l'Écraseur cesserait d'ouvrir la brèche EN
+  // SILENCE. `ARRÊT T7` tombe si on l'ignore, `MUR T5` le double côté « case
+  // devant ».
+  const caseDevant = rangee + 1;
+  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, caseDevant, colonne);
 
   // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
   // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`
   // exige `aTire` —, donc `nuit` la garde en jeu et elle ne se replie pas.
+  //
+  // ⚠⚠⚠ ET UNE UNITÉ QUI SE RANGE NE PROGRESSE PAS NON PLUS — C'EST L'AUTRE
+  // MOITIÉ DU PIÈGE DE L'ÉCRASEUR, ET ELLE A ÉTÉ TROUVÉE PAR EXÉCUTION APRÈS QUE
+  // LA PREMIÈRE EUT ÉTÉ CORRIGÉE. `peutAvancer` rend VRAI dès que
+  // `caseDestination === rangee` — « avancer à l'intérieur de sa case compte,
+  // elle progresse » —, or une entité rangée ne bouge plus d'un millième. Sans
+  // ce terme, `progresse` resterait VRAI pour toujours devant le mur, le
+  // forçage ne serait JAMAIS calculé, et l'Écraseur cesserait d'ouvrir la brèche
+  // — en silence, exactement comme si `caseDestination` était resté au forçage.
+  // Mesuré sur la scène d'`ARRÊT T7` avant correction : écart de forçage ZERO sur
+  // cent-vingt ticks. `MUR T5` monte cette scène-là.
+  //
+  // ⚠ ET LE REPLI NE S'EN TROUVE PAS OUVERT POUR AUTANT : `ticksInutiles` est
+  // remis à zéro par `nuit(e)` dès que la pièce TIRE sur ce qui la bloque, ce
+  // qu'elle fait toujours. `ARRÊT T8` le mesure sur les deux pièces — celle qui
+  // force et celle qui ne fait que tirer.
   const arrete = doitSArreter(etat, e, p);
-  const progresse = !arrete
+  const progresse = !arrete && !bloqueeParUneStructure
     && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
 
   // ÉCRASEUR — forcer la structure qui barre la colonne.
@@ -2640,7 +2764,7 @@ function avancer(etat, e, p, occupation, obstacles) {
   // l'Écraseur.
   const forcee = progresse
     ? undefined
-    : structureForcee(etat, e, p, occupation, caseDestination);
+    : structureForcee(etat, e, p, occupation, caseDevant);
   if (forcee !== undefined) {
     const degats = Math.max(1, Math.floor((forcee.pvMaxMilli * ECRASEUR_PCT_PAR_TICK) / 100));
     forcee.pvMilli = Math.max(0, forcee.pvMilli - degats);
@@ -2671,6 +2795,24 @@ function avancer(etat, e, p, occupation, obstacles) {
   if (arrete) return;
 
   if (caseDestination === rangee) {
+    // ⚠⚠ ELLE NE FLUE PLUS DANS LE MUR — ETHAN, 10/09, POINT 2 : « Un mur,
+    // tourelles, structure bloque. Donc une unité s'arrête avant, pas dedans.
+    // Ou peut-être que la hitbox est mal faite ? » CE N'EST PAS LA HITBOX,
+    // C'EST LA POSITION. `MILLI_PAR_CASE` vaut 1 000 et `caseDepuisMilli` est
+    // un `floor` : cette branche faisait avancer l'entité À L'INTÉRIEUR de sa
+    // propre case, jusqu'à 999 millièmes, sans jamais regarder si la case
+    // suivante était franchissable. Une unité arrêtée à 5 900 est en case 5
+    // pour le moteur et DESSINÉE à 90 % sur la case 6 — celle du mur — par
+    // `yDeRangeeMilli`, qui projette la position et non l'index.
+    //
+    // ⚠ ET ELLE SE RANGE, ELLE NE S'IMMOBILISE PAS : `rangeeMilli` retombe sur
+    // le multiple exact, donc l'entité repart de sa case entière dès que la
+    // structure tombe. Rien n'est mémorisé, aucun champ n'entre dans l'état, et
+    // `SAVE_VERSION` n'a pas à bouger.
+    if (bloqueeParUneStructure) {
+      e.rangeeMilli = milliDepuisCase(rangee);
+      return;
+    }
     e.rangeeMilli = destinationMilli;
     return;
   }

@@ -103,6 +103,8 @@ import {
   RAPPORTS_PROCHE_DISPOSITION_OUVRAGE, RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE,
   DEPLACES_PAR_PAQUETS, EMPREINTES_PAR_GRAINE_PAQUETS,
   DEPLACES_PAR_REGLES_DE_CARTE, EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE,
+  DEPLACES_PAR_MUR, EMPREINTES_PAR_GRAINE_MUR,
+  RAPPORTS_PROCHE_MUR, RAPPORTS_OUVRAGE_MUR,
   OCTETS_AJOUTES_PAR_REGLES_DE_CARTE, RAPPORTS_OUVRAGE_REGLES_DE_CARTE,
   RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
 } from './temoins-bases-0.js';
@@ -195,7 +197,16 @@ function empreinteAttendue(phase, champ) {
   // étant peinte au joueur des deux côtés de la règle. ⚠ Aucun champ par base ne
   // bouge : le déplacement de la phase 9 tombe sur la même case, et le barème du
   // délai ne se lit qu'au SECOND saut, que le scénario ne fait pas.
-  return DEPLACES_PAR_REGLES_DE_CARTE[phase]?.[champ]
+  // ⚠⚠ DIX-NEUVIÈME COUCHE — lot MUR, 10/09. **Vingt couples sur 350**, et les
+  // SIX PREMIÈRES PHASES sont identiques AU BIT : le scénario ne combat pas avant
+  // son premier raid, et tout ce que le lot change est DANS le combat. Deux
+  // règles, qui ne se recouvrent pas — les six unités anti-structure s'ARRÊTENT
+  // devant un mur, une barrière ou une tourelle, et toutes les autres se RANGENT
+  // sur leur case au lieu de fluer dedans. ⚠ Aucun scalaire ne bouge hors les
+  // deux rapports de raid : ni les gestes, ni la sauvegarde, ni les cases
+  // atteignables, ni le déplacement, ni la cible retenue.
+  return DEPLACES_PAR_MUR[phase]?.[champ]
+    ?? DEPLACES_PAR_REGLES_DE_CARTE[phase]?.[champ]
     ?? DEPLACES_PAR_PAQUETS[phase]?.[champ]
     ?? DEPLACES_PAR_DISPOSITION_OUVRAGE[phase]?.[champ]
     ?? DEPLACES_PAR_NEUTRALISATION[phase]?.[champ]
@@ -583,7 +594,16 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // premier raid est à la phase 7, et il touche toute graine.
     // ⚠ RÈGLES-DE-CARTE (10/09) déplace les vingt-cinq à son tour : la phase 11
     // porte un raid lointain sur toute graine, et c'est là que le prix change.
-    if (obtenue !== EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g]) ecarts.push(g);
+    // ⚠⚠ MUR (10/09) N'EN DÉPLACE QUE VINGT-DEUX, ET C'EST LA PREMIÈRE COUCHE
+    // TOUCHANT AU RAID QUI EN LAISSE. Les graines 15, 21 et 24 tombent à l'octet
+    // sur `REGLES_DE_CARTE` : sur ces parties-là, aucune unité anti-structure ne
+    // croise de mur et aucune colonne ne bute. Le `??` est donc NÉCESSAIRE, et
+    // pas une précaution — sans lui, trois graines seraient comparées à
+    // `undefined` et le test dirait qu'elles divergent alors qu'elles sont
+    // IDENTIQUES.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
+      ecarts.push(g);
+    }
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -717,8 +737,17 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // de sa base, que la carte peint au joueur des deux côtés de la règle —
       // `RAPPORTS_PROCHE_PAQUETS` reste donc en vigueur, non surchargé, et c'est
       // cette moitié-là qui dit que le lot ne renchérit pas tout.
+      // ⚠⚠ ET LE LOT MUR LES DÉPLACE TOUS LES DEUX, MAIS PAS DANS LES MÊMES
+      // PROPORTIONS — **23 sur 25 côté proximité, 4 sur 25 côté Ouvrage**, et
+      // l'écart est l'attribution du lot. Le raid de proximité vise un camp
+      // GÉNÉRÉ, qui porte ses défenses fixes — murs, barrières, tourelles — et
+      // c'est très exactement ce que les deux règles touchent ; le raid de
+      // l'Ouvrage frappe la base du JOUEUR, dont la garnison est ce que le
+      // scénario a posé. Ce qui NE bouge pas juste au-dessus — nombre de cibles,
+      // cible retenue, non-fuite et exactitude de la simulation — dit que seul
+      // le DÉROULÉ du combat a changé.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
+        ? (RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
           ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
           ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
@@ -726,7 +755,7 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
+        : (RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_PROCHE_RETOUCHES[g]
           ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
           ?? RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]

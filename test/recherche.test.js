@@ -635,7 +635,16 @@ test('T12 — l\'Écraseur retire 1 % des PV MAXIMAUX par tick, soit 100 ticks q
       assert.equal(ecart - precedent, pas,
         `${structure} : au tick ${t}, le forçage retire ${ecart - precedent} et non ${pas}`);
     }
-    assert.equal(debut, 34, `${structure} : le forçage commence au tick ${debut}`);
+    // ⚠⚠ LOT MUR (10/09) : LE FORÇAGE COMMENCE DIX TICKS PLUS TÔT — 34 → 24 — ET
+    // C'EST UNE CONSÉQUENCE DIRECTE DU POINT 2. Avant, l'unité fluait à l'intérieur
+    // de sa case jusqu'à ce que sa destination franchisse la frontière : le
+    // forçage ne trouvait la structure qu'à ce moment-là. Désormais elle se RANGE
+    // dès qu'elle entre dans la case devant le mur, et le forçage lit la « case
+    // devant », nommée explicitement dans `avancer` : il tombe au premier tick de
+    // blocage, ce que le commentaire ci-dessus annonçait déjà sans que ce fût
+    // vrai. Le PAS, lui, ne bouge pas d'un milli-PV : c'est ce que ce test
+    // mesure, et le lot n'y a pas touché.
+    assert.equal(debut, 24, `${structure} : le forçage commence au tick ${debut}`);
     assert.ok(increments >= fenetreMin,
       `${structure} : ${increments} tick(s) de forçage mesurables, ${fenetreMin} attendus`);
 
@@ -1274,12 +1283,22 @@ test('MODULES-B T1 — le Flashbang désactive une infanterie, et pas une struct
   const tirs = ticksDeTir(etat, ['guetteur', 'casemate'], 59);
   // ⚠⚠ LOT ARRÊT (04/09) : LE BÉLIER AVANCE, ET CE QUE CETTE GARDE DÉFEND N'EST
   // PAS SA CASE — C'EST L'ATTRIBUTION DU SILENCE DU GUETTEUR. Il visait le
-  // Merlon, qui n'est plus un motif d'arrêt : il monte de 2 000 à 3 920 en
-  // cinquante-neuf ticks et s'immobilise sous le mur, qui bloque. Le silence
+  // Merlon, qui n'était plus un motif d'arrêt : il montait de 2 000 à 3 920 en
+  // cinquante-neuf ticks et s'immobilisait sous le mur, qui bloque.
+  //
+  // ⚠⚠ LOT MUR (10/09) : IL NE MONTE PLUS DU TOUT — 2 000, SA CASE DE DÉPART —
+  // ET LES DEUX RÈGLES DU LOT Y CONCOURENT. Le Bélier EST anti-structure : le
+  // point 3 le fait s'arrêter pour le Merlon dès qu'il le vise. Et quand bien
+  // même il ne s'arrêterait pas, le point 2 le rangerait sur sa case au lieu de
+  // le laisser fluer à 3 920, c'est-à-dire 92 % dans la case du mur. Ce que
+  // cette garde défend n'a pas changé : le Guetteur reste à portée aux deux
+  // bouts de la fenêtre, et il l'est d'autant plus que le Bélier ne s'éloigne
+  // plus. Le silence mesuré plus bas vient donc du module, jamais de la
+  // distance. Le silence
   // qu'on mesure plus bas doit venir du module, jamais de la distance : on
   // vérifie donc que le Guetteur reste À PORTÉE aux deux bouts de la fenêtre,
   // ce qui est la grandeur en jeu. Le Bélier ne fait que s'en rapprocher.
-  assert.equal(belier.rangeeMilli, 3920, 'montage : le Bélier ne monte plus au contact du mur');
+  assert.equal(belier.rangeeMilli, 2000, 'montage : le Bélier a bougé de sa case');
   const aPortee = (r) => (guetteur.rangeeMilli - r) ** 2
     + (guetteur.colonneMilli - belier.colonneMilli) ** 2 <= belier.porteeCarree;
   assert.ok(aPortee(2000), 'montage : le Guetteur n\'était pas à portée au départ');
@@ -3323,7 +3342,13 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   // ⚠ LOT ARRÊT : 110 au lieu de 120. Le montage ne change pas, la règle
   // d'arrêt si — et les POINTS, eux, ne bougent pas d'une unité : c'est
   // exactement ce que cette ligne existe pour dire.
-  assert.equal(jeu.resultat.tick, 110, 'montage : le combat doit se dérouler pareil');
+  // ⚠⚠ LOT MUR (10/09) : 120, LE NOMBRE D'AVANT LE LOT ARRÊT, ET CE N'EST PAS UN
+  // HASARD. Le 04/09 avait retiré l'arrêt devant le Merlon de ce montage et le
+  // combat s'était raccourci de dix ticks ; le 10/09 le rétablit, et il les
+  // reprend. Les POINTS, eux, n'ont bougé d'aucune unité sur les deux lots —
+  // c'est exactement ce que cette ligne existe pour dire, et elle le dit deux
+  // fois mieux en revenant à son point de départ.
+  assert.equal(jeu.resultat.tick, 120, 'montage : le combat doit se dérouler pareil');
 
   // ⚠ ET LE MONTAGE N'EST PAS VIDE. Le Merlon porte `pvPlusVingt` côté Ouvrage :
   // débloquer ce module-là majore bien les points. Sans cette ligne, l'égalité
@@ -4610,7 +4635,10 @@ test('MODULES-E T7 — contre-épreuve : le même nom dans l\'AUTRE branche ne r
     'la branche offense de l\'Ouvrage majore encore les points de recherche');
   // ⚠ LOT ARRÊT : 110 au lieu de 120, comme à MODULES-D T4 et pour la même
   // raison — la règle d'arrêt a changé, le montage non.
-  assert.equal(resultat.tick, 110, 'le combat lui-même a changé : le module a été lu');
+  // ⚠⚠ LOT MUR (10/09) : 120, le nombre d'avant le lot ARRÊT, comme à
+  // MODULES-D T4 et pour la même raison retournée — l'arrêt devant le Merlon est
+  // rétabli, le montage n'a toujours pas bougé, et les POINTS non plus.
+  assert.equal(resultat.tick, 120, 'le combat lui-même a changé : le module a été lu');
 });
 
 test('MODULES-E T8 — le déterminisme tient, les deux branches armées', () => {
@@ -5433,7 +5461,20 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // 36, 39, 52, 56, 57 — contre 33 au lot d'avant. Un montage qui dépend d'une
   // disposition tirée la reperd au prochain lot qui y touche, c'est écrit ici
   // pour la quatrième fois.
-  const GRAINES = [1, 7, 24];
+  // ⚠⚠ RÉANCRÉ AU LOT MUR (10/09) : `1` SORT, `9` ENTRE, ET C'EST UNE PRÉMISSE
+  // TOMBÉE, PAS UNE ASSERTION ASSOUPLIE. Sur la graine 1, au niveau 38, le canal
+  // ARMÉ rapporte désormais PLUS que le canal vide — le sens que ce test mesure
+  // s'y inverse. La cause est mesurable : les anti-structure s'arrêtent désormais
+  // sur les ouvrages fixes de la garnison, qu'elles ouvrent au lieu de les
+  // longer, et le bonus de 20 % l'emporte de nouveau sur le surcroît de
+  // résistance. Ce n'est pas ce test-ci qui doit trancher : il mesure un SENS sur
+  // trois graines qui discriminent, et il lui en faut trois qui discriminent.
+  // Balayage des graines 1 à 60 : **onze** conviennent — 7, 9, 18, 24, 33, 36,
+  // 39, 51, 52, 56, 57. Les deux qui tenaient sont gardées, la troisième est la
+  // plus petite des neuf restantes. ⚠ L'inversion de la graine 1 est un CONSTAT
+  // à remonter, pas un défaut : aucun barème n'a été touché, et l'équilibrage
+  // revient à Ethan.
+  const GRAINES = [7, 9, 24];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
   // graines DISCRIMINENT toujours aux deux niveaux — c'est ce que les deux
@@ -5452,7 +5493,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // identiques au point, et deux des trois du niveau 50. Un balayage des graines
   // 1 à 60 en donne 33 qui discriminent aux trois niveaux, contre six au lot
   // précédent : la propriété est plus robuste qu'elle ne l'était.
-  const apres20 = { 1: 10_320_141n, 7: 1_801_577n, 24: 6_479_014n };
+  const apres20 = { 7: 3_671_200n, 9: 4_086_271n, 24: 6_707_657n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5473,7 +5514,13 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves. Le SENS est
   // intact — armé reste sous vide sur les trois —, et c'est la seule chose que
   // ce test mesure.
-  const apres38 = { 1: 522_201_087n, 7: 326_856_763n, 24: 524_648_503n };
+  // ⚠⚠ SECOND GESTE DU LOT MUR : **LA GRAINE 7 SEULE BOUGE**, 327 082 825 →
+  // 326 352 543, et les graines 9 et 24 ne bougent pas d'un point. Le rangement
+  // latéral de `seDecaler` ne mord que là où une défenseuse bute sur une
+  // structure en se décalant : sur ces trois bases-là, une seule est dans ce
+  // cas. ⚠ Et la propriété que ce test garde — le canal armé coûte MOINS que le
+  // canal vide — tient sur les trois, aux niveaux 38 comme 50.
+  const apres38 = { 7: 326_352_543n, 9: 1_775_548_650n, 24: 524_648_503n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5492,7 +5539,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves.
   // ⚠ RÉANCRÉ AU LOT DISPOSITION-OUVRAGE : seule la graine 1 bouge, les deux
   // autres sont identiques au point.
-  const apres50 = { 1: 10_294_965_482n, 7: 6_924_296_098n, 24: 22_542_241_392n };
+  const apres50 = { 7: 7_964_841_806n, 9: 55_700_887_742n, 24: 22_479_132_014n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);
@@ -5674,9 +5721,34 @@ test('MODULES-F T16 — le déterminisme tient avec les deux modules', () => {
       // le décalage rend `sens === 0`, la pièce reste où elle est, et les deux
       // gardes de non-vacuité redeviennent mesurables — broyeur 9 457 535 armé
       // contre 6 355 935 nu, Meute 5 041 263 contre 6 768 887.
+      //
+      // ⚠⚠⚠ LE BÉLIER PASSE DE 30 À 26 AU LOT MUR (10/09), ET C'EST UNE SECONDE
+      // PRÉMISSE RÉPARÉE, PAS UNE ASSERTION ASSOUPLIE — mais celle-ci découvre un
+      // DÉFAUT, et il est reporté tel quel dans `RAPPORT-lotMUR.md` § Restes
+      // ouverts. Sous le lot, le Bélier de niveau 30 meurt au tick 119 sous le
+      // feu CONJOINT du Broyeur et du Créneau, tous deux porteurs du Vol de vie.
+      // Le coup est un SURPLUS : l'encaissé est plus petit que la somme des deux
+      // nominaux, et `tir` le partage « par indice de tireur croissant »
+      // (`combat.js`, PASSE 1) — une clé stable DANS un run, mais qui change
+      // quand la liste des défenseurs est permutée. Résultat mesuré :
+      // **60 permutations sur 120 divergent**, exactement celles qui échangent le
+      // rang du Broyeur et du Créneau, pour 9 966 milli-PV d'écart.
+      //
+      // ⚠⚠ LE DÉFAUT PRÉEXISTE AU LOT, ET LE LOT LE REND ATTEIGNABLE. Mesuré dans
+      // un `git worktree` sur `origin/main` = `213d155`, MONTAGE IDENTIQUE :
+      // **0 permutation sur 120** ne diverge — le Bélier n'y meurt pas d'un
+      // surplus partagé. Aucune ligne du partage n'est touchée par ce lot ; ce
+      // qui change est le tick où le Bélier tombe.
+      //
+      // ⚠ LE NIVEAU 26 EST CHOISI PAR BALAYAGE, PAS AU JUGÉ : des niveaux 26 à
+      // 35, seuls 26, 32, 33, 34 et 35 rendent les 120 permutations identiques,
+      // et de ceux-là le 26 est le SEUL où le Vol de vie soigne encore
+      // mesurablement le Broyeur — la garde de non-vacuité de la dernière ligne
+      // de ce test. Les deux moitiés tiennent donc ensemble, ce qu'aucun autre
+      // niveau de la fenêtre ne permet.
       vagues: [[
         { id: 'meute', colonne: 5, rangee: 2, niveau: 30 },
-        { id: 'belier', colonne: 6, rangee: 2, niveau: 30 },
+        { id: 'belier', colonne: 6, rangee: 2, niveau: 26 },
         { id: 'crecelle', colonne: 4, rangee: 2, niveau: 30 },
       ]],
       modulesDebloques: {

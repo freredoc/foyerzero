@@ -604,7 +604,13 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // placement passe par paquets ET retire ses tirages du flux de composition,
   // donc la garnison de toute graine change avec sa forme. 528 → 396, la cause
   // ne bouge pas.
-  assert.equal(r.nbTicks, 396);
+  //
+  // ⚠⚠ LOT MUR (10/09) : 396 → 458, ET POUR UNE CINQUIÈME CAUSE ENCORE — NI LE
+  // FLUX, NI LA POSITION. Le site est composé et disposé exactement comme hier ;
+  // c'est le DÉROULÉ du combat qui change, les anti-structure s'arrêtant devant
+  // les murs et les autres se rangeant devant ce qui les bloque. La cause, elle,
+  // ne bouge toujours pas.
+  assert.equal(r.nbTicks, 458);
   assert.equal(r.cause, 'attaquants');
 });
 

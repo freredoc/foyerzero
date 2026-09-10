@@ -360,7 +360,16 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // ⚠⚠ LOT PAQUETS (09/09) : LE SITE CHANGE DE DISPOSITION ET DE GARNISON. Le
   // placement passe par paquets ET retire ses tirages du flux de composition,
   // donc la garnison de toute graine change avec sa forme. 528 → 396.
-  assert.equal(r.nbTicks, 396);
+  //
+  // ⚠⚠ LOT MUR (10/09) : 396 → 458, ET C'EST LA PREMIÈRE FOIS QUE CE SEUIL BOUGE
+  // SANS QUE LE SITE CHANGE. Ni la disposition ni la garnison ne bougent d'un
+  // identifiant — le lot ne touche pas au placement — : ce qui change est le
+  // DÉROULÉ. Les six unités anti-structure s'arrêtent désormais devant murs,
+  // barrières et tourelles au lieu de les longer, et toutes les autres se rangent
+  // sur leur case devant ce qui les bloque. Un raid qui s'arrête plus souvent met
+  // plus longtemps : soixante-deux ticks de plus. Ce que ce test existe pour
+  // tenir ne bouge pas — au moins une unité rentre à la base.
+  assert.equal(r.nbTicks, 458);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
