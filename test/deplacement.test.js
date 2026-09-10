@@ -110,6 +110,34 @@ function partieDegagee(graine = 2026, rangee = 200, rayon = RAYON_DEGAGE) {
   return etat;
 }
 
+/**
+ * Monte la base au-dessus du niveau 4,2, où la distance CESSE d'être gratuite.
+ *
+ * ⚠⚠ TROIS MONTAGES ONT PERDU LEUR PRÉMISSE AU LOT EMPRISES-ET-DÉLAI, ET LEURS
+ * PROPRES GARDES L'ONT DIT. `DÉPLACEMENT T8`, `RC T5` et `RC T6` portaient
+ * chacun un « le montage ne mesure rien : dix cases coûtent autant qu'une » ;
+ * les trois ont mordu d'un coup. La cause est la forme d'Ethan : le plafond du
+ * délai passe SOUS le plancher d'une heure en dessous du niveau 4,2, donc le
+ * terme de distance est écrasé — et une base NEUVE, qui est ce que ces trois
+ * montages posaient, est exactement dans ce cas.
+ *
+ * ⚠ C'EST LE MONTAGE QU'ON RÉPARE, PAS L'ASSERTION. Ces gardes-là existent pour
+ * refuser un test qui passerait sur n'importe quel code ; les assouplir aurait
+ * retiré la seule chose qui disait que la distance compte.
+ *
+ * ⚠ ET LE NIVEAU EST CELUI DU CHANTIER SEUL, parce qu'une base neuve n'a que
+ * lui : la moyenne vaut donc exactement `niveau × 10` dixièmes.
+ */
+function baseHorsDuPlancher(etat, niveau = 20) {
+  const laBase = baseCourante(etat);
+  for (const batiment of laBase.disposition) batiment.niveau = niveau;
+  assert.equal(niveauDesBatiments(laBase.disposition), niveau * 10,
+    'le montage ne pose pas le niveau voulu');
+  assert.ok(delaiDeplacementTicks(etat, 10) > delaiDeplacementTicks(etat, 1),
+    'le montage ne discrimine toujours pas : la distance reste gratuite à ce niveau');
+  return etat;
+}
+
 // ---------------------------------------------------------------------------
 // T1 — dix cases, en euclidien
 // ---------------------------------------------------------------------------
@@ -397,48 +425,77 @@ test('DÉPLACEMENT T6 — le rayon des anneaux de satellites suit la nouvelle ra
 // T7 — le barème du délai
 // ---------------------------------------------------------------------------
 
-test('DÉPLACEMENT T7 — le délai est 60 min + le niveau + la distance au-delà de la première case', () => {
-  // ⚠⚠ CE TEST EST RETOURNÉ, PAS AJUSTÉ — lot RÈGLES-DE-CARTE, 10/09/2026,
-  // point 15 d'Ethan. Il figeait le barème d'avant : « 1 h à bas niveau, 24 h au
-  // niveau 50, interpolé entre les deux », venu de `SESSION-RELEVE-BUTIN.md` §0.
-  // Ethan a dicté une autre règle — « coût par distance et niv. Base 1h, puis
-  // chaque niveau de base rajoute 1min », et sur la forme exacte « Q2 b » —, donc
-  // c'est la PRÉMISSE de ce test qui a cessé d'être vraie, pas son code qui a
-  // cessé d'être juste. Il mesure la règle neuve ET FALSIFIE L'ANCIENNE DE FACE :
-  // sans la seconde moitié, un retour silencieux à l'interpolation passerait.
+test('DÉPLACEMENT T7 — le délai DOUBLE tous les dix niveaux, et il ne descend jamais sous 1 h', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ POUR LA SECONDE FOIS EN UN JOUR, ET C'EST À DIRE
+  // AVANT TOUT LE RESTE. Il figeait d'abord « 1 h à bas niveau, 24 h au niveau
+  // 50, interpolé entre les deux » ; le lot RÈGLES-DE-CARTE l'a retourné le
+  // 10/09 au matin sur la droite `60 + niveau + (distance − 1)` d'Ethan ; Ethan
+  // est revenu dessus le SOIR MÊME en dictant cinq ancrages qui DOUBLENT tous
+  // les dix niveaux — « 1 h 30 niv 10 distance 10 ; 3 h niv 20 d10 ; 6 h niv 30
+  // d10 ; 12 h niv 40 d10 ; 24 h niv 50 d10 » — plus un plancher, « 1 h mini ».
+  // C'est donc la PRÉMISSE qui a cessé d'être vraie, pas le code du test.
   //
-  // ⚠⚠ ET CE QUE LE RETOURNEMENT ABANDONNE EST À DIRE : LES 24 HEURES DU
-  // NIVEAU 50. Le pire cas du jeu — niveau 50, dix cases — rend désormais 1 h 59.
-  // Le plafond du barème est divisé par douze ; c'est UNE table qui change, et
-  // Ethan peut revenir dessus.
+  // ⚠⚠ ET LES 24 HEURES DU NIVEAU 50 SONT RENDUES. La droite du matin plafonnait
+  // le jeu entier à 1 h 59 ; le pire cas vaut de nouveau **24 h**, par une
+  // géométrique et non par l'interpolation qu'il avait jadis.
+  //
+  // ⚠⚠ IL FALSIFIE LES DEUX RÈGLES MORTES DE FACE. Sans les `notEqual`, un
+  // retour silencieux à l'une ou à l'autre passerait : la droite du matin rend
+  // 1 h 01 là où on attend 1 h 00, et l'interpolation d'avant rendait 24 h à
+  // distance 1 comme à distance 10.
   const etat = creerEtat(7);
   // Une base neuve : un seul Chantier de niveau 1.
   assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 10, 'le niveau se lit en DIXIÈMES');
-  assert.equal(delaiDeplacementTicks(etat, 1), Math.round(61 * TICKS_PAR_HEURE / 60), '1 h 01');
+  assert.equal(delaiDeplacementTicks(etat, 1), Math.round(600 * TICKS_PAR_HEURE / 600), '1 h 00');
 
-  // ⚠ LA DISTANCE COMPTE AU-DELÀ DE LA PREMIÈRE CASE : dix cases coûtent neuf
-  // minutes de plus, pas dix. C'est ce que `(distance − 1)` veut dire, et c'est
-  // la moitié qu'un barème « + 1 par case » ferait tomber.
-  assert.equal(delaiDeplacementTicks(etat, 10), Math.round(70 * TICKS_PAR_HEURE / 60), '1 h 10');
+  // ⚠⚠ AU PLUS BAS NIVEAU, LA DISTANCE EST GRATUITE, ET C'EST UNE CONSÉQUENCE DE
+  // LA FORME D'ETHAN QU'IL FAUT DIRE. Le plafond du niveau 1 vaut 482 dixièmes de
+  // minute, donc SOUS le plancher de 600 : le `max(0, plafond − plancher)` du
+  // terme de distance écrase alors le surplus, et dix cases coûtent autant
+  // qu'une. Le plancher cesse de mordre au niveau 4,2 — mesuré, `ED T7`.
+  // ⚠ Une base NEUVE est exactement dans ce cas : c'est le premier déplacement
+  // de toute partie. Ethan tranche s'il veut la distance payante dès le niveau 1.
+  assert.equal(delaiDeplacementTicks(etat, 10), Math.round(600 * TICKS_PAR_HEURE / 600),
+    'au niveau 1, dix cases coûtent autant qu\'une : le plancher les couvre');
   assert.equal(
-    delaiDeplacementTicks(etat, 10) - delaiDeplacementTicks(etat, 1),
-    9 * Math.round(TICKS_PAR_HEURE / 60),
-    'neuf cases au-delà de la première, une minute chacune',
+    delaiDeplacementTicks(etat, 10) - delaiDeplacementTicks(etat, 1), 0,
+    'la distance a cessé d\'être gratuite au plancher',
   );
+  // ⚠ LA FALSIFICATION DE LA DROITE DU MATIN, DE FACE : elle rendait 1 h 01 à
+  // distance 1 et 1 h 10 à distance 10.
+  assert.notEqual(delaiDeplacementTicks(etat, 1), Math.round(610 * TICKS_PAR_HEURE / 600),
+    'le barème est revenu à la droite « 60 + niveau + (distance − 1) »');
+  assert.notEqual(delaiDeplacementTicks(etat, 10), Math.round(700 * TICKS_PAR_HEURE / 600));
 
   // Au plafond de niveau, et à la distance maximale : le PIRE cas du jeu.
   baseCourante(etat).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 500);
-  assert.equal(delaiDeplacementTicks(etat, 10), Math.round(119 * TICKS_PAR_HEURE / 60), '1 h 59');
-  // ⚠ LA FALSIFICATION DE L'ANCIENNE RÈGLE, DE FACE : elle rendait 24 h ici.
-  assert.notEqual(delaiDeplacementTicks(etat, 10), 24 * TICKS_PAR_HEURE,
+  assert.equal(delaiDeplacementTicks(etat, 10), 24 * TICKS_PAR_HEURE, '24 h tout rond');
+  // ⚠ ET LÀ, LA DISTANCE COMPTE POUR DE BON : à distance 1 le même niveau rend
+  // 3 h 18. Sans cette ligne, une lecture qui ignorerait la distance passerait.
+  assert.equal(delaiDeplacementTicks(etat, 1), Math.round(1980 * TICKS_PAR_HEURE / 600), '3 h 18');
+  assert.ok(delaiDeplacementTicks(etat, 10) > 7 * delaiDeplacementTicks(etat, 1),
+    'au plafond, dix cases ne coûtent plus sept fois une case');
+  // ⚠ LA FALSIFICATION DE LA DROITE, AU PLAFOND : elle rendait 1 h 59.
+  assert.notEqual(delaiDeplacementTicks(etat, 10), Math.round(1190 * TICKS_PAR_HEURE / 600),
+    'le barème est revenu à la droite du lot RÈGLES-DE-CARTE');
+  // ⚠ ET CELLE DE L'INTERPOLATION D'AVANT : elle rendait 24 h à TOUTE distance.
+  assert.notEqual(delaiDeplacementTicks(etat, 1), 24 * TICKS_PAR_HEURE,
     'le barème est revenu à l\'interpolation 1 h → 24 h du relevé de TA');
-  assert.notEqual(delaiDeplacementTicks(etat, 1), 24 * TICKS_PAR_HEURE);
 
-  // ⚠⚠ ET AU MILIEU, C'EST LÀ QUE LE PIÈGE DES DIXIÈMES MORD — il n'a pas changé
-  // de nature, seulement de valeur attendue. Une base de niveau 25,5 coûte
-  // 60 + 25,5 = 85,5 min. Lire `niveauDesBatiments` comme un ENTIER donnerait
-  // 255, donc 315 minutes — plus de cinq heures au lieu d'une heure et demie.
+  // ⚠⚠ LES CINQ ANCRAGES D'ETHAN, UN PAR UN, ET LE DOUBLEMENT ENTRE EUX.
+  for (const [niveau, heures] of [[10, 1.5], [20, 3], [30, 6], [40, 12], [50, 24]]) {
+    baseCourante(etat).disposition[0].niveau = niveau;
+    assert.equal(delaiDeplacementTicks(etat, 10), heures * TICKS_PAR_HEURE,
+      `niveau ${niveau}, dix cases : ${heures} h attendues`);
+  }
+
+  // ⚠⚠ ET AU MILIEU, C'EST LÀ QUE LE PIÈGE DES DIXIÈMES MORD — il n'a changé ni
+  // de nature ni d'endroit, seulement de valeur attendue. Une base de niveau
+  // 25,5 interpole entre les plafonds du 25 (2546) et du 26 (2728), soit 2637,
+  // puis paie un dixième de sa marge : 600 + 204 = **804**. Lire
+  // `niveauDesBatiments` comme un ENTIER donnerait 255, hors de la table, donc
+  // `NaN` — c'est-à-dire un délai qui ne LÈVE pas et qui déverrouille le geste.
   baseCourante(etat).disposition[0].niveau = 25;
   baseCourante(etat).disposition.push({
     id: 'caserne', rangee: 13, colonne: 1, niveau: 26, degatsMilli: 0,
@@ -446,13 +503,21 @@ test('DÉPLACEMENT T7 — le délai est 60 min + le niveau + la distance au-del�
   baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 255, 'moyenne de 25 et 26 : 25,5');
   const milieu = delaiDeplacementTicks(etat, 1);
-  assert.equal(milieu, Math.round(855 * TICKS_PAR_HEURE / 600), '85,5 minutes, au dixième');
-  // La falsification : lu en entier, le délai serait celui d'un niveau 255.
-  assert.notEqual(milieu, Math.round(3150 * TICKS_PAR_HEURE / 600),
-    '`niveauDesBatiments` est lu comme un entier : le délai est dix fois faux');
+  assert.equal(milieu, Math.round(804 * TICKS_PAR_HEURE / 600), '80,4 minutes, au dixième');
+  assert.ok(Number.isFinite(milieu), 'le niveau est lu comme un entier : la table rend NaN');
   // ⚠ ET LE DEMI-NIVEAU SE VOIT : arrondir à 25 ou à 26 rendrait un autre nombre.
-  assert.notEqual(milieu, Math.round(850 * TICKS_PAR_HEURE / 600), 'le niveau est arrondi vers le bas');
-  assert.notEqual(milieu, Math.round(860 * TICKS_PAR_HEURE / 600), 'le niveau est arrondi vers le haut');
+  // ⚠ LES DEUX BÂTIMENTS CHANGENT ENSEMBLE : n'en bouger qu'un laisse la moyenne
+  // à 25,5, donc rend le même nombre et ne mesure rien. Le premier jet de cette
+  // ligne l'a fait, et l'assertion l'a dit.
+  for (const b of baseCourante(etat).disposition) b.niveau = 25;
+  assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 250);
+  const a25 = delaiDeplacementTicks(etat, 1);
+  for (const b of baseCourante(etat).disposition) b.niveau = 26;
+  assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 260);
+  const a26 = delaiDeplacementTicks(etat, 1);
+  assert.notEqual(milieu, a25, 'le niveau est arrondi vers le bas');
+  assert.notEqual(milieu, a26, 'le niveau est arrondi vers le haut');
+  assert.ok(a25 < milieu && milieu < a26, 'le demi-niveau ne tombe plus entre ses deux voisins');
 
   // La distance est bornée des deux côtés — un déplacement de zéro case n'existe
   // pas, et onze cases sont hors de portée.
@@ -460,14 +525,20 @@ test('DÉPLACEMENT T7 — le délai est 60 min + le niveau + la distance au-del�
   assert.throws(() => delaiDeplacementTicks(etat, DEPLACEMENT.porteeMaxCases + 1), RangeError);
 
   // Le barème vient des DONNÉES, il n'est pas écrit dans le module.
-  assert.deepEqual(DEPLACEMENT.delaiMinutes, { base: 60, parNiveau: 1, parCaseAuDela: 1 });
-  assert.equal(DEPLACEMENT.delaiMinutes, GEOGRAPHIE.delaiDeplacementMinutes,
+  assert.equal(DEPLACEMENT.delai, GEOGRAPHIE.delaiDeplacement,
     'le délai est recopié au lieu d\'être référencé');
-  // ⚠ ET L'ANCIENNE TABLE NE TRAÎNE PAS À CÔTÉ DE LA NEUVE. Deux tables pour une
-  // grandeur, c'est une occasion de divergence, et `CLAUDE.md` §4 l'interdit.
+  assert.equal(DEPLACEMENT.delai.plancherDixiemesDeMinute, 600);
+  assert.equal(DEPLACEMENT.delai.plafondsParNiveau.length, GEOGRAPHIE.niveauPlafond);
+  // ⚠ ET LES ANCIENNES TABLES NE TRAÎNENT PAS À CÔTÉ DE LA NEUVE. Deux tables
+  // pour une grandeur, c'est une occasion de divergence, et `CLAUDE.md` §4
+  // l'interdit. Les DEUX qui précèdent sont nommées : celle en heures du lot
+  // DÉPLACEMENT, celle en minutes du lot RÈGLES-DE-CARTE.
   assert.equal(GEOGRAPHIE.delaiEntreSautsHeures, undefined,
     'l\'ancien couple en heures est resté dans GEOGRAPHIE à côté du neuf');
+  assert.equal(GEOGRAPHIE.delaiDeplacementMinutes, undefined,
+    'les trois coefficients en minutes sont restés à côté de la table des plafonds');
   assert.equal(DEPLACEMENT.delaiHeures, undefined);
+  assert.equal(DEPLACEMENT.delaiMinutes, undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -475,7 +546,11 @@ test('DÉPLACEMENT T7 — le délai est 60 min + le niveau + la distance au-del�
 // ---------------------------------------------------------------------------
 
 test('DÉPLACEMENT T8 — un second déplacement trop tôt est refusé, et le refus CHIFFRE l\'attente', () => {
-  const etat = partieDegagee(2026, 200);
+  // ⚠⚠ LA BASE EST MONTÉE AU-DESSUS DU PLANCHER, SANS QUOI CE TEST NE MESURE
+  // RIEN — et c'est SA PROPRE GARDE qui l'a dit au lot EMPRISES-ET-DÉLAI. Sous
+  // le niveau 4,2 le plancher d'une heure couvre toute la distance, donc « trois
+  // cases » et « une case » rendent le même nombre.
+  const etat = baseHorsDuPlancher(partieDegagee(2026, 200));
   const cible = { rangee: baseCourante(etat).position.rangee - 3, colonne: baseCourante(etat).position.colonne };
   deplacerLaBase(etat, cible);
   assert.equal(baseCourante(etat).dernierDeplacementTick, etat.horloge.nbTicks);
@@ -1048,23 +1123,33 @@ function baseAuNiveau(etat, dixiemes) {
 }
 
 test('RC T4 — la table de contrôle du barème tombe juste, ligne par ligne', () => {
-  // ⚠⚠ LES CINQ LIGNES DU BRIEF, EN DIXIÈMES DE MINUTE, ET LE CALCUL SE FAIT
-  // ENTIÈREMENT EN ENTIERS. `délai = 60 + niveau + (distance − 1)`, arbitrage
-  // d'Ethan du 10/09 — « Q2 b ». Les deux lignes en gras du brief sont ses
-  // propres exemples ; la ligne 8,6 est celle qui prouve que les DIXIÈMES ne
-  // sont pas lus comme des entiers, et c'est la seule qui l'attrape.
+  // ⚠⚠ CES CINQ LIGNES SONT RÉANCRÉES AU LOT EMPRISES-ET-DÉLAI, ET LE NOMBRE
+  // D'AVANT EST ÉCRIT À CÔTÉ DE CELUI D'APRÈS. Elles figeaient la droite
+  // `60 + niveau + (distance − 1)` qu'Ethan avait dictée le 10/09 au matin ; il
+  // est revenu dessus le SOIR MÊME — cinq ancrages qui DOUBLENT tous les dix
+  // niveaux, plus un plancher d'une heure. C'est la PRÉMISSE qui a cessé d'être
+  // vraie, et ce test-ci garde ce qu'il gardait déjà : que le barème vient des
+  // données, que les cinq montages discriminent, et que les dixièmes vivent.
   //
-  // ⚠ LA LIGNE « 5 / 4 » REND 1 h 08 LÀ OÙ ETHAN A ÉCRIT « 1h04 ». C'est ce que
-  // SA propre règle donne — 60 + 5 + 3 —, et c'est la formule (b) qu'il a
-  // choisie en connaissance des trois candidates. On mesure sa règle, on ne
-  // bricole pas la formule pour tomber sur son exemple.
+  // ⚠ LE CALCUL RESTE ENTIÈREMENT EN ENTIERS, et on remonte des ticks aux
+  // dixièmes de minute plutôt que de recopier `TICKS_PAR_HEURE`.
+  //
+  // ⚠⚠ ET LA LIGNE « 1 / 1 » A CHANGÉ DE NATURE, PAS SEULEMENT DE VALEUR : elle
+  // rendait 610 par la droite, elle rend **600** parce que le PLANCHER la
+  // couvre. C'est le « 1 h mini » d'Ethan, et il mord jusqu'au niveau 4,2 —
+  // `ED T7` le mesure. La ligne « 5 / 4 » est dans le même cas : 614 au lieu de
+  // 680, dont 14 seulement de distance.
+  //
+  // ⚠ LA LIGNE 8,6 RESTE CELLE QUI COMPTE — la seule qui prouve que les DIXIÈMES
+  // ne sont pas lus comme des entiers. Elle passe de 686 à **622**, et son
+  // chemin complet est refait dans `ED T6`.
   const table = [
     // [dixièmes de niveau, distance, dixièmes de minute attendus, libellé]
-    [10, 1, 610, '1 h 01'],
-    [50, 4, 680, '1 h 08'],
-    [86, 1, 686, '1 h 08,6'],
-    [200, 1, 800, '1 h 20'],
-    [500, 10, 1190, '1 h 59'],
+    [10, 1, 600, '1 h 00'],       // 610 sous la droite de RÈGLES-DE-CARTE
+    [50, 4, 614, '1 h 01,4'],     // 680 sous la droite
+    [86, 1, 622, '1 h 02,2'],     // 686 sous la droite
+    [200, 1, 720, '1 h 12'],      // 800 sous la droite
+    [500, 10, 14400, '24 h 00'],  // 1190 sous la droite, soit 1 h 59
   ];
   for (const [dixiemes, distance, attendu, libelle] of table) {
     const etat = baseAuNiveau(creerEtat(7), dixiemes);
@@ -1087,7 +1172,10 @@ test('RC T5 — la durée est FIGÉE au saut : améliorer sa base ne rallonge pa
   // qu'il dépend de la DISTANCE PARCOURUE, le recalcul ne sait plus de combien la
   // base a sauté — et un saut de dix cases se déverrouillerait au tarif d'un saut
   // d'une case. La base porte donc la durée qu'elle a CONTRACTÉE.
-  const etat = partieDegagee(2026, 200);
+  // ⚠ MONTÉE AU-DESSUS DU PLANCHER : voir `baseHorsDuPlancher`. Sa garde « dix
+  // cases coûtent autant qu'une » a mordu au lot EMPRISES-ET-DÉLAI, et elle
+  // avait raison — la distance est gratuite sous le niveau 4,2.
+  const etat = baseHorsDuPlancher(partieDegagee(2026, 200));
   const depart = { ...baseCourante(etat).position };
   const cible = { rangee: depart.rangee - 10, colonne: depart.colonne };
   assert.deepEqual(problemesDuDeplacement(etat, cible), [], 'le montage ne peut pas sauter de dix cases');
@@ -1129,7 +1217,7 @@ test('RC T5 — la durée est FIGÉE au saut : améliorer sa base ne rallonge pa
   // test — mesuré.
   // ⚠ SUR UN MONTAGE NEUF : la base d'à côté a déjà sauté de dix cases, et le
   // dégagement était centré sur son point de DÉPART.
-  const second = partieDegagee(2026, 200);
+  const second = baseHorsDuPlancher(partieDegagee(2026, 200));
   const oblique = { ...baseCourante(second).position };
   const coin = { rangee: oblique.rangee - 7, colonne: oblique.colonne - 7 };
   assert.deepEqual(problemesDuDeplacement(second, coin), [], 'le montage ne peut pas sauter en diagonale');

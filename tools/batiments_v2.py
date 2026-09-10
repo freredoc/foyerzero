@@ -13,13 +13,26 @@ producteurs perdent leurs bâtiments ici, et `ruines.py` ne garde que ce qui n'a
 jamais été un bâtiment : `ruine_j` et `ruine_o`. Conserver les deux séries aurait
 payé trente-deux sprites en octets pour n'en dessiner que seize.
 
-⚠⚠ L'EMPRISE NE VIENT PLUS DES PV : ELLE EST LA MÊME POUR LES VINGT — lot
-ART-90, 10/09/2026. Ethan : « Les bâtiments sont encore trop petit, ils doivent
-tous prendre 90% d'emprise pour être bien visible sur tel », puis, sur le
-périmètre : « Seulement bâtiment, pas unités ». Elle vaut donc
-`EMPRISE_QUATRE_VINGT_DIX` de `tools/joueur_v2.py`, où le nombre est écrit avec
-sa raison depuis le lot SPRITES-V2-JOUEUR — les murs, les barrières et trois
-socles du joueur le portent déjà. On le LIT, on ne l'écrit pas une seconde fois.
+⚠⚠ L'EMPRISE NE VIENT PLUS DES PV, ET ELLE A TROIS PALIERS DEPUIS LE LOT
+EMPRISES-ET-DÉLAI, 10/09/2026 au soir. Le lot ART-90, le matin même, avait mis
+les vingt à la même valeur — « ils doivent tous prendre 90% d'emprise » ; Ethan
+est revenu dessus : « Passer tous les bâtiments collecteur et central etc à 85.
+Les autres 92 %. Chantier et souche 98 % », puis, la classification lui ayant été
+soumise ligne par ligne, « Emprise 3 palier ok ».
+
+⚠⚠ ET LE PALIER MÉDIAN NE DÉPLACE PAS UN PIXEL : 92 % de 32 font 29,44, donc 29,
+qui est exactement ce qu'ART-90 avait posé partout. Neuf bâtiments DESCENDENT à
+27 et deux MONTENT à 31 ; les neuf autres ne bougent pas. C'est ce qui rend ce
+lot-ci beaucoup moins cher en octets que celui du matin.
+
+⚠⚠ LES TROIS PALIERS SONT ÉCRITS ICI ET NON LUS DANS `tools/joueur_v2.py`, ALORS
+QUE DEUX DE LEURS VALEURS Y EXISTENT DÉJÀ. `EMPRISE_QUATRE_VINGT_DIX` (29) et
+`EMPRISE_QUATRE_VINGT_CINQ` (27) y servent les murs, les barrières et les socles
+d'artillerie — c'est-à-dire des UNITÉS et des DÉFENSES, qu'Ethan a nommément
+exclues du périmètre : « seulement bâtiment, pas unités ». Les partager ferait
+bouger quatorze unités le jour où il règle le palier des collecteurs, et **aucun
+test ne le dirait** puisque les nombres sont égaux. Ce sont deux grandeurs qui
+coïncident, pas une seule — la règle §4 de `CLAUDE.md`, prise à l'endroit.
 
 ⚠ CE QUI EST PERDU, ET IL FAUT LE DIRE. `cible(pv)` de `final128.py` portait
 depuis le lot 6 une courbe qui faisait de la taille du dessin une LECTURE des
@@ -54,7 +67,6 @@ sys.path.insert(0, os.path.join(RACINE, 'tools'))
 from PIL import Image  # noqa: E402
 from chemins import dossier_sprites  # noqa: E402
 from final128 import pal, recadrer, conditionner, ecrire, boite, PV, OUV  # noqa: E402
-from joueur_v2 import EMPRISE_QUATRE_VINGT_DIX  # noqa: E402
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 GRILLES = (128, 64)
@@ -82,22 +94,95 @@ BATIMENTS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Les trois paliers d'emprise, en gros pixels sur une grille de 32
+# ---------------------------------------------------------------------------
+#
+# ⚠ LES POURCENTAGES D'ETHAN DEVIENNENT DES ENTIERS, ET L'ÉCART SE DÉCLARE.
+# 98 % de 32 font 31,36 → 31 (96,9 %) ; 92 % font 29,44 → 29 (90,6 %) ; 85 %
+# font 27,2 → 27 (84,4 %). Les trois écarts à la consigne sont sous le demi-gros
+# pixel. Un outil qui découperait au dixième rendrait des boîtes non entières,
+# donc un recadrage qui ne tombe pas sur la grille.
+EMPRISE_QUATRE_VINGT_DIX_HUIT = 31
+EMPRISE_QUATRE_VINGT_DOUZE = 29
+EMPRISE_QUATRE_VINGT_CINQ_BATIMENT = 27
+
+# ⚠⚠ LE DÉFAUT EST LE PALIER MÉDIAN, ET IL EST ÉCRIT COMME UN DÉFAUT. Les deux
+# autres sont des EXCEPTIONS NOMMÉES : un vingt-et-unième bâtiment ajouté demain
+# prend 92 % sans que personne n'ait à l'inscrire, ce qui est le bon
+# comportement — c'est le palier qu'Ethan désigne par « les autres ».
+EMPRISE_DEFAUT = EMPRISE_QUATRE_VINGT_DOUZE
+
+# ⚠⚠ LES DEUX EXCEPTIONS, ET RIEN D'AUTRE. Y inscrire un bâtiment au défaut
+# ferait une ligne qui ne dit rien et qui survivrait à un changement de défaut.
+#
+# ⚠ LE CHANTIER ET LA SOUCHE SONT LE MÊME OBJET DES DEUX CÔTÉS, et c'est pour ça
+# qu'ils partagent le palier haut : ce sont les deux bâtiments dont la perte RASE
+# la base — `raseLeSite` de `src/data/sites.js` et de `src/data/base.js` le dit
+# de tous les deux. Le plus gros bâtiment du camp tient donc la plus grande place.
+#
+# ⚠⚠ CASERNE, DÉPÔT ET AÉRODROME SONT AU PALIER DES « AUTRES », PAS À CELUI DE
+# L'ÉCONOMIE, et c'est un choix soumis à Ethan puis validé — « Emprise 3 palier
+# ok ». Ils PRODUISENT des unités ; ils ne produisent pas de ressource. La
+# formule d'Ethan nomme « collecteur et central etc », c'est-à-dire la chaîne
+# quartz/scorie/électricité et ses deux entrepôts, plus leurs quatre pendants de
+# l'Ouvrage — Nœud, Gangue, Terril — qui sont littéralement les mêmes bâtiments
+# sous l'autre jeu de noms.
+EMPRISE_PAR_BATIMENT = {
+    'chantier_de_construction': EMPRISE_QUATRE_VINGT_DIX_HUIT,
+    'souche': EMPRISE_QUATRE_VINGT_DIX_HUIT,
+
+    'centrale': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'collecteur_quartz': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'collecteur_scorie': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'raffinerie': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'accumulateur': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'noeud': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'gangue': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+    'terril': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
+}
+
+
+def emprise_du_batiment(cle):
+    """L'emprise d'un bâtiment, en gros pixels sur une grille de 32.
+
+    ⚠⚠ UNE FAUTE DE FRAPPE DANS `EMPRISE_PAR_BATIMENT` ENVERRAIT UN BÂTIMENT AU
+    DÉFAUT EN SILENCE — `collecteur_scorries` ne serait jamais lu, le collecteur
+    resterait à 92 %, et rien ne lèverait. La garde est ICI parce que le défaut
+    est ce qui rend la faute muette : elle exige que toute clé de la table soit
+    un bâtiment du roster.
+    """
+    inconnues = [c for c in EMPRISE_PAR_BATIMENT if c not in BATIMENTS]
+    if inconnues:
+        raise AssertionError(
+            f'EMPRISE_PAR_BATIMENT : {", ".join(sorted(inconnues))} — '
+            'aucun bâtiment de ce nom dans `BATIMENTS` ; une clé mal '
+            'orthographiée enverrait son bâtiment au palier par défaut en silence')
+    return EMPRISE_PAR_BATIMENT.get(cle, EMPRISE_DEFAUT)
+
+
 # ⚠⚠ LA VIGNETTE MIXTE N'A QU'UN ÉTAT, ET CE N'EST PAS UN BÂTIMENT. C'est
 # l'icône que la palette montre — « une icône collecteur mixte », Ethan, 08/09 —
 # et le joueur ne la pose jamais : ce qui atterrit sur un champ est l'un des deux
 # collecteurs, qui ont leurs quatre états. Lui en fabriquer quatre paierait trois
 # sprites que rien ne peut afficher.
 #
-# ⚠⚠ ELLE PRENAIT L'EMPRISE DU COLLECTEUR, ET L'EMPRUNT EST DEVENU UNE IDENTITÉ.
-# Il existait pour que la vignette de palette soit à la même échelle que ce
-# qu'elle pose ; depuis le lot ART-90 les vingt bâtiments partagent une seule
-# emprise, donc les deux valent 29 sans qu'on ait à aller la chercher.
+# ⚠⚠ SON SECOND MEMBRE REDEVIENT UN CALCUL, ET C'EST LE POINT ÉLÉGANT DU LOT
+# EMPRISES-ET-DÉLAI. Il a été un emprunt d'emprise jusqu'au lot ART-90, qui l'a
+# laissé en place en écrivant qu'il « ne sert plus à CALCULER l'emprise ; il dit
+# QUEL bâtiment la vignette représente » — vrai tant que les vingt partageaient
+# une seule valeur. Les paliers reviennent, donc l'emprunt aussi : l'emprise de
+# `collecteur_mixte` est CELLE DE `collecteur_quartz`, lue dans la table.
 #
-# ⚠ LE SECOND MEMBRE RESTE, ET IL RESTE VÉRIFIÉ. Il ne sert plus à CALCULER
-# l'emprise ; il dit QUEL bâtiment la vignette représente, ce qui est un fait sur
-# l'icône et non sur sa taille. `taches` exige toujours qu'il soit dans `PV` : le
-# retirer laisserait une vignette qui ne renvoie plus à rien, et un jour à un
-# collecteur qui n'existe plus.
+# ⚠⚠ ÉCRIRE 27 EN DUR PASSERAIT AUJOURD'HUI ET MENTIRAIT DEMAIN. Ce serait deux
+# vérités sur la même vignette, et la seconde se tairait au premier réglage
+# d'Ethan sur le palier de l'économie — la palette montrerait une icône à une
+# échelle que plus aucun collecteur ne pose. Le test compare les DEUX SORTIES,
+# jamais l'une à un nombre.
+#
+# ⚠ LA GARDE `emprunte not in PV` RESTE, ET SA RAISON REDEVIENT DOUBLE : elle
+# gardait que la vignette renvoie encore à un bâtiment ; elle garde de nouveau la
+# LISIBILITÉ du palier, puisqu'un renvoi cassé rendrait une emprise inventée.
 VIGNETTES = [('collecteur_mixte', 'collecteur_quartz')]
 
 
@@ -113,7 +198,7 @@ def taches():
         source = os.path.join(SRC, nom + '.png')
         if not os.path.exists(source):
             raise AssertionError(f'{nom}.png : source absente de art/sources/')
-        out.append((nom, source, EMPRISE_QUATRE_VINGT_DIX, False))
+        out.append((nom, source, emprise_du_batiment(emprunte), False))
     for cle in BATIMENTS:
         # ⚠⚠ CETTE GARDE RESTE, ET SA RAISON A CHANGÉ AU LOT ART-90. Elle
         # gardait une emprise CALCULABLE ; l'emprise ne se calcule plus. Ce
@@ -132,7 +217,7 @@ def taches():
             source = os.path.join(SRC, nom + '.png')
             if not os.path.exists(source):
                 raise AssertionError(f'{nom}.png : source absente de art/sources/')
-            out.append((nom, source, EMPRISE_QUATRE_VINGT_DIX, ouv))
+            out.append((nom, source, emprise_du_batiment(cle), ouv))
     return out
 
 
