@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
+Dernière révision : **10/09/2026**, version 0.99.38 · build 140.
 
 ---
 
@@ -42,9 +42,159 @@ Dernière révision : **09/09/2026**, version 0.99.37 · build 139.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 09/09/2026 (après le lot PAQUETS), à confronter :**
-`npm test` rend **1524 pass / 0 fail** au sens de la garde de `documentation.test.js`
-— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1523 pass · 0 fail ·
+**Référence au 10/09/2026 (après le lot ART-90), à confronter :**
+`npm test` rend **1527 pass / 0 fail** au sens de la garde de `documentation.test.js`
+— c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1526 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. `npm run build` → `dist/index.html`, **9 410 485 octets**, 0 référence
+externe. Coût **+276 304 octets, ENTIÈREMENT DES IMAGES**, mesuré poste par poste
+contre le livrable bâti sur l'arbre pristine de `main` = `14dd4ac` au premier
+`npm run check` de la session (**9 134 181**) : **images +276 304 · JavaScript
++0 · feuille +0 · balisage +0 · audio +0**, la somme des cinq postes tombant
+EXACTEMENT sur le total, et `data:` à **311 lignes / 306 URI** des deux côtés.
+⚠⚠ **LA BORNE T10 PASSE DE 9 300 000 À 9 600 000, ET C'EST ETHAN QUI L'A
+TRANCHÉ.** À 9 300 000 elle était franchie de **110 485 octets** : le lot ne
+pouvait pas sortir sans qu'elle bouge, et la réponse du 10/09 est « Q1 relever ».
+C'est la bonne moitié de l'arbitrage — §5 et `banc.test.js` disent tous deux
+qu'on ne rogne jamais pour passer dessous. **Les trois paliers de qualité WebP
+ont été mesurés sur cette machine et NE SONT PAS APPLIQUÉS** : q85 → 507 076
+octets, q80 → 452 618, q72 → 396 534. `QUALITE = 85` vaut pour les DIX-NEUF
+atlas. Marge **189 515 octets, 1,97 %**. Le lot touche `art/sources/` (huit
+fichiers permutés deux à deux), `art/sprites/bâtiment/` (162 PNG), les deux atlas
+`batiment`, `art/sprites/atlas-empreintes.json`, `tools/batiments_v2.py`,
+`tools/atlas.py`, `tools/planches.py`, `test/banc.test.js`,
+`test/pictogramme.test.js`, `package.json`, et fait entrer `test/art-90.test.js`
+et `RAPPORT-lotART-90.md` — **181 fichiers, et pas une ligne de `src/`**.
+⚠⚠ **LE QG DE DÉFENSE ET LE CENTRE DE COMMANDEMENT AVAIENT ÉCHANGÉ LEUR DESSIN,
+ET L'INVERSION ÉTAIT À LA SOURCE.** Ethan, point 1 : « Inversé sprite qg def
+centre de commandement ». **Regardé avant d'y toucher, pas déduit du brief** :
+`bat_j_qg_de_defense.png` portait une grosse coupole vitrée surmontée d'une
+antenne — un centre de commandement — et `bat_j_centre_de_commandement.png` des
+modules-tourelles autour d'un plateau hexagonal — un QG de défense. **Les huit
+fichiers sont permutés, pas les deux** : `tools/batiments_v2.py` compose le nom
+du sprite ET celui de la source depuis la MÊME clé, donc il n'y a aucune table
+d'appariement à retourner, et permuter le seul état intact laisserait un bâtiment
+qui CHANGE D'IDENTITÉ EN BRÛLANT. `AR T1` garde les quatre états, et l'ENSEMBLE
+des huit empreintes, ce qui refuse une copie autant qu'un demi-échange.
+⚠ **NI `BATIMENTS`, NI `PV`, NI `src/data/base.js` NE SONT TOUCHÉS**, et
+`art/sources-declarees.json` NON PLUS — vérifié : il ne porte que des NOMS, et
+les huit sont des deux côtés de la permutation, donc la liste est identique.
+⚠⚠ **LES VINGT BÂTIMENTS PRENNENT TOUS 29 GROS PIXELS SUR 32, ET L'EMPRISE CESSE
+D'ÊTRE UNE LECTURE DES PV.** Ethan, point 2 : « ils doivent tous prendre 90%
+d'emprise pour être bien visible sur tel », puis « Seulement bâtiment, pas
+unités ». `cible(pv)` de `final128.py` rendait **six emprises — 16 · 18 · 20 ·
+21 · 23 · 28** : la Raffinerie et l'Accumulateur tenaient la MOITIÉ de leur case,
+le Chantier 87,5 %. **Ce qui est perdu est dit** : la taille d'un bâtiment ne se
+lit plus, et ce qui distingue un gros d'un petit est désormais le dessin seul.
+⚠ **29 EXISTAIT DÉJÀ, ON LE LIT** — `EMPRISE_QUATRE_VINGT_DIX` de
+`tools/joueur_v2.py`, que les murs, les barrières et trois socles du joueur
+portent depuis SPRITES-V2-JOUEUR. 90 % de 32 font 28,8 ; l'écart à la consigne
+est de **0,2 gros pixel**, déclaré. `cible` n'a plus aucun appelant de
+production ; elle reste dans `final128.py`, dont le `__main__` historique
+l'emploie.
+⚠⚠ **LE PIÈGE DU LOT EST DE NE PAS RECOUDRE L'ATLAS, ET IL A ÉTÉ MESURÉ.**
+Régénérer les 162 PNG puis `npm run build` rend **le même nombre qu'avant, à
+l'octet** — `tools/build.js` n'inline pas les PNG, il inline les atlas cousus.
+`python3 tools/atlas.py --ecrire --forcer batiment` est obligatoire, et
+`--forcer` avec : sans lui l'outil imprime « ÉCART » et **n'écrit pas**.
+⚠⚠ **MAIS LE BRIEF SE TROMPAIT SUR CE QUI LE DIRAIT, ET C'EST MESURÉ.** Il
+posait que « la seule autre façon de s'en apercevoir est de rebâtir et de
+comparer 9 134 181 à lui-même » : **faux** — la garde « sprite — l'atlas cousu
+répond des sprites d'aujourd'hui » de `test/sprite.test.js` tombe alors, en
+nommant le premier sprite fautif et la commande à relancer. **`npm run check`
+suffit**, et c'est pourquoi `AR T3` mesure autre chose : que l'OUTIL ne dérive
+plus l'emprise des PV.
+⚠ **`src/data/atlas.js` NE BOUGE PAS D'UN OCTET** — la géométrie des cellules ne
+change pas, 83 sprites en 10 × 9 des deux côtés. Seul
+`art/sprites/atlas-empreintes.json` suit.
+⚠⚠ **`tools/verifier.py` ÉTAIT DÉJÀ ROUGE SUR L'ARBRE PRISTINE, ET IL FALLAIT LE
+MESURER AVANT D'ÉCRIRE UNE LIGNE.** Relevé sur `14dd4ac` : **1 110 identiques ·
+0 différent · 0 nouveau · 0 MANQUANT** en 673,5 s, code de sortie **1** sur la
+seule ligne `ATLAS` — `atlas.py --verifier` y rend **15 identiques · 5
+différents**, `batiment` aux deux grilles, `carte` aux deux, `interface-128`.
+C'est l'encodeur WebP de cette machine, et l'écart valait **8 octets en 64 et 178
+en 128** sur des images identiques. Le lot referme `batiment` en le réécrivant
+pour de bon et **laisse les trois autres exactement où il les a trouvés**.
+⚠⚠ **ET PILLOW 12.3.0 NE CASSE PLUS LA REPRODUCTIBILITÉ — LE §0 DU LOT
+PICTOGRAMMES DISAIT LE CONTRAIRE, ET C'EST PÉRIMÉ.** Il annonce « sous Pillow
+12.3.0 le même outil rend 0 identique / 32 différents sur un arbre PRISTINE ».
+**Mesuré le 10/09 sous Pillow 12.3.0, numpy 2.4.6, scipy 1.17.1 : 1 110
+identiques, 0 différent.** Les PNG de la chaîne se reproduisent à l'octet ; ce
+qui ne se reproduit pas est l'encodeur WebP des atlas, et lui seul.
+⚠ **UNE EXCEPTION SUR QUATRE-VINGT-UNE, MESURÉE PLUTÔT QU'ABSORBÉE PAR UNE
+TOLÉRANCE.** `bat_j_artillerie_anti_infanterie_tres_abime` sort à **114 sur 116**
+en grille 128 (et 57 sur 58 en grille 64, donc dans le ±1) ; les quatre-vingts
+autres tombent AU PIXEL sur les deux grilles. La cause est `eroder(m, 3)` de
+`conditionner`, qui ronge trois pixels du masque dans une boîte recadrée de
+993 px : sur ce dessin le panache de fumée est large de **3 px** sur ses
+premières lignes encrées — et même interrompu —, si bien que l'érosion emporte
+**12 lignes de la source, soit 1,55 px** de la grille 128. `AR T2` l'asserte
+ENCORE NÉCESSAIRE, l'idiome de `DETTES_ACCENT`.
+⚠ **ET LE SEUIL DE MESURE EST CELUI DE L'ENCRE, PAS 128.** Mesuré à alpha ≥ 128
+les quatre-vingt-un s'écartent de leur cible de **0 à −3 pixels** ; au seuil
+`SEUIL_ALPHA` de `tools/final128.py`, de **0 à ±1**. C'est la leçon d'EMBLÈME-CENTRÉ,
+et sans elle `AR T2` tomberait sur une chaîne parfaitement juste.
+⚠⚠ **TROIS COMMENTAIRES PÉRIMÉS SONT RÉÉCRITS, ET DEUX N'ÉTAIENT PAS AU BRIEF.**
+`tools/atlas.py` annonçait en DEUX endroits que la grille embarquée est la 64 et
+que « la 128 n'est lue par aucun écran » — faux depuis le lot GRILLE-128 du
+03/09, et **le fichier se contredisait lui-même**, le bloc de `COTE_INDEX` disant
+déjà la bascule. `tools/planches.py` affirmait que 28 est « la plus grande
+emprise que cette chaîne ait jamais produite » : ce lot la porte à 29.
+`EMPRISE_INTERFACE` reste à 28 — le monter relancerait les quatre-vingt-douze
+fichiers d'interface pour un demi-pixel, et **Ethan tranche**.
+⚠⚠ **UNE GARDE QUE `tools/batiments_v2.py` PROMETTAIT DEPUIS DEUX JOURS N'EXISTAIT
+PAS.** Son en-tête écrit que « `src/data/base.js` porte la même liste sous
+`SUFFIXE_ETAT_BATIMENT` — un test confronte les deux plutôt que de les croire
+d'accord » : **mesuré, aucun test ne le faisait**. `AR T3` la fait, à trois lignes
+de coût, et le renvoi la NOMME pour qu'on la retrouve au lieu de la croire.
+⚠ **TROIS TESTS ENTRENT — `AR T1` à `AR T3`, dans `test/art-90.test.js` — ET LE
+COMPTE PASSE DE 1 524 À 1 527.** **Aucune assertion n'a été retirée ni
+assouplie** ; **deux gardes changent de valeur** — `PIC T6` réancre les DEUX
+atlas `batiment` en écrivant le nombre d'avant à côté de celui d'après, et
+`PIC T7` remesure le livrable et la borne. **Les trois ont été vus ROUGES sur
+l'arbre pristine avant le lot**, avec leur message.
+⚠ **`AR T4` ET `AR T5` DU BRIEF NE SONT PAS DES TESTS, ET C'EST UN ÉCART
+DÉCLARÉ.** Leurs montages sont `python3 tools/atlas.py --verifier` et
+`python3 tools/verifier.py`, qui ne peuvent pas entrer dans `npm run check` — la
+CI n'a pas de Python, et §3 en fait un changement d'architecture. Ce sont des
+MESURES, rendues au rapport ; `AR T4` est par ailleurs le réancrage de `PIC T7`,
+qui est une édition et non un test neuf.
+⚠ **`SAVE_VERSION` NE BOUGE PAS, ET RESTE À 30.** `src/` n'a pas une ligne de
+changée, `src/data/atlas.js` compris : un sprite est un dessin.
+⚠⚠ **`python3 tools/verifier.py` A ÉTÉ LANCÉ AVANT ET APRÈS, ET LES 162 PNG
+RÉGÉNÉRÉS SONT DANS LES « IDENTIQUES À L'OCTET ».** Avant comme après : **1 110
+identiques · 0 différent · 0 nouveau · 0 MANQUANT**, 673,5 s puis 555,3 s, code de
+sortie **1** sur la seule ligne `ATLAS`, préexistante. `atlas.py --verifier` passe
+de **15 identiques · 5 différents** à **17 · 3** : les deux qui sortent sont
+exactement les deux atlas `batiment`, et les trois qui restent — `carte-64`,
+`carte-128`, `interface-128` — sont **laissés où le lot les a trouvés**.
+`entrees.py --verifier` rend **501 / 501 et 152 / 152**, `art/sourcesstandby/` 34
+fichiers 0 lu, `art/reserve/` 10 fichiers 0 lu.
+⚠ **ET `--forcer` A ÉTÉ MESURÉ, PAS REPRIS DU BRIEF** : l'ancien atlas remis en
+place, `atlas.py --ecrire` seul imprime « ÉCART atlas-batiment-128.webp » et
+**n'écrit pas** — le fichier reste à 299 848 octets. L'arbre a été remis en l'état,
+empreintes à l'appui.
+⚠⚠ **LE DÉMARRAGE EST REMESURÉ, ET CE N'EST PAS L'APPAREIL D'ETHAN.** La condition
+que `banc.test.js` pose à sept mégaoctets est DUE — on est à 9,4. Chromium,
+géométrie du S25 FE (360 × 780 à dpr 3), **A/B ALTERNÉ** sur douze tours dont le
+premier écarté, onze couples retenus : `DOMContentLoaded` médian **583 → 607 ms**
+(+24, soit +4,1 % pour +3,0 % de livrable), premier rendu **124 → 124 ms**, zéro
+erreur de page. ⚠ **Les deux étendues se recouvrent** — 569–644 contre 586–636 —,
+donc l'écart est du même ordre que le bruit de la machine : ce qu'on peut en dire
+est que le démarrage ne se dégrade pas d'un ordre de grandeur. ⚠ Un premier essai
+en séries SÉPARÉES rendait 782 ms pour l'AVANT contre 601 pour l'APRÈS, c'est-à-dire
+le livrable le plus lourd plus rapide que l'autre : **deux séries à la suite
+mesurent la machine autant que le livrable**, et c'est pourquoi la mesure alterne.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI SUR UN ÉCRAN DE JEU, ET SE
+DÉCLARE NON EXÉCUTÉ.** Ce qui a été VU, ce sont les huit SOURCES du §1, en aperçu,
+pour établir l'inversion — la seule chose que le lot demandait de regarder pour
+décider. Les 162 sprites ne sont mesurés que par leur boîte d'encre, et **un
+bâtiment qui passe de 50 % à 90,6 % de sa case est exactement le genre de
+changement qu'il faut voir**. À regarder au premier essai d'Ethan.
+
+**Auparavant, après le lot PAQUETS :**
+`npm test` déclarait **1524** tests au sens de la garde de `documentation.test.js` ;
+le verdict mesuré était **1523 pass · 0 fail ·
 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
 en 0. `npm run build` → `dist/index.html`, **9 134 181 octets**, 0 référence
 externe. Coût **+3 085 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré contre le
@@ -9279,7 +9429,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   65 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   66 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -9290,7 +9440,7 @@ test/                   65 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage  paquets
+  voisinage  paquets  art-90
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
