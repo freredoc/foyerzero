@@ -9126,9 +9126,10 @@ src/sim/                simulation déterministe, sans DOM — 34 fichiers
     MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
     l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 14 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 15 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
+  arrivee.js            comment une unité neuve monte à sa case : rampe et opacité
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
   portee.js             quelles cases une pièce de défense couvre, et si elle tire
   fond.js               le décor peint d'une base : quel dessin, et où il se pose

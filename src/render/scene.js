@@ -64,7 +64,8 @@ import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
 import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
 import { angleDeLaPiece } from '../sim/rendu-pose.js';
 import { nomDeVariante } from './variante.js';
-import { caseDepuisMilli } from '../sim/grille.js';
+import { caseDepuisMilli, MILLI_PAR_CASE } from '../sim/grille.js';
+import { OPACITE_PLEINE } from './arrivee.js';
 import { estNeutralisee } from '../sim/combat.js';
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
@@ -251,7 +252,7 @@ const ligne = (x1, y1, x2, y2, couleur, epaisseur) => ({ forme: 'ligne', x1, y1,
  * LISIBLE dans un test et dans un débogage, où « le sprite en (192, 64) » ne dit
  * rien et « off_j_belier_chassis » dit tout.
  */
-const sprite = (famille, nom, x, y, l, h, angle = 0) => {
+const sprite = (famille, nom, x, y, l, h, angle = 0, alpha = OPACITE_PLEINE) => {
   const { colonne, rangee } = celluleDuSprite(famille, nom);
   return {
     forme: 'sprite',
@@ -271,6 +272,16 @@ const sprite = (famille, nom, x, y, l, h, angle = 0) => {
     // dessin identique, et la première primitive qui l'oublierait le ferait en
     // silence. Le sens est celui de `angleVers` : 0 au nord, 90 à l'est.
     angle,
+    // ⚠⚠ L'OPACITÉ EN MILLIÈMES, ET MILLE PAR DÉFAUT — lot SON-ET-ARRIVÉE,
+    // 10/09. Même raisonnement que l'angle juste au-dessus : elle est portée par
+    // TOUTES les primitives, y compris les opaques, pour que `canvas2d.js`
+    // n'ait jamais à distinguer « absente » de « pleine ». Elle ne sert
+    // aujourd'hui qu'au fantôme d'une unité qui arrive.
+    //
+    // ⚠ EN MILLIÈMES ENTIERS, PAS EN FRACTION — l'unité d'`alphaMilli` de
+    // `render/interpolation.js` et d'`OPACITE_ARRIVEE`. La conversion en
+    // fraction se fait chez celui qui écrit sur le contexte, une fois.
+    alpha,
   };
 };
 
@@ -763,11 +774,11 @@ export function couchesDeLEntite(d, contexte = {}) {
  * l'Ouvrage intact : ses tourelles n'ont pas d'entrée, donc elles se dessinent
  * comme avant, sans rotation. Le camp n'est jamais testé ici.
  */
-function dessinerCouches(liste, x, y, t, couches) {
+function dessinerCouches(liste, x, y, t, couches, alpha = OPACITE_PLEINE) {
   for (const couche of couches) {
     const angle = couche.angle ?? 0;
     if (!couche.ancre) {
-      liste.push(sprite(couche.famille, couche.nom, x, y, t, t, angle));
+      liste.push(sprite(couche.famille, couche.nom, x, y, t, t, angle, alpha));
       continue;
     }
     const { cote_case_pct: d, dx_case_pct: dx, dy_case_pct: dy } = couche.ancre;
@@ -776,7 +787,7 @@ function dessinerCouches(liste, x, y, t, couches) {
       couche.famille, couche.nom,
       Math.round(x + t / 2 + (t * dx) / 100 - cote / 2),
       Math.round(y + t / 2 + (t * dy) / 100 - cote / 2),
-      cote, cote, angle,
+      cote, cote, angle, alpha,
     ));
   }
 }
@@ -790,7 +801,8 @@ function dessinerCouches(liste, x, y, t, couches) {
  * vocabulaire visuel dans l'éditeur et en découvrir un autre au combat. Aucune
  * de ces fonctions ne redéfinit ni forme ni couleur en propre.
  */
-function dessinerEntite(liste, x, y, t, classe, camp, accent, couches = null) {
+function dessinerEntite(liste, x, y, t, classe, camp, accent, couches = null,
+  alpha = OPACITE_PLEINE) {
   // ⚠⚠ LES QUATRE LISTES PASSENT AUX SPRITES ENSEMBLE, ET CE N'EST PAS UN
   // ÉLARGISSEMENT GRATUIT. Le premier jet de ce lot ne branchait que le champ de
   // bataille : T8 est tombé, et il avait RAISON — il asserte depuis le lot 5A
@@ -807,7 +819,12 @@ function dessinerEntite(liste, x, y, t, classe, camp, accent, couches = null) {
   // géométriques restent JOIGNABLES — c'est `dessinerVignette` qui les
   // atteint, et elle seule : `ENTREES_LEGENDE` liste des couples classe ×
   // accent sans identifiant, donc sans sprite possible.
-  if (couches !== null) { dessinerCouches(liste, x, y, t, couches); return; }
+  // ⚠ L'OPACITÉ NE VA QU'AUX SPRITES, ET LES CINQ FORMES GÉOMÉTRIQUES NE LA
+  // REÇOIVENT PAS. Elles ne servent plus que la LÉGENDE — voir le bloc
+  // ci-dessus —, qui ne fait arriver personne : leur ouvrir le paramètre
+  // demanderait de le faire descendre dans `rect`, `cadre` et `disque` pour un
+  // cas qui ne peut pas se produire.
+  if (couches !== null) { dessinerCouches(liste, x, y, t, couches, alpha); return; }
   if (classe === 'batiment') dessinerBatiment(liste, x, y, t);
   else if (classe === 'escouade') dessinerEscouade(liste, x, y, t, camp, accent);
   else if (classe === 'blinde') dessinerBlinde(liste, x, y, t, camp, accent);
@@ -875,7 +892,7 @@ function positionAffichee(e, precedentes, alpha) {
  */
 export function listeAffichage(
   etat, projection, precedentes = null, alpha = 0, fond = null, graine = 0,
-  tombees = null,
+  tombees = null, arrivees = null,
 ) {
   const t = projection.tailleCase;
   const liste = [];
@@ -930,7 +947,44 @@ export function listeAffichage(
   const positionDe = (e) => positions.get(e.indice)
     ?? { rangeeMilli: e.rangeeMilli, colonneMilli: e.colonneMilli };
   const xDe = (e) => xDeColonneMilli(projection, positionDe(e).colonneMilli);
-  const yDe = (e) => yDeRangeeMilli(projection, positionDe(e).rangeeMilli);
+
+  /**
+   * L'ARRIVÉE D'UNE ENTITÉ, ou `null` — lot SON-ET-ARRIVÉE, 10/09.
+   *
+   * ⚠⚠ UNE TABLE D'INDICES DÉJÀ RÉSOLUE, PAS UN INSTANT, ET C'EST L'IDIOME DE
+   * `tombees`. Ce module ne porte AUCUNE horloge — il décrit une image, il ne
+   * sait pas quand elle est dessinée —, donc `ui/raid.js` résout la rampe par
+   * `arriveesALEcran` et passe le résultat, exactement comme il passe l'ensemble
+   * des tombées de l'effondrement. Un instant reçu ici aurait mis le temps dans
+   * le seul module de rendu qui n'en a jamais eu.
+   */
+  const arriveeDe = (e) => (arrivees === null ? null : arrivees.get(e.indice) ?? null);
+
+  /**
+   * ⚠⚠ LE DÉCALAGE S'AJOUTE APRÈS LA PROJECTION, ET C'EST UNE MESURE.
+   * `yDeRangeeMilli` BORNE sa sortie au bord haut de la rangée 1 : mesuré,
+   * `yDeRangeeMilli(p, 0)` et `yDeRangeeMilli(p, 1000)` rendent le même nombre.
+   * Faire descendre l'entité en lui donnant `rangeeMilli − 1000` l'écraserait
+   * donc sur sa propre case, et le fantôme n'existerait pas. On projette, PUIS
+   * on décale — le décalage est du dessin, pas une position de modèle.
+   *
+   * ⚠ IL S'AJOUTE, IL NE SE RETRANCHE PAS : l'axe des y descend quand la rangée
+   * monte, donc « une case en dessous » est un `y` PLUS GRAND.
+   *
+   * ⚠ ET IL PASSE PAR `yDe`, DONC IL EMPORTE TOUT CE QUI SUIT L'ENTITÉ — son
+   * sprite, ses deux barres, son cadre de neutralisation et le départ de ses
+   * traits de tir. Ne le poser que sur le sprite laisserait la barre de vie
+   * accrochée à la case pendant que l'unité monte vers elle.
+   */
+  const yDe = (e) => {
+    const y = yDeRangeeMilli(projection, positionDe(e).rangeeMilli);
+    const arrivee = arriveeDe(e);
+    if (arrivee === null) return y;
+    return y + Math.round((arrivee.decalageMilli * t) / MILLI_PAR_CASE);
+  };
+
+  /** L'opacité d'une entité : pleine, sauf pendant qu'elle arrive. */
+  const alphaDe = (e) => arriveeDe(e)?.opacite ?? OPACITE_PLEINE;
 
   // ⚠⚠ LA LISTE DES DÉFENSES VIVANTES A DISPARU AVEC LE CHAÎNAGE, ET C'EST LE
   // LOT. Elle était calculée ici, une fois par image, pour que `liaisonDuMur`
@@ -1003,7 +1057,7 @@ export function listeAffichage(
         if (reste === 'rien') continue;
         if (reste === 'ruine') {
           dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
-            accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
+            accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire), alphaDe(e));
           continue;
         }
         // ⚠ UN RESTE INCONNU LÈVE, comme un genre absent de la table. Une
@@ -1054,7 +1108,7 @@ export function listeAffichage(
           // était lue en entier sur l'entité : la tourelle d'une défenseuse qui
           // se décale aurait visé depuis la case qu'elle vient de quitter.
           colonne: positionDe(e).colonneMilli / 1000,
-        }, { cible: cibleAffichee(e) }));
+        }, { cible: cibleAffichee(e) }), alphaDe(e));
     }
   }
 

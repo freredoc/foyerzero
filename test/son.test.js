@@ -19,6 +19,7 @@ import {
   AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, EFFONDREMENT_PV, EXPLOSION_PV,
   IMPACT_LOURD_MILLIEMES, ROULEMENT_PAR_CHASSIS, MOTEUR_PAR_CHASSIS, ARCHETYPE_PAR_UNITE,
   PASSAGE_AERIEN, DEPLOIEMENT_PAR_PAIRE, ARME_PAR_PAIRE, ARME_PAR_DEFENSE,
+  GARDE_PAR_BUS,
 } from '../src/data/sons.js';
 import {
   creerVoix, demanderUnSon, gainDuSon, reconcilierLesBoucles, boucleDeLEvenement,
@@ -868,17 +869,25 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
   const atteignables = [...new Set([...appels, ...EVENEMENTS_CABLES])]
     .flatMap((e) => EVENEMENTS[e].variantes).sort();
   assert.deepEqual([...new Set(atteignables)], atteignables, 'un son atteignable en double');
-  // ⚠⚠ CENT SOIXANTE-HUIT DEPUIS LE LOT SON-VOLUMES, ET LE SON PERDU N'A PAS
-  // QUITTÉ LE LIVRABLE. Ethan, 06/09 : « enlever son d'ambiance sur la carte ».
-  // `ambience_calm_map_loop` n'a plus aucun demandeur — l'écran Monde était sa
-  // SEULE porte, `AMBIANCE_PAR_ECRAN` n'ayant qu'un lecteur — donc il devient
-  // DORMANT. Il reste au catalogue et sous son `data:` : le retirer serait une
-  // économie qu'on n'a pas demandée, et le compte de `data:` que `CLAUDE.md`
-  // suit poste par poste ne bouge pas d'une ligne.
-  assert.equal(atteignables.length, 168, 'le nombre de sons atteignables a bougé');
-  // ⚠ ET 95 RESTENT MUETS. C'est voulu, et le rapport les nomme un par un avec
-  // leur raison : rien n'a été branché pour donner un emploi à un son.
-  assert.equal(Object.keys(SONS).length - atteignables.length, 95,
+  // ⚠⚠ CENT SOIXANTE-SEPT DEPUIS LE LOT SON-ET-ARRIVÉE, ET NON 168 :
+  // `ambience_base_player_loop` EST DEVENU DORMANT À SON TOUR. Ethan, 10/09 :
+  // « enlever le son qui tourne tout le temps », puis « faut croire, il
+  // s'arrête jamais ». Il était sur CINQ écrans — Chantier, Mission, Offense,
+  // Options, Recherche — et une boucle n'a ni garde ni plafond, donc il ne
+  // s'arrêtait littéralement jamais tant que le joueur n'allait pas sur la
+  // carte. Il n'a plus aucun demandeur.
+  //
+  // ⚠ ET COMME `ambience_calm_map_loop` AVANT LUI (lot SON-VOLUMES, 06/09), LE
+  // SON PERDU N'A PAS QUITTÉ LE LIVRABLE. Il reste au catalogue et sous son
+  // `data:` : le retirer serait de l'audio en moins et un `data:` en moins,
+  // donc une ventilation d'octets et un arbitrage à part. Le compte de `data:`
+  // que `CLAUDE.md` suit poste par poste ne bouge pas d'une ligne — ce lot est
+  // à **images +0 · audio +0**.
+  assert.equal(atteignables.length, 167, 'le nombre de sons atteignables a bougé');
+  // ⚠ ET 96 RESTENT MUETS, contre 95 avant le lot. C'est voulu, et le rapport
+  // les nomme un par un avec leur raison : rien n'a été branché pour donner un
+  // emploi à un son, et un seul en a perdu un.
+  assert.equal(Object.keys(SONS).length - atteignables.length, 96,
     'le compte des sons muets a bougé sans que le rapport le dise');
 
   // Le refus arrive par les registres `toast`, APRÈS la garde du texte vide :
@@ -994,14 +1003,31 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   const vide = bouclesDesirees({ ecran: null, disposition: [], unites: [] });
   assert.deepEqual(vide, [], 'sans écran ni base, rien ne doit sonner');
 
+  // ⚠⚠ LE MONTAGE PERD SON AMBIANCE, ET IL GARDE CE QU'IL MESURE — lot
+  // SON-ET-ARRIVÉE, 10/09. Il portait `AMBIANCE_PAR_ECRAN.chantier` en tête de
+  // l'ensemble attendu ; l'écran de la base n'a plus d'ambiance depuis le point
+  // 12 d'Ethan. Ce que ce montage-ci garde n'est PAS l'ambiance en particulier,
+  // c'est que PLUSIEURS boucles se réconcilient et se dédoublonnent : il se
+  // rejoue donc sur les deux boucles de bâtiment, qui sont bien deux, et rien
+  // n'est assoupli.
   const surLaBase = bouclesDesirees({
     ecran: 'chantier',
     disposition: [{ id: 'chantierDeConstruction' }, { id: 'caserne' }, { id: 'centrale' }],
     unites: [],
   });
   assert.deepEqual(surLaBase, [
-    AMBIANCE_PAR_ECRAN.chantier, BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.centrale,
+    BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.centrale,
   ].sort(), 'l\'ensemble désiré sur la base a changé');
+  // ⚠ ET LE MONTAGE DISCRIMINE : les deux boucles retenues sont DISTINCTES, sans
+  // quoi « plusieurs boucles » n'en serait qu'une et le dédoublonnage passerait
+  // pour de la réconciliation.
+  assert.notEqual(BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.centrale,
+    'montage : les deux bâtiments partagent leur boucle');
+  // ⚠⚠ ET C'EST ICI QU'ON MESURE LE POINT 12 : l'écran de la base ne demande
+  // AUCUNE ambiance. Sans cette ligne, le retrait des cinq écrans se lirait
+  // seulement comme une table plus courte.
+  assert.deepEqual(surLaBase.filter((n) => SONS[EVENEMENTS[n].variantes[0]].bus === 'ambiances'),
+    [], 'l\'écran de la base demande encore une ambiance');
 
   // ⚠⚠ UNE BOUCLE PAR TYPE, PAS PAR BÂTIMENT. Six casernes ne font pas six fois
   // le même bruit ; compter sur le plafond de voix pour les refuser marcherait,
@@ -1021,14 +1047,21 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   // 3. LA DIFFÉRENCE — pure, et dans les deux sens.
   // Un nom inconnu LÈVE : c'est un câblage mal tapé, donc un fait de programme.
   assert.throws(() => reconcilierLesBoucles(['a_1'], [], ACTIF), RangeError);
-  // ⚠ LA SECONDE AMBIANCE EST CELLE DU RAID, PLUS CELLE DE LA CARTE. Le lot
-  // SON-VOLUMES retire l'ambiance de l'écran Monde : `AMBIANCE_PAR_ECRAN.monde`
-  // n'existe plus, et le montage prend l'autre ambiance encore câblée. Ce qu'il
-  // mesure — changer d'écran change d'ambiance — n'a pas bougé d'un mot, et
-  // l'assertion de discrimination ci-dessous le prouve.
-  const amb = AMBIANCE_PAR_ECRAN.chantier;
+  // ⚠⚠ LA SECONDE AMBIANCE SE DÉRIVE DU PACK, ELLE NE SE LIT PLUS DANS LA TABLE
+  // DES ÉCRANS — lot SON-ET-ARRIVÉE, 10/09. Il n'en reste qu'UNE câblée, celle
+  // du raid : le montage prend donc n'importe quelle autre boucle d'ambiance du
+  // catalogue, qui est exactement ce que `ambience_base_player_loop` vient de
+  // devenir. Ce que ce bloc mesure — deux boucles distinctes se réconcilient,
+  // l'une démarre et l'autre s'arrête — n'a pas bougé d'un mot.
+  //
+  // ⚠ ET ELLE SE DÉRIVE PLUTÔT QUE DE S'ÉCRIRE : un nom de son recopié ici
+  // serait la seconde vérité que tout ce fichier refuse par ailleurs, et il
+  // mentirait le jour où le pack changerait.
   const rai = AMBIANCE_PAR_ECRAN.raid;
-  assert.notEqual(amb, rai, 'montage : les deux écrans partagent leur ambiance');
+  const amb = Object.keys(EVENEMENTS).find((n) => n !== rai
+    && EVENEMENTS[n].variantes.every((v) => SONS[v].bus === 'ambiances' && SONS[v].boucle === true));
+  assert.ok(amb !== undefined, 'montage : le pack ne porte plus deux ambiances qui bouclent');
+  assert.notEqual(amb, rai, 'montage : les deux boucles retenues n\'en font qu\'une');
   assert.deepEqual(reconcilierLesBoucles([amb], [], ACTIF), { demarrer: [amb], arreter: [] });
   assert.deepEqual(reconcilierLesBoucles([amb], [amb], ACTIF), { demarrer: [], arreter: [] });
   assert.deepEqual(reconcilierLesBoucles([rai], [amb], ACTIF),
@@ -1049,19 +1082,29 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   assert.equal(b.son, EVENEMENTS[amb].variantes[0]);
   assert.equal(b.gain, gainDuSon(b.son, 0.5));
 
-  // 5. SIX ÉCRANS SUR SEPT ONT UNE AMBIANCE, ET AUCUNE N'EST UN COUP.
-  // ⚠⚠ LA GARDE CHANGE DE CIBLE ET SE RESSERRE. Elle exigeait que les SEPT
-  // écrans en aient une ; Ethan retire celle de la carte le 06/09, et elle
-  // exige désormais que l'exception soit EXACTEMENT Monde — nommée. Un huitième
-  // écran sans ambiance, ou un autre des six qui perdrait la sienne, la fait
-  // tomber, ce qu'un simple `>= 6` n'aurait pas fait.
+  // 5. UN SEUL ÉCRAN SUR SEPT A UNE AMBIANCE, ET AUCUNE N'EST UN COUP.
+  // ⚠⚠ LA GARDE EST RETOURNÉE, ET ELLE NE SE RELÂCHE PAS — lot SON-ET-ARRIVÉE,
+  // 10/09. Elle a exigé les SEPT écrans, puis six sur sept avec Monde nommé
+  // comme exception ; Ethan retire « le son qui tourne tout le temps » le
+  // 10/09, et c'est la liste des écrans SANS ambiance qui devient la règle. Ce
+  // qu'elle protège n'a pas changé d'un mot : **qu'un écran ne se retrouve pas
+  // avec une ambiance décidée par accident**, dans un sens comme dans l'autre.
+  //
+  // ⚠ L'ÉGALITÉ, JAMAIS UNE INCLUSION, ET LES SIX SONT ÉCRITS. Un `>= 6` ou un
+  // `includes` laisserait passer un septième écran muet — c'est-à-dire le raid
+  // qui perdrait la sienne — comme un écran qui en retrouverait une. Les deux
+  // sens sont gardés : la liste des muets ET la liste des sonnants.
   const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
     .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
     .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
   assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
   assert.deepEqual(
-    ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
-    ['monde'], 'un écran autre que Monde est sans ambiance, ou Monde en a retrouvé une');
+    ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)).sort(),
+    ['chantier', 'mission', 'monde', 'offense', 'options', 'recherche'],
+    'la liste des écrans SANS ambiance a changé : le rapport doit la redire');
+  assert.deepEqual(
+    ecrans.filter((e) => Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
+    ['raid'], 'un écran autre que le raid porte une ambiance, ou le raid a perdu la sienne');
   assert.deepEqual(
     Object.keys(AMBIANCE_PAR_ECRAN).filter((e) => !ecrans.includes(e)),
     [], 'une ambiance sans écran');
@@ -1101,11 +1144,17 @@ test('SON T16 — la boucle ne se relance pas, et s\'arrête sur une rampe (fals
   const reglages = { ...ACTIF };
   const son = initialiserLeSon(faireDoc(fenetre), { reglages, graine: 5 });
 
-  // ⚠ LA SECONDE AMBIANCE EST CELLE DU RAID depuis le lot SON-VOLUMES, la carte
-  // n'en portant plus. Ce que le test mesure n'a pas bougé.
-  const base = AMBIANCE_PAR_ECRAN.chantier;
+  // ⚠⚠ LES DEUX BOUCLES SE DÉRIVENT DU PACK depuis le lot SON-ET-ARRIVÉE, 10/09.
+  // Une seule ambiance reste câblée — celle du raid —, donc le montage prend
+  // pour seconde n'importe quelle autre boucle d'ambiance du catalogue. Ce que
+  // ce test mesure est le CYCLE DE VIE d'une boucle — elle démarre une fois,
+  // monte en rampe, s'arrête quand sa raison disparaît — et il ne dépend pas de
+  // l'écran qui la demande : rien n'a bougé d'un mot.
   const carte = AMBIANCE_PAR_ECRAN.raid;
-  assert.notEqual(base, carte, 'montage : les deux écrans partagent leur ambiance');
+  const base = Object.keys(EVENEMENTS).find((n) => n !== carte
+    && EVENEMENTS[n].variantes.every((v) => SONS[v].bus === 'ambiances' && SONS[v].boucle === true));
+  assert.ok(base !== undefined, 'montage : le pack ne porte plus deux ambiances qui bouclent');
+  assert.notEqual(base, carte, 'montage : les deux boucles retenues n\'en font qu\'une');
 
   // ⚠ AVANT LE PREMIER GESTE, RIEN. La réconciliation ne crée pas de contexte :
   // un `AudioContext` né hors d'un geste reste suspendu.
@@ -1545,13 +1594,17 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
     for (const variante of EVENEMENTS[m[1]].variantes) cables.add(variante);
   }
   const muets = Object.keys(SONS).filter((n) => !cables.has(n)).sort();
-  // ⚠⚠ CENT SOIXANTE-HUIT, ET NON 169 : `ambience_calm_map_loop` EST DEVENU
-  // DORMANT. Ethan retire l'ambiance de la carte le 06/09 ; le son reste au
-  // catalogue et au livrable — pas un `data:` n'en sort — et il n'a plus aucun
-  // demandeur. C'est cette ligne qui le mesure, et c'est elle qui tomberait si
-  // le lot avait retiré le son au lieu de le laisser dormir.
-  assert.equal(cables.size, 168, 'le nombre de sons câblés a bougé');
-  assert.equal(muets.length, 95, 'le nombre de sons muets a bougé');
+  // ⚠⚠ CENT SOIXANTE-SEPT, ET NON 168 : `ambience_base_player_loop` EST DEVENU
+  // DORMANT À SON TOUR — lot SON-ET-ARRIVÉE, 10/09, point 12 d'Ethan. Le son
+  // reste au catalogue et au livrable — pas un `data:` n'en sort — et il n'a
+  // plus aucun demandeur, ses cinq écrans lui ayant été retirés. C'est cette
+  // ligne qui le mesure, et c'est elle qui tomberait si le lot avait retiré le
+  // son au lieu de le laisser dormir.
+  //
+  // ⚠ DEUX AMBIANCES DORMENT DÉSORMAIS, ET C'EST LA MÊME MÉCANIQUE DEUX FOIS :
+  // `ambience_calm_map_loop` depuis le 06/09, celle-ci depuis le 10/09.
+  assert.equal(cables.size, 167, 'le nombre de sons câblés a bougé');
+  assert.equal(muets.length, 96, 'le nombre de sons muets a bougé');
 
   // ⚠ LES SIX ORDRES DE L'OUVRAGE RESTENT MUETS — il ne donne aucun ordre que
   // le joueur entende. En brancher un fait tomber cette ligne.
@@ -1628,14 +1681,26 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
   assert.ok(Number.isInteger(IMPACT_LOURD_MILLIEMES) && IMPACT_LOURD_MILLIEMES > 0
     && IMPACT_LOURD_MILLIEMES < 1000, 'le seuil d\'impact n\'est pas une part');
 
-  // ⚠ LES CINQ AMBIANCES SANS ÉCRAN, NOMMÉES. Trois demandent un CONTEXTE que
-  // l'état ne dit pas — « être dans un champ de quartz » ne se lit nulle part —,
-  // une décrit la base de l'Ouvrage au repos, qu'aucun écran ne montre, et la
-  // dernière est la seconde ambiance de carte, dont le choix est esthétique.
+  // ⚠ LES SEPT AMBIANCES SANS ÉCRAN, NOMMÉES — elles étaient cinq. Trois
+  // demandent un CONTEXTE que l'état ne dit pas — « être dans un champ de
+  // quartz » ne se lit nulle part —, une décrit la base de l'Ouvrage au repos,
+  // qu'aucun écran ne montre, deux sont les ambiances de CARTE, et la
+  // septième est celle de la base du joueur, retirée le 10/09.
+  //
+  // ⚠⚠ IL N'EN RESTE DONC QU'UNE SEULE CÂBLÉE SUR HUIT :
+  // `ambience_battlefield_distant_loop`, sur le seul écran de raid. C'est le
+  // point 12 d'Ethan pris à la lettre — « enlever le son qui tourne tout le
+  // temps » —, et le raid reste parce qu'il ne tourne PAS tout le temps.
   const ambiancesMuettes = Object.keys(SONS)
     .filter((n) => SONS[n].bus === 'ambiances' && !cables.has(n)).sort();
   assert.deepEqual(ambiancesMuettes, [
     'ambience_base_ouvrage_loop',
+    // ⚠⚠ ET LA BASE DU JOUEUR SE TAIT DEPUIS LE 10/09, PAR ARBITRAGE : Ethan,
+    // « enlever le son qui tourne tout le temps », puis « faut croire, il
+    // s'arrête jamais ». Elle était sur CINQ écrans, et une boucle n'a ni garde
+    // ni plafond : elle avait donc une raison de sonner partout sauf sur la
+    // carte. Le son reste au catalogue et au livrable.
+    'ambience_base_player_loop',
     // ⚠⚠ ET LA CARTE EST MUETTE DEPUIS LE 06/09, PAR ARBITRAGE : Ethan, « enlever
     // son d'ambiance sur la carte ». Le départage `calm_map` / `map_wind`, seul
     // choix esthétique du lot SON-CÂBLAGE, devient SANS OBJET — les deux
@@ -1646,6 +1711,15 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
     'ambience_reactor_room_loop',
     'ambience_scoria_field_loop',
   ], 'la liste des ambiances muettes a changé : le rapport doit la redire');
+
+  // ⚠⚠ ET LA SEULE QUI SONNE ENCORE EST NOMMÉE, DANS L'AUTRE SENS. Une liste de
+  // muettes qui s'allongerait sans que celle-ci rétrécisse laisserait passer un
+  // lot qui aurait tout coupé — y compris le champ de bataille, qu'Ethan n'a
+  // pas demandé de taire.
+  assert.deepEqual(Object.keys(SONS)
+    .filter((n) => SONS[n].bus === 'ambiances' && cables.has(n)).sort(),
+  ['ambience_battlefield_distant_loop'],
+  'l\'ensemble des ambiances qui sonnent encore a changé');
 
   // ⚠⚠ ET LES SIX MOTEURS À L'ARRÊT SONNENT DÉSORMAIS TOUS. C'est l'une des six
   // décisions rendues par Ethan le 04/09 : un moteur tourne sur « unité vivante
@@ -2216,30 +2290,53 @@ test('SON-V T1 — la carte n\'a plus d\'ambiance, et c\'est la CLÉ qui manque 
 // SON-V T2 — les six autres écrans gardent la leur
 // ---------------------------------------------------------------------------
 
-test('SON-V T2 — six écrans sur sept gardent leur ambiance (falsification n° 2)', () => {
-  // ⚠ UN TEST QUI NE VÉRIFIERAIT QUE L'ABSENCE DE `monde` PASSERAIT SUR UNE
-  // TABLE VIDÉE. On énumère donc les six qui restent, avec leur valeur.
+test('SON-V T2 — UN écran sur sept garde son ambiance, et c\'est le raid (SB T1)', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ, PAS ASSOUPLI — lot SON-ET-ARRIVÉE, 10/09. Il
+  // figeait le fait que « six écrans sur sept gardent leur ambiance », qui est
+  // très exactement ce que le point 12 d'Ethan renverse : « enlever le son qui
+  // tourne tout le temps », puis « faut croire, il s'arrête jamais ». Il porte
+  // désormais la règle neuve, et il FALSIFIE l'ancienne de face — la table
+  // d'avant le lot est écrite ci-dessous et refusée.
+  //
+  // ⚠ UN TEST QUI NE VÉRIFIERAIT QUE L'ABSENCE DES CINQ PASSERAIT SUR UNE TABLE
+  // VIDÉE. On énumère donc ce qui reste, avec sa valeur.
   assert.deepEqual(AMBIANCE_PAR_ECRAN, {
+    raid: 'ambience_battlefield_distant_loop',
+  }, 'la table des ambiances d\'écran a bougé : le rapport doit la redire');
+
+  // ⚠⚠ ET L'ANCIENNE RÈGLE EST REFUSÉE DE FACE. Sans cette ligne, un lot qui
+  // remettrait les cinq écrans ne ferait tomber que l'égalité ci-dessus, et on
+  // pourrait la « corriger » en la recopiant. Ici il faut lire pourquoi.
+  const ancienne = {
     chantier: 'ambience_base_player_loop',
     mission: 'ambience_base_player_loop',
     offense: 'ambience_base_player_loop',
     options: 'ambience_base_player_loop',
     raid: 'ambience_battlefield_distant_loop',
     recherche: 'ambience_base_player_loop',
-  }, 'la table des ambiances d\'écran a bougé : le rapport doit la redire');
+  };
+  assert.notDeepEqual(AMBIANCE_PAR_ECRAN, ancienne,
+    'l\'ambiance de base est revenue sur les cinq écrans : c\'est ce qu\'Ethan a fait retirer');
 
-  // ⚠⚠ ET LES SIX SE CONFRONTENT À `ECRANS`, ILS NE SE RECOPIENT PAS. Les sept
-  // écrans se lisent dans `session.js` ; ce qui est arbitré, c'est que le
-  // septième — Monde, et lui seul — n'ait pas d'ambiance. Un huitième écran
-  // sans ambiance fait tomber cette ligne, ce qu'on lui demande.
+  // ⚠⚠ ET LE RESTANT SE CONFRONTE À `ECRANS`, IL NE SE RECOPIE PAS. Les sept
+  // écrans se lisent dans `session.js` ; ce qui est arbitré, c'est que le raid —
+  // et lui seul — porte une ambiance, parce qu'il est le seul qui ne tourne PAS
+  // tout le temps. Un huitième écran avec ambiance fait tomber cette ligne, ce
+  // qu'on lui demande.
   const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
     .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
     .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
   assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
   assert.deepEqual(
-    ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
-    ['monde'],
-    'un écran autre que Monde a perdu son ambiance, ou Monde l\'a retrouvée',
+    ecrans.filter((e) => Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
+    ['raid'],
+    'un écran autre que le raid a une ambiance, ou le raid a perdu la sienne',
+  );
+  // ⚠ ET LES SIX AUTRES SONT NOMMÉS, DANS L'AUTRE SENS — égalité, pas inclusion.
+  assert.deepEqual(
+    ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)).sort(),
+    ['chantier', 'mission', 'monde', 'offense', 'options', 'recherche'],
+    'la liste des écrans sans ambiance a changé',
   );
 });
 
@@ -2257,9 +2354,16 @@ test('SON-V T3 — sur la carte, aucune boucle d\'ambiance n\'est voulue (falsif
   // déjà muet avant le lot. On demande l'écran Monde NOMMÉ, et on montre
   // d'abord qu'un autre écran, lui, rend bien son ambiance — sans ce témoin,
   // le test serait vert sur une fonction qui ne rendrait jamais rien.
-  const surChantier = bouclesDesirees({ ecran: 'chantier' });
-  assert.ok(surChantier.some((n) => evenementsDAmbiance.has(n)),
-    'témoin : l\'écran de la base ne demande plus d\'ambiance non plus');
+  //
+  // ⚠⚠ LE TÉMOIN PASSE DU CHANTIER AU RAID — lot SON-ET-ARRIVÉE, 10/09. L'écran
+  // de la base n'a plus d'ambiance depuis le point 12 d'Ethan, donc il ne peut
+  // plus servir de témoin POSITIF : le garder aurait fait tomber ce test sur un
+  // code juste, et l'assouplir aurait retiré la seule chose qui empêche
+  // `bouclesDesirees` de ne jamais rien rendre. Le raid est désormais le seul
+  // écran qui en porte une, donc le seul témoin possible.
+  const surLeRaid = bouclesDesirees({ ecran: 'raid' });
+  assert.ok(surLeRaid.some((n) => evenementsDAmbiance.has(n)),
+    'témoin : l\'écran de raid ne demande plus d\'ambiance non plus');
 
   const surMonde = bouclesDesirees({ ecran: 'monde' });
   assert.deepEqual(surMonde.filter((n) => evenementsDAmbiance.has(n)), [],
@@ -2355,4 +2459,222 @@ test('SON-V T6 — ni le bus, ni les ordres, ni les alertes (falsification n° 6
   assert.equal(SONS.order_player_attack_01.volumeDb, 0);
   assert.equal(SONS.order_player_attack_02.volumeDb, 0);
   assert.equal(SONS.building_player_complete.volumeDb, 0);
+});
+
+// ---------------------------------------------------------------------------
+// SB T1 — l'ambiance de base s'arrête : un écran sur sept en porte une
+//
+// Ethan, point 12 du 10/09 : « Enlever le son qui tourne tout le temps », puis
+// « faut croire, il s'arrête jamais ».
+// ---------------------------------------------------------------------------
+
+test('SB T1 — un seul écran demande une ambiance, et c\'est le raid', () => {
+  // ⚠⚠ ON PASSE PAR `bouclesDesirees`, LE LECTEUR RÉEL, ET PAS PAR LA TABLE.
+  // Vider `AMBIANCE_PAR_ECRAN` sans que le câblage soit relu laisserait un test
+  // de table entièrement vert si l'ambiance venait d'ailleurs. Elle n'en vient
+  // pas — et c'est ce montage-ci qui le prouve, en interrogeant la fonction que
+  // `src/ui/son.js` appelle pour de bon.
+  const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
+    .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
+    .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
+  assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
+
+  const estUneAmbiance = (nom) => EVENEMENTS[nom].variantes
+    .every((v) => SONS[v].bus === 'ambiances');
+
+  const avecAmbiance = [];
+  for (const ecran of ecrans) {
+    // Disposition et unités VIDES : on ne mesure que ce que l'écran demande,
+    // sans qu'une usine ou un roulement ne vienne brouiller le relevé.
+    const voulu = bouclesDesirees({ ecran, disposition: [], unites: [] });
+    const ambiances = voulu.filter(estUneAmbiance);
+    if (ambiances.length > 0) avecAmbiance.push([ecran, ambiances]);
+    // ⚠ SUR UN ÉCRAN SANS AMBIANCE, C'EST L'ENSEMBLE ENTIER QUI EST VIDE : une
+    // base sans bâtiment et sans unité ne demande rien du tout.
+    if (ecran !== 'raid') {
+      assert.deepEqual(voulu, [],
+        `l'écran ${ecran} demande encore une boucle : « le son qui tourne tout le temps »`);
+    }
+  }
+
+  // ⚠ L'ÉGALITÉ, PAS UNE INCLUSION — et le singleton est nommé avec sa valeur.
+  assert.deepEqual(avecAmbiance, [['raid', ['ambience_battlefield_distant_loop']]],
+    'la liste des écrans qui demandent une ambiance a changé');
+
+  // ⚠⚠ ET LE RAID EN GARDE UNE, CE QUI EST UNE LECTURE ET PAS UNE DICTÉE. Ethan
+  // a nommé « le son qui tourne tout le temps » ; le champ de bataille ne sonne
+  // que pendant un raid, donc il ne tourne pas tout le temps. **S'il veut le
+  // silence complet, c'est cette ligne-ci qui tombe, et rien d'autre.**
+  assert.deepEqual(bouclesDesirees({ ecran: 'raid', disposition: [], unites: [] }),
+    ['ambience_battlefield_distant_loop'], 'le champ de bataille est devenu muet');
+
+  // ⚠⚠ ET LE RETRAIT EST CHIRURGICAL : `BOUCLES_DE_BATIMENT` n'est pas touché.
+  // Ses quatre boucles sonnent toujours, sur n'importe quel écran — elles sont
+  // motivées par une SITUATION, une usine qui tourne, et non par le simple fait
+  // d'être quelque part. Sans cette ligne, un lot qui aurait tout coupé
+  // passerait pour avoir répondu au point 12.
+  assert.deepEqual(bouclesDesirees({ ecran: 'chantier', disposition: [{ id: 'caserne' }], unites: [] }),
+    ['building_player_factory_loop'], 'la machinerie s\'est tue avec l\'ambiance');
+});
+
+// ---------------------------------------------------------------------------
+// SB T2 — trois tirs par seconde, et la garde ne consomme pas de tirage
+//
+// Ethan, point 10 du 10/09 : « La fréquence des tirs du son est basée sur la
+// fréquence. Ce qui est assez inaudible il faudrait plutôt 3 son par seconde ».
+// ---------------------------------------------------------------------------
+
+test('SB T2 — la garde de bus tient trois sons par seconde, sans consommer de tirage', () => {
+  const ACTIF_T2 = { muet: false, volume: 1 };
+
+  // Les événements d'armes qui ne bouclent PAS — les deux boucles du bus sont
+  // hors de portée de `demanderUnSon`, et `SB T3` s'en occupe.
+  const armes = Object.keys(EVENEMENTS).filter((e) => EVENEMENTS[e].variantes
+    .every((v) => SONS[v].bus === 'armes' && SONS[v].boucle !== true));
+  assert.ok(armes.length >= 20, `montage : ${armes.length} événements d'armes seulement`);
+
+  // ⚠⚠ DES ÉVÉNEMENTS TOUS DIFFÉRENTS, ET C'EST TOUT LE POINT. La garde par
+  // ÉVÉNEMENT ne borne qu'un canon ; ce montage en fait tirer vingt-cinq en
+  // alternance, ce qui est exactement ce qu'une bande de défense produit et ce
+  // que cette garde-ci existe pour tenir.
+  const voix = creerVoix(12345);
+  let accords = 0;
+  let refusDuBus = 0;
+  for (let i = 0; i < 1000; i += 1) {
+    const r = demanderUnSon(voix, armes[i % armes.length], i * 10, ACTIF_T2);
+    if (r.jouer) accords += 1;
+    else if (r.raison === 'garde-bus') refusDuBus += 1;
+  }
+  // Dix secondes à 3/s, plus celui de l'instant zéro : au plus 31.
+  assert.ok(accords <= 31, `${accords} sons en 10 s : la cadence n'est pas tenue`);
+  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : sans garde de bus, ces mille
+  // demandes en rendraient des centaines. Un `<= 31` serait vert sur une
+  // politique qui ne rendrait jamais rien.
+  assert.ok(accords >= 25, `${accords} sons en 10 s : la cadence refuse trop`);
+  assert.ok(refusDuBus > 900, `${refusDuBus} refus de bus : la garde ne mord pas`);
+
+  // ⚠⚠ ET LA GARDE NE CONSOMME PAS DE TIRAGE — C'EST LA FALSIFICATION QUE CE
+  // MONTAGE EXISTE POUR ATTRAPER. Posée APRÈS le tirage de variante, elle ferait
+  // avancer la graine du xorshift à chaque refus, donc **déplacerait la suite
+  // des variantes de tous les sons suivants** : deux exécutions du même combat
+  // ne sonneraient plus pareil, et rien d'autre ne le dirait.
+  //
+  // On rejoue donc les MÊMES accords, sur une voix de même graine, mais à des
+  // instants assez espacés pour qu'aucun refus n'ait lieu. Les deux suites de
+  // variantes doivent coïncider, terme à terme.
+  const arme = armes.find((e) => EVENEMENTS[e].variantes.length > 1);
+  assert.ok(arme !== undefined, 'montage : aucun événement d\'armes à plusieurs variantes');
+  const nbVariantes = EVENEMENTS[arme].variantes.length;
+  assert.ok(nbVariantes > 1, 'montage : l\'événement retenu n\'a qu\'une variante');
+
+  // (a) avec refus : une demande toutes les 10 ms, dont la plupart tombent.
+  const voixA = creerVoix(777);
+  const suiteA = [];
+  const instants = [];
+  for (let i = 0; i < 400; i += 1) {
+    const r = demanderUnSon(voixA, arme, i * 10, ACTIF_T2);
+    if (r.jouer) { suiteA.push(r.son); instants.push(i * 10); }
+  }
+  assert.ok(suiteA.length >= 8, `montage : ${suiteA.length} accords, trop peu pour comparer`);
+  assert.ok(new Set(suiteA).size > 1, 'montage : le tirage rend toujours la même variante');
+
+  // (b) sans refus : on ne demande qu'aux instants où (a) a accordé.
+  const voixB = creerVoix(777);
+  const suiteB = instants.map((t) => demanderUnSon(voixB, arme, t, ACTIF_T2));
+  assert.ok(suiteB.every((r) => r.jouer), 'montage : un accord de (a) est refusé en (b)');
+  assert.deepEqual(suiteB.map((r) => r.son), suiteA,
+    'la garde de bus consomme un tirage : la suite des variantes a divergé');
+
+  // ⚠ ET LA GRAINE ELLE-MÊME EST AU MÊME POINT — la comparaison des sons
+  // pourrait coïncider par accident sur une suite courte ; celle-ci ne le peut
+  // pas.
+  assert.equal(voixA.graine, voixB.graine,
+    'la garde de bus a fait avancer la graine du tirage');
+
+  // ⚠ LA GARDE S'ARME SUR LE BUS, ET SEULEMENT SUR CELUI QUI EN A UNE. Un
+  // `gardesBus` qui se remplirait de bus sans cadence laisserait croire, en
+  // lisant une voix, que les cinq sont bridés.
+  assert.deepEqual(Object.keys(voixA.gardesBus), ['armes']);
+  const voixC = creerVoix(4242);
+  demanderUnSon(voixC, 'ui_click', 0, ACTIF_T2);
+  assert.deepEqual(Object.keys(voixC.gardesBus), [],
+    'un bus sans cadence arme quand même sa garde');
+
+  // ⚠⚠ ET `creerVoix` NAÎT AVEC `gardesBus`, SANS `??` DE SECOURS. Un repli
+  // masquerait une voix mal construite, et la garde ne s'armerait jamais.
+  assert.deepEqual(creerVoix(1).gardesBus, {});
+  assert.ok(!/gardesBus\s*\?\?|\?\?\s*\{\s*\}/.test(
+    sansCommentaires(lire('src', 'son', 'politique.js'))),
+  'un `??` de secours masque une voix sans `gardesBus`');
+
+  // 334 = ceil(1000 / 3) : trois sons par seconde est un PLAFOND.
+  assert.equal(GARDE_PAR_BUS.armes, 334, 'la cadence du bus `armes` a bougé');
+  assert.deepEqual(Object.keys(GARDE_PAR_BUS), ['armes'],
+    'un second bus est bridé : le rapport doit le dire');
+  for (const bus of Object.keys(GARDE_PAR_BUS)) {
+    assert.ok(bus in BUS, `« ${bus} » n'est pas un bus`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SB T3 — la garde de bus n'atteint ni les alertes ni les boucles
+// ---------------------------------------------------------------------------
+
+test('SB T3 — la cadence des armes ne déborde ni sur les alertes ni sur les boucles', () => {
+  const ACTIF_T3 = { muet: false, volume: 1 };
+
+  // ⚠⚠ LES ALERTES GARDENT LEUR CADENCE PROPRE, ET ELLE EST INDÉPENDANTE. Ethan
+  // a nommé les TIRS ; une garde de bus posée sur `interface` ferait taire les
+  // boutons, les ordres et les alertes ensemble.
+  const alertes = Object.keys(EVENEMENTS).filter((e) => e.startsWith('alert_'));
+  assert.ok(alertes.length >= 10, `montage : ${alertes.length} alertes seulement`);
+  const voix = creerVoix(31337);
+  let armes = 0;
+  let sonnees = 0;
+  const armesDispo = Object.keys(EVENEMENTS).filter((e) => EVENEMENTS[e].variantes
+    .every((v) => SONS[v].bus === 'armes' && SONS[v].boucle !== true));
+  // On alterne un tir et une alerte toutes les 10 ms.
+  for (let i = 0; i < 1000; i += 1) {
+    if (demanderUnSon(voix, armesDispo[i % armesDispo.length], i * 10, ACTIF_T3).jouer) armes += 1;
+    if (demanderUnSon(voix, alertes[i % alertes.length], i * 10, ACTIF_T3).jouer) sonnees += 1;
+  }
+  assert.ok(armes <= 31, `${armes} tirs en 10 s : la cadence des armes n'est pas tenue`);
+  // ⚠ LES ALERTES SONNENT BIEN PLUS SOUVENT : leur garde vaut 450 ms PAR
+  // ÉVÉNEMENT, et il y en a dix-huit. Sans cette ligne, une garde de bus posée
+  // sur `interface` par symétrie apparente passerait inaperçue.
+  assert.ok(sonnees > 100,
+    `${sonnees} alertes en 10 s : la cadence des armes a débordé sur les alertes`);
+  assert.deepEqual(Object.keys(voix.gardesBus), ['armes'],
+    'un second bus s\'est armé une garde');
+
+  // ⚠⚠ ET LES DEUX BOUCLES DU BUS `armes` DÉMARRENT QUELLE QUE SOIT L'ACTIVITÉ
+  // DU BUS. C'est la falsification que le brief nomme : poser la garde dans
+  // `reconcilierLesBoucles` par symétrie apparente est exactement ce que le
+  // commentaire de cette fonction interdit — « un refus qui ne se rattrape
+  // pas ». Une boucle refusée resterait muette jusqu'au prochain changement
+  // d'état, c'est-à-dire, pour un rayon continu, jusqu'à la fin du raid.
+  const bouclesDArmes = Object.keys(EVENEMENTS).filter((e) => EVENEMENTS[e].variantes
+    .every((v) => SONS[v].bus === 'armes' && SONS[v].boucle === true));
+  assert.deepEqual(bouclesDArmes.sort(),
+    ['weapon_missile_flight_loop', 'weapon_ouvrage_beam_loop'],
+    'les boucles du bus `armes` ont changé : relire la garde de cadence');
+  for (const boucle of bouclesDArmes) {
+    assert.deepEqual(reconcilierLesBoucles([boucle], [], ACTIF_T3),
+      { demarrer: [boucle], arreter: [] },
+      `« ${boucle} » est refusée : la garde de bus a atteint les boucles`);
+  }
+  // Et deux fois de suite, sans le moindre délai : une garde mordrait ici.
+  assert.deepEqual(reconcilierLesBoucles(bouclesDArmes, [], ACTIF_T3).demarrer.sort(),
+    bouclesDArmes.sort(), 'les deux boucles d\'armes ne démarrent pas ensemble');
+
+  // ⚠ ET LA GARDE VIT DANS `demanderUnSon`, PAS DANS LA RÉCONCILIATION — mesuré
+  // sur la SOURCE, parce que c'est le seul endroit où la faute pourrait
+  // réapparaître sans qu'un comportement change tout de suite.
+  const politique = sansCommentaires(lire('src', 'son', 'politique.js'));
+  const corpsReconciliation = politique
+    .slice(politique.indexOf('export function reconcilierLesBoucles'));
+  assert.ok(!corpsReconciliation.includes('GARDE_PAR_BUS'),
+    'la garde de cadence est entrée dans `reconcilierLesBoucles`');
+  assert.ok(politique.includes('GARDE_PAR_BUS'),
+    'témoin : la garde de cadence a disparu de la politique');
 });
