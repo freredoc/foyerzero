@@ -590,38 +590,71 @@ export const GEOGRAPHIE = {
   rayonAttaque: 10, // fixe
   niveauBase: 'moyenne des niveaux de ses bâtiments',
   compositionBase: 'deux niveaux adjacents, répartis pour atteindre la moyenne',
-  // ⚠⚠ TROIS COEFFICIENTS, PLUS DEUX BOUTS D'INTERPOLATION — lot RÈGLES-DE-CARTE,
-  // 10/09/2026, point 15 d'Ethan : « coût par distance et niv. Base 1h, puis
-  // chaque niveau de base rajoute 1min », et sur la forme exacte, « Q2 b », soit
+  // ⚠⚠ UNE TABLE DE CINQUANTE PLAFONDS, PLUS TROIS COEFFICIENTS — lot
+  // EMPRISES-ET-DÉLAI, 10/09/2026 au soir. Ethan : « 1 h 30 niv 10 distance 10 ;
+  // 3 h niv 20 d10 ; 6 h niv 30 d10 ; 12 h niv 40 d10 ; 24 h niv 50 d10 », puis
+  // « 1 h mini » — et ses trois contrôles au niveau 10 : d1 1 h 03, d5 1 h 15,
+  // d10 1 h 30. La forme qui rend les huit :
   //
-  //     délai en minutes = 60 + niveau + (distance − 1)
+  //     plafond(niveau)  = 900 × 2 ^ ((niveau − 10) / 10)   dixièmes de minute
+  //     délai(niveau, d) = 600 + max(0, plafond(niveau) − 600) × d / 10
   //
-  // ⚠⚠ ET CE QUE ÇA COÛTE EST À DIRE AVANT TOUT LE RESTE : LES 24 HEURES DU
-  // NIVEAU 50 SONT ABANDONNÉES. Le couple d'avant était
-  // `delaiEntreSautsHeures: { depart: 1, niveau50: 24 }` et venait de
-  // `SESSION-RELEVE-BUTIN.md` §0 — « 1 h au départ → 24 h au niveau 50 ». Sur la
-  // règle neuve, le PIRE cas du jeu — niveau 50, dix cases — rend
-  // `60 + 50 + 9 = 119 minutes`, soit **1 h 59** : le plafond du barème est
-  // divisé par douze, et ce relevé cesse d'être la règle. Les deux exemples
-  // d'Ethan confirment que c'est bien (b) qu'il a voulue (niveau 20, distance 1
-  // → 1 h 20) ; c'est UNE table qui change, et il peut revenir dessus.
+  // ⚠⚠ ET ÇA REND LES 24 HEURES DU NIVEAU 50, QUE LE LOT PRÉCÉDENT AVAIT
+  // ABANDONNÉES. RÈGLES-DE-CARTE était linéaire — `60 + niveau + (distance − 1)`
+  // — et plafonnait le jeu entier à 1 h 59 ; Ethan est revenu dessus le soir même
+  // en dictant un DOUBLEMENT tous les dix niveaux. `SESSION-RELEVE-BUTIN.md` §0
+  // redevient donc juste sur ce point, par un autre chemin que l'interpolation
+  // qu'il décrivait : ce n'est pas une droite de 1 h à 24 h, c'est une
+  // géométrique dont la distance 10 est le plafond.
   //
-  // ⚠ LE NOM CHANGE PARCE QUE LA GRANDEUR CHANGE. Ce ne sont plus deux bouts
-  // d'une interpolation en HEURES, ce sont trois coefficients en MINUTES.
-  // Garder l'ancien nom ferait lire « heures » là où on écrit des minutes.
+  // ⚠⚠ LE PLANCHER D'UNE HEURE N'EST PAS UN RABOT POSÉ SUR LE RÉSULTAT, IL EST
+  // DANS LA FORME. `plafond` passe sous 600 en dessous du niveau 4,2 — mesuré —
+  // et le `max(0, …)` écrase alors le terme de distance : un niveau 1 rend
+  // 1 h 00 à toutes les distances. C'est le « 1 h mini » d'Ethan, obtenu sans
+  // seconde règle. ⚠ CE QU'IL COÛTE EST À DIRE : SOUS LE NIVEAU 4,2 LA DISTANCE
+  // EST GRATUITE — dix cases coûtent autant qu'une, et une base neuve est
+  // exactement dans ce cas. C'est une conséquence de la forme, pas un oubli ;
+  // Ethan tranche s'il la veut payante dès le premier niveau.
   //
-  // ⚠ `parNiveau` SE PAIE AU DIXIÈME DE NIVEAU, et ce n'est pas un détail :
-  // `niveauDesBatiments` rend une moyenne en DIXIÈMES — 86 pour une base de
-  // niveau 8,6 —, donc une base de 8,6 coûte 68,6 min et non 68 ni 69.
-  // `sim/deplacement.js` travaille en dixièmes de minute pour cette raison, et
-  // ne divise qu'en dernier.
+  // ⚠⚠ LES CINQUANTE PLAFONDS SONT PRÉCALCULÉS, ET AUCUN `Math.pow` N'ENTRE DANS
+  // LE MOTEUR. `2 ^ 0,1` n'est pas garanti bit à bit d'un moteur JavaScript à
+  // l'autre, et cette durée ENTRE DANS LA SAUVEGARDE — `dernierDeplacementDelaiTicks`,
+  // posé au lot RÈGLES-DE-CARTE. Une divergence de dernier bit donnerait deux
+  // attentes différentes pour la même partie selon le navigateur.
+  // ⚠ ET LE RISQUE EST MESURÉ, PAS CRAINT : `plafond(8)` vaut **783,4955**, à
+  // quatre millièmes d'une égalité. C'est le seul des cinquante qui approche une
+  // bascule d'arrondi, et il suffit à justifier la table.
   //
-  // ⚠ `parCaseAuDela` COMPTE LES CASES AU-DELÀ DE LA PREMIÈRE : un saut d'une
-  // case ne paie rien de distance, un saut de dix en paie neuf. La distance est
-  // celle que le joueur LIT à l'écran — euclidienne, arrondie au supérieur —,
-  // jamais Tchebychev : facturer une diagonale comme une ligne droite mentirait
-  // à la phrase qui dit « 7 cases ».
-  delaiDeplacementMinutes: { base: 60, parNiveau: 1, parCaseAuDela: 1 },
+  // ⚠ EN DIXIÈMES DE MINUTE, COMME LE BARÈME D'AVANT, et pour la même raison :
+  // `niveauDesBatiments` rend une moyenne en DIXIÈMES de niveau — 86 pour une
+  // base de niveau 8,6 —, donc le plafond s'INTERPOLE entre deux niveaux entiers
+  // et le calcul ne quitte jamais les entiers. `sim/deplacement.js` le fait, et
+  // ne convertit en ticks qu'une fois.
+  //
+  // ⚠ LA DISTANCE EST CELLE QUE LE JOUEUR LIT — euclidienne, arrondie au
+  // supérieur —, jamais Tchebychev : facturer une diagonale comme une ligne
+  // droite mentirait à la phrase qui dit « 7 cases ». ⚠ Et elle compte à partir
+  // de la PREMIÈRE case, `d / 10`, là où l'ancien barème comptait au-delà d'elle :
+  // c'est ce qui fait tomber les trois contrôles d'Ethan au niveau 10.
+  delaiDeplacement: {
+    /** Le plancher, en dixièmes de minute — « 1 h mini », Ethan, 10/09. */
+    plancherDixiemesDeMinute: 600,
+    /**
+     * Le plafond du délai — à distance 10 — pour chaque niveau de 1 à 50, en
+     * dixièmes de minute. `round(900 × 2 ^ ((niveau − 10) / 10))`.
+     *
+     * ⚠ LES CINQ ANCRAGES D'ETHAN TOMBENT EXACTEMENT : 900 au niveau 10,
+     * 1800 au 20, 3600 au 30, 7200 au 40, 14400 au 50 — soit 1 h 30, 3 h, 6 h,
+     * 12 h et 24 h. Un test les nomme un par un.
+     */
+    plafondsParNiveau: [
+      482, 517, 554, 594, 636, 682, 731, 783, 840, 900,
+      965, 1034, 1108, 1188, 1273, 1364, 1462, 1567, 1679, 1800,
+      1929, 2068, 2216, 2375, 2546, 2728, 2924, 3134, 3359, 3600,
+      3858, 4135, 4432, 4750, 5091, 5457, 5848, 6268, 6718, 7200,
+      7717, 8271, 8864, 9500, 10182, 10913, 11696, 12536, 13436, 14400,
+    ],
+  },
   blocageApresAttaqueHeures: 1,
   blocageApresRasageHeures: 24,
   avantPostesParBaseJoueur: { min: 1, max: 2, niveauRelatif: 1, renouvelables: true },
@@ -629,11 +662,12 @@ export const GEOGRAPHIE = {
 
 // --- déplacement de la base ---------------------------------------------------
 // Ce que le joueur peut faire de sa base, et à quel rythme. La portée vient
-// d'Ethan le 02/09 (« 10 cases au maximum ») ; le délai vient de lui aussi, le
-// 10/09 — « coût par distance et niv. Base 1h, puis chaque niveau de base
-// rajoute 1min ». Il dormait auparavant dans `GEOGRAPHIE.delaiEntreSautsHeures`,
-// deux bouts d'une interpolation en heures, et il a changé de GRANDEUR : voir
-// `delaiDeplacementMinutes` ci-dessus, qui dit ce que le changement abandonne.
+// d'Ethan le 02/09 (« 10 cases au maximum ») ; le délai vient de lui aussi, et
+// il a changé DEUX FOIS le 10/09 — d'abord « Base 1h, puis chaque niveau de base
+// rajoute 1min » (linéaire, plafond 1 h 59), puis le soir « 1 h 30 niv 10
+// distance 10 […] 24 h niv 50 d10 » avec « 1 h mini », qui est un DOUBLEMENT
+// tous les dix niveaux. Voir `delaiDeplacement` ci-dessus, qui porte la table et
+// dit ce que chaque changement a abandonné.
 //
 // ⚠⚠ LE DÉLAI N'EST PAS RECOPIÉ ICI, IL EST RÉFÉRENCÉ. Deux tables pour une
 // grandeur, c'est une occasion de divergence, et `CLAUDE.md` §4 l'interdit :
@@ -649,21 +683,22 @@ export const DEPLACEMENT = {
   porteeMaxCases: 10,
 
   /**
-   * Le barème du délai, en MINUTES : une base, un coût par niveau, un coût par
-   * case au-delà de la première.
+   * Le barème du délai : un plancher, et un plafond par niveau — tout en
+   * dixièmes de minute.
    *
-   * ⚠ IL CHANGE DE NOM AVEC LA GRANDEUR — lot RÈGLES-DE-CARTE, 10/09/2026. Il
-   * s'appelait `delaiHeures` et référençait deux bouts d'interpolation ; ce
-   * sont maintenant trois coefficients, et en minutes. Un nom qui dit « heures »
-   * sur des minutes se relit faux une fois, et se corrige de travers la fois
-   * d'après.
+   * ⚠ IL CHANGE DE NOM AVEC LA GRANDEUR, POUR LA SECONDE FOIS EN UN JOUR — lot
+   * EMPRISES-ET-DÉLAI, 10/09/2026 au soir. Il s'appelait `delaiHeures`, puis
+   * `delaiMinutes` au lot RÈGLES-DE-CARTE ; ce ne sont plus ni des heures ni
+   * trois coefficients en minutes, c'est un plancher et cinquante plafonds en
+   * dixièmes de minute. Un nom qui dit « minutes » sur des dixièmes se relit
+   * faux une fois, et se corrige de travers la fois d'après.
    *
    * ⚠ LE NIVEAU D'UNE BASE EST LA MOYENNE DES NIVEAUX DE SES BÂTIMENTS, et
    * `niveauDesBatiments` la rend EN DIXIÈMES. Le lire comme un entier donnerait
    * un délai dix fois faux — c'est le piège que `sim/reparation.js` a déjà payé
-   * avec `niveauDeLArmee`.
+   * avec `niveauDeLArmee`, et le plafond s'INTERPOLE pour cette raison.
    */
-  delaiMinutes: GEOGRAPHIE.delaiDeplacementMinutes,
+  delai: GEOGRAPHIE.delaiDeplacement,
 };
 
 /**

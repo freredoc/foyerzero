@@ -51,38 +51,52 @@ const MINUTES_PAR_HEURE = 60;
  * Le délai avant le prochain déplacement, en TICKS, pour ce niveau et cette
  * distance.
  *
- * ⚠⚠ LA DISTANCE EST ENTRÉE DANS LE BARÈME — lot RÈGLES-DE-CARTE, 10/09/2026.
- * Ethan : « Deux choses : coût par distance et niv. Base 1h, puis chaque niveau
- * de base rajoute 1min », puis, sur la forme exacte, « Q2 b » :
+ * ⚠⚠ LE BARÈME DOUBLE TOUS LES DIX NIVEAUX — lot EMPRISES-ET-DÉLAI, 10/09/2026
+ * au soir, ET C'EST LE SECOND CHANGEMENT DU MÊME JOUR. Le matin, RÈGLES-DE-CARTE
+ * avait posé une droite — `60 + niveau + (distance − 1)` — dont le pire cas
+ * valait 1 h 59 ; Ethan est revenu dessus le soir : « 1 h 30 niv 10 distance
+ * 10 ; 3 h niv 20 d10 ; 6 h niv 30 d10 ; 12 h niv 40 d10 ; 24 h niv 50 d10 »,
+ * puis « 1 h mini ». Les 24 heures du niveau 50 sont donc RENDUES, et par une
+ * géométrique et non par l'interpolation qu'elles avaient jadis.
  *
- *     délai en minutes = 60 + niveau + (distance − 1)
+ *     plafond(niveau)  = 900 × 2 ^ ((niveau − 10) / 10)   dixièmes de minute
+ *     délai(niveau, d) = 600 + max(0, plafond(niveau) − 600) × d / portéeMax
  *
- * ⚠⚠ ET ÇA ABANDONNE LES 24 HEURES DU NIVEAU 50, qu'il faut dire avant tout le
- * reste. L'ancien barème interpolait linéairement entre 1 h au niveau 1 et 24 h
- * au niveau 50 ; le pire cas de la règle neuve — niveau 50, dix cases — rend
- * `60 + 50 + 9 = 119 minutes`, soit **1 h 59**. Le plafond est divisé par douze,
- * et `SESSION-RELEVE-BUTIN.md` §0 cesse d'être la règle sur ce point.
+ * ⚠⚠ AUCUN `Math.pow` ICI, ET C'EST LA CONTRAINTE QUI COMMANDE TOUT LE MODULE.
+ * Cette durée ENTRE DANS LA SAUVEGARDE — `dernierDeplacementDelaiTicks` —, et
+ * `2 ^ 0,1` n'est pas garanti bit à bit d'un moteur JavaScript à l'autre : une
+ * divergence de dernier bit donnerait deux attentes différentes pour la même
+ * partie selon le navigateur. Les cinquante plafonds sont donc PRÉCALCULÉS dans
+ * `GEOGRAPHIE.delaiDeplacement`, en entiers, et ce module ne fait que les lire
+ * et les interpoler. ⚠ Le risque est mesuré : `plafond(8)` vaut 783,4955, à
+ * quatre millièmes d'une bascule d'arrondi.
+ *
+ * ⚠⚠ LE PLANCHER D'UNE HEURE EST DANS LA FORME, PAS POSÉ SUR LE RÉSULTAT. Un
+ * `Math.max(600, …)` final rendrait le même nombre aujourd'hui et cacherait ce
+ * qui se passe : le plafond passe SOUS le plancher en dessous du niveau 4,2, et
+ * c'est le `max(0, …)` du terme de distance qui écrase alors le surplus.
+ * ⚠ CE QU'IL COÛTE EST À DIRE : SOUS LE NIVEAU 4,2 LA DISTANCE EST GRATUITE —
+ * dix cases coûtent autant qu'une, et une base neuve est exactement dans ce cas.
+ * C'est une conséquence de la forme d'Ethan, pas un oubli.
  *
  * ⚠⚠ EN DIXIÈMES DE NIVEAU, ET C'EST LE PIÈGE QUE CE DÉPÔT A DÉJÀ PAYÉ DEUX
  * FOIS. `niveauDesBatiments` rend `86` pour une base de niveau 8,6 ; le lire
  * comme un entier ferait croire à une base de niveau 86, donc rendrait un délai
  * bien plus long. `sim/reparation.js` l'a payé avec `niveauDeLArmee` au lot
- * RÉSERVE ; ce module-ci le documentait déjà au lot DÉPLACEMENT.
+ * RÉSERVE. Le plafond s'INTERPOLE donc entre deux niveaux entiers, ce qui est le
+ * seul endroit du barème où la lecture en dixièmes se voit.
  *
  * ⚠ TOUT EN ENTIERS, LA DIVISION EN DERNIER. Le calcul se fait en DIXIÈMES DE
- * MINUTE — `600 + dixièmes + 10 × (distance − 1)` — et ne se convertit en ticks
- * qu'une fois. Une base de niveau 8,6 coûte ainsi 68,6 min à distance 1, et non
- * 68 ni 69 : arrondir le niveau avant de l'ajouter perdrait exactement ce que
- * les dixièmes servent à porter.
+ * MINUTE et ne se convertit en ticks qu'une fois — et cette conversion-là est
+ * EXACTE, mesuré : un dixième de minute vaut six secondes, donc exactement
+ * soixante ticks à 10 Hz. L'arrondi final est donc un non-événement aujourd'hui,
+ * et la monotonie du barème en dixièmes se transporte telle quelle en ticks.
  *
  * ⚠⚠ ET LE NIVEAU RESTE BORNÉ AUX DEUX BOUTS, `[10, 500]` DIXIÈMES, COMME
- * AVANT — ET LA BORNE EST INERTE AUJOURD'HUI, MESURÉ. `niveauDesBatiments` rend
- * une MOYENNE de niveaux qu'`ameliorer` plafonne déjà à `NIVEAU.plafond`, et
- * `verifierEtat` refuse au chargement une disposition qui sortirait de là : la
- * retirer ne fait tomber AUCUN test, vérifié à la falsification. Elle est écrite
- * quand même parce qu'elle protège le seul bout par lequel un nombre absurde
- * pourrait entrer — un `??` sur une base vide —, et parce qu'un barème qui rend
- * une durée négative ne lèverait pas : il déverrouillerait le déplacement.
+ * AVANT — ET LA BORNE A CESSÉ D'ÊTRE INERTE. Elle l'était sous la droite du
+ * matin ; elle porte désormais l'indexation de la table : un dixième hors de
+ * `[10, 500]` lirait `plafondsParNiveau` hors de ses bornes et rendrait `NaN`,
+ * c'est-à-dire un délai qui ne LÈVE pas et qui déverrouille le déplacement.
  *
  * @param {object} etat
  * @param {number} distance distance PARCOURUE, en cases entières, ≥ 1
@@ -90,6 +104,34 @@ const MINUTES_PAR_HEURE = 60;
  */
 export function delaiDeplacementTicks(etat, distance) {
   return delaiPourLaBase(baseCourante(etat), distance);
+}
+
+/**
+ * Le plafond du délai — celui de la distance maximale — pour un niveau donné EN
+ * DIXIÈMES, interpolé entre les deux niveaux entiers qui l'encadrent.
+ *
+ * ⚠⚠ L'INTERPOLATION EST CE QUI FAIT VIVRE LES DIXIÈMES. `plafonds[dixièmes]`
+ * lirait la table comme si elle avait cinq cents entrées ; `plafonds[entier]`
+ * jetterait la fraction, donc rendrait le même délai à 8,0 et à 8,9. Une base de
+ * 8,6 vaut `783 + arrondi((840 − 783) × 6 / 10)` = 817, et ni 783 ni 840.
+ *
+ * ⚠⚠ LE PLAFOND EXACT NE LIT PAS LA CASE SUIVANTE, ET C'EST LE `return` QUI LE
+ * DIT — pas un commentaire. Au niveau 50 la fraction vaut zéro, donc on sort
+ * AVANT de chercher `plafondsParNiveau[50]`, qui n'existe pas et rendrait `NaN`
+ * en silence. La borne du niveau garantit qu'une fraction non nulle a toujours
+ * un suivant.
+ *
+ * @param {number} dixiemes niveau en dixièmes, déjà borné à `[10, 500]`
+ * @returns {number} dixièmes de minute, entier
+ */
+function plafondDixiemesDeMinute(dixiemes) {
+  const plafonds = DEPLACEMENT.delai.plafondsParNiveau;
+  const entier = Math.floor(dixiemes / DIXIEMES_PAR_NIVEAU);
+  const fraction = dixiemes - entier * DIXIEMES_PAR_NIVEAU;
+  const bas = plafonds[entier - 1];
+  if (fraction === 0) return bas;
+  const haut = plafonds[entier];
+  return bas + Math.round(((haut - bas) * fraction) / DIXIEMES_PAR_NIVEAU);
 }
 
 /**
@@ -101,6 +143,7 @@ export function delaiDeplacementTicks(etat, distance) {
  * sur `baseCourante`. Lui faire recopier la formule aurait mis deux écritures du
  * barème au dépôt, et la seconde se serait tue au premier réglage d'Ethan. C'est
  * le motif de `problemesDeLEffectif`, qui prend une liste et non un état.
+ * ⚠ SA SIGNATURE NE BOUGE PAS AU LOT EMPRISES-ET-DÉLAI : seul le corps change.
  *
  * ⚠ ELLE NE LIT QUE `disposition`, donc elle ne peut rien savoir de la position :
  * la distance lui est DONNÉE. C'est voulu — la distance parcourue est un fait du
@@ -118,14 +161,18 @@ export function delaiPourLaBase(laBase, distance) {
       + `${DEPLACEMENT.porteeMaxCases} attendu`,
     );
   }
-  const { base, parNiveau, parCaseAuDela } = DEPLACEMENT.delaiMinutes;
-  const plancher = DIXIEMES_PAR_NIVEAU;
-  const plafond = GEOGRAPHIE.niveauPlafond * DIXIEMES_PAR_NIVEAU;
-  const brut = niveauDesBatiments(laBase.disposition) ?? plancher;
-  const dixiemes = Math.min(plafond, Math.max(plancher, brut));
-  const dixiemesDeMinute = base * DIXIEMES_PAR_MINUTE
-    + parNiveau * dixiemes
-    + parCaseAuDela * DIXIEMES_PAR_MINUTE * (distance - 1);
+  const plancher = DEPLACEMENT.delai.plancherDixiemesDeMinute;
+  const basNiveau = DIXIEMES_PAR_NIVEAU;
+  const hautNiveau = GEOGRAPHIE.niveauPlafond * DIXIEMES_PAR_NIVEAU;
+  const brut = niveauDesBatiments(laBase.disposition) ?? basNiveau;
+  const dixiemes = Math.min(hautNiveau, Math.max(basNiveau, brut));
+  // ⚠ LA DISTANCE SE PAIE EN PART DE LA PORTÉE MAXIMALE, jamais sur un « 10 »
+  // écrit ici : le plafond de la table EST celui de la distance maximale, donc
+  // les deux nombres sont le même fait. Un 10 en dur ferait diverger le barème
+  // du jour où Ethan règle `porteeMaxCases`.
+  const marge = Math.max(0, plafondDixiemesDeMinute(dixiemes) - plancher);
+  const dixiemesDeMinute = plancher
+    + Math.round((marge * distance) / DEPLACEMENT.porteeMaxCases);
   return Math.round(
     (TICKS_PAR_HEURE * dixiemesDeMinute) / (MINUTES_PAR_HEURE * DIXIEMES_PAR_MINUTE),
   );
