@@ -398,6 +398,33 @@ COMMENTAIRE_IMPACT = """/**
  * C'est le SEUL arbitrage encore ouvert de ce lot, et il se change seul.
  */"""
 
+COMMENTAIRE_GARDE_BUS = """/**
+ * LA CADENCE D'ENSEMBLE D'UN BUS, en millisecondes — point 10 d'Ethan, 10/09 :
+ * « La fréquence des tirs du son est basée sur la fréquence. Ce qui est assez
+ * inaudible il faudrait plutôt 3 son par seconde. »
+ *
+ * ⚠⚠ ELLE NE REMPLACE PAS LA GARDE PAR ÉVÉNEMENT, ELLE S'AJOUTE. Celle-là
+ * empêche un même canon de bégayer et n'a jamais eu d'autre objet ; celle-ci
+ * borne ce que le bus produit EN TOUT. Mesuré : `weapon_ouvrage_aa` et cinq
+ * autres portent `gardeMs: 22`, soit **quarante-cinq déclenchements par seconde
+ * pour ce seul événement**, et le bus `armes` en porte vingt-sept qu'une bande
+ * de défense fait tirer ensemble. C'est cette somme-là qu'Ethan entend.
+ *
+ * ⚠ 334 = ceil(1000 / 3) : trois sons par seconde est un PLAFOND, pas une
+ * moyenne. L'écart à la consigne vaut 0,3 %, et il est déclaré.
+ *
+ * ⚠⚠ UNE SEULE ENTRÉE, ET C'EST VOULU. Les alertes gardent leur cadence propre
+ * — 450 ms par événement —, les impacts et les effondrements la leur : Ethan a
+ * nommé les TIRS. Le jour où un second bus devra être bridé, il s'ajoute dans
+ * cette table et nulle part ailleurs.
+ *
+ * ⚠⚠ ET LES BOUCLES N'Y SONT PAS SOUMISES. Deux sons du bus `armes` bouclent —
+ * `weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop` — et une boucle n'a
+ * ni garde ni plafond : `reconcilierLesBoucles` écrit pourquoi, « un refus qui
+ * ne se rattrape pas ». La garde vit dans `demanderUnSon`, que les boucles ne
+ * traversent jamais.
+ */"""
+
 COMMENTAIRE_REGLAGES = """/**
  * Les réglages par défaut, au premier démarrage.
  *
@@ -509,36 +536,45 @@ COMMENTAIRE_MEMOIRE = """/**
  * est la seule câblée, rien n'est jamais évincé.
  */"""
 
-# ⚠⚠ QUEL ÉCRAN PORTE QUELLE AMBIANCE — SIX SUR SEPT DEPUIS LE 06/09. Deux
-# ambiances pour six écrans, et le reste des huit est DÉCLARÉ MUET faute d'une
-# lecture qui ne s'invente pas — voir `RAPPORT-lotSON-CABLAGE.md`.
+# ⚠⚠ QUEL ÉCRAN PORTE QUELLE AMBIANCE — UN SUR SEPT DEPUIS LE 10/09, ET C'EST
+# LE POINT 12 D'ETHAN. « Enlever le son qui tourne tout le temps », puis, le
+# 10/09 : « faut croire, il s'arrête jamais ». Il avait raison, et la cause se
+# lit dans cette table-ci : `ambience_base_player_loop` était sur CINQ écrans —
+# Chantier, Mission, Offense, Options, Recherche.
 #
-# ⚠⚠ ET LA CARTE N'EN A PLUS AUCUNE. Ethan, 06/09 : « enlever son d'ambiance sur
-# la carte ». Le lot SON-CÂBLAGE avait choisi `ambience_calm_map_loop` contre
-# `ambience_map_wind_loop` — le SEUL choix esthétique de ce lot-là, pris « pour
-# que la carte ne soit pas muette » —, et c'est cet arbitrage-ci qui le
-# renverse : elle doit l'être. La question du départage des deux ambiances de
-# carte devient donc SANS OBJET, elle n'est pas tranchée.
+# ⚠⚠ ET UNE BOUCLE N'A NI GARDE NI PLAFOND, C'EST CE QUI REND LA PHRASE EXACTE.
+# `reconcilierLesBoucles` de `src/son/politique.js` l'écrit en toutes lettres :
+# « une boucle a une raison de sonner, ou elle n'en a pas ». Cette ambiance-là
+# avait donc une raison de sonner partout sauf sur la carte : elle ne s'arrêtait
+# **littéralement jamais** tant que le joueur n'allait pas sur la carte, et y
+# revenir la relançait. Ce n'est pas une durée mal réglée, c'est un état
+# permanent.
 #
-# ⚠⚠ LA CLÉ DISPARAÎT, ELLE NE PASSE PAS À `None`. `bouclesDesirees` de
+# ⚠⚠ `raid` RESTE, ET C'EST UNE LECTURE, PAS UNE DICTÉE. Ethan a nommé « le son
+# qui tourne tout le temps » ; `ambience_battlefield_distant_loop` ne sonne que
+# pendant un raid, donc elle ne tourne pas tout le temps — et un champ de
+# bataille muet serait un appauvrissement que personne n'a demandé. **Si Ethan
+# veut le silence complet, c'est cette ligne-ci qui part, et rien d'autre.**
+#
+# ⚠⚠ LES CLÉS DISPARAISSENT, ELLES NE PASSENT PAS À `None`. `bouclesDesirees` de
 # `src/son/cablage.js` teste `!== undefined` : une clé posée à `None` — donc à
 # `null` — passerait le test, et `voulu.add(null)` empoisonnerait l'ensemble des
 # boucles voulues avec un nom qui n'est pas un événement. La réconciliation
-# lèverait, et loin de la faute.
+# lèverait, et loin de la faute. C'est la règle que le retrait de `monde` a
+# posée le 06/09, reprise à la lettre pour les cinq suivantes.
 #
-# ⚠ ET `ambience_calm_map_loop` RESTE AU CATALOGUE ET AU LIVRABLE. Le son
-# devient DORMANT : plus aucun écran ne le demande, et pas un `data:` ne sort du
-# bundle. Le retirer serait une économie qu'Ethan n'a pas demandée, et il
-# redeviendra utile le jour où une autre situation l'appellera.
+# ⚠ ET `ambience_base_player_loop` RESTE AU CATALOGUE ET AU LIVRABLE, comme
+# `ambience_calm_map_loop` avant elle. Le son devient DORMANT : plus aucun écran
+# ne le demande, et pas un `data:` ne sort du bundle. Le retirer serait de
+# l'audio en moins et un `data:` en moins, donc une ventilation d'octets et un
+# arbitrage à part.
 #
-# ⚠ `ambience_base_ouvrage_loop` n'a AUCUN écran qui montre la base de
-# l'Ouvrage au repos ; `ambience_battlefield_distant_loop` en a un, le raid.
+# ⚠⚠ ET `BOUCLES_DE_BATIMENT` N'EST PAS TOUCHÉ — voir la table juste en dessous.
+# Ses quatre boucles tournent aussi tant que le bâtiment est posé, donc elles
+# sont le SECOND candidat à la phrase d'Ethan ; mais elles sont motivées par une
+# SITUATION — une usine qui tourne — et non par le simple fait d'être quelque
+# part. Le rapport les nomme pour qu'il tranche sans qu'on refasse le relevé.
 AMBIANCE_PAR_ECRAN = {
-    'chantier': 'ambience_base_player_loop',
-    'offense': 'ambience_base_player_loop',
-    'mission': 'ambience_base_player_loop',
-    'recherche': 'ambience_base_player_loop',
-    'options': 'ambience_base_player_loop',
     'raid': 'ambience_battlefield_distant_loop',
 }
 
@@ -693,6 +729,37 @@ BUS = {
     'impacts': -7,
     'moteurs': -12,
     'ambiances': -18,
+}
+
+# ⚠⚠ LA CADENCE D'ENSEMBLE D'UN BUS, EN MILLISECONDES — POINT 10 D'ETHAN, 10/09 :
+# « La fréquence des tirs du son est basée sur la fréquence. Ce qui est assez
+# inaudible il faudrait plutôt 3 son par seconde. »
+#
+# ⚠⚠ LA GARDE PAR ÉVÉNEMENT EXISTAIT, ET ELLE NE POUVAIT PAS TENIR ÇA. Elle
+# empêche un même canon de bégayer, et c'est tout ce qu'elle a jamais fait :
+# mesuré, `weapon_ouvrage_aa`, `weapon_ouvrage_machinegun` et `weapon_*_rifle`
+# portent `gardeMs: 22`, ce qui autorise **quarante-cinq déclenchements par
+# seconde POUR CE SEUL ÉVÉNEMENT** — et le bus `armes` en porte
+# VINGT-SEPT, qu'une bande de défense fait tirer en parallèle. Ce n'est pas un
+# seuil mal réglé, c'est une grandeur qui n'était bornée nulle part.
+#
+# ⚠ 334 SE CALCULE : 1000 / 3 = 333,33, ARRONDI AU SUPÉRIEUR pour que trois sons
+# par seconde soit un PLAFOND et non une moyenne. L'écart à la consigne est de
+# 0,3 %, et il est déclaré.
+#
+# ⚠⚠ SEULEMENT `armes`, ET C'EST UNE TABLE PLUTÔT QU'UN `if`. Ethan a nommé les
+# TIRS ; les alertes gardent leur cadence propre (450 ms par événement), les
+# impacts et les effondrements la leur. Le jour où un second bus devra être
+# bridé, il s'ajoute ICI et nulle part ailleurs — un `if` sur le nom du bus
+# serait le premier cas particulier écrit à la main dans une table qui se lit.
+#
+# ⚠⚠ ET ELLE N'ATTEINT PAS LES BOUCLES, PAR CONSTRUCTION. Deux sons du bus
+# `armes` BOUCLENT — `weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop` —
+# et une boucle n'a ni garde ni plafond : `reconcilierLesBoucles` l'écrit, « un
+# refus qui ne se rattrape pas ». La garde vit dans `demanderUnSon`, que les
+# boucles ne traversent jamais. `SB T3` le vérifie plutôt que de le supposer.
+GARDE_PAR_BUS = {
+    'armes': 334,
 }
 
 # ⚠⚠ CE QUE LE JEU RETIRE À UNE FAMILLE, EN PLUS DE CE QUE LE PACK RECOMMANDE.
@@ -940,6 +1007,20 @@ def ecrire_la_table(pack):
         variantes = ', '.join("'%s'" % m['id'] for m in membres)
         lignes.append('  %s: { variantes: [%s], gardeMs: %d },'
                       % (nom, variantes, membres[0]['recommended_cooldown_ms']))
+    # ⚠⚠ LA CADENCE PAR BUS — ET LE GÉNÉRATEUR REFUSE UN BUS QUI N'EXISTE PAS.
+    # C'est ce qu'il fait déjà pour un nom de son (`exiger_une_boucle`) et pour
+    # une catégorie sans bus : une clé mal tapée ici rendrait la garde INERTE en
+    # silence, `GARDE_PAR_BUS[bus]` valant `undefined` pour tout le monde, et le
+    # son se remettrait à bouillir sans qu'une ligne ne le dise.
+    lignes += ['};', '', COMMENTAIRE_GARDE_BUS, 'export const GARDE_PAR_BUS = {']
+    for bus in sorted(GARDE_PAR_BUS):
+        if bus not in BUS:
+            raise SystemExit('GARDE_PAR_BUS : « %s » n\'est pas un bus — les cinq '
+                             'sont %s' % (bus, ', '.join(sorted(BUS))))
+        if not isinstance(GARDE_PAR_BUS[bus], int) or GARDE_PAR_BUS[bus] <= 0:
+            raise SystemExit('GARDE_PAR_BUS[%s] : « %s » n\'est pas une durée en '
+                             'millisecondes' % (bus, GARDE_PAR_BUS[bus]))
+        lignes.append('  %s: %d,' % (bus, GARDE_PAR_BUS[bus]))
     lignes += ['};', '', COMMENTAIRE_REGLAGES,
                'export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };', '']
 

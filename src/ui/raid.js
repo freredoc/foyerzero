@@ -70,6 +70,11 @@ import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
 } from '../render/interpolation.js';
 import { calculerProjection } from '../render/projection.js';
+// ⚠ L'ARRIVÉE FANTÔME VIENT DE `render/`, ET ELLE Y EST PURE — lot
+// SON-ET-ARRIVÉE, 10/09. L'écran tient l'état et donne l'instant ; le module
+// décide de la rampe. C'est le partage de `render/bandes.js` et de
+// `render/fond.js`, repris à la lettre.
+import { creerArrivees, noterLesArrivees, arriveesALEcran } from '../render/arrivee.js';
 // ⚠⚠ LES BANDES VIENNENT DE `render/`, PAS DE L'ÉCRAN DE LA BASE — lot
 // ÉCRAN-RAID, 04/09. Elles y ont déménagé au même lot : les recopier ici aurait
 // été la deuxième vérité que §4 interdit, et importer `ui/chantier.js` pour une
@@ -749,6 +754,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
    */
   let effondrementMs = null;
 
+  /**
+   * L'ARRIVÉE DES UNITÉS — lot SON-ET-ARRIVÉE, 10/09.
+   *
+   * ⚠ ÉTAT D'AFFICHAGE PUR, comme `mesure` et comme l'ensemble des tombées : il
+   * vit dans cette fermeture, il meurt avec le déroulé, et pas un champ n'entre
+   * dans la sauvegarde. `SAVE_VERSION` ne bouge pas.
+   */
+  let arrivees = creerArrivees();
+
   // --- la vue : quelle bande, à quelle taille, et où -------------------------
   //
   // ⚠⚠ TROIS ÉTATS ET PAS UN DE PLUS, ET C'EST CE QUE `calculerProjection`
@@ -940,6 +954,28 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   function dessiner() {
     if (ctx === null || combat === null || projection === null) return;
     const debut = (doc.defaultView?.performance ?? globalThis.performance)?.now() ?? 0;
+    // ⚠⚠ LES ARRIVÉES SE NOTENT ICI, JUSTE AVANT DE PEINDRE, ET C'EST UN ÉCART
+    // AU BRIEF — DÉCLARÉ, ET MESURÉ. Il demandait de noter « AVANT
+    // `prendrePositions` », c'est-à-dire dans `avancerDUnTick`. Mesuré : la
+    // VAGUE 1 naît dans `creerCombat`, avant qu'un seul tick n'ait tourné — sa
+    // dernière ligne pose la vague, ce que `rejouer` sait déjà puisqu'il relève
+    // le journal juste après. Et la première image ne fait tourner AUCUN tick :
+    // `derniereImageMs` est nul, donc `ecoule` vaut zéro, donc `ticksDus` rend
+    // zéro. Noter dans `avancerDUnTick` aurait donc laissé la première vague —
+    // très exactement celle qu'Ethan voit apparaître sur la bande du bas — sans
+    // fantôme.
+    //
+    // ⚠ ET LE STAMP DOIT ÊTRE L'INSTANT DE LA PREMIÈRE IMAGE QUI DESSINE
+    // L'ENTITÉ, pas celui de sa naissance : c'est de là que part la rampe de
+    // 400 ms de temps réel. Ici, ces deux instants coïncident par construction,
+    // pour toute entité et par tous les chemins — la boucle d'images, le
+    // pas-à-pas du simulateur, et tout appelant à venir. Un second point
+    // d'appel serait un point d'appel à oublier.
+    //
+    // ⚠ `dessiner` ÉCRIT DÉJÀ DANS `mesure`, donc elle n'est pas pure et ne l'a
+    // jamais été. Ce qu'on lui ajoute est de la même nature : de l'état
+    // d'AFFICHAGE, pas un fait de partie.
+    noterLesArrivees(arrivees, combat, debut);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     executer(
       ctx,
@@ -951,7 +987,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // et c'est très exactement ce que ce point d'Ethan demande de refermer.
       listeAffichage(combat, projection, precedentes,
         combat.termine ? 0 : alphaMilli(accumulateur, vitesse), fondCourant,
-        etatCourant.graine, tombeesALEcran()),
+        etatCourant.graine, tombeesALEcran(), arriveesALEcran(arrivees, debut)),
       atlas ?? {},
     );
     const fin = (doc.defaultView?.performance ?? globalThis.performance)?.now() ?? 0;
@@ -1031,6 +1067,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // la boucle sans passer par `finDuDeroule` : sans cette ligne, un raid lancé
     // après un écran quitté en plein effondrement croirait en reprendre un.
     effondrementMs = null;
+    // ⚠ NI LES ARRIVÉES DU PRÉCÉDENT, ET POUR LA MÊME RAISON. `vus` est une
+    // marque haute sur l'INDICE : gardée d'un raid à l'autre, elle serait déjà
+    // au-delà de la vague 1 du raid neuf, dont les unités apparaîtraient alors
+    // sans fantôme — et seulement pour le deuxième raid d'une session, ce qui est
+    // la pire façon de rater un effet.
+    arrivees = creerArrivees();
     dimensionner();
     demarrerBoucle();
   }

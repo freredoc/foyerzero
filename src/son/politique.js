@@ -20,7 +20,7 @@
 // `Math.random` est interdit dans tout `src/` par la garde §11 de
 // `test/banc.test.js` ; on n'en a pas besoin non plus.
 
-import { SONS, EVENEMENTS, BUS } from '../data/sons.js';
+import { SONS, EVENEMENTS, BUS, GARDE_PAR_BUS } from '../data/sons.js';
 
 /**
  * L'état des voix : ce qui sonne, ce qui vient de sonner, et la graine du
@@ -31,14 +31,22 @@ import { SONS, EVENEMENTS, BUS } from '../data/sons.js';
  * variante serait figée pour toute la session, et le tirage n'en serait plus un.
  * On lève plutôt que de la corriger en silence.
  *
+ * ⚠⚠ `gardesBus` NAÎT ICI, VIDE, ET IL N'Y A PAS DE `??` DE SECOURS DANS
+ * `demanderUnSon` — lot SON-ET-ARRIVÉE, 10/09. Un repli masquerait une voix mal
+ * construite : la garde de bus ne s'armerait jamais sur une voix venue
+ * d'ailleurs, et le son se remettrait à bouillir sans qu'une ligne ne tombe.
+ * C'est la règle que ce module porte déjà pour `gardes` et `instances` — décide
+ * ET enregistre, en un seul appel.
+ *
  * @param {number} graine entier non nul
  * @returns {{graine: number, gardes: Record<string, number>,
+ *            gardesBus: Record<string, number>,
  *            instances: Record<string, number[]>}}
  */
 export function creerVoix(graine) {
   const g = Math.trunc(graine) >>> 0;
   if (g === 0) throw new RangeError('son : la graine du tirage de variante ne peut pas être nulle');
-  return { graine: g, gardes: {}, instances: {} };
+  return { graine: g, gardes: {}, gardesBus: {}, instances: {} };
 }
 
 /**
@@ -132,6 +140,46 @@ export function demanderUnSon(voix, evenement, maintenantMs, reglages) {
     return { jouer: false, raison: 'garde' };
   }
 
+  // 2 bis. LA CADENCE D'ENSEMBLE DU BUS — point 10 d'Ethan, 10/09 : « il
+  // faudrait plutôt 3 son par seconde ». La garde ci-dessus tient un ÉVÉNEMENT ;
+  // celle-ci tient tout ce que le bus produit. Mesuré : six événements d'armes
+  // portent `gardeMs: 22`, soit quarante-cinq déclenchements par seconde chacun,
+  // et le bus `armes` en porte vingt-sept qu'une bande de défense fait tirer
+  // ensemble — c'est cette somme-là qu'on entend bouillir.
+  //
+  // ⚠⚠ ELLE SE POSE AVANT LE TIRAGE DE VARIANTE, ET L'ORDRE N'EST PAS
+  // INDIFFÉRENT. `tirer` fait avancer la graine du xorshift : refuser APRÈS
+  // avoir tiré consommerait un tirage pour un son qui ne sort pas, donc
+  // **déplacerait la suite des variantes de tous les sons suivants** — deux
+  // exécutions du même combat ne sonneraient plus pareil, et rien ne le dirait.
+  // C'est la règle que `tirer` écrit déjà en tête : « il n'avance que quand on
+  // tire pour de bon ». `SB T2` compare les deux suites pour l'attraper.
+  //
+  // ⚠⚠ LE BUS EST UNE PROPRIÉTÉ DU FICHIER, PAS DE L'ÉVÉNEMENT, donc il se lit
+  // sur une VARIANTE. On prend la première et on LÈVE si les autres divergent :
+  // ce serait un fait de programme — un événement dont les variantes ne
+  // partagent pas leur mixage —, et le taire ferait dépendre la cadence du
+  // tirage. Mesuré au générateur, les 54 groupes à plusieurs variantes portent
+  // tous une catégorie unique, donc un seul bus : la levée est un garde-fou,
+  // pas un cas courant.
+  //
+  // ⚠ ET LES BOUCLES NE PASSENT PAS PAR ICI. `reconcilierLesBoucles` est une
+  // autre fonction, sans garde ni plafond, et son commentaire dit pourquoi : un
+  // refus qui ne se rattrape pas. Les deux boucles du bus `armes` —
+  // `weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop` — sont donc
+  // intactes, et `SB T3` le vérifie plutôt que de le supposer.
+  const bus = SONS[decrit.variantes[0]].bus;
+  if (!decrit.variantes.every((v) => SONS[v].bus === bus)) {
+    throw new RangeError(`son : « ${evenement} » porte plusieurs bus`);
+  }
+  const gardeBus = GARDE_PAR_BUS[bus];
+  if (gardeBus !== undefined) {
+    const dernierDuBus = voix.gardesBus[bus];
+    if (dernierDuBus !== undefined && maintenantMs - dernierDuBus < gardeBus) {
+      return { jouer: false, raison: 'garde-bus' };
+    }
+  }
+
   purger(voix, maintenantMs);
 
   // 3. la variante, puis son plafond de voix — dans cet ordre, parce que le
@@ -144,8 +192,14 @@ export function demanderUnSon(voix, evenement, maintenantMs, reglages) {
   const enCours = voix.instances[nomDuSon] ?? [];
   if (enCours.length >= son.maxInstances) return { jouer: false, raison: 'plafond' };
 
-  // 4. accordé : on arme la garde et on compte l'instance.
+  // 4. accordé : on arme les DEUX gardes et on compte l'instance.
+  //
+  // ⚠ LA GARDE DE BUS NE S'ARME QUE SI LE BUS EN A UNE. L'armer partout
+  // remplirait `gardesBus` de bus sans cadence, ce qui ne changerait rien au
+  // comportement mais laisserait croire, en lisant l'état d'une voix, que les
+  // cinq bus sont bridés.
   voix.gardes[evenement] = maintenantMs;
+  if (gardeBus !== undefined) voix.gardesBus[bus] = maintenantMs;
   voix.instances[nomDuSon] = [...enCours, maintenantMs + son.dureeMs];
   return { jouer: true, son: nomDuSon, gain: gainDuSon(nomDuSon, reglages.volume) };
 }
