@@ -48,7 +48,7 @@ import {
 } from '../src/data/sites.js';
 import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
-import { coutDUnRaid } from '../src/sim/points-attaque.js';
+import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 

@@ -19,7 +19,7 @@ import { lignesDuResultat } from '../src/ui/raid.js';
 // écrans le lisent désormais, et ils ne peuvent pas importer `ui/raid.js`.
 import { LIBELLE_VERDICT } from '../src/ui/chantier.js';
 import { butinSiToutTombe, forceDeLaDefense } from '../src/sim/site-de-la-case.js';
-import { coutDUnRaid } from '../src/sim/points-attaque.js';
+import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
 import {
   creerEtat, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION,
   poserEffectif, problemesDeLaPoseDEffectif, reglerActivite,

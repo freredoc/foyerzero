@@ -50,6 +50,10 @@ import {
 } from '../src/sim/satellites.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import {
+  delaiDeplacementTicks, ticksAvantProchainDeplacement, deplacerLaBase,
+  poserLaBaseSur,
+} from '../src/sim/deplacement.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
@@ -2450,7 +2454,11 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // et la chaîne un maillon v27 → v28. La phrase du message reste vraie de
   // PRODUCTION-EN-DÉFENSE ; ce que la ligne garde n'est pas un numéro figé mais
   // le fait qu'on ne bumpe pas sans passer par ici.
-  assert.equal(SAVE_VERSION, 30, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — PAQUETS, lui, y est passé (09/09)');
+  // ⚠⚠ ET RÈGLES-DE-CARTE Y EST PASSÉ À SON TOUR, LE 10/09 : la base porte
+  // `dernierDeplacementDelaiTicks`, la durée contractée au dernier saut, parce
+  // que le délai dépend désormais de la distance PARCOURUE et qu'aucun recalcul
+  // ne peut la retrouver. Le maillon v30 → v31 est dans `state.js`.
+  assert.equal(SAVE_VERSION, 31, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RÈGLES-DE-CARTE, lui, y est passé (10/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
@@ -2464,4 +2472,82 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
 
   // Et l'aller-retour complet rend le MÊME texte, à l'octet.
   assert.equal(serialiser(charger(json, 1_700_000_000_000), 1_700_000_000_000), json);
+});
+
+
+// ---------------------------------------------------------------------------
+// RC T6 — lot RÈGLES-DE-CARTE, 10/09/2026
+// ---------------------------------------------------------------------------
+
+test('RC T6 — la migration v30 → v31 contracte la durée la plus COURTE, jamais une attente inventée', () => {
+  // ⚠⚠ LA MIGRATION NE PEUT PAS SAVOIR DE COMBIEN LE JOUEUR A SAUTÉ. Le délai
+  // dépend désormais de la DISTANCE PARCOURUE ; une v30 ne porte que l'INSTANT
+  // du saut, jamais son amplitude. Trois lectures étaient possibles — la plus
+  // longue (distance 10), la moyenne, la plus courte (distance 1) — et c'est la
+  // plus courte qui est prise : **une migration ne doit jamais enfermer un
+  // joueur derrière une attente qu'il n'a pas contractée.** Elle peut le
+  // libérer plus tôt, elle ne peut pas le retenir plus longtemps.
+  const etat = creerEtat(2026);
+  poserLaBaseSur(etat, 200, positionDepartJoueur().colonne);
+  rattraperJeu(etat, 3 * TICKS_PAR_HEURE);
+  const laBase = baseCourante(etat);
+  laBase.dernierDeplacementTick = etat.horloge.nbTicks - 10;
+  laBase.dernierDeplacementDelaiTicks = delaiDeplacementTicks(etat, 10);
+
+  // ⚠ LE MONTAGE DOIT DISCRIMINER : à distance 1 et à distance 10 la durée doit
+  // DIFFÉRER, sans quoi ce test passerait sur n'importe quelle lecture.
+  const court = delaiDeplacementTicks(etat, 1);
+  const long = delaiDeplacementTicks(etat, 10);
+  assert.ok(long > court,
+    'le montage ne mesure rien : les deux distances rendent le même délai');
+
+  // Une v30 : le champ neuf n'existe pas, l'horodatage si.
+  const v31 = JSON.parse(serialiser(etat, 1_700_000_000_000));
+  const v30 = structuredClone(v31);
+  v30.version = 30;
+  for (const b of v30.bases) delete b.dernierDeplacementDelaiTicks;
+  assert.equal('dernierDeplacementDelaiTicks' in v30.bases[0], false,
+    'le montage ne mesure rien : la v30 porte déjà le champ neuf');
+
+  const migre = migrer(structuredClone(v30));
+  assert.equal(migre.version, SAVE_VERSION);
+  assert.equal(migre.bases[0].dernierDeplacementDelaiTicks, court,
+    'la migration n\'a pas contracté la durée d\'un saut d\'UNE case');
+  assert.notEqual(migre.bases[0].dernierDeplacementDelaiTicks, long,
+    'la migration invente une attente que le joueur n\'a pas contractée');
+
+  // ⚠⚠ ET CE QUI COMPTE POUR LE JOUEUR EST L'ATTENTE, PAS LE CHAMP. On la
+  // mesure des deux côtés du maillon, sur l'état CHARGÉ, et elle ne peut que
+  // raccourcir.
+  const charge = charger(JSON.stringify(v30), 1_700_000_000_000);
+  const attenteApres = ticksAvantProchainDeplacement(charge);
+  const attenteAvant = long - 10;
+  assert.ok(attenteApres <= attenteAvant,
+    `la migration allonge l'attente : ${attenteApres} contre ${attenteAvant}`);
+  assert.ok(attenteApres > 0,
+    'le montage ne mesure rien : la base n\'attendait déjà plus');
+
+  // ⚠ ET UNE BASE QUI N'A JAMAIS SAUTÉ REÇOIT `null`, PAS ZÉRO. Zéro se lirait
+  // « une durée contractée qui vaut zéro tick », donc une attente échue ; c'est
+  // vrai par accident aujourd'hui et faux le jour où le plancher bougerait.
+  // `null` dit « aucun saut », ce qui est le fait.
+  const neuve = JSON.parse(serialiser(creerEtat(11), 1_700_000_000_000));
+  neuve.version = 30;
+  for (const b of neuve.bases) delete b.dernierDeplacementDelaiTicks;
+  assert.equal(neuve.bases[0].dernierDeplacementTick, null,
+    'le montage ne mesure rien : la base neuve a déjà sauté');
+  const migreeNeuve = migrer(neuve);
+  assert.equal(migreeNeuve.bases[0].dernierDeplacementDelaiTicks, null);
+  assert.equal(ticksAvantProchainDeplacement(charger(
+    JSON.stringify(migreeNeuve), 1_700_000_000_000,
+  )), 0, 'une base qui n\'a jamais sauté attend');
+
+  // ⚠⚠ ET LA CHAÎNE ENTIÈRE PASSE ENCORE : une v29 traverse les deux maillons.
+  // Sans cette moitié, le maillon neuf pourrait supposer une forme que seule la
+  // v30 porte, et toute sauvegarde plus ancienne lèverait au chargement.
+  const v29 = structuredClone(v30);
+  v29.version = 29;
+  const depuis29 = migrer(v29);
+  assert.equal(depuis29.version, SAVE_VERSION);
+  assert.equal(depuis29.bases[0].dernierDeplacementDelaiTicks, court);
 });

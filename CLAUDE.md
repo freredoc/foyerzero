@@ -8995,7 +8995,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 32 fichiers
+src/sim/                simulation déterministe, sans DOM — 34 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -9023,6 +9023,8 @@ src/sim/                simulation déterministe, sans DOM — 32 fichiers
   recherche.js          l'achat : acquises, modules, coûts en BigInt, problèmes chiffrés
   formation-de-raid.js  la copie de travail de l'armée : ranger, embarquer, débarquer
   voisinage-des-bases.js  ce qu'une base ENCOMBRE : le 3 × 3 qu'aucune autre ne partage
+  prix-du-raid.js       ce qu'un raid coûte : la distance, et ce que la CARTE peint
+  territoire-tenu.js    le refus partagé : une case tenue par l'Ouvrage ne se prend pas
   ⤷ ⚠⚠ `formation-de-raid.js` NE VA JAMAIS DANS L'ÉTAT, ET C'EST TOUT SON OBJET —
     lot FORMATION-ET-GARNISON, 08/09. Il rend une copie profonde de
     `baseCourante(etat).armee`, ALIGNÉE PAR INDICE, plus un `embarqueDans` par

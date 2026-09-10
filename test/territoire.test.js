@@ -23,8 +23,13 @@ import { niveauDeLaRangee } from '../src/sim/carte.js';
 import { siteDeLaCase } from '../src/sim/site-de-la-case.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { TEINTES_TERRITOIRE } from '../src/ui/monde.js';
-import { GEOGRAPHIE, EMBLEMES_CARTE, TYPES_SITE, ZOOM_CARTE } from '../src/data/sites.js';
+import {
+  GEOGRAPHIE, EMBLEMES_CARTE, TYPES_SITE, ZOOM_CARTE, POINTS_ATTAQUE,
+} from '../src/data/sites.js';
 import { creerEtat } from '../src/sim/state.js';
+import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
+import { poserLaBaseSur } from '../src/sim/deplacement.js';
+import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { caseRasee } from '../src/sim/ruines.js';
@@ -868,4 +873,135 @@ test('TL T2 — le plancher tient aussi sur UNE case : une base garde la sienne'
     'la base de l\'Ouvrage a perdu son propre pied');
   // ⚠ ET LA VOISINE, ELLE, TOMBE — sans quoi le plancher protégerait l'octogone.
   assert.equal(campDeLaCase(etat, position.rangee, position.colonne + 1), OUVRAGE);
+});
+
+// ---------------------------------------------------------------------------
+// RC T1 et RC T2 — le prix d'un raid lit la carte que le joueur voit
+// ---------------------------------------------------------------------------
+
+/**
+ * Une base de l'Ouvrage assez BASSE en niveau pour qu'une base du joueur de
+ * niveau 9 l'emporte en force sur sa propre case.
+ *
+ * ⚠ ELLE SE CHERCHE, ELLE NE S'ÉCRIT PAS. Un montage qui écrit une coordonnée
+ * ne garde que lui-même, et tombe au premier lot qui touche au peuplement — le
+ * dépôt l'a payé six fois. On demande donc la carte, et on s'arrête à la
+ * première qui convient.
+ */
+function trouverUneBaseFaible(graine, niveauMax = 5) {
+  for (let r = 250; r <= 290; r += 1) {
+    if (niveauDeLaRangee(r) > niveauMax) continue;
+    for (let c = 2; c <= GEOGRAPHIE.carte.largeur - 1; c += 1) {
+      if (estBaseOuvrage(graine, r, c)) return { rangee: r, colonne: c };
+    }
+  }
+  throw new Error('trouverUneBaseFaible : aucune base de bas niveau sur cette graine');
+}
+
+test('RC T1 — le prix d\'un raid lit la même case que la carte', () => {
+  // ⚠⚠ C'EST LE TROISIÈME CÔTÉ DU TRIANGLE, ET IL ÉTAIT OUVERT. `TL T1`
+  // ci-dessus confronte déjà `campDeLaCase` à ce que la carte PEINT ; ce test-ci
+  // confronte le PRIX à `campDeLaCase`. Les trois ensemble disent qu'il n'existe
+  // qu'une définition de « à qui est cette case », ce que l'en-tête de ce module
+  // DÉCLARAIT depuis TERRITOIRE-LU sans que ce soit vrai.
+  //
+  // ⚠⚠ IL EST ROUGE SUR L'ARBRE INTACT, ET C'EST MESURÉ AVANT D'ÊTRE ÉCRIT : sur
+  // vingt graines et cinq rangées, **353 cibles sur 5 508 — 6,41 %** — étaient
+  // facturées au tarif de chez soi pendant que la carte les peignait ailleurs.
+  // Toutes dans l'octogone de rayon 2, donc à une ou deux cases : l'écart vaut
+  // +2 ou +4 points, jamais plus.
+  const { fixe, parCaseAllie, parCaseEnnemiOuNeutre } = POINTS_ATTAQUE.coutRaid;
+  let alliees = 0;
+  let ennemies = 0;
+  for (const graine of [3, 7, 11, 19, 31]) {
+   for (const rangee of [285, 250]) {
+    const etat = creerEtat(graine);
+    const laBase = baseCourante(etat);
+    // ⚠⚠ DEUX RANGÉES, ET IL EN FAUT DEUX — MESURÉ. Au DÉPART la garde du
+    // peuplement écarte l'Ouvrage de quinze cases : la fenêtre n'y porte que du
+    // neutre et du joueur, et le désaccord vit là où les deux camps se touchent.
+    // À la rangée 250, l'Ouvrage tient TOUT — 0 case alliée sur 2 200, mesuré —
+    // donc un balayage là-haut ne comparerait qu'un seul tarif. La 285 porte les
+    // deux : 94 cases alliées sur 2 200.
+    poserLaBaseSur(etat, rangee, laBase.position.colonne, laBase);
+    const ici = laBase.position;
+    for (let r = ici.rangee - GEOGRAPHIE.rayonAttaque; r <= ici.rangee + GEOGRAPHIE.rayonAttaque; r += 1) {
+      for (let c = ici.colonne - GEOGRAPHIE.rayonAttaque; c <= ici.colonne + GEOGRAPHIE.rayonAttaque; c += 1) {
+        if (r < 1 || r > GEOGRAPHIE.carte.hauteur) continue;
+        if (c < 1 || c > GEOGRAPHIE.carte.largeur) continue;
+        const distance = Math.max(Math.abs(ici.rangee - r), Math.abs(ici.colonne - c));
+        if (distance < 1 || distance > GEOGRAPHIE.rayonAttaque) continue;
+        const chezMoi = campDeLaCase(etat, r, c) === JOUEUR;
+        if (chezMoi) alliees += 1; else ennemies += 1;
+        assert.equal(
+          coutDUnRaid(etat, laBase, { rangee: r, colonne: c }),
+          fixe + distance * (chezMoi ? parCaseAllie : parCaseEnnemiOuNeutre),
+          `graine ${graine}, case (${r}, ${c}) : le prix ne suit pas la carte`,
+        );
+      }
+    }
+   }
+  }
+  // ⚠ ET LA FENÊTRE PORTE LES DEUX CAMPS, sans quoi ce balayage ne comparerait
+  // qu'un seul tarif et passerait sur un code qui n'en connaîtrait qu'un.
+  assert.ok(alliees > 0, 'le montage ne mesure rien : aucune case alliée dans la fenêtre');
+  assert.ok(ennemies > 0, 'le montage ne mesure rien : aucune case ennemie dans la fenêtre');
+});
+
+test('RC T2 — le PLANCHER est facturé : une base ennemie chez soi se paie cher', () => {
+  // ⚠⚠ C'EST LA CAPTURE D'ETHAN DU 10/09, REPRODUITE : une base de l'Ouvrage à
+  // deux cases d'une base du joueur BIEN PLUS FORTE, facturée douze points quand
+  // la carte la peint en violet. « Il doit y avoir un truc lié au fait qu'une
+  // base reste toujours dans son territoire, alors que le calcul est basé sur la
+  // force des territoires en ignorant les exceptions. » L'exception est le
+  // PLANCHER — « le territoire où la base se trouve ne change pas » —, et c'est
+  // exactement ce que l'octogone géométrique ne pouvait pas voir.
+  //
+  // ⚠ LE JOUEUR EST PLUS FORT, ET C'EST LA MOITIÉ QUI DISCRIMINE. Sans le
+  // plancher, la somme des forces donnerait la case au joueur : une base de
+  // niveau 8,6 à deux cases pèse `2 ^ (9 − 2)`, une base de l'Ouvrage de niveau 2
+  // sur sa propre case `2 ^ 2`. Un code qui lirait la force SANS le plancher
+  // rendrait donc 12, et ce test le nomme.
+  const etat = creerEtat(GRAINE);
+  const laBase = baseCourante(etat);
+  // ⚠ LA BASE SE POSE À DEUX CASES D'UNE BASE DE L'OUVRAGE DE BAS NIVEAU, et la
+  // case se CHERCHE au lieu de s'écrire : un montage qui écrit une coordonnée ne
+  // garde que lui-même, et le dépôt l'a payé six fois.
+  const ouvrage = trouverUneBaseFaible(etat.graine);
+  poserLaBaseSur(etat, ouvrage.rangee + 2, ouvrage.colonne, laBase);
+  // Une base du joueur de niveau 8,6 : dix bâtiments, six au niveau 9.
+  laBase.disposition.length = 0;
+  laBase.economie.residus.length = 0;
+  for (let i = 0; i < 10; i += 1) {
+    laBase.disposition.push({
+      id: i === 0 ? 'chantierDeConstruction' : 'accumulateur',
+      rangee: 11 + Math.floor(i / 9), colonne: 1 + (i % 9),
+      niveau: i < 6 ? 9 : 8, degatsMilli: 0,
+    });
+    laBase.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  assert.equal(niveauDesBatiments(laBase.disposition), 86, 'le montage ne pose pas un niveau 8,6');
+  assert.equal(niveauDUneBaseDuJoueur(laBase), 9, 'la force se lit sur un niveau ENTIER');
+
+  const cible = { rangee: ouvrage.rangee, colonne: ouvrage.colonne };
+  assert.equal(estBaseOuvrage(etat.graine, cible.rangee, cible.colonne), true,
+    'le montage ne mesure rien : pas de base de l\'Ouvrage sur la cible');
+  // ⚠ LE NIVEAU D'UNE BASE DE L'OUVRAGE EST CELUI DE SA RANGÉE — jamais une
+  // moyenne de bâtiments, c'est la règle que `sim/carte.js` existe pour tenir.
+  const niveauOuvrage = niveauDeLaRangee(cible.rangee);
+  assert.ok(niveauOuvrage < 9, `le montage ne discrimine pas : l'Ouvrage y est au niveau ${niveauOuvrage}`);
+
+  // ⚠ LA FORCE DU JOUEUR L'EMPORTE, ET LE PLANCHER PASSE QUAND MÊME DEVANT.
+  assert.ok(
+    forceDUneBase(9, 2) > forceDUneBase(niveauOuvrage, 0),
+    'le montage ne mesure rien : le joueur n\'est pas le plus fort sur cette case',
+  );
+  assert.equal(campDeLaCase(etat, cible.rangee, cible.colonne), OUVRAGE,
+    'le plancher ne tient plus : la case est passée au joueur');
+
+  const { fixe, parCaseAllie, parCaseEnnemiOuNeutre } = POINTS_ATTAQUE.coutRaid;
+  assert.equal(coutDUnRaid(etat, laBase, cible), fixe + 2 * parCaseEnnemiOuNeutre, '16 points');
+  // ⚠ LA FALSIFICATION, NOMMÉE : lire la force sans le plancher rendrait 12.
+  assert.notEqual(coutDUnRaid(etat, laBase, cible), fixe + 2 * parCaseAllie,
+    'le prix lit encore l\'octogone du joueur : 12 points au lieu de 16');
 });

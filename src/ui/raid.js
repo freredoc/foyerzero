@@ -64,7 +64,7 @@ import {
   pvMaxDeLUnite,
 } from '../sim/raid.js';
 import { siteDeLaCase } from '../sim/site-de-la-case.js';
-import { coutDUnRaid } from '../sim/points-attaque.js';
+import { coutDUnRaid } from '../sim/prix-du-raid.js';
 import { creerCombat, tick as tickCombat } from '../sim/combat.js';
 import {
   creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,

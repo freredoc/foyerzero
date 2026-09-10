@@ -21,11 +21,26 @@
 // que ce qu'Ethan voulait voir. Ce n'est PAS un retour sur EUCLIDE : la portée du
 // raid, la garde du peuplement et les anneaux de satellites restent des disques.
 //
-// ⚠⚠ ET LES DEUX CÔTÉS NE BASCULENT PLUS ENSEMBLE — ILS PARTAGENT LA FONCTION.
-// `dansLOctogoneDInfluence` de `sim/points-attaque.js` est appelée ICI pour le
-// dessin et par `estEnTerritoireAllie` pour le PRIX. CLAUDE.md prévenait depuis
-// EUCLIDE qu'il fallait changer les deux d'accord ; il n'y a plus qu'une écriture
-// de la forme, donc plus d'accord à tenir.
+// ⚠⚠ CE PARAGRAPHE A DÉCLARÉ CLOSE UNE DIVERGENCE OUVERTE, ET IL EST RÉÉCRIT —
+// lot RÈGLES-DE-CARTE, 10/09/2026. Il disait : « les deux côtés ne basculent plus
+// ensemble, ils partagent la fonction […] il n'y a plus qu'une écriture de la
+// forme, donc plus d'accord à tenir. » C'était vrai de la FORME et faux du
+// PARTAGE. Réunir les deux géométries avait laissé DEUX règles d'appartenance :
+// ce module peignait par la FORCE des deux camps, planchers compris, quand
+// `estEnTerritoireAllie` facturait sur un octogone purement géométrique autour
+// des bases du joueur. Une base de l'Ouvrage posée à deux cases de chez soi se
+// payait donc au tarif de chez soi pendant que la carte la peignait en violet —
+// c'est la capture d'Ethan du 10/09, douze points au lieu de seize.
+//
+// ⚠⚠ LE PRIX LIT MAINTENANT LA CARTE. `sim/prix-du-raid.js` appelle
+// `campDeLaCase` ci-dessous ; il n'y a plus qu'une définition de « à qui est
+// cette case », et c'est celle-ci. Un module à part parce que faire lire ce
+// fichier-ci à `points-attaque.js` refermerait un cycle d'import — voir son
+// en-tête.
+//
+// ⚠ ET `dansLOctogoneDInfluence` N'A PLUS QU'UN LECTEUR, CE MODULE. Ce qui
+// s'accorde désormais, ce sont `campDeLaCase` et `territoireDeLaFenetre` — une
+// case contre une fenêtre —, et `TL T1` les confronte case par case.
 //
 // ⚠ EN ENTIERS, SANS AUCUNE RACINE. La double boucle reste, mais comme
 // ENVELOPPE : elle borne le travail, elle ne décide plus de l'appartenance.
