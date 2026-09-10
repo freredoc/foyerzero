@@ -60,7 +60,7 @@ import { problemesDuRaid } from '../sim/raid.js';
 import { nombreDAttaquantes } from '../sim/raid-ouvrage.js';
 import {
   problemesDuDeplacement, deplacerLaBase, casesAtteignables,
-  ticksAvantProchainDeplacement,
+  ticksAvantProchainDeplacement, delaiDuDeplacementVers, enDuree,
 } from '../sim/deplacement.js';
 import {
   blocsDeLaDalle, geometrieDuCran, profilDuBloc, COTE_SOURCE, NOMS_DU_SOL,
@@ -1410,6 +1410,32 @@ export function bilanDuTerritoire(etat, cible) {
  * `ouvrirPanneau` et `demanderLeDeplacement` peignent par le même chemin. Deux
  * formes de ligne dans le même panneau seraient deux façons de le styler.
  */
+/**
+ * Les deux lignes d'attente d'un déplacement : ce qu'il facture, et combien de
+ * temps la base restera clouée.
+ *
+ * ⚠⚠ RIEN N'EST CALCULÉ ICI — point 6, 10/09. Les deux nombres viennent de
+ * `delaiDuDeplacementVers`, qui est la MÊME fonction que `deplacerLaBase`
+ * appelle pour écrire `dernierDeplacementDelaiTicks` : le nombre annoncé est le
+ * nombre facturé, par construction et non par vérification. Et la phrase vient
+ * d'`enDuree` de `sim/deplacement.js`, celle qui écrit déjà le refus `delai` —
+ * la reformuler ici donnerait deux façons de dire la même attente.
+ *
+ * ⚠ LA DISTANCE EST AFFICHÉE PARCE QU'ELLE EST FACTURÉE. Le barème est
+ * `600 + max(0, plafond − 600) × distance / portéeMax` : sans elle, le joueur
+ * lirait un délai sans savoir ce qui le fait monter — et il ne pourrait pas
+ * voir qu'une case plus près coûte moins.
+ *
+ * @param {{distance: number, ticks: number}} attente
+ * @returns {Array<{quoi: string, valeur: string}>}
+ */
+export function lignesDeLAttente(attente) {
+  return [
+    { quoi: 'Distance', valeur: `${attente.distance} case${attente.distance > 1 ? 's' : ''}` },
+    { quoi: 'Immobilisée', valeur: enDuree(attente.ticks) },
+  ];
+}
+
 export function lignesDuBilan(bilan) {
   return [
     { quoi: 'Cases gagnées', valeur: String(bilan.gagnees) },
@@ -3079,7 +3105,15 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // le même peintre : le §2.1 du brief dit que la simulation « entre au même
     // endroit, par la même porte » que le chiffre de menace, et il ne s'agit pas
     // d'un second écran.
-    peindreLesLignes(lignesDuBilan(bilanDuTerritoire(etatCourant, cible)));
+    // ⚠⚠ LE DÉLAI ENTRE PAR LA MÊME PORTE QUE LE BILAN, ET IL SE CALCULE UNE
+    // FOIS — point 6, 10/09, Ethan : « indiquer temps de déplacement avant
+    // confirmation ». `peindreLesLignes` est appelée UNE fois avec les cinq
+    // lignes ; un second appel, ou un second panneau, remettrait le recalcul à
+    // chaque image et casserait la discipline que `PC T3` mesure.
+    peindreLesLignes([
+      ...lignesDeLAttente(delaiDuDeplacementVers(etatCourant, cible)),
+      ...lignesDuBilan(bilanDuTerritoire(etatCourant, cible)),
+    ]);
     panneauRefus.hidden = true;
     panneauRefus.textContent = '';
     // ⚠⚠ LE CHIFFRE VIENT DU MOTEUR, ET C'EST TOUT L'ENJEU DU LOT.

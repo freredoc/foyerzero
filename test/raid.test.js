@@ -51,6 +51,12 @@ const NB_VAGUES_DU_RAID = EMPLACEMENTS_ASSAUT.vagues;
 function partieArmee(graine = 2026, unites = 6, niveau = 1) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
+  // ⚠⚠ LES TROIS BÂTIMENTS DE PRODUCTION — lot RAID-ET-ÉCRAN, 10/09. Depuis le
+  // point 4 d'Ethan, `problemesDuRaid` refuse le DÉPART d'une pièce dont le
+  // bâtiment de production est tombé : un montage qui compose une armée sans
+  // Caserne est désormais refusé, et le test ne prouverait plus ce qu'il annonce.
+  // L'aide est celle du lot PRODUCTION-EN-DÉFENSE, une seule pour tout `test/`.
+  poserLesBatimentsDeProduction(etat);
   for (let c = 1; c <= unites; c += 1) {
     baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau, degatsMilli: 0 });
   }
@@ -175,13 +181,35 @@ test('TRANSFERT T4 — le butin DÉPASSE la capacité, et rien ne se perd', () =
   // y est. La garde mesure donc maintenant qu'il monte VRAIMENT au-dessus.
   const etat = partieArmee();
   const capacites = capacitesMilli(baseCourante(etat).disposition);
+
+  // ⚠⚠ LE MORDANT SE REND PAR LE STOCK, ET PLUS PAR LE COFFRE — lot
+  // RAID-ET-ÉCRAN, 10/09. Il tenait jusque-là à une comparaison de tailles :
+  // « un camp de niveau 1 rapporte largement plus que le coffre d'une base
+  // neuve ». C'était vrai d'un Chantier de niveau 1, qui tient 50 ; le point 4
+  // fait poser à `partieArmee` les trois bâtiments de production, donc monte le
+  // Chantier au niveau 5, donc porte le coffre à 122 — mesuré — quand le camp
+  // rapporte 52 de quartz et 17 de scorie. La prémisse était devenue fausse
+  // pour une raison qui ne regarde pas ce test.
+  //
+  // ⚠ ON PART DONC À UNE UNITÉ SOUS LE PLAFOND, ET ON EXIGE LES DEUX BOUTS.
+  // C'est la propriété que le test annonce — le butin a le droit de passer
+  // au-dessus — et elle ne dépend plus de la taille du coffre du jour. ⚠ Et ce
+  // n'est PAS `T4 bis`, qui part déjà AU-DESSUS du plafond : ici on le
+  // FRANCHIT.
+  for (const r of ['quartz', 'scorie']) {
+    baseCourante(etat).economie.ressources[r] = capacites[r] - 1000;
+  }
   const avant = { ...baseCourante(etat).economie.ressources };
+  for (const r of ['quartz', 'scorie']) {
+    assert.ok(avant[r] < capacites[r], `montage : le stock de ${r} part déjà au plafond`);
+  }
 
   const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
 
-  // ⚠ MONTAGE FALSIFIABLE, ET IL MORD FORT : un camp de niveau 1 rapporte
-  // largement plus que le coffre d'une base neuve. Le stock DOIT donc finir
-  // au-dessus, sinon ce test ne mesurerait rien.
+  // ⚠ MONTAGE FALSIFIABLE : le butin doit être non nul, sinon le franchissement
+  // ne mesurerait rien.
+  assert.ok((rapport.butin.quartz ?? 0) + (rapport.butin.scorie ?? 0) > 0,
+    'montage sans mordant : le raid ne rapporte rien');
   let auMoinsUnDepassement = false;
   for (const r of ['quartz', 'scorie']) {
     const apres = baseCourante(etat).economie.ressources[r];
@@ -289,6 +317,15 @@ test('armée — une unité détruite plancher à 1 PV et RESTE dans l\'armée',
   const etat = creerEtat(2026);
   for (const b of baseCourante(etat).disposition) b.niveau = 12;
   rattraperJeu(etat, 3001);
+  // ⚠⚠ ET LES TROIS BÂTIMENTS DE PRODUCTION VIENNENT APRÈS LE RATTRAPAGE,
+  // PAS AVANT — lot RAID-ET-ÉCRAN, 10/09. Le point 4 les rend obligatoires à
+  // tout montage qui compose une armée ; mais l'aide les pose au niveau 1, et le
+  // niveau d'un camp suit la MOYENNE des bâtiments du joueur au moment où il
+  // paraît. Posés avant, ils feraient tomber la moyenne de 12 à 3,75, donc le
+  // camp avec, donc le mordant du montage — c'est tout ce que le paragraphe
+  // ci-dessus a coûté le 31/08, repris par l'autre bout. Ils n'ont ici aucun
+  // effet sur le combat : ils ouvrent le départ, et c'est tout.
+  poserLesBatimentsDeProduction(etat);
   for (let c = 1; c <= 6; c += 1) {
     baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }
@@ -399,6 +436,11 @@ const T_RAID0 = 4_000_000;
 function partieAuMilieu(rangee = 200, graine = 2026) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
+  // ⚠⚠ LES TROIS BÂTIMENTS DE PRODUCTION — lot RAID-ET-ÉCRAN, 10/09 : depuis le
+  // point 4 d'Ethan, `problemesDuRaid` refuse le DÉPART d'une pièce dont le
+  // bâtiment de production est tombé. Un montage qui compose une armée sans
+  // Caserne serait refusé, et le test ne prouverait plus ce qu'il annonce.
+  poserLesBatimentsDeProduction(etat);
   for (let c = 1; c <= 6; c += 1) {
     baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }

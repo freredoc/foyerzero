@@ -436,7 +436,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 310 752 octets, la marge sur la borne T10 est de 3,01 %', () => {
+test('PIC T7 — le livrable pèse 9 314 390 octets, la marge sur la borne T10 est de 2,98 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -668,11 +668,23 @@ test('PIC T7 — le livrable pèse 9 310 752 octets, la marge sur la borne T10 e
   // 0.99.40 · build 142, donc ce lot passe à **0.99.41 · build 143** — deux
   // livrables différents sous le même `config.build` seraient lus comme un
   // seul par l'enveloppe Android.
+  // ⚠⚠ RÉANCRÉ AU LOT RAID-ET-ÉCRAN, 10/09, ET C'EST LA DISCIPLINE DE LA
+  // DERNIÈRE ASSERTION DE CE TEST. Elle écrit que « la tolérance garde contre la
+  // dérive LENTE, pas contre un lot qui sait ce qu'il déplace » : l'ancre valait
+  // **9 310 752**, mesurée sur `6eccedc`, et deux lots ont passé dessus sans la
+  // toucher — MUR (+142) puis celui-ci (+3 496). L'écart cumulé faisait
+  // **3 638 octets**, sous la tolérance de 50 000, donc VERT, et c'est
+  // exactement ce que cette dernière assertion existe pour empêcher.
+  // ⚠ CE LOT-CI SAIT CE QU'IL DÉPLACE, ET IL LE VENTILE : **+3 496** contre
+  // l'arbre pristine de `main` = `ea79a16` (9 310 894) — feuille +464 ·
+  // JavaScript +2 689 · balisage +343 · **images +0 · audio +0**, la somme des
+  // cinq postes tombant EXACTEMENT sur le total, et **307 lignes `data:` / 306
+  // URI de part et d'autre**. Aucune ressource n'entre : la borne NE BOUGE PAS.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_310_752;          // remesuré après fusion, lot ARRIVÉE-CARTE-ET-BUILD, base `6eccedc`
-  const MARGE = BORNE - MESURE;      // 289 248 octets
-  assert.equal(MARGE, 289_248);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 3.01);
+  const MESURE = 9_314_390;          // remesuré au lot RAID-ET-ÉCRAN, base `ea79a16`
+  const MARGE = BORNE - MESURE;      // 285 610 octets
+  assert.equal(MARGE, 285_610);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.98);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
@@ -841,7 +853,7 @@ test('CÂB T6 — décoratif ou parlant, jamais les deux, jamais ni l\'un ni l\'
   assert.equal(parlant.attributs['aria-hidden'], undefined);
 });
 
-test('CÂB T7 — les fiches portent leurs pictogrammes, et le TITRE porte le niveau', () => {
+test('CÂB T7 — les fiches portent leurs pictogrammes de LIGNE, et le titre n\'en a plus', () => {
   // ⚠⚠ LES DEUX FICHES DOIVENT AVOIR LA MÊME FORME — `ERGO T7 bis` l'exige, et
   // c'est ce qui permet un seul rendu. Ce test-ci mesure l'autre moitié : que
   // les pictogrammes soient bien ceux de la DONNÉE, ligne par ligne.
@@ -852,8 +864,19 @@ test('CÂB T7 — les fiches portent leurs pictogrammes, et le TITRE porte le ni
   const piece = lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', 0));
   const batiment = lignesDuPanneau(apercuDuBatiment(etat, 0));
 
-  assert.equal(piece.picto, 'ui_niveau');
-  assert.equal(batiment.picto, 'ui_niveau');
+  // ⚠⚠ CE TEST EST RETOURNÉ, PAS RETIRÉ — Ethan, 10/09, point 7 : « il y a une
+  // espèce de blason à gauche du nom quand on clique sur une unité ou un
+  // bâtiment. L'enlever. » Il exigeait `picto === 'ui_niveau'` sur les deux
+  // fiches ; il exige maintenant l'ABSENCE du champ. Un test supprimé ne dirait
+  // pas qu'on a voulu l'inverse : remettre le blason fait tomber ces deux
+  // lignes, et le lecteur y trouve la date et la phrase.
+  //
+  // ⚠ L'ABSENCE SE MESURE PAR `in`, PAS PAR `=== undefined`. Les quatre vues
+  // partagent un rendu et `ERGO T7 bis` exige qu'elles aient EXACTEMENT les
+  // mêmes clés : un `picto: undefined` posé d'un seul côté passerait l'égalité
+  // et ferait diverger les formes.
+  assert.equal('picto' in piece, false, 'le blason du titre est revenu sur la fiche d\'une pièce');
+  assert.equal('picto' in batiment, false, 'le blason du titre est revenu sur la fiche d\'un bâtiment');
 
   const lignes = piece.sections.flatMap((s) => s.lignes);
   const parLibelle = new Map(lignes.map((l) => [l.libelle, l.picto]));

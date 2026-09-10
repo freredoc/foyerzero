@@ -48,6 +48,8 @@ import {
   creerAcquises, modulesDebloquesDuJoueur, moduleEstAcquis, nomDuModule,
 } from './recherche.js';
 import { baseCourante } from './base-courante.js';
+import { batimentDeProductionManquant } from './batiment-de-production.js';
+import { messageSansBatiment, BASE_BATIMENTS } from '../data/base.js';
 
 /** Un millier — l'échelle des milli-PV et des milli-unités. */
 const MILLE = 1000;
@@ -281,7 +283,56 @@ export function problemesDuRaid(etat, baseAttaquante, cible, formation = null) {
     });
   }
 
-  const { vagues } = composerLesVagues(etat, formation);
+  const { vagues, indices } = composerLesVagues(etat, formation);
+
+  // ⚠⚠⚠ LE BÂTIMENT DE PRODUCTION SE VÉRIFIE AU DÉPART, ET PAS SEULEMENT À LA
+  // POSE — POINT 4 D'ETHAN, 10/09 : « J'ai supprimé un aérodrome. Mon Épervier
+  // peut quand même partir en raid. » `batimentDeProductionManquant` répondait
+  // juste depuis le 07/09 et `FORCES.armee.exigeLeBatimentDeProduction` valait
+  // déjà `true` ; ce qui manquait était un LECTEUR sur ce chemin-ci. La doctrine
+  // est écrite dans `sim/state.js` — « on SIGNALE au geste, le joueur purge » —
+  // et un départ en raid est un geste.
+  //
+  // ⚠⚠ SUR LES SEULES PIÈCES QUI PARTENT, ET C'EST `indices` QUI LE DIT.
+  // `composerLesVagues` a déjà écarté les inactives et celles qui sont sous le
+  // plancher de PV : refuser sur `armee` entière bloquerait le raid pour une
+  // unité que le joueur a précisément laissée à la maison, ce qui est l'inverse
+  // de la porte de sortie qu'on lui offre.
+  //
+  // ⚠⚠ ET LE MESSAGE NOMME LA SORTIE, CE QUI EST CE QUI REND LE REFUS TENABLE.
+  // Un joueur qui vient de démolir son aérodrome se retrouverait sinon avec TOUS
+  // ses raids bloqués par un avion qu'il a oublié, sans savoir quoi en faire. Le
+  // drapeau `actif` est la porte : désactiver la pièce, ou la retirer en
+  // Offense. La phrase la nomme.
+  //
+  // ⚠ LA MOITIÉ « SANS BÂTIMENT » VIENT DE `messageSansBatiment`, JAMAIS D'UNE
+  // SECONDE FORMULATION : c'est la phrase des deux palettes et celle des trois
+  // gestes de pose, et elle a descendu dans `data/base.js` pour que `sim/`
+  // puisse la lire sans importer de `ui/`.
+  //
+  // ⚠⚠ LE DRAPEAU `FORCES.armee.exigeLeBatimentDeProduction` N'EST PAS LU ICI,
+  // ET C'EST UN COUPLAGE DÉCLARÉ. Il vaut `true`, et ce chemin-ci EST l'armée par
+  // construction — `composerLesVagues` ne compose que `baseCourante(etat).armee`.
+  // Le lire demanderait d'importer `FORCES` de `sim/state.js`, qui importe déjà
+  // `creerRecherche` de ce fichier : ce serait le cycle que
+  // `sim/batiment-de-production.js` vient d'être écrit pour éviter. **Le jour où
+  // Ethan retire ce verrou à l'ARMÉE, il faut basculer LES DEUX endroits** — la
+  // table et ces lignes-ci. C'est écrit au rapport du lot.
+  const manquants = new Map();
+  for (const i of indices) {
+    const piece = baseAttaquante.armee[i];
+    if (piece === undefined) continue;
+    const manque = batimentDeProductionManquant(etat, piece.id);
+    if (manque !== null && !manquants.has(manque)) manquants.set(manque, piece.id);
+  }
+  for (const [manque, uniteId] of manquants) {
+    problemes.push({
+      code: 'sans-batiment-de-production',
+      message: `${messageSansBatiment(BASE_BATIMENTS[manque].nom.joueur, UNITES[uniteId].chassis)}`
+        + ' : désactive la pièce ou retire-la en Offense.',
+    });
+  }
+
   if (vagues.length === 0) {
     problemes.push({
       code: 'sans-armee',

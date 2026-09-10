@@ -316,7 +316,13 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // ⚠ CORRIGÉ EN LE SACHANT par PAQUETS (09/09) puis par RÈGLES-DE-CARTE
   // (10/09) : ce que la ligne garde n'est pas un numéro figé, c'est qu'on ne
   // bumpe pas sans passer par ici.
-  assert.equal(SAVE_VERSION, 31);
+  // ⚠⚠ ET RAID-ET-ÉCRAN Y EST PASSÉ À SON TOUR, LE 10/09, EN LE SACHANT : la
+  // formation de raid RETENUE entre dans l'état — Ethan, « je reviens sur la
+  // cible, les unités restent dans leur position ». Elle vivait jusque-là dans
+  // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
+  // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
+  // jeu. Le maillon v31 → v32 est dans `state.js`.
+  assert.equal(SAVE_VERSION, 32);
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

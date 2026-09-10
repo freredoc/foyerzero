@@ -23,11 +23,14 @@ import assert from 'node:assert/strict';
 
 import {
   creerEtat, rattraperJeu, serialiser, poserEffectif, pointsEngages,
-  problemesDeLEffectif,
+  problemesDeLEffectif, migrer, charger, SAVE_VERSION,
 } from '../src/sim/state.js';
+import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import {
-  formationDepuisLArmee, resynchroniserLaFormation, reglerActiviteEnFormation,
+  formationDepuisLArmee, formationPourLaCible, retenirLaFormation,
+  empreinteDeLArmee, CHAMPS_RETENUS,
+  resynchroniserLaFormation, reglerActiviteEnFormation,
   problemesDuDeplacementEnFormation, deplacerEnFormation,
   problemesDeLaPermutationEnFormation, permuterEnFormation,
   problemesDeLEmbarquement, embarquerEnFormation,
@@ -892,4 +895,155 @@ test('FG T20 — porteur retenu à l\'apparition : la passagère attend avec lui
   // `construireResultat` rendra.
   assert.equal(passagere.indice, porteur.indice + 1);
   assert.equal(passagere.porteurIndice, porteur.indice);
+});
+
+// ---------------------------------------------------------------------------
+// FR T2 et FR T3 — la formation RETENUE, lot RAID-ET-ÉCRAN, 10/09
+//
+// ⚠⚠ DEUX TESTS, ET LES DEUX GARDENT UNE DÉFAILLANCE **SILENCIEUSE**. Un
+// décalage d'indice fait retomber la formation retenue sur les mauvaises pièces
+// sans qu'une ligne ne lève ; une chaîne de migration qui saute un maillon rend
+// une sauvegarde à laquelle il manque un champ, et c'est au CHARGEMENT suivant
+// que ça se voit. Ni l'un ni l'autre ne se lit dans un écran.
+// ---------------------------------------------------------------------------
+
+/** Les seuls champs que la mémoire retient — lus dans le module, jamais retapés. */
+const retenus = (formation) => formation.map(
+  (piece) => CHAMPS_RETENUS.map((champ) => `${champ}=${piece[champ]}`).join(' '),
+);
+
+test('FR T2 — l\'armée recomposée jette la mémoire, et le montage DÉCALE les indices', () => {
+  const etat = partie();
+  armeeDeSix(etat);
+  const cible = premierCamp(etat);
+  assert.ok(cible !== null, 'montage : aucun camp autour de la base');
+
+  // On range la formation à la main, puis on la retient. Deux gestes, parce que
+  // la mémoire porte DEUX sortes de champs : une position et un drapeau.
+  const rangee = formationPourLaCible(etat, cible);
+  deplacerEnFormation(rangee, 0, { vague: 4, colonne: 9 });
+  reglerActiviteEnFormation(rangee, 1, false);
+  retenirLaFormation(etat, cible, rangee);
+
+  // ⚠ LE MONTAGE MESURE QUELQUE CHOSE : sur la MÊME cible et la MÊME armée, la
+  // mémoire est rendue. Sans ce contrôle, un `formationPourLaCible` qui ne
+  // retiendrait JAMAIS rien passerait la moitié suivante les doigts dans le nez.
+  assert.deepEqual(retenus(formationPourLaCible(etat, cible)), retenus(rangee),
+    'montage : la mémoire ne rend rien, il n\'y a donc rien à jeter ensuite');
+  assert.notDeepEqual(retenus(rangee), retenus(formationDepuisLArmee(etat)),
+    'montage : la formation retenue est celle d\'Offense, l\'écart ne dirait rien');
+
+  // ⚠⚠ ET C'EST ICI QUE LE MONTAGE SE JOUE : ON RECOMPOSE À LONGUEUR ÉGALE.
+  // Retirer une pièce et n'en pas remettre ferait tomber le garde de LONGUEUR,
+  // pas celui de l'empreinte — et la falsification qui compte (« retirer
+  // l'empreinte ») laisserait ce test VERT. On retire donc la PREMIÈRE et on en
+  // pose une autre à la fin : six pièces des deux côtés, et tous les indices
+  // décalés d'un cran.
+  const armee = baseCourante(etat).armee;
+  const avant = armee.map((p) => p.id);
+  const empreinteAvant = empreinteDeLArmee(etat);
+  armee.splice(0, 1);
+  armee.push({ id: 'carapace', vague: 3, colonne: 4, niveau: 1, degatsMilli: 0 });
+  const apres = armee.map((p) => p.id);
+
+  assert.equal(apres.length, avant.length,
+    'montage : la longueur a changé — c\'est le garde de longueur qui répondrait');
+  const decalees = apres.filter((id, i) => id !== avant[i]);
+  assert.ok(decalees.length >= 5,
+    `montage : ${decalees.length} position(s) décalée(s), il en faut presque toutes`);
+  assert.notEqual(empreinteDeLArmee(etat), empreinteAvant,
+    'montage : l\'empreinte n\'a pas bougé — rien ne distingue les deux armées');
+
+  // ⚠⚠ LE CŒUR DU TEST : on repart d'Offense, à l'identique. Sans le contrôle
+  // d'empreinte, `formationPourLaCible` recopierait les positions retenues sur
+  // des pièces qui ne sont plus les mêmes — le Bélier prendrait la case du
+  // Ratisseur —, et RIEN ne lèverait : le raid partirait avec une formation que
+  // le joueur n'a jamais composée.
+  assert.deepEqual(retenus(formationPourLaCible(etat, cible)),
+    retenus(formationDepuisLArmee(etat)),
+    'la mémoire a survécu à une recomposition de l\'armée');
+
+  // ⚠ ET LA MÉMOIRE EST TOUJOURS LÀ, ELLE N'A PAS ÉTÉ PURGÉE. Elle est
+  // IGNORÉE — la jeter serait une écriture de plus dans un chemin de LECTURE, et
+  // `formationPourLaCible` ne modifie pas l'état.
+  assert.notEqual(etat.formationRetenue, null,
+    'la lecture a purgé la mémoire : elle écrit dans l\'état');
+});
+
+test('FR T3 — la chaîne de migration se rejoue en entier, et le maillon 31 → 32 y est', () => {
+  const etat = partie();
+  armeeDeSix(etat);
+
+  // ⚠⚠ ON PART DE LA PLUS VIEILLE VERSION QUE LA CHAÎNE ACCEPTE, ET C'EST ZÉRO
+  // — `migrer` lit `version` comme 0 quand elle est absente, et `MIGRATIONS[0]`
+  // existe. On le VÉRIFIE au lieu de le croire : un cran en dessous n'a aucun
+  // maillon, et la chaîne le dit.
+  assert.throws(() => migrer({ version: -1 }), /aucune migration depuis la version -1/,
+    'la chaîne accepte une version antérieure à 0 : le plancher a bougé');
+
+  const vieille = JSON.parse(serialiser(etat, INSTANT));
+  // ⚠ APLATIE AVANT D'ÊTRE RABAISSÉE — lot BASES-0. Une v0 n'a jamais porté
+  // `bases` : lui en donner un ferait tourner la chaîne sur une forme qui n'a
+  // jamais existé.
+  aplatirSauvegarde(vieille);
+  vieille.version = 0;
+  // Et elle ne porte évidemment pas le champ du lot.
+  delete vieille.formationRetenue;
+
+  const migre = migrer(vieille);
+  assert.equal(migre.version, SAVE_VERSION);
+  assert.equal(SAVE_VERSION, 32, 'SAVE_VERSION a bougé sans que ce test suive');
+  // ⚠⚠ LE MAILLON 31 → 32 A JOUÉ, ET IL N'A RIEN INVENTÉ. Une v0 ne sait ni
+  // quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
+  // formation vivait dans la fermeture de l'écran et ne se sérialisait pas.
+  // `null` est ce qu'une sauvegarde d'avant AVAIT, à chaque ouverture.
+  assert.equal(migre.formationRetenue, null,
+    'le maillon 31 → 32 n\'a pas posé la mémoire, ou il a inventé un rangement');
+
+  // ⚠⚠ ET C'EST CE QUI REND UN MAILLON SAUTÉ BRUYANT : le champ est EXIGÉ au
+  // chargement. Sans lui, une v32 traverse `charger` et LÈVE — le défaut ne
+  // reste pas silencieux jusqu'au premier raid.
+  const sansLeChamp = JSON.parse(JSON.stringify(migre));
+  delete sansLeChamp.formationRetenue;
+  assert.throws(() => charger(JSON.stringify(sansLeChamp), INSTANT), /formationRetenue/,
+    'une v32 sans la mémoire se charge quand même : un maillon sauté passerait');
+
+  // La sauvegarde migrée se charge pour de bon, et la partie tient debout.
+  const charge = charger(JSON.stringify(migre), INSTANT);
+  assert.equal(charge.formationRetenue, null);
+
+  // ⚠⚠ ET DEPUIS LA v0 LA BASE EST REFONDÉE, ARMÉE COMPRISE — MESURÉ, PAS
+  // SUPPOSÉ, ET CE N'EST PAS UN DÉFAUT. `CLAUDE.md` §6 l'écrit depuis le 26/08 :
+  // « la migration 3 → 4 REFONDE, elle ne convertit pas » — il n'existe aucune
+  // correspondance entre une `foreuse` sans coordonnée et un collecteur qui doit
+  // se poser sur un champ. Relevé version par version sur ce montage : v0 et v3
+  // rendent 0 pièce d'armée et 1 bâtiment, v4 en rend 0 et 4 — `armee` naît à la
+  // v7 —, et **v10 et au-delà rendent les six pièces et les quatre bâtiments**.
+  assert.equal(baseCourante(charge).armee.length, 0,
+    'la refonte de la 3 → 4 a cessé : la mesure de ce test est périmée');
+
+  // ⚠⚠ D'OÙ LE SECOND DÉPART, ET C'EST LUI QUI DIT QUE LA CHAÎNE TOURNE SUR UNE
+  // VRAIE PARTIE. Une chaîne rejouée sur une base vide prouverait seulement
+  // qu'elle ne lève pas ; depuis la v10, la plus ancienne qui traverse la
+  // refonte, les six pièces arrivent intactes de l'autre côté avec la mémoire à
+  // `null`.
+  const v10 = JSON.parse(serialiser(etat, INSTANT));
+  aplatirSauvegarde(v10);
+  v10.version = 10;
+  delete v10.formationRetenue;
+  const depuisV10 = charger(JSON.stringify(migrer(v10)), INSTANT);
+  assert.equal(depuisV10.formationRetenue, null);
+  assert.equal(baseCourante(depuisV10).armee.length, 6,
+    'la chaîne a perdu l\'armée en route');
+
+  // ⚠ ET ELLE N'ÉCRASE PAS UNE MÉMOIRE DÉJÀ PRÉSENTE — même discipline que le
+  // compteur d'instance de la 23 → 24. Les montages du dépôt fabriquent leurs
+  // vieilles sauvegardes en RABAISSANT une récente : remettre `null` dessus
+  // effacerait un rangement légitime.
+  const v31 = JSON.parse(serialiser(etat, INSTANT));
+  v31.version = 31;
+  v31.formationRetenue = { base: 0, cible: { rangee: 1, colonne: 2 }, empreinte: 'x', pieces: [] };
+  assert.deepEqual(migrer(v31).formationRetenue,
+    { base: 0, cible: { rangee: 1, colonne: 2 }, empreinte: 'x', pieces: [] },
+    'le maillon 31 → 32 a écrasé une mémoire déjà présente');
 });

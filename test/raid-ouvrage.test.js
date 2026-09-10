@@ -1171,7 +1171,13 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // trois champs de plus — et RAID-CIBLE-UNIQUE, lui, n'a toujours rien ajouté :
   // ce que ce test mesure est la ligne DEUX crans plus bas, où une sauvegarde à
   // la version courante traverse `migrer` sans être touchée.
-  assert.equal(SAVE_VERSION, 31, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RÈGLES-DE-CARTE, lui, y est passé (10/09)');
+  // ⚠⚠ ET RAID-ET-ÉCRAN Y EST PASSÉ À SON TOUR, LE 10/09, EN LE SACHANT : la
+  // formation de raid RETENUE entre dans l'état — Ethan, « je reviens sur la
+  // cible, les unités restent dans leur position ». Elle vivait jusque-là dans
+  // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
+  // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
+  // jeu. Le maillon v31 → v32 est dans `state.js`.
+  assert.equal(SAVE_VERSION, 32, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

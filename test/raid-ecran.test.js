@@ -49,6 +49,7 @@ import {
 import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -69,6 +70,11 @@ function balisage() {
 function partieArmee(graine = 2026, niveau = 1, colonnes = 6) {
   const etat = creerEtat(graine);
   rattraperJeu(etat, 3001);
+  // ⚠⚠ LES TROIS BÂTIMENTS DE PRODUCTION — lot RAID-ET-ÉCRAN, 10/09 : depuis le
+  // point 4 d'Ethan, `problemesDuRaid` refuse le DÉPART d'une pièce dont le
+  // bâtiment de production est tombé. Un montage qui compose une armée sans
+  // Caserne serait refusé, et le test ne prouverait plus ce qu'il annonce.
+  poserLesBatimentsDeProduction(etat);
   for (let c = 1; c <= colonnes; c += 1) {
     baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau, degatsMilli: 0 });
   }
@@ -142,9 +148,25 @@ test('ASSAUT T1 — `lancer(false)` n\'est atteint que par deux boutons nommés'
   assert.ok(!rangee[1].includes('raid-attaquer'),
     'le bouton d\'attaque est retombé dans la rangée des cinq');
   assert.match(html, /<div id="raid-rangee">/, 'la rangée du bas n\'a plus de conteneur');
-  // Cinq boutons dans la rangée, pas six.
-  assert.equal((rangee[1].match(/<button/g) ?? []).length, 5,
-    'la rangée du bas ne porte plus exactement cinq boutons');
+  // ⚠⚠ CINQ MOTS ET QUATRE FLÈCHES DEPUIS LE POINT 9, 10/09, ET LES DEUX SE
+  // COMPTENT SÉPARÉMENT. Ce bloc comptait « cinq boutons, pas six » sur une
+  // tranche non gloutonne qui s'arrête au PREMIER `</div>` : depuis que
+  // `#raid-fleches` est imbriqué dedans, cette tranche-là s'arrête à SA
+  // fermeture et rend neuf boutons. On coupe donc au bon endroit, et on garde
+  // les deux moitiés — ce qui attrape aussi bien un sixième mot qu'une
+  // cinquième flèche.
+  const avantLesFleches = rangee[1].slice(0, rangee[1].indexOf('<div id="raid-fleches">'));
+  assert.ok(avantLesFleches.length > 0, '#raid-fleches n\'est plus dans la rangée');
+  assert.equal((avantLesFleches.match(/<button/g) ?? []).length, 5,
+    'la rangée du bas ne porte plus exactement cinq boutons de mots');
+  const fleches = html.match(/<div id="raid-fleches">([\s\S]*?)<\/div>/);
+  assert.ok(fleches, '#raid-fleches a disparu du balisage');
+  assert.equal((fleches[1].match(/<button/g) ?? []).length, 4,
+    'les quatre flèches du point 9 ne sont plus quatre');
+  // ⚠ ET AUCUNE NE NOMME UN SPRITE : le pictogramme se DEMANDE au câblage, comme
+  // les deux flèches de `#navigation`. Un nom écrit ici serait la faute que
+  // `CÂB T4` garde partout ailleurs.
+  assert.doesNotMatch(fleches[1], /ui_/, 'une flèche nomme un sprite dans le balisage');
 
   // La feuille lui donne une cible de doigt, et la garde nomme le nombre.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
@@ -862,6 +884,10 @@ function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) 
     'raid-sim', 'raid-sim-corps', 'raid-sim-fermer',
     'raid-fin', 'raid-fin-corps', 'raid-fin-carte', 'raid-fin-base',
     'raid-retour-carte', 'raid-retour-offense',
+    // ⚠ LES QUATRE FLÈCHES — point 9, 10/09. Le faux document LÈVE sur tout
+    // identifiant que le balisage n'a pas : les ajouter ici garde donc, comme
+    // les autres, que l'écran ne demande rien qui n'existe pas dans la page.
+    'raid-fleche-gauche', 'raid-fleche-haut', 'raid-fleche-bas', 'raid-fleche-droite',
     'raid-vitesse-1', 'raid-vitesse-2', 'raid-vitesse-4',
     // La fiche d'une cible ennemie — lot FICHES-ENNEMIES, 07/09.
     'raid-fiche', 'raid-fiche-titre', 'raid-fiche-corps', 'raid-fiche-fermer',

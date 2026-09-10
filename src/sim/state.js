@@ -24,6 +24,12 @@ import {
   sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
 } from './site-entame.js';
 import { creerRecherche } from './raid.js';
+// ⚠ IMPORT **ET** EXPORT, JAMAIS UN `export … from` SEUL : ce fichier LIT
+// `batimentDeProductionManquant` dans `problemeDuBatimentDeProduction`, et un
+// ré-export nu ne crée aucune liaison locale — leçon du lot MURS-OUVRAGE.
+import { batimentDeProductionManquant } from './batiment-de-production.js';
+
+export { batimentDeProductionManquant };
 import {
   crediterLesReserves, reservesVides, problemesDesReserves,
   problemesDeLaReserveDesBatiments, ramenerLaGarnison, problemesDuRetour,
@@ -71,7 +77,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 31;
+export const SAVE_VERSION = 32;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -334,6 +340,16 @@ export function creerEtat(graine) {
     // titre que `satellites`.
     sitesEntames: sitesEntamesVides(),
     basesRasees: [],
+    // ⚠⚠ LA FORMATION DE RAID RETENUE — lot RAID-ET-ÉCRAN, 10/09. Ethan : « je
+    // reviens sur la cible, les unités restent dans leur position ». C'est de
+    // l'HISTOIRE au même titre que `satellites` : aucune autre grandeur de
+    // l'état ne dit où le joueur avait rangé ses unités pour CETTE cible-là.
+    //
+    // ⚠ `null` ET PAS UN OBJET VIDE : « pas de mémoire » et « une mémoire qui ne
+    // retient rien » ne sont pas la même chose, et `formationPourLaCible` teste
+    // la première d'une seule façon. Le champ est TOUJOURS présent — il se teste
+    // donc d'une seule façon lui aussi.
+    formationRetenue: null,
     // ⚠ UNE CHAÎNE DÉCIMALE, PAS UN NOMBRE. Le compteur de recherche est un
     // BigInt — le barème dépasse l'entier sûr dès le niveau 39 — et
     // `JSON.stringify` lève sur un BigInt. Voir `sim/raid.js`.
@@ -540,7 +556,7 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis', 'prochaineInstanceSatellite', 'satellitesDetruits']) {
+  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis', 'prochaineInstanceSatellite', 'satellitesDetruits', 'formationRetenue']) {
     exigerChamp(etat, champ);
   }
   // ⚠ LA LISTE DE BASES SE VÉRIFIE AVANT SES BASES. Sans ces deux lignes,
@@ -2223,17 +2239,12 @@ export function niveauDuChantier(etat) {
  * @param {string} uniteId clé de `UNITES`, ou d'un ouvrage fixe de la défense
  * @returns {string|null} clé du bâtiment manquant dans `BASE_BATIMENTS`
  */
-export function batimentDeProductionManquant(etat, uniteId) {
-  const base = baseCourante(etat);
-  exigerChamp(base, 'disposition');
-  const unite = UNITES[uniteId];
-  if (unite === undefined) return null;
-  const requis = BATIMENT_DE_CHASSIS[unite.chassis];
-  if (requis === undefined) {
-    throw new Error(`etat : châssis « ${unite.chassis} » sans bâtiment de production`);
-  }
-  return base.disposition.some((b) => b.id === requis) ? null : requis;
-}
+// ⚠⚠ `batimentDeProductionManquant` A DÉMÉNAGÉ DANS `sim/batiment-de-production.js`
+// AU LOT RAID-ET-ÉCRAN, 10/09, ET ELLE EST RÉ-EXPORTÉE JUSTE EN DESSOUS. Le
+// point 4 demande à `problemesDuRaid` de `sim/raid.js` de la lire ; or ce
+// fichier-ci importe déjà `creerRecherche` de `raid.js`, donc l'y laisser aurait
+// fait le premier cycle de `src/sim/`. Voir l'en-tête du module neuf — c'est un
+// DÉPLACEMENT, pas une écriture, et aucun appelant n'a changé d'import.
 
 export function niveauDeCommandement(etat, force) {
   return niveauDeCommandementDeLaBase(baseCourante(etat), force);
@@ -3265,6 +3276,30 @@ const MIGRATIONS = {
         ? null
         : delaiPourLaBase(base, 1);
     }
+  },
+  /**
+   * v31 → v32 : la formation de raid retenue entre dans l'état — lot
+   * RAID-ET-ÉCRAN, 10/09.
+   *
+   * ⚠⚠ ELLE NE CALCULE RIEN, ET ELLE NE PEUT RIEN CALCULER. Une v31 ne sait ni
+   * quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
+   * formation vivait dans la fermeture de l'écran de raid et n'était PAS
+   * sérialisée. Lui inventer un rangement plausible ferait s'ouvrir le prochain
+   * raid sur une disposition que personne n'a composée.
+   *
+   * ⚠ `null` EST LA VALEUR NEUTRE, ET ELLE EST EXACTEMENT JUSTE ICI : « pas de
+   * mémoire » est ce qu'une v31 avait, à chaque ouverture. Le premier raid
+   * ouvert après la migration repart donc d'Offense, comme avant le lot.
+   *
+   * ⚠ ET ELLE N'ÉCRASE PAS UNE VALEUR DÉJÀ PRÉSENTE, même discipline que le
+   * compteur d'instance de la 23 → 24 : les montages du dépôt fabriquent leurs
+   * vieilles sauvegardes en rabaissant une récente, et remettre `null` dessus
+   * effacerait une mémoire légitime.
+   * @param {object} s
+   */
+  31: (s) => {
+    s.version = 32;
+    if (s.formationRetenue === undefined) s.formationRetenue = null;
   },
 };
 

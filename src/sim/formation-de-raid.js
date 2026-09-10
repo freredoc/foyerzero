@@ -1,12 +1,31 @@
 // La formation de raid — une COPIE DE TRAVAIL de l'armée, et rien d'autre.
 //
-// ⚠⚠ ELLE NE VA JAMAIS DANS `etat`, ET ELLE NE SE SÉRIALISE PAS. Elle vit dans
-// la fermeture de l'écran de raid, elle meurt avec lui, et elle repart de
-// l'armée d'Offense À CHAQUE OUVERTURE — arbitrage d'Ethan du 08/09 : « la
-// formation de raid repart toujours de celle d'Offense, et toutes les unités
-// repartent actives ». C'est cette phrase-là, et elle seule, qui fait que
-// `SAVE_VERSION` ne bouge pas et qu'aucune migration n'est écrite : rien de neuf
-// n'entre dans la sauvegarde.
+// ⚠⚠⚠ DEUX ARBITRAGES D'ETHAN, ET LE SECOND RENVERSE UNE PARTIE DU PREMIER.
+// LES DEUX SONT ÉCRITS ICI, DATÉS, PARCE QUE C'EST LA SEULE CHOSE QUI EMPÊCHERA
+// UN FUTUR LOT DE « RÉTABLIR » LA REMISE À ZÉRO EN CROYANT RÉPARER.
+//
+//   • **08/09** — « la formation de raid repart toujours de celle d'Offense, et
+//     toutes les unités repartent actives ». La formation vivait alors dans la
+//     fermeture de l'écran, mourait avec lui, et ne se sérialisait pas ; c'est
+//     cette phrase-là, et elle seule, qui faisait que `SAVE_VERSION` ne bougeait
+//     pas.
+//
+//   • **10/09** — « la position des unités dans le menu Offense revient à chaque
+//     fois. Je vais attaquer une cible, je fais un raid, mais il n'est pas
+//     terminé. Je reviens sur la cible, les unités restent dans leur position.
+//     Je ne suis pas obligé de remettre mes unités à chaque fois. » Et, sur
+//     question directe : **le drapeau actif/inactif est retenu aussi.**
+//
+// ⚠⚠ CE QUI SURVIT DU 08/09 : la formation reste une COPIE DE TRAVAIL, elle
+// repart de l'armée d'Offense **dès que la cible change**, et `formationDepuisLArmee`
+// pose toujours `actif: true` — c'est le point de départ NEUF. Ce qui tombe :
+// « à chaque ouverture ». Sur la MÊME cible, et tant que l'armée n'a pas été
+// recomposée, la formation retenue est rendue telle quelle.
+//
+// ⚠⚠ ET C'EST CE QUI FAIT BOUGER `SAVE_VERSION` DE 31 À 32. La mémoire doit
+// survivre à la fermeture du jeu — un raid non terminé est le cas d'usage
+// d'Ethan, pas un cas limite —, donc elle entre dans l'état et se sérialise.
+// C'est le seul champ neuf du lot.
 //
 // ⚠⚠ ELLE EST ALIGNÉE PAR INDICE SUR `baseCourante(etat).armee`, ET CE N'EST PAS
 // UN CONFORT — C'EST CE QUI EMPÊCHE LE RAID DE LEVER. `executerRaid` appelle
@@ -100,6 +119,118 @@ export function formationDepuisLArmee(etat) {
     actif: true,
     embarqueDans: null,
   }));
+}
+
+/**
+ * Les QUATRE champs que la formation possède, et qui sont retenus d'un raid à
+ * l'autre. La liste est AUTORITATIVE : `resynchroniserLaFormation` la nomme en
+ * creux — elle rend `niveau` et `degatsMilli` à l'armée et ne touche à rien
+ * d'autre —, et `formationPourLaCible` la relit pour restaurer.
+ *
+ * ⚠ `niveau` ET `degatsMilli` N'EN SONT PAS, ET C'EST LE POINT. La santé d'une
+ * pièce est une grandeur de l'ÉTAT, jamais de la copie de travail : elle se
+ * relit dans `armee` à chaque ouverture. Une mémoire qui les porterait ferait
+ * repartir au raid une unité réparée entre-temps avec ses anciens dégâts.
+ */
+export const CHAMPS_RETENUS = Object.freeze(['vague', 'colonne', 'actif', 'embarqueDans']);
+
+/**
+ * L'empreinte de l'armée : la suite ORDONNÉE de ses identifiants.
+ *
+ * ⚠⚠⚠ C'EST LA MOITIÉ DANGEREUSE DU POINT 1, ET ELLE EXISTE POUR UNE
+ * DÉFAILLANCE SILENCIEUSE. La formation est alignée PAR INDICE sur
+ * `baseCourante(etat).armee` — voir l'en-tête de ce fichier —, et `executerRaid`
+ * apparie `resultat.attaquants` et `indices` POSITION PAR POSITION. Si le joueur
+ * recompose son armée en Offense entre deux raids, une mémoire alignée par
+ * indice devient FAUSSE : les dégâts du raid tomberaient sur la mauvaise unité,
+ * et **rien ne lèverait**. L'empreinte permet de le détecter ; la règle est
+ * alors de **JETER la mémoire**, jamais de la « réparer au mieux ».
+ *
+ * ⚠ LA SUITE EST ORDONNÉE, PAS UN ENSEMBLE. Permuter deux unités de châssis
+ * différents dans `armee` ne change pas l'ensemble des identifiants et casse
+ * pourtant l'alignement : c'est très exactement le décalage d'indice qu'on
+ * cherche. `FR T2` monte ce cas-là et pas un changement de niveau.
+ *
+ * @param {object} etat
+ * @returns {string}
+ */
+export function empreinteDeLArmee(etat) {
+  return baseCourante(etat).armee.map((piece) => piece.id).join('|');
+}
+
+/**
+ * Retient la formation pour CETTE cible. Un seul créneau, écrasé à chaque fois.
+ *
+ * ⚠⚠ UN SEUL CRÉNEAU, ET C'EST UNE DÉCISION DE FORME. Une table par cible
+ * grandirait sans borne — il y a des milliers de sites sur la carte, et rien ne
+ * les purgerait. « Quand on attaque la même cible » : si la cible diffère, la
+ * formation repart d'Offense, et c'est tout ce qu'Ethan a demandé.
+ *
+ * ⚠ LA CIBLE EST UN COUPLE `{rangee, colonne}`, ET CE N'EST PAS UNE SECONDE
+ * NOTION D'IDENTITÉ. C'est celle que tout le dépôt emploie — `siteDeLaCase`,
+ * `ciblesAPortee`, `cibleCourante` de l'écran — et le §1.2 du brief interdit
+ * justement d'en inventer une autre.
+ *
+ * ⚠⚠ ET LA BASE COURANTE EST RETENUE AVEC. Deux bases du joueur peuvent porter
+ * des armées de MÊMES identifiants dans le MÊME ordre : l'empreinte ne les
+ * distinguerait pas, et la formation de l'une serait appliquée à l'autre. Ce
+ * n'est pas une corruption — l'alignement resterait valide —, mais c'est un
+ * rangement que le joueur n'a pas fait sur cette base-là.
+ *
+ * @param {object} etat modifié en place
+ * @param {{rangee: number, colonne: number}} cible
+ * @param {Array<object>} formation
+ * @returns {object} le même état
+ */
+export function retenirLaFormation(etat, cible, formation) {
+  etat.formationRetenue = {
+    base: etat.baseCourante,
+    cible: { rangee: cible.rangee, colonne: cible.colonne },
+    empreinte: empreinteDeLArmee(etat),
+    pieces: formation.map((piece) => {
+      const retenu = {};
+      for (const champ of CHAMPS_RETENUS) retenu[champ] = piece[champ];
+      return retenu;
+    }),
+  };
+  return etat;
+}
+
+/**
+ * La formation à ouvrir sur cette cible : la retenue si elle vaut encore, une
+ * neuve sinon. **La SEULE porte de l'écran de raid.**
+ *
+ * ⚠⚠ QUATRE RAISONS DE JETER LA MÉMOIRE, ET AUCUNE NE SE « RÉPARE ». Pas de
+ * mémoire ; une autre base ; une autre cible ; une armée recomposée. La
+ * quatrième est la dangereuse — voir `empreinteDeLArmee`. La cinquième est une
+ * CEINTURE : un compte de pièces qui ne correspond pas ne peut pas arriver si
+ * l'empreinte correspond, et on la teste quand même, parce que ce qui suit
+ * indexe la mémoire par la position de l'armée.
+ *
+ * ⚠ ELLE REPART TOUJOURS DE `formationDepuisLArmee`, MÊME QUAND ELLE RESTAURE.
+ * C'est ce qui rend `niveau` et `degatsMilli` frais par construction : la
+ * mémoire ne rend QUE ses quatre champs, et il n'y a pas de chemin où une santé
+ * périmée puisse remonter.
+ *
+ * @param {object} etat
+ * @param {{rangee: number, colonne: number}} cible
+ * @returns {Array<object>} la formation, alignée par indice sur `armee`
+ */
+export function formationPourLaCible(etat, cible) {
+  const fraiche = formationDepuisLArmee(etat);
+  const memoire = etat.formationRetenue;
+  if (memoire === null || memoire === undefined) return fraiche;
+  if (memoire.base !== etat.baseCourante) return fraiche;
+  if (memoire.cible.rangee !== cible.rangee || memoire.cible.colonne !== cible.colonne) {
+    return fraiche;
+  }
+  if (memoire.empreinte !== empreinteDeLArmee(etat)) return fraiche;
+  if (memoire.pieces.length !== fraiche.length) return fraiche;
+  return fraiche.map((piece, i) => {
+    const restaure = { ...piece };
+    for (const champ of CHAMPS_RETENUS) restaure[champ] = memoire.pieces[i][champ];
+    return restaure;
+  });
 }
 
 /**
@@ -356,6 +487,121 @@ export function permuterEnFormation(formation, indexA, indexB) {
   a.colonne = b.colonne;
   b.vague = vagueDeA;
   b.colonne = colonneDeA;
+  return formation;
+}
+
+/**
+ * Les quatre sens d'une translation, et le pas de chacun.
+ *
+ * ⚠⚠ « HAUT » EST LA VAGUE QUI DÉCROÎT, ET CE N'EST PAS UNE CONVENTION LIBRE :
+ * `peindreVagues` de `ui/raid.js` empile les vagues dans l'ordre rendu par
+ * `vaguesDeLArmee`, donc la vague 1 est en HAUT de l'écran. Le sens qu'un doigt
+ * lit et le sens que la donnée porte sont donc opposés en signe, et c'est cette
+ * table — pas l'écran — qui les réconcilie une fois pour toutes.
+ *
+ * ⚠ ELLE EST DANS `sim/`, PAS DANS L'ÉCRAN. Un jour où l'ordre des vagues
+ * changerait à l'affichage, c'est ici qu'on le corrige, et les deux flèches
+ * verticales suivraient ensemble.
+ */
+export const SENS_DE_TRANSLATION = Object.freeze({
+  gauche: Object.freeze({ vague: 0, colonne: -1 }),
+  droite: Object.freeze({ vague: 0, colonne: 1 }),
+  haut: Object.freeze({ vague: -1, colonne: 0 }),
+  bas: Object.freeze({ vague: 1, colonne: 0 }),
+});
+
+/**
+ * Ce qui empêche de décaler TOUTE la formation d'un cran dans ce sens.
+ *
+ * ⚠⚠⚠ ELLE JUGE LA FORMATION D'ARRIVÉE, JAMAIS UNE PIÈCE À LA FOIS — ET LA
+ * DIFFÉRENCE A ÉTÉ MESURÉE AVANT D'ÊTRE ÉCRITE. `problemesDeLEffectif` compare
+ * la pièce candidate à la LISTE qu'on lui donne : appelé pièce par pièce sur la
+ * formation COURANTE, il refuse une translation parfaitement légale dès que deux
+ * pièces se suivent. Mesuré sur deux Meutes en (1, 1) et (1, 2), décalées d'une
+ * colonne vers la droite : la première rend **`superposition`**, la seconde rend
+ * une liste vide. On construit donc l'ARRIVÉE une fois, et on la juge — c'est le
+ * motif exact de `problemesDeLaPermutationEnFormation`, pour la même raison.
+ *
+ * ⚠⚠ ET LE REFUS EST EN BLOC. Si une seule pièce sortait de la grille ou tombait
+ * sur une occupée, RIEN ne bouge : une formation déplacée à moitié est pire que
+ * rien — le joueur ne saurait plus ce qu'il a composé, et il n'aurait aucun
+ * geste pour revenir en arrière. C'est la même discipline que la permutation,
+ * qui refuse ses deux arrivées ensemble.
+ *
+ * ⚠ LES PASSAGÈRES NE SE COMPTENT PAS, ET ELLES NE BOUGENT PAS. Une embarquée
+ * n'a pas de case — `embarquerEnFormation` lui retire la sienne pour la libérer
+ * — donc elle ne peut ni sortir de la grille ni entrer en collision, et elle
+ * suit son porteur sans une écriture. Les inclure ferait refuser la translation
+ * sur un `hors-grille` de `colonne null`, c'est-à-dire sur rien.
+ *
+ * ⚠ UNE FORMATION SANS UNE SEULE PIÈCE POSÉE SE REFUSE, ELLE NE RÉUSSIT PAS EN
+ * SILENCE. Sans ce refus, la flèche répondrait « fait » à un geste qui n'a rien
+ * déplacé, ce qui est exactement l'inverse de ce qu'on demande à un avis.
+ *
+ * @param {Array<object>} formation
+ * @param {string} sens clé de `SENS_DE_TRANSLATION`
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLaTranslationEnFormation(formation, sens) {
+  const pas = SENS_DE_TRANSLATION[sens];
+  if (pas === undefined) {
+    throw new RangeError(`formation de raid : translation — sens « ${sens} » inconnu`);
+  }
+  const posees = [];
+  for (let i = 0; i < formation.length; i += 1) {
+    if (!estPassager(formation[i])) posees.push(i);
+  }
+  if (posees.length === 0) {
+    return [{ code: 'formation-vide', message: 'aucune unité posée à déplacer' }];
+  }
+  const apres = formation.map((piece) => (estPassager(piece) ? piece : {
+    ...piece, vague: piece.vague + pas.vague, colonne: piece.colonne + pas.colonne,
+  }));
+  const tous = [];
+  for (const i of posees) {
+    tous.push(...problemesDeLEffectif(FORCE_DE_LA_FORMATION, apres, apres[i], i));
+  }
+  // Neuf pièces qui sortent du bord rendent neuf fois la même phrase ; la
+  // répétition n'apprend rien de plus que la première. Le dédoublonnage porte
+  // sur le COUPLE code+message, comme en permutation.
+  const vus = new Set();
+  return tous.filter((p) => {
+    const signature = `${p.code}\u0000${p.message}`;
+    if (vus.has(signature)) return false;
+    vus.add(signature);
+    return true;
+  });
+}
+
+/**
+ * Décale toute la formation d'un cran. LÈVE sur un refus, comme ses voisines :
+ * l'appelant DEMANDE d'abord, et montre le refus au joueur.
+ *
+ * ⚠ LES CASES SONT MODIFIÉES EN PLACE, JAMAIS PAR UNE NOUVELLE LISTE — c'est
+ * l'alignement par indice sur `baseCourante(etat).armee` qui apparie les dégâts
+ * du raid, et ce module entier existe pour qu'il ne bouge pas.
+ *
+ * ⚠ ET LE PAS EST APPLIQUÉ APRÈS QUE TOUT A ÉTÉ JUGÉ. Le juger au fil de
+ * l'écriture rendrait le refus dépendant de l'ordre des pièces.
+ *
+ * @param {Array<object>} formation modifiée en place
+ * @param {string} sens clé de `SENS_DE_TRANSLATION`
+ * @returns {Array<object>} la même formation
+ */
+export function translaterLaFormation(formation, sens) {
+  const problemes = problemesDeLaTranslationEnFormation(formation, sens);
+  if (problemes.length > 0) {
+    throw new Error(
+      'translaterLaFormation : translation illégale — '
+        + problemes.map((p) => p.message).join(' ; '),
+    );
+  }
+  const pas = SENS_DE_TRANSLATION[sens];
+  for (const piece of formation) {
+    if (estPassager(piece)) continue;
+    piece.vague += pas.vague;
+    piece.colonne += pas.colonne;
+  }
   return formation;
 }
 

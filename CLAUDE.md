@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **10/09/2026**, version 0.99.43 · build 145.
+Dernière révision : **10/09/2026**, version 0.99.44 · build 146.
 
 ---
 
@@ -42,7 +42,219 @@ Dernière révision : **10/09/2026**, version 0.99.43 · build 145.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 10/09/2026 (après le lot MUR), à confronter :**
+**Référence au 10/09/2026 (après le lot RAID-ET-ÉCRAN), à confronter :**
+⚠⚠ **LA FORMATION DE RAID RESTE EN PLACE D'UN RAID À L'AUTRE, ET C'EST LE SEUL
+CHAMP NEUF DE LA SAUVEGARDE.** Ethan, 10/09 : « la position des unités dans le
+menu Offense revient à chaque fois. Je vais attaquer une cible, je fais un raid,
+mais il n'est pas terminé. Je reviens sur la cible, les unités restent dans leur
+position. Je ne suis pas obligé de remettre mes unités à chaque fois », et, sur
+question directe, **le drapeau actif/inactif est retenu aussi**. `npm test` rend
+**1573 pass / 0 fail** au sens de la garde de `documentation.test.js` — c'est le
+NOMBRE de tests déclarés ; le verdict mesuré est **1572 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. `npm run build` → `dist/index.html`, **9 314 390 octets**, 0 référence
+externe. Coût **+3 496 octets, SANS UN OCTET D'IMAGE NI DE SON**, mesuré poste
+par poste contre le livrable rebâti dans un `git worktree` sur l'arbre pristine
+de `main` = `ea79a16` (**9 310 894**) : **feuille +464 · JavaScript +2 689 ·
+balisage +343 · images +0 · audio +0**, la somme des cinq postes tombant
+EXACTEMENT sur le total, et **307 lignes `data:` / 306 URI de part et d'autre**.
+Borne T10 **inchangée à 9 600 000** — le lot ne fait entrer aucune ressource —,
+marge **285 610 octets, 2,98 %**. Version et build passent à **0.99.44 ·
+build 146**, le suivant disponible ; `main` n'a pas bougé sous le lot, vérifié au
+`git fetch`, et **`ea79a16` EST le commit de fusion du lot MUR** — l'ordre de
+merge du §9 du brief est donc tenu. Le lot touche `src/index.src.html`,
+`src/sim/deplacement.js`, `src/sim/formation-de-raid.js`, `src/sim/raid.js`,
+`src/sim/state.js`, `src/ui/chantier.js`, `src/ui/monde.js`, `src/ui/raid.js`,
+`package.json`, treize fichiers de `test/`, et fait entrer
+`src/sim/batiment-de-production.js` et `RAPPORT-lotRAID-ET-ECRAN.md`. **Pas une
+ligne de `src/sim/combat.js`, `src/data/`, `src/render/`, `src/son/` ni
+`tools/`** — vérifié au diff.
+⚠⚠ **`SAVE_VERSION` PASSE DE 31 À 32, ET C'EST OBLIGATOIRE.** La mémoire doit
+survivre à la fermeture du jeu : « un raid non terminé » est le cas d'usage
+d'Ethan, pas un cas limite. `formationRetenue` entre à la RACINE de l'état — un
+seul champ, `null` par défaut — et la migration 31 → 32 **ne calcule rien et ne
+peut rien calculer** : une v31 ne sait ni quelle cible le joueur regardait, ni
+comment il avait rangé ses unités, la formation vivant jusque-là dans la
+fermeture de l'écran. ⚠ Et elle **n'écrase pas** une valeur déjà présente, même
+discipline que le compteur d'instance de la 23 → 24 : les montages du dépôt
+fabriquent leurs vieilles sauvegardes en RABAISSANT une récente.
+⚠⚠ **LA CLÉ DE LA MÉMOIRE EST UN QUADRUPLET, ET LE QUATRIÈME TERME EST CELUI QUI
+COMPTE.** On rend la formation retenue si et seulement si la BASE, la RANGÉE et
+la COLONNE de la cible, l'EMPREINTE de l'armée et la LONGUEUR coïncident.
+L'empreinte est la suite des identifiants de `baseCourante(etat).armee`, jointe
+par `|` : c'est elle qui attrape la RECOMPOSITION. Sans elle, une armée dont le
+joueur a retiré la première pièce et posé une autre à la fin recevrait les
+positions retenues **décalées d'un cran**, en silence — le Bélier prendrait la
+case du Ratisseur, et le raid partirait avec une formation que personne n'a
+composée. `FR T2` monte exactement ce cas, à LONGUEUR ÉGALE pour que ce ne soit
+pas le garde de longueur qui réponde.
+⚠ **CE QUI EST RETENU EST QUATRE CHAMPS, ET ILS SE LISENT DANS `CHAMPS_RETENUS`**
+— `vague`, `colonne`, `actif`, `embarqueDans`. `niveau` et `degatsMilli` se
+relisent FRAIS dans `armee` : une unité réparée entre deux passes part réparée.
+⚠⚠ **ET « RÉ-ATTAQUER » EN HÉRITE, CE QUI EST LE POINT ET NON UN EFFET DE BORD.**
+Le commentaire d'`ouvrirSurLaCible` disait jusqu'au 10/09 qu'« après un raid,
+l'armée est abîmée et le rangement de la passe précédente n'a plus de sens ».
+C'est exactement ce qu'Ethan renverse : son cas d'usage est le raid qui laisse le
+site DEBOUT. Les deux arbitrages — 08/09 et 10/09 — sont écrits, datés, en tête
+de `sim/formation-de-raid.js`, avec ce qui survit du premier.
+⚠⚠ **QUATRE FLÈCHES DÉCALENT TOUTE LA FORMATION, ET LE REFUS EST EN BLOC.**
+Point 9. `problemesDeLaTranslationEnFormation` juge la formation d'ARRIVÉE, une
+fois — le motif exact de `problemesDeLaPermutationEnFormation` —, et **ce n'est
+pas un confort : c'est mesuré.** Appelé pièce par pièce sur la formation
+COURANTE, `problemesDeLEffectif` refuse une translation parfaitement légale dès
+que deux pièces se suivent : relevé sur deux Meutes en (1, 1) et (1, 2) décalées
+d'une colonne à droite, **la première rend `superposition`, la seconde une liste
+vide**. ⚠ Les passagères ne se comptent pas et ne bougent pas — elles n'ont pas
+de case —, et une formation sans une seule pièce posée se REFUSE au lieu de
+réussir en silence.
+⚠⚠ **ET LA PLACE EST PRISE À LA VERTICALE, PAS À LA LARGEUR — MESURÉ AVANT
+D'ÉCRIRE UNE LIGNE.** Ethan : « on a déjà trop de place quelque part en bas ».
+Relevé dans Chromium à la géométrie du S25 FE : les cinq boutons de mots
+faisaient **45,6 × 48 px** pour un texte de 9 px, la hauteur venant d'un
+`align-items: stretch` aligné sur les 48 px d'`ATTAQUER`. `#raid-boutons` devient
+une grille de DEUX rangées ; il fait toujours **240 × 48**, `#raid-rangee`
+toujours 56, et le canevas ne perd rien. **Chaque flèche fait 57,8 × 21,9 px**,
+la cible de doigt la plus large de cette rangée, **débordement horizontal 0**.
+⚠ **ET LES CINQ MOTS CESSENT DE SE COUPER, CE QUI EST UN GAIN ET NON UNE
+CONSÉQUENCE.** Les colonnes passent de `1fr` à `auto` : à parts égales
+« Simulateur » demandait **48,5 px pour 45,6** et se coupait EN PLEIN MOT ; il en
+reçoit **57,7**, et **aucun des cinq ne se coupe plus** — mesuré des deux côtés.
+⚠⚠ **LE HAUT ET LE BAS SONT LA GAUCHE ET LA DROITE TOURNÉES D'UN QUART DE TOUR.**
+`PICTOGRAMMES` ne porte que `ui_fleche_gauche` et `ui_fleche_droite` — vérifié
+dans `src/data/atlas.js`, la famille `interface` n'a AUCUNE flèche verticale.
+Inventer un sprite serait un lot d'art, écrire un glyphe `▲` serait une seconde
+façon de dire une flèche : on tourne le MÊME dessin. ⚠ `transform` reste interdit
+sur la grille de la base — l'interdiction du lot POSE-À-L'ÉCRAN nomme
+`#chantier-grille`, `.case` et `.jeton`, elle défend le POINTAGE d'une case, et
+un bouton n'a pas de case à désigner.
+⚠⚠ **L'ÉPERVIER NE PART PLUS SANS AÉRODROME, ET CE QUI MANQUAIT ÉTAIT UN
+LECTEUR.** Point 4. `batimentDeProductionManquant` répondait juste depuis le
+07/09 et `FORCES.armee.exigeLeBatimentDeProduction` valait déjà `true` ;
+`problemesDuRaid` ne l'interrogeait pas. Le refus porte **sur les seules pièces
+qui PARTENT**, celles que `composerLesVagues` retient, et la phrase vient de
+`messageSansBatiment` — jamais d'une seconde formulation.
+⚠⚠ **ET IL A FALLU EXTRAIRE `src/sim/batiment-de-production.js` POUR NE PAS FAIRE
+LE PREMIER CYCLE DE `src/sim/`.** La fonction vivait dans `sim/state.js`, qui
+importe DÉJÀ `creerRecherche` de `sim/raid.js` : l'y laisser aurait fait importer
+`state.js` en retour. Précédents exacts : `base-courante.js` et `saveur.js`.
+**C'est un DÉPLACEMENT, pas une écriture** — pas une ligne du corps n'a changé,
+`state.js` la RÉ-EXPORTE, et aucun de ses appelants n'a eu à changer d'import.
+⚠ Le ré-export est un `import` PUIS un `export`, jamais un `export … from` seul.
+⚠⚠ **ET `FORCES.armee.exigeLeBatimentDeProduction` N'EST PAS LU SUR CE
+CHEMIN-LÀ — COUPLAGE DÉCLARÉ.** Le lire demanderait d'importer `FORCES` de
+`sim/state.js`, donc de rouvrir le cycle qu'on vient de fermer ; et ce chemin EST
+l'armée par construction. **Le jour où Ethan retire ce verrou à l'ARMÉE, il faut
+basculer LES DEUX endroits** — la table et `problemesDuRaid`. C'est écrit à
+côté du code.
+⚠⚠ **LE POINT 4 DÉPLACE 34 MONTAGES, PAS 32, ET C'EST MESURÉ.** Le brief en
+annonçait trente-deux ; en neutralisant les huit appels de l'aide dans une copie
+de l'arbre, `npm test` rend **1 + 16 + 15 + 2 = 34** rouges — `poi.test.js`,
+`raid.test.js`, `raid-ecran.test.js`, `recherche.test.js`. **Aucun témoin ne
+bouge** : `JOURNAL T1`, `JOURNAL T1 bis` et `BASES-0 T1` sont verts.
+⚠ **ET L'AIDE DE MONTAGE EXISTAIT DÉJÀ — ÉCART AU BRIEF, DÉCLARÉ.** Il demandait
+d'en écrire une ; `test/batiments-de-production.js` est au dépôt depuis le lot
+PRODUCTION-EN-DÉFENSE, 07/09, et il fait exactement ce qu'il fallait. **Huit
+appels** ont été ajoutés, dans quatre fichiers, et pas une ligne de l'aide.
+⚠⚠ **DEUX MONTAGES ONT PERDU LEUR PRÉMISSE, ET C'EST LE MONTAGE QU'ON RÉPARE,
+JAMAIS L'ASSERTION.** (1) `TRANSFERT T4` mesurait le dépassement de plafond par
+une comparaison de tailles — « un camp de niveau 1 rapporte plus que le coffre
+d'une base neuve » : l'aide monte le Chantier au niveau 5, donc le coffre de 50 à
+**122**, quand le camp rapporte 52 de quartz. Il part désormais **à une unité
+sous le plafond** et exige les deux bouts. (2) « armée — plancher à 1 PV » monte
+sa base au niveau 12 AVANT le rattrapage, parce que le niveau d'un camp se fixe à
+l'apparition : l'aide pose donc ses bâtiments **après**, sinon la moyenne
+tomberait de 12 à 3,75 et le montage perdrait son mordant.
+⚠⚠ **LE DÉLAI DE DÉPLACEMENT S'ANNONCE AVANT LA CONFIRMATION, ET LE NOMBRE
+ANNONCÉ EST CELUI QUI SERA FACTURÉ — PAR CONSTRUCTION.** Point 6.
+`delaiDuDeplacementVers` entre dans `sim/deplacement.js` : **une écriture, deux
+lecteurs** — `deplacerLaBase` l'appelle pour ÉCRIRE
+`dernierDeplacementDelaiTicks`, l'écran pour ANNONCER. `enDuree` est EXPORTÉE
+plutôt que reformulée : c'est la phrase qui écrit déjà le refus `delai`, et
+surtout pas `formaterDuree` de `ui/raid.js`, qui compte des ticks de COMBAT.
+⚠ **LES DEUX LIGNES ENTRENT PAR LA MÊME PORTE QUE LE BILAN**, `peindreLesLignes`,
+en UN seul appel : la discipline que `PC T3` mesure — le bilan se calcule au
+TOUCHER, pas à chaque image — n'est pas touchée. Relevé à l'écran : « Distance
+1 case · Immobilisée 1 h », puis, l'accord donné, **`dernierDeplacementDelaiTicks`
+= 36 000 ticks**, soit exactement une heure. **Les deux nombres sont le même.**
+⚠⚠ **LE BLASON DU TITRE DISPARAÎT DES QUATRE FICHES, ET L'INSERTION SE RETIRE UNE
+FOIS.** Point 7. `peindreVueDuPanneau` est le rendu partagé du Chantier, de
+l'Offense, de la fiche d'une cible ennemie et du journal des raids : le champ
+`picto` de niveau TITRE part de ses quatre producteurs ENSEMBLE, faute de quoi
+`ERGO T7 bis` — « les deux vues ont EXACTEMENT les mêmes clés » — tombe sur la
+première oubliée. ⚠ **Les pictogrammes de LIGNE restent** : ils sont dans le
+CORPS, ils nomment la grandeur de chaque paire, et `CÂB T7` les mesure toujours.
+Relevé à l'écran sur les quatre : **0 pictogramme au titre, 5 et 6 au corps**.
+⚠ **`CÂB T7` EST RETOURNÉ, PAS SUPPRIMÉ**, et l'absence se mesure par `in` et non
+par `=== undefined` : un `picto: undefined` posé d'un seul côté passerait
+l'égalité et ferait diverger les formes.
+⚠⚠ **LE BOUTON RÉPARER DE LA BANDE DÉFENSE SE MASQUE, ET C'EST LA TABLE QUI LE
+DÉCIDE.** Point 8. La règle est `TERRAINS[terrainCourant()].actions[nom] === null`
+— jamais un `=== 'defense'` écrit dans l'écran, que `chantier.test.js` interdit
+de toute façon. **Ce qui disparaît est l'AFFICHAGE** : `ACTIONS.reparer` garde son
+moteur, que la bande Bâtiments emploie, et le long bloc de `TERRAINS.defense` qui
+dit POURQUOI `reparer` vaut `null` reste mot pour mot — c'est lui qui empêchera
+qu'on le recâble. ⚠ `#offense-reparer` n'est pas concerné : il a un vrai moteur.
+⚠⚠ **ET UNE ACTION DONT LE BOUTON VA DISPARAÎTRE SE DÉSARME, SANS QUOI LE MODE
+DEVENAIT INANNULABLE.** L'action armée SURVIT au changement de bande — c'est
+voulu depuis le 28/08 — mais retoucher le bouton armé est la SEULE façon de
+désarmer : un bouton masqué aurait laissé « Mode RÉPARER » actif et sans issue.
+Relevé à l'écran : bouton armé au Chantier, bascule en Défense → **bouton masqué,
+classe `arme` retirée, ligne de mode vide** ; retour → bouton présent.
+⚠⚠ **`PIC T7` EST RÉANCRÉ, ET SON ANCRE MENTAIT DÉJÀ DE 142 OCTETS.** Elle
+écrivait **9 310 752**, mesuré au lot ARRIVÉE-CARTE-ET-BUILD sur `6eccedc` ; MUR
+est passé dessus sans la toucher, et l'écart cumulé faisait **3 638 octets** —
+sous la tolérance de 50 000, donc VERT. C'est très exactement ce que la dernière
+assertion de ce test existe pour empêcher : **la tolérance garde contre la dérive
+LENTE, pas contre un lot qui sait ce qu'il déplace.** Marge réécrite à
+**285 610 octets, 2,98 %**.
+⚠ **DEUX TESTS ENTRENT — `FR T2` ET `FR T3` — ET LE COMPTE PASSE DE 1 571 À
+1 573.** **Aucune assertion n'a été retirée ni assouplie** ; **une garde est
+RETOURNÉE** (`CÂB T7`), et trois changent de valeur en écrivant le nombre d'avant
+à côté de celui d'après — `PC T1` (deux lignes de plus au panneau), `ASSAUT T1`
+(cinq mots ET quatre flèches, comptés séparément), et les quatre `SAVE_VERSION`.
+⚠⚠ **TROIS FALSIFICATIONS JOUÉES, TROIS CHUTES, ZÉRO MUETTE.** (1) Le contrôle
+d'empreinte retiré de `formationPourLaCible` fait tomber `FR T2` — et lui seul.
+(2) Le maillon 31 → 32 vidé de son corps fait tomber `FR T3`. (3) Le maillon
+RETIRÉ de la table fait lever la chaîne — « aucune migration depuis la version
+31 » — et `FR T3` tombe avec elle. ⚠ Et la garde de `charger` est la seconde
+moitié : une v32 sans `formationRetenue` est REFUSÉE, donc un maillon sauté ne
+peut pas rester silencieux.
+⚠⚠ **SIX CONTRÔLES JOUÉS AU BANC, DANS UN VRAI NAVIGATEUR, SUR UNE VRAIE
+PARTIE.** Chromium, géométrie du S25 FE, sauvegarde injectée dans
+`localStorage` : formation rangée puis raid mené (site laissé DEBOUT — « Bâtiments
+restants 99 % ») → la MÊME cible rouverte rend **`2:1 2:2 2:3(off) 2:4 2:5 2:6`,
+à l'identique**, et une AUTRE cible repart d'Offense (**`1:1 … 1:6`, toutes
+actives**) ; les quatre flèches refusent en bloc au bord — « colonne 0 hors de
+1…9 », « vague 0 hors de 1…4 », **rien ne bouge** — et déplacent les six d'un
+coup ailleurs ; l'Épervier sans aérodrome bloque l'entrée sur la cible avec
+« sans Aérodrome, pas d'avion : désactive la pièce ou retire-la en Offense », et
+la pièce retirée en Offense, la cible s'ouvre ; le délai annoncé est celui qui est
+facturé, au tick ; les quatre titres n'ont plus un pictogramme ; le bouton
+Réparer est absent en Défense **et présent au Chantier**, les deux moitiés
+vérifiées ensemble.
+⚠⚠ **ET UN RESTE OUVERT EST TROUVÉ EN JOUANT, PAS EN RELISANT : LA SORTIE
+« DÉSACTIVER » N'EST PAS ATTEIGNABLE DEPUIS LA CARTE.** `entrerDansLaCible` lit
+`problemesDuRaid` : le refus du point 4 ferme donc l'écran de raid, qui est le
+SEUL endroit où l'on désactive une pièce — l'Offense n'a pas ce geste. La phrase
+nomme deux sorties, et **une seule est ouverte** dans ce cas-là ; l'autre l'est si
+le joueur est déjà sur l'écran de raid quand le bâtiment tombe. **Relevé, non
+corrigé, à trancher par Ethan** : soit la phrase ne nomme que l'Offense, soit
+l'écran de raid s'ouvre et ne refuse qu'au DÉPART.
+⚠ **LES DEUX CENTS TÉMOINS DE COMBAT NE BOUGENT PAS D'UN BIT**, et
+`test/temoins-combat.js` n'a pas une ligne de changée : `src/sim/combat.js`
+n'apparaît pas au diff. **Le témoin de BASES-0 gagne un SIXIÈME terme d'octets**,
+`OCTETS_AJOUTES_PAR_RAID_ET_ECRAN = 24` — `,"formationRetenue":null` —, et il est
+FIXE sur les vingt-cinq graines : le scénario n'ouvre aucun écran de raid, donc
+rien ne s'y range.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠ **CE QUI N'A PAS ÉTÉ VU SE NOMME** : le rendu sur l'appareil d'Ethan (§3), et
+le déroulé d'un raid en temps réel — le volet du navigateur reste masqué ici,
+donc `requestAnimationFrame` ne bat pas, et le raid a dû être conclu par la porte
+que le jeu offre déjà (page masquée ⇒ rapport immédiat, lot RETOUR-DE-RAID).
+L'ÉTAT, lui, était commis avant la première image depuis l'arbitrage du 01/09.
+
+**Auparavant, après le lot MUR :**
 ⚠⚠ **ON S'ARRÊTE DEVANT LE MUR, ET ON NE FLUE PLUS DEDANS.** Ethan, 10/09, deux
 points relevés le même jour : « Un mur, tourelles, structure bloque. Donc une
 unité s'arrête avant, pas dedans. Ou peut-être que la hitbox est mal faite ? » et
@@ -9866,7 +10078,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 34 fichiers
+src/sim/                simulation déterministe, sans DOM — 35 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -9896,6 +10108,25 @@ src/sim/                simulation déterministe, sans DOM — 34 fichiers
   voisinage-des-bases.js  ce qu'une base ENCOMBRE : le 3 × 3 qu'aucune autre ne partage
   prix-du-raid.js       ce qu'un raid coûte : la distance, et ce que la CARTE peint
   territoire-tenu.js    le refus partagé : une case tenue par l'Ouvrage ne se prend pas
+  batiment-de-production.js  quel bâtiment manque à une pièce, ou `null`
+  ⤷ ⚠⚠ `batiment-de-production.js` EXISTE POUR UNE CONTRAINTE D'IMPORTS, ET
+    LES PRÉCÉDENTS SONT `base-courante.js` ET `saveur.js` — lot RAID-ET-ÉCRAN,
+    10/09. `batimentDeProductionManquant` vivait dans `sim/state.js` ; le
+    point 4 d'Ethan — « j'ai supprimé un aérodrome, mon Épervier peut quand même
+    partir en raid » — demande à `problemesDuRaid` de `sim/raid.js` de la lire.
+    Or `state.js` importe DÉJÀ `creerRecherche` de `raid.js` : l'importer en
+    retour aurait fait le PREMIER cycle de `src/sim/`, mesuré inexistant avant
+    d'écrire une ligne.
+  ⤷ ⚠⚠ C'EST UN DÉPLACEMENT, PAS UNE ÉCRITURE, ET `state.js` LA RÉ-EXPORTE.
+    Pas une ligne du corps n'a changé en route, et aucun de ses appelants — les
+    deux palettes, l'écran de réparation, le tutoriel, six fichiers de test — n'a
+    eu à changer d'import. ⚠ Le ré-export est un `import` PUIS un `export`,
+    jamais un `export … from` seul : `state.js` LIT cette fonction pour son
+    propre `problemeDuBatimentDeProduction`, et un ré-export nu ne crée aucune
+    liaison locale — la leçon payée au lot MURS-OUVRAGE, mot pour mot.
+  ⤷ ⚠ IL N'IMPORTE QUE `base-courante.js` ET DEUX TABLES. Un module de bas
+    niveau qui remonterait vers un moteur rouvrirait exactement la porte qu'on
+    ferme.
   ⤷ ⚠⚠ `formation-de-raid.js` NE VA JAMAIS DANS L'ÉTAT, ET C'EST TOUT SON OBJET —
     lot FORMATION-ET-GARNISON, 08/09. Il rend une copie profonde de
     `baseCourante(etat).armee`, ALIGNÉE PAR INDICE, plus un `embarqueDans` par
