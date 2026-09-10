@@ -11,8 +11,8 @@ déterministe — même entrée, mêmes octets — et son mode --verifier le pro
 
 Deux sorties par exécution :
 
-  art/sprites/atlas-<famille>-64.webp    l'image cousue, inlinée par tools/build.js
-  art/sprites/atlas-<famille>-128.webp   la même en grille 128, qu'aucun écran ne lit encore
+  art/sprites/atlas-<famille>-128.webp   l'image cousue, inlinée par tools/build.js
+  art/sprites/atlas-<famille>-64.webp    la même en grille 64, qu'aucun écran ne lit plus
   src/data/atlas.js                      l'index, importé par src/render/sprite.js
 
 ⚠ LE LECTEUR S'APPELLE `sprite.js`, PAS `atlas.js`, ET C'EST UNE PRÉCAUTION DE
@@ -28,11 +28,16 @@ base64 contre 719 018 pour un atlas unique et 957 205 pour les fichiers séparé
 Le découpage par FAMILLE, et pas par écran, évite qu'un sprite servant à deux
 écrans y soit deux fois.
 
-⚠ LA GRILLE EMBARQUÉE EST LA 64, ARBITRÉE LE 30/08. Neuf colonnes sur ~380 px
-font des cases de ~42 px CSS, soit ~126 px physiques à DPR 3 sur le S25 FE : le
-128 serait la taille juste, le 64 est le compromis tenu. La 128 est cousue à
-côté depuis le lot PIXELS, et coûte 1 260 ko de dépôt pour zéro octet de
-livrable. ET LES DEUX GRILLES NE SONT PAS DES AGRANDISSEMENTS L'UNE DE L'AUTRE :
+⚠⚠ LA GRILLE EMBARQUÉE EST LA 128 DEPUIS LE 03/09, ET CE PARAGRAPHE A ANNONCÉ
+LE CONTRAIRE PENDANT UNE SEMAINE. Il disait « la grille embarquée est la 64,
+arbitrée le 30/08 » et « la 128 coûte 1 260 ko de dépôt pour zéro octet de
+livrable » — les deux étaient vrais jusqu'au lot GRILLE-128, où Ethan a tranché
+« il faut les mettre en 128 au sol, et les unités aussi », et faux ensuite. Le
+bloc de `COTE_INDEX` plus bas disait déjà la bascule : le fichier se
+contredisait, ce qui est exactement la faute que `CLAUDE.md` §6 raconte pour la
+boussole de `rendu-pose.js`. Corrigé au lot ART-90. **C'est la 64 qui ne coûte
+rien au livrable aujourd'hui**, et qu'aucun écran ne lit.
+ET LES DEUX GRILLES NE SONT PAS DES AGRANDISSEMENTS L'UNE DE L'AUTRE :
 ce sont deux conditionnements indépendants, chacun réduit depuis la source.
 
 ⚠ L'EFFECTIF DE CHAQUE FAMILLE EST ASSERTÉ, PAS DÉDUIT. La leçon du 29/08 (voir

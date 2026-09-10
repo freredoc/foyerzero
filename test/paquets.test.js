@@ -400,21 +400,29 @@ test('PQ T10 — trois mille montages : effectifs, bandes, cases uniques, aucune
 // toujours, indépendante du placement — ne bouge pas. C'est la DERNIÈRE fois
 // qu'un lot de placement bump `SAVE_VERSION` : le placement tire sur son propre
 // flux, tout d'avance, et un lot qui le retouche ne change plus la composition.
-test('PQ T11 — v29 → v30 : sitesEntames vidé, basesRasees intact, v30 inchangée', () => {
-  assert.equal(SAVE_VERSION, 30);
+test('PQ T11 — v29 → v30 : sitesEntames vidé, basesRasees intact, version courante inchangée', () => {
+  // ⚠⚠ LE MAILLON N'EST PLUS LE DERNIER DE LA CHAÎNE — lot RÈGLES-DE-CARTE,
+  // 10/09/2026. `SAVE_VERSION` est passée à 31, et la garde du NUMÉRO appartient
+  // au maillon le plus récent, une seule fois : elle vit désormais dans
+  // `RC T6`. Ce que ce test-ci garde n'a pas changé d'un mot — le maillon v29
+  // vide bien `sitesEntames` et ne touche pas `basesRasees` — mais il le mesure
+  // au BOUT de la chaîne, ce qui est plus fort : un maillon posé après lui qui
+  // remettrait des sites entamés le ferait tomber.
   const etat = creerEtat(11);
   const v29 = JSON.parse(serialiser(etat, 1_700_000_000_000));
   v29.version = 29;
   v29.sitesEntames = { '200:16:1': { tickDuRaid: 5, pvBatimentsMilli: [1, 2], pvDefensesMilli: [3] } };
   v29.basesRasees = [{ rangee: 150, colonne: 4, vainqueur: 'joueur', niveau: 12, tick: 9, type: 'baseOuvrage' }];
   const migre = migrer(structuredClone(v29));
-  assert.equal(migre.version, 30);
+  assert.equal(migre.version, SAVE_VERSION, 'la chaîne ne va pas jusqu\'au bout');
+  assert.ok(SAVE_VERSION > 30, 'le maillon v29 → v30 n\'est plus le dernier : la chaîne doit le traverser');
   assert.deepEqual(migre.sitesEntames, {}, 'le maillon v29 → v30 n\'a pas vidé les sites entamés');
   assert.deepEqual(migre.basesRasees, v29.basesRasees, 'la migration a touché basesRasees');
-  // Une sauvegarde déjà en v30 traverse sans être réécrite.
-  const v30 = JSON.parse(serialiser(etat, 1_700_000_000_000));
-  v30.sitesEntames = { '1:1:1': { tickDuRaid: 1, pvBatimentsMilli: [], pvDefensesMilli: [] } };
-  assert.deepEqual(migrer(structuredClone(v30)), v30, 'une v30 est réécrite');
+  // Une sauvegarde déjà à la version courante traverse sans être réécrite.
+  const courante = JSON.parse(serialiser(etat, 1_700_000_000_000));
+  courante.sitesEntames = { '1:1:1': { tickDuRaid: 1, pvBatimentsMilli: [], pvDefensesMilli: [] } };
+  assert.deepEqual(migrer(structuredClone(courante)), courante,
+    'une sauvegarde à la version courante est réécrite');
   // Et la v29 se charge, ce qui est la seule chose que le joueur voit.
   assert.doesNotThrow(() => charger(JSON.stringify(v29), 1_700_000_000_000));
 });

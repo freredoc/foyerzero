@@ -11,39 +11,78 @@ par `git diff --name-only`.
 
 | | valeur |
 |---|---|
-| version · build | **0.99.38 · build 140** — le suivant disponible à l'exécution |
-| `npm test` | **1532 déclarés · 1531 pass · 0 fail · 1 skipped** |
+| version · build | **0.99.39 · build 141** — le suivant disponible APRÈS la fusion |
+| `npm test` | **1550 déclarés · 1549 pass · 0 fail · 1 skipped** |
 | le `skipped` | `LIMITE T8`, suspendu par Ethan le 08/09 — **non réparé**, §10 |
 | `npm run check` | **sort en 0** |
-| `npm run build` | `dist/index.html`, **9 147 308 octets**, **0 référence externe** |
-| borne T10 | inchangée à 9 300 000 — marge **152 692 octets, 1,64 %** |
-| `SAVE_VERSION` | **30**, inchangé — vérifié au diff |
+| `npm run build` | `dist/index.html`, **9 425 421 octets**, **0 référence externe** |
+| borne T10 | **9 600 000** (relevée par ART-90, **non touchée ici**) — marge **174 579 octets, 1,82 %** |
+| `SAVE_VERSION` | **31** — **pas une ligne de ce lot ne le touche**, vérifié au diff ;
+  il est passé de 30 à 31 sur `main`, par RÈGLES-DE-CARTE, pas ici |
+
+⚠⚠ **LA BASE A BOUGÉ SOUS LE LOT, ET TOUT CE QUI SUIT EST REMESURÉ.** `main` est
+passé de `14dd4ac` à **`3e68d7b`** pendant l'exécution, Ethan ayant fusionné
+SON-ET-ARRIVÉE (#126), RÈGLES-DE-CARTE (#125) puis ART-90 (#124). Le lot est
+**remesuré poste par poste contre la base neuve**, pas recopié — précédent
+SOL-OUVRAGE. Les nombres de la première livraison (9 147 308, +13 127,
+1532 tests, marge 1,64 %) sont **périmés** et remplacés ici.
+
+⚠⚠ **ET LE NUMÉRO DE BUILD ÉTAIT EN COLLISION, CE QUE GIT A FUSIONNÉ EN
+SILENCE.** ART-90 a pris **0.99.38 · build 140** ; ce lot avait pris le même,
+indépendamment. Les deux côtés portant le MÊME texte, `git merge` n'a rien
+signalé — et deux livrables DIFFÉRENTS auraient porté un seul numéro, que
+l'enveloppe Android lit par `config.build` et que le manifeste de Pages publie.
+Le lot passe donc à **0.99.39 · build 141**.
 
 ### Le coût, ventilé poste par poste
 
 Mesuré contre un livrable rebâti dans un `git worktree` depuis
-`origin/main` = **`14dd4ac`**, qui rend **9 134 181 octets** — exactement le
-nombre que `CLAUDE.md` §0 annonçait.
+`origin/main` = **`3e68d7b`**, qui rend **9 412 300 octets**.
 
 | poste | avant | après | écart |
 |---|---:|---:|---:|
-| JavaScript | 399 346 | 400 403 | **+1 057** |
+| JavaScript | 401 161 | 402 212 | **+1 051** |
 | feuille | 129 497 | 141 917 | **+12 420** |
 | balisage | 36 205 | 35 855 | **−350** |
-| **images** | 7 375 787 | 7 375 787 | **+0** |
+| **images** | 7 652 091 | 7 652 091 | **+0** |
 | **audio** | 1 193 346 | 1 193 346 | **+0** |
-| TOTAL | 9 134 181 | 9 147 308 | **+13 127** |
+| TOTAL | 9 412 300 | 9 425 421 | **+13 121** |
 
-**La somme des cinq postes tombe EXACTEMENT sur le total.** `data:` à
-**311 lignes / 306 URI des deux côtés** — aucune ressource n'entre ni ne sort,
-ce que le §11 du brief exigeait.
+**Les cinq postes PARTITIONNENT le fichier des deux côtés** — chacun est NET de
+ses `data:`, si bien que leur somme tombe sur le total avant comme après, et pas
+seulement parce que les images ne bougent pas. `data:` à **311 lignes / 306 URI
+des deux côtés** — aucune ressource n'entre ni ne sort, ce que le §11 du brief
+exigeait.
+
+⚠⚠ **ET LE JAVASCRIPT PERD SIX OCTETS À LA FUSION : +1 057 → +1 051.**
+`src/ui/monde.js` et `src/ui/raid.js` sont touchés par les DEUX côtés, donc le
+livrable fusionné n'est pas la somme des deux diffs. **C'est la mesure qui le
+dit, pas l'arithmétique** — et c'est exactement pourquoi un lot dont la base a
+bougé se remesure au lieu de se recopier.
+
+⚠⚠ **ET `main` EST ROUGE À L'HEURE OÙ CE LOT SE FUSIONNE — MESURÉ, PAS DÉDUIT.**
+Sur un `git worktree` pristine à `3e68d7b`, `dist/` rebâti : **1542 déclarés ·
+1540 pass · 1 fail · 1 skipped**, et le rouge est
+`documentation — CLAUDE.md §0 annonce le vrai nombre de tests` — la §0 de `main`
+annonce **1527**, le dépôt en déclare **1542**. Les trois lots du 10/09 ont
+chacun mesuré leur compte contre `14dd4ac`, et aucun n'a remesuré après
+l'atterrissage des deux autres. **Ce lot le referme** en écrivant 1550, le compte
+mesuré de l'arbre fusionné. ⚠ Le premier relevé de cette base annonçait 20 échecs
+et **c'était mon artefact** : `FZ_SORTIE` prend un chemin de FICHIER, donc le
+worktree n'avait pas de `dist/index.html` et dix-neuf gardes qui le lisent
+tombaient. Rebâti normalement, il en reste **un**, celui ci-dessus.
+⚠ Même écart sur la taille : la §0 d'ART-90 annonce **9 410 485**, l'arbre réel
+de `main` en rend **9 412 300** — les **1 815 octets** d'écart sont le JavaScript
+des deux lots frères, que sa mesure contre `14dd4ac` ne portait pas. **Son bloc
+n'est pas réécrit** : il dit ce que son lot a mesuré, et c'est ce qu'un bloc
+« Auparavant » doit dire.
 
 ⚠⚠ **ET LES ONZE MILLE OCTETS DE FEUILLE SONT DE LA PROSE, MESURÉ.** Sur les
 +12 420, **+11 755 sont des commentaires** et **+665 des règles** :
 `tools/build.js` inline la feuille TELLE QUELLE, sans retirer les `/* */`. Le
 livrable porte aujourd'hui **98 084 octets de commentaires CSS pour 43 833 de
 règles**. Ce n'est pas un défaut de ce lot — c'est le régime depuis toujours —
-mais c'est le premier qui le mesure, et la marge vient de descendre à 1,64 %.
+mais c'est le premier qui le mesure, et la marge est à 1,82 %.
 **Le levier existe et il est chiffré** : les retirer AU BUILD rendrait ~98 Kio
 sans toucher une ligne de source, et la source garderait tout. C'est un lot
 d'outillage. **Ethan tranche.**
@@ -524,8 +563,9 @@ ne le lancer qu'aux lots d'art.
 ## 12. Points ouverts — Ethan tranche
 
 1. **Les 98 084 octets de commentaires CSS du livrable.** La marge T10 est à
-   **1,64 %**, la plus mince depuis BASES-1. Les retirer AU BUILD rendrait
-   ~98 Kio sans toucher une ligne de source. C'est un lot d'outillage.
+   **1,82 %** — la borne vient d'être relevée à 9 600 000 par ART-90, donc elle
+   respire, mais le poste ne se réduit pas tout seul. Les retirer AU BUILD
+   rendrait ~98 Kio sans toucher une ligne de source. C'est un lot d'outillage.
 2. **`#chantier-reparation` sorti du flux** est un écart au mot d'Ethan, qui ne
    nommait que l'armée et le raid. Réversible en retirant un sélecteur.
 3. **Ouvrir le journal recouvre la fiche au lieu de la fermer.** Voulu et

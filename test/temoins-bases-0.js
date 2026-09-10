@@ -3857,3 +3857,127 @@ export const RAPPORTS_OUVRAGE_PAQUETS = {
   24: '78f4edf69e69cd41',
   25: 'bba397b690e08c80'
 };
+
+/**
+ * DIX-HUITIÈME COUCHE — lot RÈGLES-DE-CARTE, 10/09/2026.
+ *
+ * ⚠⚠ SEPT COUPLES SUR 350, ET LES DIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT.
+ * Deux champs seulement bougent — `attaque` et `rapports` —, et seulement à
+ * partir de la phase 11, celle du raid LOINTAIN. C'est la signature exacte du
+ * point 8 d'Ethan : le prix d'un raid lit désormais ce que la CARTE peint,
+ * planchers compris, et non plus l'octogone géométrique autour des bases du
+ * joueur. La cible du scénario est à la rangée 201, en plein territoire de
+ * l'Ouvrage : elle tombait dans l'octogone allié et se payait au tarif de chez
+ * soi. `attaque` porte les points dépensés, `rapports` le raid qui a suivi.
+ *
+ * ⚠⚠ ET LE RAID DE PROXIMITÉ, LUI, NE BOUGE PAS — les phases 7 à 10 tombent à
+ * l'octet. Il vise un CAMP du joueur à une case de sa base, que la carte peint
+ * au joueur des deux côtés de la règle : le tarif ne change pas. C'est cette
+ * moitié-là qui dit que le lot ne renchérit pas tout, mais seulement ce que la
+ * carte contredisait.
+ *
+ * ⚠ HUIT CHAMPS PAR BASE NE BOUGENT PAS DU TOUT, sur les quatorze phases —
+ * `position`, `dernierDeplacementTick`, `disposition`, `economie`, `garnison`,
+ * `armee`, `satellites`, `sitesEntames`. Le déplacement de la phase 9 tombe sur
+ * la MÊME case qu'avant : le refus `territoire-ennemi` ne mord pas au départ, où
+ * la garde du peuplement écarte l'Ouvrage de quinze cases. Et le barème du délai
+ * ne se lit qu'au SECOND déplacement, que le scénario ne fait pas.
+ */
+export const DEPLACES_PAR_REGLES_DE_CARTE = {
+  "p11_raidOuvrageApres": {
+    "attaque": "bb862f0d944d5f66",
+    "rapports": "7e2fe82f61410618"
+  },
+  "p12_veilleDuRaid": {
+    "attaque": "c6c207fcc5ffc4d5",
+    "rapports": "7e2fe82f61410618"
+  },
+  "p13_apresLeRaid": {
+    "attaque": "a26820f08296abf9",
+    "rapports": "80c5e72cf09408f4"
+  },
+  "p14_sousLeFeu": {
+    "rapports": "f69cf79dd0727486"
+  }
+};
+
+/** Les vingt-cinq empreintes par graine, après la dix-huitième couche. */
+export const EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE = {
+  "1": "00246443efd8131a",
+  "2": "e013afca1b7f81aa",
+  "3": "fdb5dc33f2788d9f",
+  "4": "b2e4ca7b902d5928",
+  "5": "078ad59041e03a4c",
+  "6": "d800f4fc09a1818a",
+  "7": "e1924e87f593c01b",
+  "8": "1069fce66c7050d0",
+  "9": "d563b196169aed4c",
+  "10": "2e9b602540f67ed0",
+  "11": "cbda64b923b7e0e7",
+  "12": "489bc1d81b590f1d",
+  "13": "4aa2b35f4d431d2d",
+  "14": "9160b8b306f36149",
+  "15": "0a8f2158858e20cd",
+  "16": "e6805c818fd96d79",
+  "17": "24dbdf0c2fc999ca",
+  "18": "250a3bacc972f980",
+  "19": "0c342a36baa9075e",
+  "20": "32fa1c9272141a66",
+  "21": "d08aa8112a81819e",
+  "22": "c4597fac22ac65b5",
+  "23": "7d852ae5211c6500",
+  "24": "e2acb877ef6816a5",
+  "25": "3145aff31b69efc0"
+};
+
+/**
+ * Ce que le champ neuf coûte à la sauvegarde — un nombre FIXE.
+ *
+ * ⚠ TRENTE-SIX OCTETS, LE MÊME NOMBRE QUE `reserveReparationBatiments` AU LOT
+ * RÉSERVE-BASE, ET POUR LA MÊME RAISON : c'est la longueur exacte de
+ * `,"dernierDeplacementDelaiTicks":null`. Il est le même sur les vingt-cinq
+ * graines — si l'écart dépendait de la partie, c'est qu'un CONTENU aurait bougé
+ * et pas seulement la forme. Il s'AJOUTE aux termes précédents au lieu de les
+ * remplacer : chacun dit ce que son lot a coûté, et la somme reste lisible
+ * ligne par ligne.
+ */
+export const OCTETS_AJOUTES_PAR_REGLES_DE_CARTE = 36;
+
+/**
+ * Les vingt-cinq empreintes du rapport du raid LOINTAIN, dix-huitième couche.
+ *
+ * ⚠⚠ VINGT-CINQ SUR VINGT-CINQ, ET LE RAID DE PROXIMITÉ ZÉRO SUR VINGT-CINQ.
+ * C'est l'attribution la plus nette du lot : le raid lointain vise la rangée
+ * 201, en plein territoire de l'Ouvrage, donc son prix change et le rapport avec
+ * lui ; le raid de proximité vise un camp du joueur à une case de sa base, que la
+ * carte peint au joueur des deux côtés de la règle. `RAPPORTS_PROCHE_PAQUETS`
+ * reste donc en vigueur, non surchargé — c'est cette moitié-là qui dit que le
+ * lot ne renchérit pas tout, mais seulement ce que la carte contredisait.
+ */
+export const RAPPORTS_OUVRAGE_REGLES_DE_CARTE = {
+  "1": "1927fee1d7a71cc5",
+  "2": "088dbfcf72a1057e",
+  "3": "9556113339699928",
+  "4": "0e346e39fc9dae49",
+  "5": "533060bb159aa7c9",
+  "6": "f0016f3b09e37c62",
+  "7": "60807aefb662ebda",
+  "8": "29649932f7c41046",
+  "9": "3383db5341b4d8af",
+  "10": "5605a1742e7ef9d2",
+  "11": "c896bb201ff786ac",
+  "12": "9a378a5837cbeae3",
+  "13": "9b7120493e701c53",
+  "14": "29a3c41f7023952c",
+  "15": "67438190db08c082",
+  "16": "f24a6584c61eb655",
+  "17": "0a8906977e77b277",
+  "18": "1a2c27c81dbe07af",
+  "19": "e71fbc788ee1cc08",
+  "20": "59478888f49168bc",
+  "21": "c0f818e6a455300c",
+  "22": "3edb39263348ea9d",
+  "23": "041e3f9ab015b30e",
+  "24": "79819a92f985fd6a",
+  "25": "875e50c49d08add3"
+};

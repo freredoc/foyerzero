@@ -48,9 +48,14 @@ import {
   rangDeLaBaseSuivante,
 } from '../src/sim/recherche.js';
 import { SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE } from '../src/data/recherche.js';
-import { territoireDeLaFenetre, occupantDeLaCase, OUVRAGE, JOUEUR } from '../src/sim/territoire.js';
+import {
+  territoireDeLaFenetre, occupantDeLaCase, campDeLaCase, OUVRAGE, JOUEUR,
+} from '../src/sim/territoire.js';
 import { caseRasee } from '../src/sim/ruines.js';
-import { coutDUnRaid, distanceCarreeCases } from '../src/sim/points-attaque.js';
+import { distanceCarreeCases } from '../src/sim/points-attaque.js';
+// ⚠ LE PRIX A DÉMÉNAGÉ AU LOT RÈGLES-DE-CARTE : il lit la CARTE, et
+// `points-attaque.js` ne peut pas la lire sans refermer un cycle d'import.
+import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { poiDeLaCase } from '../src/sim/poi.js';
 import { GEOGRAPHIE, FONDATION, POINTS_ATTAQUE } from '../src/data/sites.js';
@@ -97,6 +102,8 @@ import {
   DEPLACES_PAR_DISPOSITION_OUVRAGE, EMPREINTES_PAR_GRAINE_DISPOSITION_OUVRAGE,
   RAPPORTS_PROCHE_DISPOSITION_OUVRAGE, RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE,
   DEPLACES_PAR_PAQUETS, EMPREINTES_PAR_GRAINE_PAQUETS,
+  DEPLACES_PAR_REGLES_DE_CARTE, EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE,
+  OCTETS_AJOUTES_PAR_REGLES_DE_CARTE, RAPPORTS_OUVRAGE_REGLES_DE_CARTE,
   RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
 } from './temoins-bases-0.js';
 
@@ -180,7 +187,16 @@ function empreinteAttendue(phase, champ) {
   // composition, donc la garnison de tout site change avec sa disposition, et
   // rien ne se voit avant le premier raid. Aucun scalaire ne bouge, seuls les
   // deux rapports — voir la couche dans `temoins-bases-0.js`.
-  return DEPLACES_PAR_PAQUETS[phase]?.[champ]
+  // ⚠⚠ DIX-HUITIÈME COUCHE — lot RÈGLES-DE-CARTE, 10/09. **Sept couples sur
+  // 350**, et les DIX PREMIÈRES PHASES sont identiques AU BIT : deux champs
+  // seulement, `attaque` et `rapports`, à partir du raid LOINTAIN. C'est la
+  // signature du point 8 — le prix d'un raid lit ce que la carte PEINT au lieu
+  // d'un octogone géométrique —, et le raid de PROXIMITÉ ne bouge pas, sa cible
+  // étant peinte au joueur des deux côtés de la règle. ⚠ Aucun champ par base ne
+  // bouge : le déplacement de la phase 9 tombe sur la même case, et le barème du
+  // délai ne se lit qu'au SECOND saut, que le scénario ne fait pas.
+  return DEPLACES_PAR_REGLES_DE_CARTE[phase]?.[champ]
+    ?? DEPLACES_PAR_PAQUETS[phase]?.[champ]
     ?? DEPLACES_PAR_DISPOSITION_OUVRAGE[phase]?.[champ]
     ?? DEPLACES_PAR_NEUTRALISATION[phase]?.[champ]
     ?? DEPLACES_PAR_QUATRE_ETATS[phase]?.[champ]
@@ -565,7 +581,9 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // moitié-là qui prouve que le §6 ne fuit pas hors du raid subi.
     // ⚠ PAQUETS (09/09) déplace les vingt-cinq, comme DISPOSITION-OUVRAGE : le
     // premier raid est à la phase 7, et il touche toute graine.
-    if (obtenue !== EMPREINTES_PAR_GRAINE_PAQUETS[g]) ecarts.push(g);
+    // ⚠ RÈGLES-DE-CARTE (10/09) déplace les vingt-cinq à son tour : la phase 11
+    // porte un raid lointain sur toute graine, et c'est là que le prix change.
+    if (obtenue !== EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g]) ecarts.push(g);
   }
   assert.deepEqual(ecarts, [], `graine(s) divergente(s) : ${ecarts.join(', ')}`);
 });
@@ -600,7 +618,12 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       attendu.tailleSauvegarde + OCTETS_AJOUTES_PAR_LE_DEPLIAGE + OCTETS_AJOUTES_PAR_BASES_1
         + OCTETS_AJOUTES_PAR_TRANSFERT + OCTETS_AJOUTES_PAR_RESERVE_BASE
         + OCTETS_AJOUTES_PAR_QUATRE_ETATS
-        - OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE,
+        - OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE
+        // ⚠ LE CINQUIÈME TERME EST ENTRÉ AU LOT RÈGLES-DE-CARTE, 10/09 : un
+        // champ de plus par base, `dernierDeplacementDelaiTicks`, et lui aussi
+        // d'un nombre FIXE — 36 octets sur les vingt-cinq graines, exactement
+        // comme `reserveReparationBatiments`.
+        + OCTETS_AJOUTES_PAR_REGLES_DE_CARTE,
       `graine ${g} : taille de la sauvegarde`,
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);
@@ -687,8 +710,16 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // et cible retenue — dit que seule la POSITION des pièces a changé, et pas
       // leur composition. C'est ce que le §5 du brief exigeait, et c'est ce qui
       // laisse `SAVE_VERSION` à 29.
+      // ⚠⚠ ET LE LOT RÈGLES-DE-CARTE NE DÉPLACE QUE LE RAID LOINTAIN — 25 sur
+      // 25 d'un côté, ZÉRO sur 25 de l'autre. La cible lointaine est à la rangée
+      // 201, en plein territoire de l'Ouvrage : son prix passe du tarif de chez
+      // soi à celui d'ailleurs. La cible PROCHE est un camp du joueur à une case
+      // de sa base, que la carte peint au joueur des deux côtés de la règle —
+      // `RAPPORTS_PROCHE_PAQUETS` reste donc en vigueur, non surchargé, et c'est
+      // cette moitié-là qui dit que le lot ne renchérit pas tout.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_PAQUETS[g] ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
+        ? (RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
+          ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
           ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
           ?? RAPPORTS_OUVRAGE_CIBLES_RANGEES[g]
@@ -1225,20 +1256,53 @@ test('BASES-1 T2 — le prix d\'un raid ne change QUE dans les angles', () => {
   const cibles = ciblesAPortee(etat, base);
   assert.ok(cibles.length > 5, 'le montage ne mesure rien : trop peu de cibles');
 
+  // ⚠⚠ CE TEST EST RETOURNÉ, PAS AJUSTÉ — lot RÈGLES-DE-CARTE, 10/09/2026,
+  // point 8 d'Ethan. Il PRÉDISAIT le prix en réécrivant l'octogone en toutes
+  // lettres — Tchebychev ET Manhattan — pour ne pas être tautologique. Cette
+  // prédiction-là est devenue FAUSSE : le prix ne lit plus l'octogone, il lit ce
+  // que la CARTE peint, planchers compris. Une base de l'Ouvrage posée à deux
+  // cases de chez soi tombait dans l'octogone allié et se payait au tarif de
+  // chez soi pendant que la carte la peignait en violet — douze points au lieu
+  // de seize, la capture d'Ethan.
+  //
+  // ⚠ CE QUI RESTE MESURÉ, ET C'EST LE TITRE : LE BARÈME N'A PAS BOUGÉ D'UN
+  // POINT. `fixe + distance × tarif`, avec la distance de GRILLE : c'est
+  // l'arithmétique du prix, et elle n'est pas tautologique — un barème changé la
+  // fait tomber. Ce qui change de main, c'est le CHOIX du tarif.
+  const { fixe, parCaseAllie, parCaseEnnemiOuNeutre } = POINTS_ATTAQUE.coutRaid;
+  let desaccords = 0;
   for (const c of cibles) {
     const dr = base.position.rangee - c.rangee;
     const dc = base.position.colonne - c.colonne;
     const distance = Math.max(Math.abs(dr), Math.abs(dc));
-    // ⚠ LA FORME EST RÉÉCRITE ICI, PAS IMPORTÉE — Tchebychev ET Manhattan, en
-    // toutes lettres. Appeler `dansLOctogoneDInfluence` rendrait le test
-    // tautologique : il passerait sur n'importe quelle zone.
-    const chezMoi = distance <= GEOGRAPHIE.rayonInfluenceJoueur
-      && Math.abs(dr) + Math.abs(dc) <= GEOGRAPHIE.rayonInfluenceJoueur + 1;
-    const { fixe, parCaseAllie, parCaseEnnemiOuNeutre } = POINTS_ATTAQUE.coutRaid;
+    const chezMoi = campDeLaCase(etat, c.rangee, c.colonne) === JOUEUR;
     const attendu = fixe + distance * (chezMoi ? parCaseAllie : parCaseEnnemiOuNeutre);
     assert.equal(coutDUnRaid(etat, base, c), attendu,
       `prix faux pour (${c.rangee}, ${c.colonne})`);
+
+    // ⚠⚠ ET L'ANCIENNE LECTURE EST FALSIFIÉE DE FACE, CIBLE PAR CIBLE. On
+    // recompose l'octogone en toutes lettres — la forme exacte que ce test
+    // portait avant — et on compte les cibles où les deux se contredisent. Sans
+    // ce compte, un retour silencieux à l'octogone passerait sur les cibles où
+    // les deux répondent pareil, c'est-à-dire sur 93 % d'entre elles.
+    const dansLOctogone = distance <= GEOGRAPHIE.rayonInfluenceJoueur
+      && Math.abs(dr) + Math.abs(dc) <= GEOGRAPHIE.rayonInfluenceJoueur + 1;
+    if (dansLOctogone !== chezMoi) {
+      desaccords += 1;
+      assert.notEqual(
+        coutDUnRaid(etat, base, c),
+        fixe + distance * (dansLOctogone ? parCaseAllie : parCaseEnnemiOuNeutre),
+        `(${c.rangee}, ${c.colonne}) : le prix lit encore l'octogone et non la carte`,
+      );
+    }
   }
+  // ⚠ ET LE MONTAGE PORTE BIEN DES DÉSACCORDS, sans quoi la falsification
+  // ci-dessus ne s'exécuterait jamais. Mesuré sur vingt graines et cinq rangées :
+  // 6,41 % des cibles à portée changent de camp, toutes dans le sens de la
+  // HAUSSE — l'écart vaut +2 ou +4 points, jamais plus, parce que le désaccord ne
+  // peut vivre que dans l'octogone de rayon 2.
+  assert.ok(desaccords > 0,
+    'le montage ne mesure rien : aucune cible où la carte et l\'octogone divergent');
 
   // ⚠ ET LA DISTANCE RESTE CELLE DE LA GRILLE — arbitrage d'EUCLIDE, intact. La
   // PORTÉE est euclidienne, le PRIX se compte en cases de grille : une cible en

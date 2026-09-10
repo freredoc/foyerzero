@@ -22,7 +22,7 @@ import { subirUnRaid, basesAttaquantes, nombreDAttaquantes } from '../src/sim/ra
 import { casesDeLAnneau, ANNEAUX } from '../src/sim/satellites.js';
 import { carteDesPoi } from '../src/sim/poi.js';
 import { estSurLaCarte, niveauDeLaRangee, positionDepartJoueur } from '../src/sim/carte.js';
-import { distanceCarreeCases } from '../src/sim/points-attaque.js';
+import { distanceCarreeCases, casesArrondiesAuSuperieur as casesEnLigneDroite } from '../src/sim/points-attaque.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import {
@@ -37,6 +37,8 @@ import {
   haloAllumeAuTick, PERIODE_HALO_TICKS,
 } from '../src/ui/monde.js';
 import { baseCourante } from '../src/sim/base-courante.js';
+import { campDeLaCase, OUVRAGE } from '../src/sim/territoire.js';
+import { problemesDuTerritoireTenu } from '../src/sim/territoire-tenu.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,6 +59,22 @@ function partie(graine = 2026, rangee = 200) {
 }
 
 /**
+ * Le rayon de rasage par défaut, et celui d'AVANT ce lot — lot RÈGLES-DE-CARTE.
+ *
+ * ⚠⚠ LES DEUX SONT NOMMÉS PARCE QUE `RC T7` A BESOIN DU SECOND. La règle du §3
+ * refuse une case TENUE par l'Ouvrage ; le rayon par défaut la rend donc
+ * INATTEIGNABLE — c'est tout son objet, les sept tests ci-dessous parlant
+ * d'autre chose. Le montage qui MESURE la règle est celui d'hier : à onze
+ * cases, une base de l'Ouvrage survit juste au-delà du disque et son octogone
+ * de rayon `rayonInfluenceEnnemie` peint la couronne, sans que son 3 × 3
+ * n'encombre les cases qu'elle tient. **Mesuré, graine 2026 rangée 200 :
+ * vingt-trois cases refusées pour CETTE seule raison, et 293 destinations au
+ * lieu de 316.**
+ */
+const RAYON_ENCOMBREMENT = DEPLACEMENT.porteeMaxCases + ENCOMBREMENT_DES_BASES.rayonCases;
+const RAYON_DEGAGE = RAYON_ENCOMBREMENT + GEOGRAPHIE.rayonInfluenceEnnemie;
+
+/**
  * La même, mais avec de la PLACE — lot VOISINAGE-ET-MENACE, 08/09/2026.
  *
  * ⚠⚠ SANS ELLE, CES TESTS MESURERAIENT LA DENSITÉ DU PEUPLEMENT ET PLUS LE
@@ -72,11 +90,19 @@ function partie(graine = 2026, rangee = 200) {
  * lettre : on rase le voisinage pour mesurer la FORME. Le rayon couvre le
  * disque de déplacement PLUS l'encombrement, sans quoi la couronne du bord
  * resterait refusée par une base juste au-delà.
+ *
+ * ⚠⚠ ET IL COUVRE MAINTENANT L'INFLUENCE, EN PLUS — lot RÈGLES-DE-CARTE,
+ * 10/09/2026. Le déplacement refuse désormais une case TENUE par l'Ouvrage, et
+ * une base de l'Ouvrage tient jusqu'à `rayonInfluenceEnnemie` cases autour
+ * d'elle : une base restée à onze cases de la nôtre peindrait encore la couronne
+ * du disque de déplacement, et les sept tests ci-dessous mesureraient à nouveau
+ * la densité au lieu du geste. Le rayon suit la règle qui vient d'entrer, il ne
+ * se choisit pas — c'est la troisième fois que ce montage s'élargit pour la même
+ * raison, et à chaque fois par une SOMME de portées nommées.
  */
-function partieDegagee(graine = 2026, rangee = 200) {
+function partieDegagee(graine = 2026, rangee = 200, rayon = RAYON_DEGAGE) {
   const etat = partie(graine, rangee);
   const p = baseCourante(etat).position;
-  const rayon = DEPLACEMENT.porteeMaxCases + ENCOMBREMENT_DES_BASES.rayonCases;
   for (const o of basesDeLaFenetre(etat.graine, {
     premiereRangee: p.rangee - rayon, derniereRangee: p.rangee + rayon,
     premiereColonne: p.colonne - rayon, derniereColonne: p.colonne + rayon,
@@ -241,8 +267,13 @@ test('DÉPLACEMENT T4 — après un déplacement, les POI de l\'arrivée sont ac
   // déplacement est une base de l'Ouvrage collée à l'arrivée. Raser les bases
   // du voisinage laisse les deux gisements intacts, donc mesure toujours le
   // RELEVÉ et pas un rapport de force.
+  // ⚠ ET LE RAYON COUVRE AUSSI L'INFLUENCE — lot RÈGLES-DE-CARTE, 10/09/2026.
+  // Le déplacement refuse maintenant une case TENUE par l'Ouvrage, et une base
+  // tient jusqu'à `rayonInfluenceEnnemie` cases : dégager le seul encombrement
+  // laisserait l'arrivée en territoire violet, et ce test mesurerait à nouveau la
+  // densité au lieu du relevé des POI.
   for (const k of [depart, arrivee]) {
-    const rayon = ENCOMBREMENT_DES_BASES.rayonCases + 1;
+    const rayon = ENCOMBREMENT_DES_BASES.rayonCases + 1 + GEOGRAPHIE.rayonInfluenceEnnemie;
     for (const o of basesDeLaFenetre(graine, {
       premiereRangee: k.rangee - rayon, derniereRangee: k.rangee + rayon,
       premiereColonne: k.colonne - rayon, derniereColonne: k.colonne + rayon,
@@ -366,39 +397,77 @@ test('DÉPLACEMENT T6 — le rayon des anneaux de satellites suit la nouvelle ra
 // T7 — le barème du délai
 // ---------------------------------------------------------------------------
 
-test('DÉPLACEMENT T7 — 1 h à bas niveau, 24 h au niveau 50, interpolé entre les deux', () => {
+test('DÉPLACEMENT T7 — le délai est 60 min + le niveau + la distance au-delà de la première case', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ, PAS AJUSTÉ — lot RÈGLES-DE-CARTE, 10/09/2026,
+  // point 15 d'Ethan. Il figeait le barème d'avant : « 1 h à bas niveau, 24 h au
+  // niveau 50, interpolé entre les deux », venu de `SESSION-RELEVE-BUTIN.md` §0.
+  // Ethan a dicté une autre règle — « coût par distance et niv. Base 1h, puis
+  // chaque niveau de base rajoute 1min », et sur la forme exacte « Q2 b » —, donc
+  // c'est la PRÉMISSE de ce test qui a cessé d'être vraie, pas son code qui a
+  // cessé d'être juste. Il mesure la règle neuve ET FALSIFIE L'ANCIENNE DE FACE :
+  // sans la seconde moitié, un retour silencieux à l'interpolation passerait.
+  //
+  // ⚠⚠ ET CE QUE LE RETOURNEMENT ABANDONNE EST À DIRE : LES 24 HEURES DU
+  // NIVEAU 50. Le pire cas du jeu — niveau 50, dix cases — rend désormais 1 h 59.
+  // Le plafond du barème est divisé par douze ; c'est UNE table qui change, et
+  // Ethan peut revenir dessus.
   const etat = creerEtat(7);
   // Une base neuve : un seul Chantier de niveau 1.
   assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 10, 'le niveau se lit en DIXIÈMES');
-  assert.equal(delaiDeplacementTicks(etat), 1 * TICKS_PAR_HEURE);
+  assert.equal(delaiDeplacementTicks(etat, 1), Math.round(61 * TICKS_PAR_HEURE / 60), '1 h 01');
 
-  // Au plafond.
+  // ⚠ LA DISTANCE COMPTE AU-DELÀ DE LA PREMIÈRE CASE : dix cases coûtent neuf
+  // minutes de plus, pas dix. C'est ce que `(distance − 1)` veut dire, et c'est
+  // la moitié qu'un barème « + 1 par case » ferait tomber.
+  assert.equal(delaiDeplacementTicks(etat, 10), Math.round(70 * TICKS_PAR_HEURE / 60), '1 h 10');
+  assert.equal(
+    delaiDeplacementTicks(etat, 10) - delaiDeplacementTicks(etat, 1),
+    9 * Math.round(TICKS_PAR_HEURE / 60),
+    'neuf cases au-delà de la première, une minute chacune',
+  );
+
+  // Au plafond de niveau, et à la distance maximale : le PIRE cas du jeu.
   baseCourante(etat).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 500);
-  assert.equal(delaiDeplacementTicks(etat), 24 * TICKS_PAR_HEURE);
+  assert.equal(delaiDeplacementTicks(etat, 10), Math.round(119 * TICKS_PAR_HEURE / 60), '1 h 59');
+  // ⚠ LA FALSIFICATION DE L'ANCIENNE RÈGLE, DE FACE : elle rendait 24 h ici.
+  assert.notEqual(delaiDeplacementTicks(etat, 10), 24 * TICKS_PAR_HEURE,
+    'le barème est revenu à l\'interpolation 1 h → 24 h du relevé de TA');
+  assert.notEqual(delaiDeplacementTicks(etat, 1), 24 * TICKS_PAR_HEURE);
 
-  // ⚠⚠ ET AU MILIEU, C'EST LÀ QUE LE PIÈGE DES DIXIÈMES MORD. Une base de
-  // niveau 25,5 est à la moitié exacte du barème : 12,5 h. Lire
-  // `niveauDesBatiments` comme un ENTIER donnerait 255, donc le plafond, donc
-  // 24 h — un délai presque deux fois trop long, et dix fois trop tôt.
+  // ⚠⚠ ET AU MILIEU, C'EST LÀ QUE LE PIÈGE DES DIXIÈMES MORD — il n'a pas changé
+  // de nature, seulement de valeur attendue. Une base de niveau 25,5 coûte
+  // 60 + 25,5 = 85,5 min. Lire `niveauDesBatiments` comme un ENTIER donnerait
+  // 255, donc 315 minutes — plus de cinq heures au lieu d'une heure et demie.
   baseCourante(etat).disposition[0].niveau = 25;
   baseCourante(etat).disposition.push({
     id: 'caserne', rangee: 13, colonne: 1, niveau: 26, degatsMilli: 0,
   });
   baseCourante(etat).economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
   assert.equal(niveauDesBatiments(baseCourante(etat).disposition), 255, 'moyenne de 25 et 26 : 25,5');
-  const milieu = delaiDeplacementTicks(etat);
-  assert.equal(milieu, Math.round(12.5 * TICKS_PAR_HEURE));
-  assert.ok(milieu > 1 * TICKS_PAR_HEURE && milieu < 24 * TICKS_PAR_HEURE);
-  // La falsification : lu en entier, le délai serait celui du plafond.
-  assert.notEqual(milieu, 24 * TICKS_PAR_HEURE,
+  const milieu = delaiDeplacementTicks(etat, 1);
+  assert.equal(milieu, Math.round(855 * TICKS_PAR_HEURE / 600), '85,5 minutes, au dixième');
+  // La falsification : lu en entier, le délai serait celui d'un niveau 255.
+  assert.notEqual(milieu, Math.round(3150 * TICKS_PAR_HEURE / 600),
     '`niveauDesBatiments` est lu comme un entier : le délai est dix fois faux');
+  // ⚠ ET LE DEMI-NIVEAU SE VOIT : arrondir à 25 ou à 26 rendrait un autre nombre.
+  assert.notEqual(milieu, Math.round(850 * TICKS_PAR_HEURE / 600), 'le niveau est arrondi vers le bas');
+  assert.notEqual(milieu, Math.round(860 * TICKS_PAR_HEURE / 600), 'le niveau est arrondi vers le haut');
+
+  // La distance est bornée des deux côtés — un déplacement de zéro case n'existe
+  // pas, et onze cases sont hors de portée.
+  assert.throws(() => delaiDeplacementTicks(etat, 0), RangeError);
+  assert.throws(() => delaiDeplacementTicks(etat, DEPLACEMENT.porteeMaxCases + 1), RangeError);
 
   // Le barème vient des DONNÉES, il n'est pas écrit dans le module.
-  assert.equal(DEPLACEMENT.delaiHeures.depart, 1);
-  assert.equal(DEPLACEMENT.delaiHeures.niveau50, 24);
-  assert.equal(DEPLACEMENT.delaiHeures, GEOGRAPHIE.delaiEntreSautsHeures,
+  assert.deepEqual(DEPLACEMENT.delaiMinutes, { base: 60, parNiveau: 1, parCaseAuDela: 1 });
+  assert.equal(DEPLACEMENT.delaiMinutes, GEOGRAPHIE.delaiDeplacementMinutes,
     'le délai est recopié au lieu d\'être référencé');
+  // ⚠ ET L'ANCIENNE TABLE NE TRAÎNE PAS À CÔTÉ DE LA NEUVE. Deux tables pour une
+  // grandeur, c'est une occasion de divergence, et `CLAUDE.md` §4 l'interdit.
+  assert.equal(GEOGRAPHIE.delaiEntreSautsHeures, undefined,
+    'l\'ancien couple en heures est resté dans GEOGRAPHIE à côté du neuf');
+  assert.equal(DEPLACEMENT.delaiHeures, undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -422,7 +491,16 @@ test('DÉPLACEMENT T8 — un second déplacement trop tôt est refusé, et le re
   assert.throws(() => deplacerLaBase(etat, encore), /deplacement impossible/);
 
   // Le temps passe, et l'attente fond.
-  const du = delaiDeplacementTicks(etat);
+  // ⚠⚠ LA DURÉE SE RELIT SUR LA BASE, ELLE NE SE RECALCULE PLUS — lot
+  // RÈGLES-DE-CARTE, 10/09/2026. Le saut ci-dessus faisait TROIS cases : le
+  // délai qu'il a contracté est celui de trois cases, et rien dans l'état ne le
+  // dirait si le geste ne l'avait pas écrit. Le test le confronte au barème pour
+  // que les deux ne puissent pas diverger.
+  const du = baseCourante(etat).dernierDeplacementDelaiTicks;
+  assert.equal(du, delaiDeplacementTicks(etat, 3),
+    'la durée écrite au saut n\'est pas celle du barème pour trois cases');
+  assert.ok(du > delaiDeplacementTicks(etat, 1),
+    'le montage ne mesure rien : trois cases coûtent autant qu\'une');
   assert.equal(ticksAvantProchainDeplacement(etat), du);
   rattraperJeu(etat, Math.floor(du / 2));
   assert.equal(ticksAvantProchainDeplacement(etat), du - Math.floor(du / 2));
@@ -459,12 +537,34 @@ test('DÉPLACEMENT T9 — le PREMIER déplacement d\'une partie neuve n\'attend 
   assert.equal(baseCourante(vieux).dernierDeplacementTick, null);
   assert.equal(ticksAvantProchainDeplacement(vieux), 0);
 
+  // ⚠ ET SA DURÉE EST `null` AUSSI — lot RÈGLES-DE-CARTE, 10/09/2026. Les deux
+  // champs vont ensemble, dans les deux sens : une base qui ne s'est jamais
+  // déplacée n'a contracté aucun délai.
+  assert.equal(baseCourante(etat).dernierDeplacementDelaiTicks, null);
+  assert.equal(baseCourante(vieux).dernierDeplacementDelaiTicks, null);
+
   // Falsifiable : un zéro écrit à la place de `null` ferait attendre.
+  // ⚠ LE MONTAGE POSE LES DEUX CHAMPS, PARCE QUE LE GESTE LES POSE TOUS LES
+  // DEUX. Un horodatage seul ne fait plus attendre — `ticksAvantProchainDeplacement`
+  // sort sur la durée absente —, et c'est voulu : une durée manquante n'enferme
+  // personne. Ce que ce bloc falsifie est le `null` de l'HORODATAGE ; la garde
+  // symétrique, celle de la durée, est juste en dessous.
   const forge = creerEtat(7);
   baseCourante(forge).dernierDeplacementTick = 0;
+  baseCourante(forge).dernierDeplacementDelaiTicks = delaiDeplacementTicks(forge, 1);
   rattraperJeu(forge, 10);
   assert.ok(ticksAvantProchainDeplacement(forge) > 0,
     'le montage ne mesure rien : un horodatage à zéro n\'attend pas non plus');
+
+  // ⚠⚠ ET UNE DURÉE ABSENTE N'ENFERME PERSONNE. C'est la moitié qui protège les
+  // vieilles sauvegardes et les montages écrits à la main : `null` vaut « aucune
+  // attente », jamais « attente infinie ». Le contraire bloquerait pour toujours
+  // une base dont le champ manque.
+  const sansDuree = creerEtat(7);
+  baseCourante(sansDuree).dernierDeplacementTick = 0;
+  baseCourante(sansDuree).dernierDeplacementDelaiTicks = null;
+  rattraperJeu(sansDuree, 10);
+  assert.equal(ticksAvantProchainDeplacement(sansDuree), 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -662,12 +762,30 @@ test('DÉPLACEMENT — un déplacement change les cibles à portée, et ça se m
   // ⚠ C'EST UN CONSTAT, PAS UN RÉGLAGE. Ce que ce test garde, c'est que le
   // déplacement a bien un EFFET sur la carte de jeu — un déplacement qui ne
   // changerait rien serait un geste pour rien.
+  //
+  // ⚠⚠ IL MESURE ENFIN CE QUE SON TITRE ANNONCE — lot RÈGLES-DE-CARTE,
+  // 10/09/2026. Il disait « les CIBLES À PORTÉE » et comptait `basesAttaquantes`,
+  // c'est-à-dire l'inverse : qui peut m'attaquer, MOI. Les deux mesuraient bien
+  // un effet du déplacement tant que la rangée 220 était atteignable ; elle ne
+  // l'est plus — le refus `territoire-ennemi` immobilise le joueur passé la
+  // rangée 275, mesuré 20/20 —, et le montage a perdu sa prémisse.
+  //
+  // ⚠⚠ ET LÀ OÙ LE JOUEUR PEUT ENCORE BOUGER, `basesAttaquantes` NE PEUT PAS
+  // BOUGER : c'est la bande immunisée de 28 rangées mesurée au lot
+  // VOISINAGE-ET-MENACE — `RAID_OUVRAGE.niveauMinimal` vaut 10, et aucune base de
+  // l'Ouvrage ne le vaut au-dessus de la rangée 262. Zéro avant, zéro après, sur
+  // les vingt graines : le test aurait été VERT sans rien mesurer. C'est un fait
+  // à porter au rapport, pas un montage à bricoler.
+  //
+  // ⚠ CE QU'IL GARDE EST DONC PLUS FORT QU'AVANT : il exigeait que 10 graines sur
+  // 20 voient un changement, il les exige TOUTES LES VINGT.
   let bougees = 0;
   for (let graine = 1; graine <= 20; graine += 1) {
-    const etat = partie(graine, 220);
+    const etat = partie(graine, 280);
     const atteignables = casesAtteignables(etat);
     assert.ok(atteignables.length > 0, 'aucune case atteignable : le montage ne mesure rien');
-    const avantCibles = basesAttaquantes(etat).length;
+    const avantCibles = ciblesAPortee(etat, baseCourante(etat)).length;
+    assert.ok(avantCibles > 0, 'aucune cible à portée : le montage ne mesure rien');
     // ⚠⚠ LA DESTINATION SE DEMANDE AU MOTEUR, ELLE NE S'ÉCRIT PLUS — lot
     // VOISINAGE-ET-MENACE, 08/09/2026. Le montage sautait « dix cases plein
     // nord » ; depuis qu'aucune base ne peut se coller à une autre, cette case
@@ -678,9 +796,9 @@ test('DÉPLACEMENT — un déplacement change les cibles à portée, et ça se m
       distanceCarreeCases(baseCourante(etat).position, b)
         > distanceCarreeCases(baseCourante(etat).position, a) ? b : a));
     deplacerLaBase(etat, dest);
-    if (basesAttaquantes(etat).length !== avantCibles) bougees += 1;
+    if (ciblesAPortee(etat, baseCourante(etat)).length !== avantCibles) bougees += 1;
   }
-  assert.ok(bougees > 10,
+  assert.equal(bougees, 20,
     `${bougees} graines sur 20 seulement voient leurs cibles changer : le déplacement ne mord pas`);
 });
 
@@ -903,4 +1021,228 @@ test('DÉ T5 — une attaquante compte pour UNE, même à portée de deux bases 
 
   assert.equal(nombreDAttaquantes(etat, position), seule,
     'le compte d\'une position a doublé quand une seconde base est arrivée à portée');
+});
+
+// ---------------------------------------------------------------------------
+// RC T4, RC T5 et RC T7 — lot RÈGLES-DE-CARTE, 10/09/2026
+// ---------------------------------------------------------------------------
+
+/** Une base dont `niveauDesBatiments` rend EXACTEMENT les dixièmes voulus. */
+function baseAuNiveau(etat, dixiemes) {
+  const laBase = baseCourante(etat);
+  const entier = Math.floor(dixiemes / 10);
+  const hauts = dixiemes % 10;
+  laBase.disposition.length = 0;
+  laBase.economie.residus.length = 0;
+  for (let i = 0; i < 10; i += 1) {
+    laBase.disposition.push({
+      id: i === 0 ? 'chantierDeConstruction' : 'accumulateur',
+      rangee: 11 + Math.floor(i / 9), colonne: 1 + (i % 9),
+      niveau: i < hauts ? entier + 1 : entier, degatsMilli: 0,
+    });
+    laBase.economie.residus.push({ quartz: 0, scorie: 0, electricite: 0 });
+  }
+  assert.equal(niveauDesBatiments(laBase.disposition), dixiemes,
+    `le montage ne pose pas le niveau ${dixiemes / 10}`);
+  return etat;
+}
+
+test('RC T4 — la table de contrôle du barème tombe juste, ligne par ligne', () => {
+  // ⚠⚠ LES CINQ LIGNES DU BRIEF, EN DIXIÈMES DE MINUTE, ET LE CALCUL SE FAIT
+  // ENTIÈREMENT EN ENTIERS. `délai = 60 + niveau + (distance − 1)`, arbitrage
+  // d'Ethan du 10/09 — « Q2 b ». Les deux lignes en gras du brief sont ses
+  // propres exemples ; la ligne 8,6 est celle qui prouve que les DIXIÈMES ne
+  // sont pas lus comme des entiers, et c'est la seule qui l'attrape.
+  //
+  // ⚠ LA LIGNE « 5 / 4 » REND 1 h 08 LÀ OÙ ETHAN A ÉCRIT « 1h04 ». C'est ce que
+  // SA propre règle donne — 60 + 5 + 3 —, et c'est la formule (b) qu'il a
+  // choisie en connaissance des trois candidates. On mesure sa règle, on ne
+  // bricole pas la formule pour tomber sur son exemple.
+  const table = [
+    // [dixièmes de niveau, distance, dixièmes de minute attendus, libellé]
+    [10, 1, 610, '1 h 01'],
+    [50, 4, 680, '1 h 08'],
+    [86, 1, 686, '1 h 08,6'],
+    [200, 1, 800, '1 h 20'],
+    [500, 10, 1190, '1 h 59'],
+  ];
+  for (const [dixiemes, distance, attendu, libelle] of table) {
+    const etat = baseAuNiveau(creerEtat(7), dixiemes);
+    const ticks = delaiDeplacementTicks(etat, distance);
+    // ⚠ ON REMONTE DES TICKS AUX DIXIÈMES DE MINUTE, ET C'EST EXACT : un dixième
+    // de minute vaut six secondes, donc soixante ticks à 10 Hz. Comparer des
+    // ticks à un nombre écrit à la main ferait recopier `TICKS_PAR_HEURE`.
+    assert.equal(ticks * 600, attendu * TICKS_PAR_HEURE,
+      `niveau ${dixiemes / 10}, distance ${distance} : ${libelle} attendu`);
+  }
+  // ⚠ ET LES CINQ LIGNES SONT DEUX À DEUX DIFFÉRENTES, sans quoi la table ne
+  // mesurerait qu'une constante.
+  const rendus = table.map(([d, dist]) => delaiDeplacementTicks(baseAuNiveau(creerEtat(7), d), dist));
+  assert.equal(new Set(rendus).size, table.length, 'deux lignes de la table rendent le même délai');
+});
+
+test('RC T5 — la durée est FIGÉE au saut : améliorer sa base ne rallonge pas l\'attente', () => {
+  // ⚠⚠ C'EST LA RAISON DU BUMP DE `SAVE_VERSION`. Tant que le délai ne dépendait
+  // que du niveau, `ticksAvantProchainDeplacement` pouvait le recalculer ; depuis
+  // qu'il dépend de la DISTANCE PARCOURUE, le recalcul ne sait plus de combien la
+  // base a sauté — et un saut de dix cases se déverrouillerait au tarif d'un saut
+  // d'une case. La base porte donc la durée qu'elle a CONTRACTÉE.
+  const etat = partieDegagee(2026, 200);
+  const depart = { ...baseCourante(etat).position };
+  const cible = { rangee: depart.rangee - 10, colonne: depart.colonne };
+  assert.deepEqual(problemesDuDeplacement(etat, cible), [], 'le montage ne peut pas sauter de dix cases');
+  deplacerLaBase(etat, cible);
+
+  const contracte = baseCourante(etat).dernierDeplacementDelaiTicks;
+  assert.equal(contracte, delaiDeplacementTicks(etat, 10), 'la durée écrite n\'est pas celle de dix cases');
+  // ⚠ ET DIX CASES COÛTENT PLUS QU'UNE, sans quoi ce test ne mesurerait rien.
+  assert.ok(contracte > delaiDeplacementTicks(etat, 1),
+    'le montage ne discrimine pas : dix cases coûtent autant qu\'une');
+
+  // Le temps passe, l'attente FOND, un tick par tick.
+  assert.equal(ticksAvantProchainDeplacement(etat), contracte);
+  rattraperJeu(etat, 100);
+  assert.equal(ticksAvantProchainDeplacement(etat), contracte - 100);
+
+  // ⚠⚠ ET ON MONTE LA BASE DE PLUSIEURS NIVEAUX : L'ATTENTE NE DOIT PAS
+  // RALLONGER. Un recalcul à chaque lecture la ferait grandir — le joueur se
+  // retrouverait plus bloqué qu'au moment où il a sauté, pour avoir amélioré ses
+  // bâtiments. C'est la falsification de ce test.
+  const avant = ticksAvantProchainDeplacement(etat);
+  for (const batiment of baseCourante(etat).disposition) batiment.niveau += 20;
+  assert.ok(niveauDesBatiments(baseCourante(etat).disposition) > 200,
+    'le montage ne mesure rien : le niveau n\'a pas monté');
+  assert.equal(ticksAvantProchainDeplacement(etat), avant,
+    'le délai se recalcule à la lecture : monter sa base rallonge l\'attente');
+  assert.ok(delaiDeplacementTicks(etat, 10) > contracte,
+    'le montage ne discrimine pas : le barème rend le même nombre après la montée');
+
+  // Et elle finit par tomber à zéro, sans jamais remonter.
+  rattraperJeu(etat, contracte);
+  assert.equal(ticksAvantProchainDeplacement(etat), 0);
+
+  // ⚠⚠ ET LA DISTANCE EST EUCLIDIENNE, PAS TCHEBYCHEV — LA DIAGONALE EST LE SEUL
+  // ENDROIT OÙ LES DEUX DIVERGENT, DONC LE SEUL QUI LES DÉPARTAGE. Un saut de
+  // (7, 7) fait SEPT cases de Tchebychev et DIX en ligne droite : le tarif d'un
+  // saut au coin du disque est celui du coin, pas celui du côté. Sans cette
+  // moitié-ci, lire la distance au carré de Tchebychev ne ferait tomber aucun
+  // test — mesuré.
+  // ⚠ SUR UN MONTAGE NEUF : la base d'à côté a déjà sauté de dix cases, et le
+  // dégagement était centré sur son point de DÉPART.
+  const second = partieDegagee(2026, 200);
+  const oblique = { ...baseCourante(second).position };
+  const coin = { rangee: oblique.rangee - 7, colonne: oblique.colonne - 7 };
+  assert.deepEqual(problemesDuDeplacement(second, coin), [], 'le montage ne peut pas sauter en diagonale');
+  const tchebychev = Math.max(
+    Math.abs(oblique.rangee - coin.rangee), Math.abs(oblique.colonne - coin.colonne),
+  );
+  const ligneDroite = casesEnLigneDroite(distanceCarreeCases(oblique, coin));
+  assert.equal(tchebychev, 7);
+  assert.equal(ligneDroite, 10, 'le montage ne discrimine pas : les deux distances coïncident');
+  deplacerLaBase(second, coin);
+  assert.equal(baseCourante(second).dernierDeplacementDelaiTicks,
+    delaiDeplacementTicks(second, ligneDroite),
+    'la distance du saut est prise en Tchebychev au lieu de la ligne droite');
+});
+
+test('RC T7 — on ne déplace pas sa base en territoire de l\'Ouvrage', () => {
+  // ⚠⚠ POINT 16 D'ETHAN, 10/09 : « Je ne dois pas pouvoir poser ma base dans [le]
+  // territoire ouvrage ». La règle existait à la FONDATION et manquait au
+  // DÉPLACEMENT : on fondait loin, puis on sautait dans le violet au geste
+  // suivant, et le contournement était à un toucher.
+  // ⚠⚠ LE MONTAGE EST CELUI D'AVANT LE LOT, ET C'EST TOUT SON INTÉRÊT. Le rayon
+  // par défaut de `partieDegagee` s'est élargi CE JOUR-CI jusqu'à
+  // `rayonInfluenceEnnemie` pour que les sept tests d'à côté cessent de mesurer
+  // la densité ; ici, c'est justement la règle qu'on mesure, donc on reprend le
+  // rayon d'hier. À onze cases, la base de l'Ouvrage la plus proche survit juste
+  // au-delà du disque : son octogone peint la couronne sans que son 3 × 3
+  // n'encombre les cases qu'elle tient, si bien qu'un refus y est le refus de
+  // territoire ET RIEN D'AUTRE. **Mesuré : 23 cases violettes, 293 destinations
+  // au lieu des 316 du disque — l'écart EST le nombre de cases violettes.**
+  const etat = partieDegagee(2026, 200, RAYON_ENCOMBREMENT);
+  const laBase = baseCourante(etat);
+  const ici = laBase.position;
+
+  // On cherche une case à portée que la carte donne à l'OUVRAGE, et qui ne soit
+  // refusée par rien d'autre — sinon ce test mesurerait le voisinage.
+  let violette = null;
+  let violettes = 0;
+  for (let r = ici.rangee - DEPLACEMENT.porteeMaxCases; r <= ici.rangee + DEPLACEMENT.porteeMaxCases; r += 1) {
+    for (let c = ici.colonne - DEPLACEMENT.porteeMaxCases; c <= ici.colonne + DEPLACEMENT.porteeMaxCases; c += 1) {
+      if (campDeLaCase(etat, r, c) !== OUVRAGE) continue;
+      const codes = problemesDuDeplacement(etat, { rangee: r, colonne: c }).map((p) => p.code);
+      if (codes.length !== 1 || codes[0] !== 'territoire-ennemi') continue;
+      violettes += 1;
+      if (violette === null) violette = { rangee: r, colonne: c };
+    }
+  }
+  assert.ok(violette !== null,
+    'le montage ne mesure rien : aucune case tenue par l\'Ouvrage refusée pour CETTE seule raison');
+
+  // ⚠ LE MESSAGE EST CELUI DE LA FONDATION, MOT POUR MOT — une seule écriture,
+  // deux lecteurs. Deux formulations divergeraient au premier réglage.
+  const refus = problemesDuDeplacement(etat, violette);
+  assert.deepEqual(refus, problemesDuTerritoireTenu(etat, violette));
+  assert.match(refus[0].message, /tenue par l'Ouvrage/);
+  assert.throws(() => deplacerLaBase(etat, violette), /tenue par l'Ouvrage/);
+
+  // ⚠⚠ ET `casesAtteignables` SUIT PAR CONSTRUCTION : elle INTERROGE
+  // `problemesDuDeplacement` au lieu de réécrire ses règles. C'est ce que `VM T8`
+  // garde depuis VOISINAGE ; ce test-ci le vérifie sur la case exacte, parce que
+  // proposer une case que le geste refuse est le défaut le plus probable du lot.
+  const atteignables = casesAtteignables(etat);
+  assert.ok(atteignables.length > 0, 'le montage ne mesure rien : aucune destination');
+  // ⚠⚠ ET LE COMPTE TOMBE JUSTE : le disque de dix cases en porte 316, la règle
+  // en retire EXACTEMENT les violettes. Sans cette égalité, « la case n'est plus
+  // proposée » passerait sur une `casesAtteignables` qui aurait cessé de
+  // proposer quoi que ce soit.
+  assert.equal(violettes, 23, 'le montage a changé : recompter les cases violettes');
+  assert.equal(atteignables.length, 316 - violettes,
+    'l\'écart entre le disque et les destinations n\'est pas le compte des cases violettes');
+  assert.equal(
+    atteignables.some((k) => k.rangee === violette.rangee && k.colonne === violette.colonne),
+    false,
+    'casesAtteignables propose une case tenue par l\'Ouvrage',
+  );
+  // ⚠ ET AUCUNE des cases proposées n'est violette — la propriété entière, pas
+  // seulement celle qu'on vient de nommer.
+  for (const k of atteignables) {
+    assert.notEqual(campDeLaCase(etat, k.rangee, k.colonne), OUVRAGE,
+      `casesAtteignables propose (${k.rangee}, ${k.colonne}), tenue par l'Ouvrage`);
+  }
+
+  // ⚠⚠ ET L'ORDRE DES TROIS REFUS EST CELUI DU BRIEF : voisinage, PUIS
+  // territoire, PUIS délai. Il se lit sur une partie ORDINAIRE, pas sur le
+  // montage dégagé — mesuré, **432 cases de la graine 2026 en rangée 200 portent
+  // les deux premiers codes à la fois**, et le dégagement les fait toutes
+  // disparaître par construction. Sans cette moitié-ci, déplacer le refus au
+  // premier rang ne ferait tomber aucun test, et le joueur lirait « tenue par
+  // l'Ouvrage » devant une case que le voisinage refuse de toute façon.
+  const dense = partie(2026, 200);
+  const laDense = baseCourante(dense);
+  rattraperJeu(dense, TICKS_PAR_HEURE);
+  laDense.dernierDeplacementTick = dense.horloge.nbTicks;
+  laDense.dernierDeplacementDelaiTicks = delaiDeplacementTicks(dense, 1);
+  const p0 = laDense.position;
+  let trois = null;
+  for (let r = p0.rangee - 10; r <= p0.rangee + 10 && trois === null; r += 1) {
+    for (let c = p0.colonne - 10; c <= p0.colonne + 10; c += 1) {
+      const codes = problemesDuDeplacement(dense, { rangee: r, colonne: c }).map((x) => x.code);
+      if (codes.includes('voisinage') && codes.includes('territoire-ennemi')
+        && codes.includes('delai')) { trois = codes; break; }
+    }
+  }
+  assert.ok(trois !== null,
+    'le montage ne mesure rien : aucune case ne porte les trois refus à la fois');
+  assert.ok(trois.indexOf('voisinage') < trois.indexOf('territoire-ennemi'),
+    `le refus de territoire passe devant le voisinage : ${trois.join(', ')}`);
+  assert.ok(trois.indexOf('territoire-ennemi') < trois.indexOf('delai'),
+    `le délai passe devant le refus de territoire : ${trois.join(', ')}`);
+
+  // ⚠⚠ ET LE DÉPART N'EST PAS TOUCHÉ, MESURÉ : la garde du peuplement écarte
+  // l'Ouvrage de quinze cases autour de la base de départ, donc la règle n'y
+  // retire pas une seule destination. C'est le même nombre qu'au lot VOISINAGE.
+  const neuve = creerEtat(2026);
+  assert.equal(casesAtteignables(neuve).length, 261,
+    'le refus mord au DÉPART : ce n\'est pas ce que la règle doit faire');
 });

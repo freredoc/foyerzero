@@ -29,9 +29,13 @@ import { UNITES, GRILLE } from '../data/combat.js';
 import { reservoirsDeLArmee } from './reparation.js';
 import { RESSOURCES, capacitesMilli } from './economie-base.js';
 import {
-  coutDUnRaid, manquePourPayer, payer, basesDuJoueur,
+  manquePourPayer, payer, basesDuJoueur,
   estAPorteeDAttaque, distanceCarreeCases, casesArrondiesAuSuperieur,
 } from './points-attaque.js';
+// ⚠ LE PRIX EST DANS SON PROPRE MODULE DEPUIS LE LOT RÈGLES-DE-CARTE : il lit la
+// CARTE — `campDeLaCase` —, et `points-attaque.js` ne peut pas la lire sans
+// refermer un cycle d'import. Voir l'en-tête de `sim/prix-du-raid.js`.
+import { coutDUnRaid } from './prix-du-raid.js';
 import { siteDeLaCase, montageDuSite } from './site-de-la-case.js';
 import { montageCourant, enregistrerLeRaid } from './site-entame.js';
 import { majorationsDeCombat } from './poi.js';

@@ -54,9 +54,8 @@ import {
   saveurDeLaCase, siteDeLaCase, butinSiToutTombe, forceDeLaDefense,
 } from '../sim/site-de-la-case.js';
 import { avariesParCase, avarieDeLaBase, montageCourant } from '../sim/site-entame.js';
-import {
-  coutDUnRaid, distanceCarreeCases, casesArrondiesAuSuperieur,
-} from '../sim/points-attaque.js';
+import { distanceCarreeCases, casesArrondiesAuSuperieur } from '../sim/points-attaque.js';
+import { coutDUnRaid } from '../sim/prix-du-raid.js';
 import { problemesDuRaid } from '../sim/raid.js';
 import { nombreDAttaquantes } from '../sim/raid-ouvrage.js';
 import {

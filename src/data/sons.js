@@ -552,6 +552,36 @@ export const EVENEMENTS = {
 };
 
 /**
+ * LA CADENCE D'ENSEMBLE D'UN BUS, en millisecondes — point 10 d'Ethan, 10/09 :
+ * « La fréquence des tirs du son est basée sur la fréquence. Ce qui est assez
+ * inaudible il faudrait plutôt 3 son par seconde. »
+ *
+ * ⚠⚠ ELLE NE REMPLACE PAS LA GARDE PAR ÉVÉNEMENT, ELLE S'AJOUTE. Celle-là
+ * empêche un même canon de bégayer et n'a jamais eu d'autre objet ; celle-ci
+ * borne ce que le bus produit EN TOUT. Mesuré : `weapon_ouvrage_aa` et cinq
+ * autres portent `gardeMs: 22`, soit **quarante-cinq déclenchements par seconde
+ * pour ce seul événement**, et le bus `armes` en porte vingt-sept qu'une bande
+ * de défense fait tirer ensemble. C'est cette somme-là qu'Ethan entend.
+ *
+ * ⚠ 334 = ceil(1000 / 3) : trois sons par seconde est un PLAFOND, pas une
+ * moyenne. L'écart à la consigne vaut 0,3 %, et il est déclaré.
+ *
+ * ⚠⚠ UNE SEULE ENTRÉE, ET C'EST VOULU. Les alertes gardent leur cadence propre
+ * — 450 ms par événement —, les impacts et les effondrements la leur : Ethan a
+ * nommé les TIRS. Le jour où un second bus devra être bridé, il s'ajoute dans
+ * cette table et nulle part ailleurs.
+ *
+ * ⚠⚠ ET LES BOUCLES N'Y SONT PAS SOUMISES. Deux sons du bus `armes` bouclent —
+ * `weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop` — et une boucle n'a
+ * ni garde ni plafond : `reconcilierLesBoucles` écrit pourquoi, « un refus qui
+ * ne se rattrape pas ». La garde vit dans `demanderUnSon`, que les boucles ne
+ * traversent jamais.
+ */
+export const GARDE_PAR_BUS = {
+  armes: 334,
+};
+
+/**
  * Les réglages par défaut, au premier démarrage.
  *
  * ⚠ LE SON EST ACTIF PAR DÉFAUT — arbitrage d'Ethan : « une fonction muette par
@@ -580,12 +610,7 @@ export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };
  * par SUBSTITUTION `_player_` → `_ouvrage_`, vérifiée douze fois sur douze.
  */
 export const AMBIANCE_PAR_ECRAN = {
-  chantier: 'ambience_base_player_loop',
-  mission: 'ambience_base_player_loop',
-  offense: 'ambience_base_player_loop',
-  options: 'ambience_base_player_loop',
   raid: 'ambience_battlefield_distant_loop',
-  recherche: 'ambience_base_player_loop',
 };
 
 export const BOUCLES_DE_BATIMENT = {

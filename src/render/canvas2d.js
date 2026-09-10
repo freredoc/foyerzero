@@ -73,6 +73,26 @@ export function executer(ctx, liste, atlas = null) {
         // le poser sur le contexte. Un angle nul ne touche pas au contexte du
         // tout — sinon toute la scène paierait un `save`/`restore` par primitive
         // pour une transformation identité.
+        //
+        // ⚠⚠ L'OPACITÉ SE POSE ET SE REMET À UN, ET C'EST LA MOITIÉ QUI COMPTE —
+        // lot SON-ET-ARRIVÉE, 10/09. `globalAlpha` est un ÉTAT du contexte, pas
+        // un argument de `drawImage` : oublier de le remettre repeindrait tout ce
+        // que la liste dessine ENSUITE en translucide — la moitié de la scène,
+        // barres et traits de tir compris. Et **aucun test sans navigateur ne le
+        // verrait** : la liste d'affichage serait juste, seule l'image serait
+        // fausse. `SB T6` lit donc les écritures de `globalAlpha` sur un
+        // enregistreur et exige que la dernière vaille 1.
+        //
+        // ⚠ UNE OPACITÉ PLEINE NE TOUCHE PAS AU CONTEXTE DU TOUT, exactement
+        // comme un angle nul : sinon la scène entière paierait deux écritures par
+        // primitive pour une valeur qu'elle a déjà.
+        //
+        // ⚠ ET LE MILLIÈME SE DIVISE ICI, comme le degré se convertit en radians
+        // trois lignes plus bas. La primitive porte des ENTIERS — c'est le
+        // contrat de `sprite()` dans `scene.js` — et ce module les traduit dans
+        // l'unité du contexte, sans rien décider.
+        const translucide = p.alpha !== undefined && p.alpha < 1000;
+        if (translucide) ctx.globalAlpha = p.alpha / 1000;
         if (p.angle) {
           const cx = p.x + p.l / 2;
           const cy = p.y + p.h / 2;
@@ -84,6 +104,11 @@ export function executer(ctx, liste, atlas = null) {
         } else {
           ctx.drawImage(image, p.sx, p.sy, p.sl, p.sh, p.x, p.y, p.l, p.h);
         }
+        // ⚠ APRÈS le `restore` de la branche tournante, et non avant : `save`
+        // capture `globalAlpha` avec le reste, donc `restore` le REMET à la
+        // valeur translucide qu'on venait de poser. C'est ici, et ici seulement,
+        // que le contexte redevient opaque.
+        if (translucide) ctx.globalAlpha = 1;
         break;
       }
       case 'ligne':
