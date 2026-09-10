@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **10/09/2026**, version 0.99.39 · build 141.
+Dernière révision : **10/09/2026**, version 0.99.40 · build 142.
 
 ---
 
@@ -42,7 +42,190 @@ Dernière révision : **10/09/2026**, version 0.99.39 · build 141.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 10/09/2026 (après le lot ÉCRANS), à confronter :**
+**Référence au 10/09/2026 (après le lot ARRIVÉE-CARTE-ET-BUILD), à confronter :**
+⚠⚠ **C'EST LE PREMIER LOT DEPUIS FICHE-JUSTE QUI REND DES OCTETS, ET IL EN REND
+QUATRE-VINGT-QUATORZE MILLE.** `npm test` rend **1558 pass / 0 fail** au sens de
+la garde de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le
+verdict mesuré est **1557 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par
+Ethan le 08/09), et `npm run check` sort en 0. `npm run build` →
+`dist/index.html`, **9 331 195 octets**, 0 référence externe. Coût
+**−94 226 octets**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `d68c4d1` (**9 425 421**) :
+**feuille −97 361 · JavaScript +2 735 · balisage +400 · images +0 · audio +0**,
+la somme des cinq postes tombant EXACTEMENT sur le total. **306 URI de part et
+d'autre**, identiques à l'octet ; les lignes `data:` passent de 311 à **307** —
+les quatre qui partent sont des COMMENTAIRES qui nommaient `data:` sans en porter
+un. Borne T10 **inchangée à 9 600 000** — ce lot ALLÈGE, et une borne ne se
+baisse pas non plus pour se féliciter d'un gain —, marge **268 805 octets,
+2,80 %**. Le lot touche `src/data/sons.js`, `src/index.src.html`,
+`src/render/arrivee.js`, `src/render/scene.js`, `src/ui/monde.js`,
+`tools/build.js`, `tools/sons.py`, six fichiers de `test/`, et fait entrer
+`src/render/mini-carte.js`.
+⚠⚠ **LES COMMENTAIRES DE LA FEUILLE SORTENT AU BUILD, ET C'EST LE LEVIER QUE LE
+LOT ÉCRANS AVAIT CHIFFRÉ SANS LE TIRER.** Son §0 écrivait « le livrable porte
+98 084 octets de commentaires CSS pour 43 833 de règles […] les retirer AU BUILD
+rendrait ~98 Kio sans toucher une ligne de source. C'est un lot d'outillage, pas
+une ligne ; Ethan tranche. » Il a tranché. Mesuré : **−97 361 octets de feuille**,
+et **la source ne perd pas une ligne** — ils sortent du LIVRABLE, jamais du dépôt.
+⚠⚠ **ET C'EST UN SCANNER, JAMAIS UNE EXPRESSION RÉGULIÈRE, POUR UNE RAISON QUI
+S'EST RÉVÉLÉE MUETTE À LA MESURE.** Un `/* … */` non glouton passé sur la page
+mangerait ce qui RESSEMBLE à un commentaire dans une chaîne CSS, dans une
+`url(…)` et dans un `data:` en base64. **Mesuré : le remplacer par ce naïf ne
+fait tomber AUCUN test du dépôt** — la feuille d'aujourd'hui porte **173 chaînes
+et 18 `url(…)`, ZÉRO contenant une ouverture de commentaire**, et le retrait
+passe AVANT l'inlinage, donc pas un octet de base64 n'est sous ses yeux. Le naïf
+est juste aujourd'hui et faux demain, ce qui est le pire cas qu'une suite verte
+puisse laisser passer.
+⚠⚠ **D'OÙ `verifierLeScanner`, QUI CONFRONTE L'OUTIL À SON PROPRE PIÈGE À CHAQUE
+BUILD.** Sur une feuille témoin qui porte le danger, le naïf mange **la règle
+`#b` ENTIÈRE et son `data:`** quand le scanner rend les quatre règles intactes —
+mesuré des deux côtés. La falsification mord donc dans l'OUTIL et non dans la
+suite JS, comme `verifier_les_coupes` de `tools/planches.py` et `assert_bord` de
+`tools/bords.py` : **le BUILD échoue** au lieu de produire une page à l'image
+tronquée. `AC T8` garde la garde.
+⚠⚠ **ET LES IMAGES SONT MESURÉES INTACTES, PAS SUPPOSÉES : 306 URI DES DEUX
+CÔTÉS, CHACUN DÉCODÉ.** `AC T8` vérifie la longueur base64, l'en-tête de format —
+263 `OggS`, 41 `RIFF/WEBP`, 2 `PNG` — et qu'aucun URI ne porte d'ouverture de
+commentaire. C'est la moitié qui distingue ce travail d'un travail raté.
+⚠⚠ **L'ÉCRAN DE LA BASE EST ENTIÈREMENT SILENCIEUX, ET C'EST LA PREMIÈRE CHOSE À
+DIRE.** Ethan, 10/09 : « Oui » à « faut-il couper aussi les boucles de bâtiment ? ».
+`BOUCLES_DE_BATIMENT` passe à **VIDE** — elle portait `caserne`,
+`depotDeVehicules` et `aerodrome` sur `building_player_factory_loop`, `centrale`
+sur `building_reactor_loop` — et `AMBIANCE_PAR_ECRAN` ne porte plus que `raid`.
+**Il ne reste plus une boucle qui tourne hors d'un combat**, et `AC T1` le mesure
+sur les sept écrans, par `bouclesDesirees`, qui est le lecteur réel.
+⚠ **VIDE ET NON SUPPRIMÉE, ET C'EST DÉLIBÉRÉ** : `src/son/cablage.js` la lit
+toujours, et c'est l'endroit où une boucle se remet — le jour où Ethan en veut
+une, c'est UNE ligne. ⚠ Et `src/data/sons.js` est **GÉNÉRÉ** : la table est vidée
+dans `tools/sons.py`, puis le fichier régénéré par lui. Éditer le généré à la
+main aurait été défait au prochain lot de sons.
+⚠⚠ **DEUX SONS DEVIENNENT DORMANTS ET RESTENT AU LIVRABLE — ÉCART DÉCLARÉ, PAS
+OUBLI.** `building_player_factory_loop` et `building_reactor_loop` ne sont plus
+atteignables ; le §9 du brief met leur retrait HORS lot (« économie d'octets,
+donc ventilation et arbitrage à part »), avec `ambience_base_player_loop` et
+`ambience_calm_map_loop`. **Les quatre pèsent 71 016 octets d'Opus, soit 94 688
+en base64** — mesuré sur le disque, fichier par fichier. `SON T14` et `SON T20` suivent le compte : **165
+atteignables, 98 muets**, les deux entrants NOMMÉS.
+⚠⚠ **L'ARRIVÉE PERD SON FANTÔME ET GAGNE UNE DURÉE QUI DÉPEND DE L'UNITÉ.**
+Ethan : « Ils arrivent trop rapidement, et on les voit spawn. Ils doivent spawn
+en dessous et arriver », et **« Ne pas faire de fantôme. »** `OPACITE_ARRIVEE`
+disparaît, `alphaDe` de `render/scene.js` avec elle — elle ne pouvait plus rendre
+que `OPACITE_PLEINE` —, et `ARRIVEE_MS = 400` cède la place à
+`dureeDArrivee(entite)` = `MILLI_PAR_CASE × TICK_MS / vitesse`, c'est-à-dire le
+temps que CETTE unité met à franchir une case.
+⚠⚠ **MESURÉ SUR LES QUATRE VITESSES DU ROSTER : 1 667 · 1 111 · 833 · 417 ms.**
+⚠ **ET LE BRIEF SE TROMPAIT SUR L'EXTRÊME** : il annonce « 833 ms au plus
+rapide » ; le Frappeur vaut `vitesse: 240`, donc **417 ms**. 833 est la durée
+d'une unité à 120, qui n'est pas la plus rapide.
+⚠⚠ **ET LE BRIEF SE TROMPAIT AUSSI SUR OÙ VIT LA VITESSE — LA MESURE A COÛTÉ UN
+DÉTOUR.** Il pose que « `vitesseMilli` EST SUR L'ENTITÉ, `src/sim/combat.js` le
+pose au montage » : **faux, mesuré** — le littéral d'`ajouterEntite` ne le porte
+pas, il vit sur le PROFIL partagé, que `combat.js` n'exporte pas. Et `src/sim/`
+est hors territoire. `dureeDArrivee` lit donc `UNITES[id].vitesse`, la table
+DONT le profil dérive, ce qui n'est pas une seconde écriture. ⚠ Conséquence :
+**une entité forgée sans `id` LÈVE**, et c'est le bon comportement — ce qui ne
+roule pas n'arrive pas. Sept montages de `raid-ecran.test.js` et un de
+`rendu.test.js` ont dû recevoir un identifiant RÉEL du roster.
+⚠⚠ **`SB T4` ET `SB T5` RESTENT VERTS SOUS UNE DURÉE FIXE, ET C'EST POURQUOI
+`AC T3` EXISTE.** Mesuré : forcer `dureeDArrivee` à rendre 400 laisse les deux
+gardes de la rampe VERTES — elles dérivent leurs instants de la durée, donc elles
+sont auto-cohérentes — et fait tomber **`AC T3` et `AC T4`**. Une garde qui
+demande la durée ne peut pas garder la durée.
+⚠⚠ **LE POP-UP D'ACQUISITION NE DIT PLUS QUE CE QUI VIENT D'ÊTRE PRIS.** Ethan,
+« Oui » à « une acquisition annonce donc la carte entière — la filtrer ? ». Le
+bouton `#monde-poi` garde les soixante-dix ; `signalerLesPoisNeufs` retient
+désormais les CLÉS et non plus leur nombre, et passe la sélection à `vueDesPois`.
+⚠⚠ **ET `AC T5` A DÛ ÊTRE RESSERRÉ APRÈS UNE FALSIFICATION MUETTE.** Sa première
+écriture construisait la sélection DANS l'ordre du tirage : un
+`[...selection].map(…)` rendait alors le même ordre et passait. Elle la construit
+à l'envers désormais — et ce n'est pas un montage artificiel, `poisAcquis` étant
+TRIÉ par `releverLesPoisAcquis`, jamais par rang de tirage.
+⚠⚠ **LA MINI-CARTE ENTRE, 1 080 × 1 920 PIXELS D'APPAREIL, ET LES CASES SONT
+ÉTIRÉES.** Ethan : « faire un bouton une mini carte qui passe sur 1080 1920 avec
+les poi ». À échelle uniforme la hauteur commanderait — 6,4 px par rangée, donc
+198 px de large sur 1 080 — et laisserait quatre cinquièmes de l'écran vides : la
+case fait **34,8 px sur 6,4**, et la carte remplit son cadre.
+⚠⚠ **RELEVÉ DANS CHROMIUM, GÉOMÉTRIE DU S25 FE : LE TAMPON FAIT 1 080 × 1 920 ET
+LA SURFACE CSS 360 × 640, DONC LE 1:1 EXACT.** Le corps montre **588 px CSS** et
+défile de **52** ; il s'ouvre CENTRÉ sur la base du joueur, sans quoi la rangée
+295 tombait sous le pli. **Treize teintes à l'écran, toutes de la fiche** — les
+dix bandes du sol, `#231D2E` pour les bases de l'Ouvrage (**17,2 % de la
+surface**), `#68727E` pour un gisement, `#F5F3E8` pour la base — **zéro erreur de
+page, débordement horizontal 0**.
+⚠⚠ **ET LE FICHIER NE PORTE PAS UN SEUL `#` : LES QUATRE TEINTES SE LISENT DANS
+`EMBLEMES_CARTE`.** « Aucune teinte neuve » cesse d'être une promesse à tenir —
+`banc.test.js` §11 balaie ce fichier et n'y trouve rien à juger. ⚠ Le marqueur
+d'une base de l'Ouvrage reprend son **FOND** et non son bord : à 1 590 marqueurs,
+le rouge réservé à ce qui ATTAQUE le joueur ferait une brume sur un sixième de
+l'écran et cesserait de désigner quoi que ce soit. ⚠ Et un gisement ACQUIS prend
+l'ambre du **butin** — celle des camps —, ce que le pavé du gabarit des POI dit
+déjà : « un POI n'appartient à personne tant qu'il n'est pas entré dans un
+territoire ».
+⚠⚠ **LE FOND EST UN APLAT PAR BANDE DE NIVEAUX, ET CE SONT CELLES DES
+GISEMENTS.** Le panneau des POI écrit « bande 7 » sur chaque ligne ; sans un fond
+qui les montre, ce nombre ne désigne rien à l'écran. Les deux lisent
+`rangeesDeLaBande`. ⚠ **PAS LES VINGT-DEUX PLANCHES DE SOL** : 2,2 Mo en base64,
+et à six pixels de haut il n'en resterait qu'un bruit.
+⚠⚠ **ET LA BASCULE OCRE → VIOLET TOMBE OÙ LE VRAI SOL LA MET — BANDE 6 DES DEUX
+CÔTÉS, MESURÉ.** Rien dans le code ne les y oblige : `AC T6` confronte
+`TONS_DU_SOL` à `partDeTeinteDeLaRangee`, et si elles cessent de s'accorder, la
+mini-carte ment sur l'endroit où le sol de l'Ouvrage commence.
+⚠ **« LES BASES CONNUES » EST UNE LECTURE, DÉCLARÉE.** Ce jeu n'a pas de
+brouillard de guerre : « connues » se lit « celles que le modèle sait produire »,
+moins les RASÉES. Coût mesuré sur la graine 2026 : **1 642 marqueurs — 1 571
+Ouvrage, 70 POI, 1 base — en 56 ms**, un seul dessin à l'ouverture. ⚠ Le compte
+suit la GRAINE, la durée non.
+⚠ **ET LES MARQUEURS PONCTUELS DÉBORDENT DE LEUR CASE — DÉCIDÉ EN REGARDANT,
+PAS EN RELISANT.** À une rangée de haut, les soixante-dix gisements se perdaient
+dans les **16,89 %** de texture de la même graine ; ils font trois rangées, la base du joueur cinq, et
+le débord est BORNÉ au canevas. `AC T6` garde le RAPPORT, jamais la taille.
+⚠⚠ **LE BOUTON DU JOURNAL PORTE UN MOT, ET LA POLICE NE DESCEND PAS — CONTRE LA
+PRÉDICTION DU BRIEF.** Ethan : « Pas d'emoji mais un mot journal comme les autres
+boutons ». La règle `#tete-rapport` disparaît ENTIÈREMENT — `flex: 0 0 32px`,
+`font-size: 16px`, `text-transform: none`, `letter-spacing: 0` —, et son
+`aria-label` avec elle : le texte visible EST son nom accessible. Le brief posait
+que six mots à 11 px ne tiendraient pas dans 360 px CSS et qu'il faudrait baisser
+les six ; **relevé dans Chromium : BASE 31,66 + JOURNAL 54,11 + MISSION 51,45 +
+RECHERCHE 73,44 + MONDE 45,11 + OPTIONS 53,75 = 309,52 px**, plus six bordures
+= **315,52 sur 360**, soit **44,48 px de mou, zéro coupure**. Rapetisser cinq
+libellés justes pour un sixième qui tient aurait été un réglage sans cause.
+⚠ **ET IL NE DEVIENT PAS UN ONGLET** : son identifiant reste `tete-rapport`, il
+ne prend jamais `.actif`, et `ONGLET_DE_L_ECRAN` ne le connaît pas.
+⚠⚠ **QUATORZE FALSIFICATIONS, QUATORZE CHUTES, ET TROIS ONT ÉTÉ MUETTES AU
+PREMIER RELEVÉ — CHACUNE A RESSERRÉ SON TEST.** L'ordre du pop-up (ci-dessus) ;
+les deux rampes du sol INTERVERTIES, que `basculeDuSol` ne voyait pas parce
+qu'elle lisait le RANG dans la liste et non la RAMPE — la mini-carte aurait peint
+le violet au sud sans qu'un test bronche ; et le débord des marqueurs remis à
+zéro, désormais gardé par un RAPPORT de hauteurs. ⚠ La quatorzième, le scanner
+naïf, mord dans l'OUTIL et se déclare comme telle.
+⚠ **HUIT TESTS ENTRENT — `AC T1` À `AC T8` — ET LE COMPTE PASSE DE 1 550 À
+1 558.** **Aucune assertion n'a été retirée ni assouplie** ; **cinq gardes
+changent de cible et toutes se RESSERRENT** — `SB T4` et `SB T5` retournent leurs
+assertions d'opacité, `SON T14`, `SON T15` et `SON T20` suivent le compte des
+atteignables, `PC T5` mesure la liste FILTRÉE, `ÉCRANS T*` perd son exception de
+largeur, et le compte des `image-rendering: pixelated` passe de 8 à **9** — le
+neuvième est le canevas de la mini-carte.
+⚠⚠ **`PIC T7` EST RÉANCRÉ PAR CE LOT, ET SON ANCRE D'AVANT MENTAIT DÉJÀ DE
+14 936 OCTETS.** Elle écrivait `9_410_485`, mesuré au lot ART-90 sur `14dd4ac` ;
+`d68c4d1` en pèse **9 425 421**. La dérive passait sous sa tolérance de 50 000,
+qui garde contre la dérive LENTE et ne remplace pas un remesurage.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 31** — vérifié au diff : aucun champ
+n'entre dans l'état. Une arrivée est un état d'affichage, une cadence un réglage
+de sortie, et la mini-carte une lecture.
+⚠ **LES DEUX CENTS TÉMOINS DE COMBAT ET CELUI DE BASES-0 NE BOUGENT PAS D'UN
+BIT**, et `test/temoins-combat.js` n'a pas une ligne de changée : le lot ne
+touche ni `src/sim/`, ni `src/son/`, ni un barème.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne graphique — `tools/sons.py` est
+touché dans sa TABLE, pas dans son encodage, et `opusenc` est absent de ce
+conteneur. ⚠ **`tools/build.js` n'est pas un outil de la chaîne** : il ne produit
+ni sprite ni son.
+⚠ **CE QUI N'A ÉTÉ NI VU NI ENTENDU SE NOMME** : le silence de l'écran de la base
+— aucun périphérique audio ici —, l'ambre d'un gisement ACQUIS sur la mini-carte
+(la partie neuve du relevé n'en porte aucun), et le rendu sur l'appareil d'Ethan
+(§3). Tout ce qui précède est relevé dans Chromium à la géométrie du S25 FE.
+
+**Auparavant, après le lot ÉCRANS :**
 `npm test` rend **1550 pass / 0 fail** au sens de la garde de `documentation.test.js`
 — c'est le NOMBRE de tests déclarés ; le verdict mesuré est **1549 pass · 0 fail ·
 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
@@ -9334,10 +9517,11 @@ src/sim/                simulation déterministe, sans DOM — 34 fichiers
     MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
     l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 15 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 16 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
-  arrivee.js            comment une unité neuve monte à sa case : rampe et opacité
+  arrivee.js            à quelle hauteur une unité neuve roule vers sa case, et pendant combien de temps
+  mini-carte.js         les 31 × 300 cases sur 1080 × 1920 : bandes, marqueurs, rien d'autre
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
   portee.js             quelles cases une pièce de défense couvre, et si elle tire
   fond.js               le décor peint d'une base : quel dessin, et où il se pose

@@ -613,11 +613,25 @@ export const AMBIANCE_PAR_ECRAN = {
   raid: 'ambience_battlefield_distant_loop',
 };
 
+/**
+ * Les boucles qu'un BÂTIMENT posé fait tourner — et il n'y en a plus aucune.
+ *
+ * ⚠⚠ VIDE DEPUIS LE 10/09, SUR ARBITRAGE D'ETHAN : « Oui » à « faut-il couper
+ * aussi les boucles de bâtiment ? ». Elle portait `caserne`,
+ * `depotDeVehicules` et `aerodrome` sur `building_player_factory_loop`, et
+ * `centrale` sur `building_reactor_loop`.
+ *
+ * ⚠⚠ VIDE ET NON SUPPRIMÉE. `bouclesDesirees` de `src/son/cablage.js` la lit, et
+ * une garde confronte ses clés au roster de `src/data/base.js` : la retirer
+ * demanderait de toucher le câblage, et surtout ferait disparaître l'endroit où
+ * une boucle se remet. Le jour où Ethan en veut une, c'est UNE ligne ici.
+ *
+ * ⚠⚠ ET APRÈS ELLE, L'ÉCRAN DE LA BASE EST ENTIÈREMENT SILENCIEUX.
+ * `AMBIANCE_PAR_ECRAN` ne porte plus que `raid` ; tout ce qui reste de boucles
+ * au dépôt ne tourne que pendant un combat. C'est voulu, et c'est assez
+ * inhabituel pour être écrit.
+ */
 export const BOUCLES_DE_BATIMENT = {
-  aerodrome: 'building_player_factory_loop',
-  caserne: 'building_player_factory_loop',
-  centrale: 'building_reactor_loop',
-  depotDeVehicules: 'building_player_factory_loop',
 };
 
 /**

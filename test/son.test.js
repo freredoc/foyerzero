@@ -883,11 +883,22 @@ test('SON T14 — quatre points d\'accroche, un seul écouteur pour tous les bou
   // donc une ventilation d'octets et un arbitrage à part. Le compte de `data:`
   // que `CLAUDE.md` suit poste par poste ne bouge pas d'une ligne — ce lot est
   // à **images +0 · audio +0**.
-  assert.equal(atteignables.length, 167, 'le nombre de sons atteignables a bougé');
-  // ⚠ ET 96 RESTENT MUETS, contre 95 avant le lot. C'est voulu, et le rapport
-  // les nomme un par un avec leur raison : rien n'a été branché pour donner un
-  // emploi à un son, et un seul en a perdu un.
-  assert.equal(Object.keys(SONS).length - atteignables.length, 96,
+  //
+  // ⚠⚠ CENT SOIXANTE-CINQ DEPUIS LE LOT ARRIVÉE-CARTE-ET-BUILD, ET LES DEUX QUI
+  // PARTENT SONT LES BOUCLES DE BÂTIMENT. Ethan, 10/09, à « faut-il couper aussi
+  // les boucles de bâtiment ? » : **« Oui »**. `BOUCLES_DE_BATIMENT` est VIDE,
+  // donc `building_player_factory_loop` et `building_reactor_loop` perdent leur
+  // dernier demandeur. **QUATRE sons dorment maintenant**, et c'est la même
+  // mécanique quatre fois : deux ambiances puis deux machineries.
+  //
+  // ⚠ LES DEUX RESTENT AU LIVRABLE, comme les deux ambiances avant eux — même
+  // arbitrage en suspens, même ventilation à part. **audio +0**.
+  assert.equal(atteignables.length, 165, 'le nombre de sons atteignables a bougé');
+  // ⚠ ET 98 RESTENT MUETS, contre 96 au lot précédent et 95 avant lui. C'est
+  // voulu, et le rapport les nomme un par un avec leur raison : rien n'a été
+  // branché pour donner un emploi à un son, et DEUX en ont perdu un — les deux
+  // machineries de bâtiment, sur arbitrage d'Ethan du 10/09.
+  assert.equal(Object.keys(SONS).length - atteignables.length, 98,
     'le compte des sons muets a bougé sans que le rapport le dise');
 
   // Le refus arrive par les registres `toast`, APRÈS la garde du texte vide :
@@ -1003,46 +1014,95 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   const vide = bouclesDesirees({ ecran: null, disposition: [], unites: [] });
   assert.deepEqual(vide, [], 'sans écran ni base, rien ne doit sonner');
 
-  // ⚠⚠ LE MONTAGE PERD SON AMBIANCE, ET IL GARDE CE QU'IL MESURE — lot
-  // SON-ET-ARRIVÉE, 10/09. Il portait `AMBIANCE_PAR_ECRAN.chantier` en tête de
-  // l'ensemble attendu ; l'écran de la base n'a plus d'ambiance depuis le point
-  // 12 d'Ethan. Ce que ce montage-ci garde n'est PAS l'ambiance en particulier,
-  // c'est que PLUSIEURS boucles se réconcilient et se dédoublonnent : il se
-  // rejoue donc sur les deux boucles de bâtiment, qui sont bien deux, et rien
-  // n'est assoupli.
+  // ⚠⚠ LE MONTAGE DÉMÉNAGE UNE SECONDE FOIS, ET IL GARDE TOUJOURS CE QU'IL
+  // MESURE. Il portait `AMBIANCE_PAR_ECRAN.chantier` jusqu'au lot
+  // SON-ET-ARRIVÉE, puis les deux boucles de bâtiment jusqu'au lot
+  // ARRIVÉE-CARTE-ET-BUILD : les deux tables se sont vidées l'une après l'autre,
+  // sur deux arbitrages d'Ethan du 10/09. Ce que ce montage garde n'a jamais été
+  // l'une ou l'autre en particulier — c'est que **PLUSIEURS boucles se
+  // réconcilient et se dédoublonnent**. Il se rejoue donc sur le RAID et ses
+  // roulements, qui sont le dernier endroit du dépôt où il y en a plusieurs, et
+  // **rien n'est assoupli** : le montage passe de deux boucles à QUATRE.
+  //
+  // ⚠ LES IDENTIFIANTS SONT CEUX DE LA TABLE, qui porte les noms de l'Ouvrage —
+  // `meute` est l'escouade, `ratisseur` et `fendeur` deux chenillés de poids
+  // différents. C'est `UNITES` qui fait foi, pas le nom affiché au joueur.
+  const surLeRaid = bouclesDesirees({
+    ecran: 'raid',
+    disposition: [],
+    unites: [
+      { id: 'meute', proprietaire: 'joueur', enMouvement: true },
+      { id: 'ratisseur', proprietaire: 'joueur', enMouvement: true },
+      { id: 'fendeur', proprietaire: 'joueur', enMouvement: true },
+    ],
+  });
+  assert.equal(surLeRaid.length, 4,
+    `l'ensemble désiré sur le raid a changé : ${surLeRaid.join(', ')}`);
+  // ⚠ ET LE MONTAGE DISCRIMINE : les trois roulements retenus sont DISTINCTS,
+  // sans quoi « plusieurs boucles » n'en serait qu'une et le dédoublonnage
+  // passerait pour de la réconciliation.
+  const roulements = [
+    boucleDeLUnite('meute', 'joueur', true),
+    boucleDeLUnite('ratisseur', 'joueur', true),
+    boucleDeLUnite('fendeur', 'joueur', true),
+  ];
+  assert.equal(new Set(roulements).size, 3, 'montage : deux des trois partagent leur roulement');
+  assert.deepEqual(surLeRaid,
+    [AMBIANCE_PAR_ECRAN.raid, ...roulements].sort(),
+    'l\'ensemble désiré sur le raid a changé');
+
+  // ⚠⚠ ET C'EST ICI QU'ON MESURE LES DEUX ARBITRAGES DU 10/09 : hors combat,
+  // l'ensemble est **entièrement vide**, bâtiments posés compris. C'est plus
+  // fort que ce que ce test exigeait avant lui — il vérifiait l'absence
+  // d'AMBIANCE sur la base, il vérifie maintenant l'absence de TOUT.
   const surLaBase = bouclesDesirees({
     ecran: 'chantier',
     disposition: [{ id: 'chantierDeConstruction' }, { id: 'caserne' }, { id: 'centrale' }],
     unites: [],
   });
-  assert.deepEqual(surLaBase, [
-    BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.centrale,
-  ].sort(), 'l\'ensemble désiré sur la base a changé');
-  // ⚠ ET LE MONTAGE DISCRIMINE : les deux boucles retenues sont DISTINCTES, sans
-  // quoi « plusieurs boucles » n'en serait qu'une et le dédoublonnage passerait
-  // pour de la réconciliation.
-  assert.notEqual(BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.centrale,
-    'montage : les deux bâtiments partagent leur boucle');
-  // ⚠⚠ ET C'EST ICI QU'ON MESURE LE POINT 12 : l'écran de la base ne demande
-  // AUCUNE ambiance. Sans cette ligne, le retrait des cinq écrans se lirait
-  // seulement comme une table plus courte.
-  assert.deepEqual(surLaBase.filter((n) => SONS[EVENEMENTS[n].variantes[0]].bus === 'ambiances'),
-    [], 'l\'écran de la base demande encore une ambiance');
+  assert.deepEqual(surLaBase, [], 'l\'écran de la base demande encore une boucle');
 
-  // ⚠⚠ UNE BOUCLE PAR TYPE, PAS PAR BÂTIMENT. Six casernes ne font pas six fois
-  // le même bruit ; compter sur le plafond de voix pour les refuser marcherait,
-  // et demanderait de savoir combien il en autorise.
+  // ⚠⚠ UNE BOUCLE PAR SOURCE, PAS PAR OCCURRENCE. Six unités du même châssis ne
+  // font pas six fois le même bruit ; compter sur le plafond de voix pour les
+  // refuser marcherait, et demanderait de savoir combien il en autorise.
+  //
+  // ⚠ LE MONTAGE A CHANGÉ DE PORTEUR AVEC LA TABLE : il comptait six casernes,
+  // il compte six escouades. La propriété est la même, et la voie du
+  // dédoublonnage est désormais la seule qui reste peuplée.
   const six = bouclesDesirees({
-    ecran: 'chantier',
-    disposition: Array.from({ length: 6 }, () => ({ id: 'caserne' })),
-    unites: [],
+    ecran: 'raid',
+    disposition: [],
+    unites: Array.from({ length: 6 },
+      () => ({ id: 'meute', proprietaire: 'joueur', enMouvement: true })),
   });
-  assert.equal(six.filter((n) => n === BOUCLES_DE_BATIMENT.caserne).length, 1,
-    'six casernes demandent six boucles');
-  // ⚠ ET LE MONTAGE MESURE QUELQUE CHOSE : la caserne et le dépôt PARTAGENT une
-  // boucle, donc le dédoublonnage joue aussi entre deux types différents.
-  assert.equal(BOUCLES_DE_BATIMENT.caserne, BOUCLES_DE_BATIMENT.depotDeVehicules,
-    'montage : les deux ne partagent plus la même boucle');
+  assert.equal(six.filter((n) => n === roulements[0]).length, 1,
+    'six escouades demandent six boucles');
+  // ⚠ ET LE DÉDOUBLONNAGE JOUE AUSSI ENTRE DEUX SOURCES DIFFÉRENTES : deux
+  // escouades de NOMS distincts partagent un roulement, et il n'en sort qu'un.
+  assert.equal(boucleDeLUnite('meute', 'joueur', true),
+    boucleDeLUnite('guetteur', 'joueur', true),
+    'montage : les deux escouades ne partagent plus leur roulement');
+  const deuxNoms = bouclesDesirees({
+    ecran: 'raid',
+    disposition: [],
+    unites: [
+      { id: 'meute', proprietaire: 'joueur', enMouvement: true },
+      { id: 'guetteur', proprietaire: 'joueur', enMouvement: true },
+    ],
+  });
+  assert.equal(deuxNoms.filter((n) => n === roulements[0]).length, 1,
+    'deux escouades de noms différents demandent deux boucles');
+
+  // ⚠⚠ ET LA VOIE DES BÂTIMENTS RESTE CÂBLÉE, MESURÉE PAR LA SOURCE — c'est la
+  // seule façon de la garder maintenant que sa table est vide. `BOUCLES_DE_BATIMENT`
+  // n'a plus une entrée, donc AUCUNE disposition ne peut faire répondre cette
+  // branche : elle est INERTE, et un test comportemental serait vert quoi qu'il
+  // arrive. La ligne qui la lit doit donc exister, pour que remettre une boucle
+  // reste UNE ligne de `tools/sons.py` et rien d'autre.
+  assert.ok(cablage.includes('BOUCLES_DE_BATIMENT[piece.id]'),
+    'la branche des boucles de bâtiment a disparu : y remettre une boucle ne suffirait plus');
+  assert.deepEqual(Object.keys(BOUCLES_DE_BATIMENT), [],
+    'BOUCLES_DE_BATIMENT n\'est plus vide : ce test garde la branche INERTE, le rouvrir demande de le relire');
 
   // 3. LA DIFFÉRENCE — pure, et dans les deux sens.
   // Un nom inconnu LÈVE : c'est un câblage mal tapé, donc un fait de programme.
@@ -1603,8 +1663,21 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
   //
   // ⚠ DEUX AMBIANCES DORMENT DÉSORMAIS, ET C'EST LA MÊME MÉCANIQUE DEUX FOIS :
   // `ambience_calm_map_loop` depuis le 06/09, celle-ci depuis le 10/09.
-  assert.equal(cables.size, 167, 'le nombre de sons câblés a bougé');
-  assert.equal(muets.length, 96, 'le nombre de sons muets a bougé');
+  //
+  // ⚠⚠ ET DEUX MACHINERIES LES REJOIGNENT AU LOT ARRIVÉE-CARTE-ET-BUILD —
+  // `building_player_factory_loop` et `building_reactor_loop`, cent soixante-cinq
+  // au lieu de 167. `BOUCLES_DE_BATIMENT` est vide sur arbitrage d'Ethan du
+  // 10/09, donc les deux n'ont plus aucun demandeur. **Quatre sons dorment**, et
+  // les quatre restent au catalogue et au livrable : pas un `data:` n'en sort.
+  assert.equal(cables.size, 165, 'le nombre de sons câblés a bougé');
+  assert.equal(muets.length, 98, 'le nombre de sons muets a bougé');
+  // ⚠ ET LES DEUX QUI ENTRENT SONT NOMMÉS, pas seulement comptés : un compte qui
+  // monte de deux ne dit pas LESQUELS, et c'est exactement ce qu'on veut savoir
+  // le jour où un lot en éteint un par mégarde.
+  for (const nom of ['building_player_factory_loop', 'building_reactor_loop']) {
+    assert.ok(muets.some((m) => EVENEMENTS[nom].variantes.includes(m)),
+      `${nom} devrait dormir depuis que BOUCLES_DE_BATIMENT est vide`);
+  }
 
   // ⚠ LES SIX ORDRES DE L'OUVRAGE RESTENT MUETS — il ne donne aucun ordre que
   // le joueur entende. En brancher un fait tomber cette ligne.
@@ -1729,15 +1802,23 @@ test('SON T20 — les sons déclarés muets le sont, un par un (falsification n�
   assert.deepEqual(moteursMuets, [], 'un moteur est redevenu muet');
   assert.equal(Object.keys(SONS).filter((n) => n.startsWith('engine_')).length, 6);
 
-  // ⚠⚠ ET DOUZE SONS DE BÂTIMENT RESTENT MUETS, POUR DES MOTIFS QUI TIENNENT
-  // TOUS AU MODÈLE. Il n'y a ni file de construction, ni réparation qui DURE —
-  // c'est un stock depuis le lot RÉSERVE —, ni état « base attaquée » qui
-  // persiste ; `power_up` et `power_down` sonneraient une seconde fois les
-  // quatre gestes qui sonnent déjà, `capacitesMilli` n'étant fonction que de la
-  // disposition ; et l'Ouvrage ne CONSTRUIT rien sous les yeux du joueur.
+  // ⚠⚠ ET QUATORZE SONS DE BÂTIMENT RESTENT MUETS, POUR DES MOTIFS QUI TIENNENT
+  // TOUS AU MODÈLE — SAUF DEUX, QUI TIENNENT À UN ARBITRAGE. Il n'y a ni file de
+  // construction, ni réparation qui DURE — c'est un stock depuis le lot
+  // RÉSERVE —, ni état « base attaquée » qui persiste ; `power_up` et
+  // `power_down` sonneraient une seconde fois les quatre gestes qui sonnent
+  // déjà, `capacitesMilli` n'étant fonction que de la disposition ; et l'Ouvrage
+  // ne CONSTRUIT rien sous les yeux du joueur.
+  //
+  // ⚠⚠ LES DEUX QUI ENTRENT AU LOT ARRIVÉE-CARTE-ET-BUILD SONT D'UNE AUTRE
+  // NATURE, ET LA DISTINCTION COMPTE. Les douze premiers sont muets parce que le
+  // modèle n'a rien à leur faire dire ; `building_player_factory_loop` et
+  // `building_reactor_loop`, eux, avaient un demandeur et Ethan le leur a retiré
+  // — « Oui » à « faut-il couper aussi les boucles de bâtiment ? », 10/09. Les
+  // premiers attendent une mécanique, les seconds attendent qu'il change d'avis.
   const batimentsMuets = Object.keys(SONS)
     .filter((n) => n.startsWith('building_') && !cables.has(n)).sort();
-  assert.equal(batimentsMuets.length, 12, 'le compte des sons de bâtiment muets a bougé');
+  assert.equal(batimentsMuets.length, 14, 'le compte des sons de bâtiment muets a bougé');
   // ⚠ MAIS LES SIX EFFONDREMENTS SONNENT, DANS LES DEUX CAMPS — c'est le raid
   // qui les fait tomber, et c'est ce que le journal publie.
   for (const mot of ['player', 'ouvrage']) {
@@ -2369,12 +2450,19 @@ test('SON-V T3 — sur la carte, aucune boucle d\'ambiance n\'est voulue (falsif
   assert.deepEqual(surMonde.filter((n) => evenementsDAmbiance.has(n)), [],
     'la carte demande encore une ambiance');
 
-  // ⚠ ET LE RETRAIT EST CHIRURGICAL : le reste de ce que l'écran porte sonne
-  // toujours. Une base avec une caserne garde sa machinerie, sur la carte comme
-  // ailleurs — sans quoi le lot aurait coupé plus que ce qu'Ethan a demandé.
+  // ⚠⚠ CETTE ASSERTION EST RETOURNÉE, PAS ASSOUPLIE — lot ARRIVÉE-CARTE-ET-BUILD,
+  // 10/09. Elle exigeait l'INVERSE : « le retrait est chirurgical, une base avec
+  // une caserne garde sa machinerie, sans quoi le lot aurait coupé plus que ce
+  // qu'Ethan a demandé ». Elle avait raison au lot SON-VOLUMES, où seule
+  // l'ambiance partait ; Ethan a depuis répondu « Oui » à « faut-il couper aussi
+  // les boucles de bâtiment ? », et ce qu'elle défendait n'est plus vrai.
+  //
+  // ⚠ ELLE SE RESSERRE EN SE RETOURNANT : elle exigeait UN nom, elle exige
+  // désormais le VIDE — et le vide est plus difficile à obtenir par accident.
+  // Une caserne posée ne demande plus rien, sur la carte comme ailleurs.
   const avecUsine = bouclesDesirees({ ecran: 'monde', disposition: [{ id: 'caserne' }] });
-  assert.deepEqual(avecUsine, ['building_player_factory_loop'],
-    'sur la carte, la machinerie s\'est tue avec l\'ambiance');
+  assert.deepEqual(avecUsine, [],
+    'la carte demande encore une boucle : les bâtiments se taisent depuis le 10/09');
 });
 
 // ---------------------------------------------------------------------------
@@ -2508,13 +2596,23 @@ test('SB T1 — un seul écran demande une ambiance, et c\'est le raid', () => {
   assert.deepEqual(bouclesDesirees({ ecran: 'raid', disposition: [], unites: [] }),
     ['ambience_battlefield_distant_loop'], 'le champ de bataille est devenu muet');
 
-  // ⚠⚠ ET LE RETRAIT EST CHIRURGICAL : `BOUCLES_DE_BATIMENT` n'est pas touché.
-  // Ses quatre boucles sonnent toujours, sur n'importe quel écran — elles sont
-  // motivées par une SITUATION, une usine qui tourne, et non par le simple fait
-  // d'être quelque part. Sans cette ligne, un lot qui aurait tout coupé
-  // passerait pour avoir répondu au point 12.
-  assert.deepEqual(bouclesDesirees({ ecran: 'chantier', disposition: [{ id: 'caserne' }], unites: [] }),
-    ['building_player_factory_loop'], 'la machinerie s\'est tue avec l\'ambiance');
+  // ⚠⚠ ET CETTE ASSERTION EST RETOURNÉE, PAS ASSOUPLIE — lot
+  // ARRIVÉE-CARTE-ET-BUILD, 10/09. Elle disait « le retrait est chirurgical,
+  // `BOUCLES_DE_BATIMENT` n'est pas touché, ses quatre boucles sonnent toujours »
+  // et servait à empêcher qu'un lot qui aurait TOUT coupé passe pour avoir
+  // répondu au point 12. C'est exactement ce qu'Ethan demande depuis : « Oui » à
+  // « faut-il couper aussi les boucles de bâtiment ? ».
+  //
+  // ⚠ CE QU'ELLE GARDE MAINTENANT EST PLUS FORT : une base posée avec ses quatre
+  // bâtiments à boucle ne demande **rien du tout**. C'est l'énoncé qu'un lot ne
+  // peut pas satisfaire par accident, là où « une boucle » se satisfaisait en
+  // laissant la table pleine.
+  assert.deepEqual(bouclesDesirees({
+    ecran: 'chantier',
+    disposition: [{ id: 'caserne' }, { id: 'centrale' },
+      { id: 'aerodrome' }, { id: 'depotDeVehicules' }],
+    unites: [],
+  }), [], 'un bâtiment fait encore tourner une boucle');
 });
 
 // ---------------------------------------------------------------------------
@@ -2677,4 +2775,74 @@ test('SB T3 — la cadence des armes ne déborde ni sur les alertes ni sur les b
     'la garde de cadence est entrée dans `reconcilierLesBoucles`');
   assert.ok(politique.includes('GARDE_PAR_BUS'),
     'témoin : la garde de cadence a disparu de la politique');
+});
+
+// ---------------------------------------------------------------------------
+// AC T1 — hors combat, aucune boucle n'est demandée
+// ---------------------------------------------------------------------------
+
+test('AC T1 — hors du raid, aucune boucle n\'est demandée, quelle que soit la base', () => {
+  // ⚠⚠ ETHAN, 10/09 : « Oui » À « FAUT-IL COUPER AUSSI LES BOUCLES DE BÂTIMENT ? »
+  // Le point 4 de sa liste retirait l'ambiance de la base ; la question posée en
+  // retour portait sur les QUATRE boucles de bâtiment que `BOUCLES_DE_BATIMENT`
+  // portait encore — usine pour la Caserne, le Dépôt et l'Aérodrome, réacteur
+  // pour la Centrale. Après ce lot, **l'écran de la base est entièrement
+  // silencieux**, et il n'y a plus de boucle nulle part hors d'un combat.
+  //
+  // ⚠⚠ LA MESURE PASSE PAR `bouclesDesirees`, QUI EST LE LECTEUR RÉEL, ET C'EST
+  // LA FALSIFICATION QUE LE BRIEF NOMME. Vider la table sans relire son lecteur
+  // laisserait ce test vert si les boucles venaient d'ailleurs — d'une ambiance
+  // d'écran, d'un roulement d'unité, d'une seconde table. En interrogeant la
+  // fonction que `ui/session.js` appelle pour de bon, on mesure ce que le jeu
+  // demande, pas ce qu'une table contient.
+  const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
+
+  // ⚠ LA DISPOSITION PORTE LES QUATRE BÂTIMENTS QUI SONNAIENT, POSÉS ET EN
+  // SERVICE. Une base vide rendrait l'ensemble vide sur n'importe quel code : le
+  // montage doit porter exactement ce que la table portait.
+  const disposition = [
+    { id: 'chantierDeConstruction', rangee: 18, colonne: 5, niveau: 1 },
+    { id: 'caserne', rangee: 17, colonne: 2, niveau: 3 },
+    { id: 'depotDeVehicules', rangee: 17, colonne: 4, niveau: 3 },
+    { id: 'aerodrome', rangee: 17, colonne: 6, niveau: 3 },
+    { id: 'centrale', rangee: 16, colonne: 2, niveau: 3 },
+  ];
+  for (const piece of disposition) {
+    assert.ok(BASE_BATIMENTS[piece.id] !== undefined,
+      `« ${piece.id} » n'est plus un bâtiment du joueur : le montage ne mesure plus rien`);
+  }
+
+  for (const ecran of ECRANS) {
+    const voulu = bouclesDesirees({ ecran, disposition, unites: [] });
+    if (ecran === 'raid') {
+      assert.deepEqual(voulu, ['ambience_battlefield_distant_loop'],
+        'le raid a perdu son ambiance, ou en a gagné une seconde');
+    } else {
+      assert.deepEqual(voulu, [],
+        `l'écran « ${ecran} » demande encore ${voulu.join(', ')}`);
+    }
+  }
+
+  // ⚠ ET LA TABLE EST VIDE, PAS ABSENTE. `bouclesDesirees` la LIT ; la supprimer
+  // ferait disparaître l'endroit où une boucle se remet, et le jour où Ethan en
+  // veut une, c'est UNE ligne. Les deux moitiés se mesurent.
+  assert.deepEqual(Object.keys(BOUCLES_DE_BATIMENT), [],
+    'une boucle de bâtiment est revenue sans qu\'on le dise');
+  assert.equal(typeof BOUCLES_DE_BATIMENT, 'object',
+    'la table a été supprimée : `bouclesDesirees` la lit encore');
+  const cablage = lire('src', 'son', 'cablage.js');
+  assert.ok(cablage.includes('BOUCLES_DE_BATIMENT'),
+    'le câblage ne lit plus la table : la vider ne prouverait plus rien');
+
+  // ⚠ FALSIFIABLE : la fonction doit encore savoir rendre une boucle. Sans cette
+  // ligne, un `bouclesDesirees` qui rendrait TOUJOURS l'ensemble vide passerait
+  // les sept écrans ci-dessus.
+  assert.deepEqual(
+    bouclesDesirees({
+      ecran: 'raid',
+      disposition: [],
+      unites: [{ id: 'meute', proprietaire: 'joueur', enMouvement: true }],
+    }).length > 1, true,
+    'témoin : `bouclesDesirees` ne rend plus rien du tout',
+  );
 });

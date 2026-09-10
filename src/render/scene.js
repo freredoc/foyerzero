@@ -275,12 +275,23 @@ const sprite = (famille, nom, x, y, l, h, angle = 0, alpha = OPACITE_PLEINE) => 
     // ⚠⚠ L'OPACITÉ EN MILLIÈMES, ET MILLE PAR DÉFAUT — lot SON-ET-ARRIVÉE,
     // 10/09. Même raisonnement que l'angle juste au-dessus : elle est portée par
     // TOUTES les primitives, y compris les opaques, pour que `canvas2d.js`
-    // n'ait jamais à distinguer « absente » de « pleine ». Elle ne sert
-    // aujourd'hui qu'au fantôme d'une unité qui arrive.
+    // n'ait jamais à distinguer « absente » de « pleine ».
+    //
+    // ⚠⚠ ET ELLE N'A PLUS AUCUN CLIENT DEPUIS LE LOT ARRIVÉE-CARTE-ET-BUILD —
+    // Ethan, 10/09 : « Ne pas faire de fantôme. » Elle ne servait qu'à l'unité
+    // qui arrive ; **toute primitive vaut désormais `OPACITE_PLEINE`**, et
+    // `AC T2` le mesure sur la liste d'affichage entière.
+    //
+    // ⚠ ELLE RESTE QUAND MÊME, ET C'EST DÉLIBÉRÉ. Le champ est générique, la
+    // valeur par défaut le rend invisible aux appelants, et `SB T6` garde la
+    // restauration de `globalAlpha` chez celui qui peint. Retirer la plomberie
+    // parce que son premier client s'en va obligerait le suivant à la réécrire —
+    // et un `globalAlpha` laissé sale est une faute qu'aucun test sans
+    // navigateur ne verrait deux fois.
     //
     // ⚠ EN MILLIÈMES ENTIERS, PAS EN FRACTION — l'unité d'`alphaMilli` de
-    // `render/interpolation.js` et d'`OPACITE_ARRIVEE`. La conversion en
-    // fraction se fait chez celui qui écrit sur le contexte, une fois.
+    // `render/interpolation.js`. La conversion en fraction se fait chez celui
+    // qui écrit sur le contexte, une fois.
     alpha,
   };
 };
@@ -983,8 +994,13 @@ export function listeAffichage(
     return y + Math.round((arrivee.decalageMilli * t) / MILLI_PAR_CASE);
   };
 
-  /** L'opacité d'une entité : pleine, sauf pendant qu'elle arrive. */
-  const alphaDe = (e) => arriveeDe(e)?.opacite ?? OPACITE_PLEINE;
+  // ⚠⚠ `alphaDe` A DISPARU AVEC LE FANTÔME — lot ARRIVÉE-CARTE-ET-BUILD, 10/09.
+  // Elle rendait `arriveeDe(e)?.opacite ?? OPACITE_PLEINE` ; `etatDeLArrivee` ne
+  // rend plus d'opacité, donc elle rendait `OPACITE_PLEINE` dans tous les cas,
+  // c'est-à-dire la valeur par défaut de `sprite()`. Les deux sites d'appel la
+  // laissent tomber plutôt que de passer une constante que la primitive pose
+  // déjà — un argument qui vaut toujours son défaut est un argument qu'on croit
+  // lu.
 
   // ⚠⚠ LA LISTE DES DÉFENSES VIVANTES A DISPARU AVEC LE CHAÎNAGE, ET C'EST LE
   // LOT. Elle était calculée ici, une fois par image, pour que `liaisonDuMur`
@@ -1057,7 +1073,7 @@ export function listeAffichage(
         if (reste === 'rien') continue;
         if (reste === 'ruine') {
           dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
-            accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire), alphaDe(e));
+            accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
           continue;
         }
         // ⚠ UN RESTE INCONNU LÈVE, comme un genre absent de la table. Une
@@ -1108,7 +1124,7 @@ export function listeAffichage(
           // était lue en entier sur l'entité : la tourelle d'une défenseuse qui
           // se décale aurait visé depuis la case qu'elle vient de quitter.
           colonne: positionDe(e).colonneMilli / 1000,
-        }, { cible: cibleAffichee(e) }), alphaDe(e));
+        }, { cible: cibleAffichee(e) }));
     }
   }
 

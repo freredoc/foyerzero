@@ -417,7 +417,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 410 485 octets, la marge sur la borne T10 est de 1,97 %', () => {
+test('PIC T7 — le livrable pèse 9 331 195 octets, la marge sur la borne T10 est de 2,80 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -564,11 +564,42 @@ test('PIC T7 — le livrable pèse 9 410 485 octets, la marge sur la borne T10 e
   // faux, et c'est mesuré** — la garde « sprite — l'atlas cousu répond des
   // sprites d'aujourd'hui » de `test/sprite.test.js` tombe alors, et elle dit
   // quoi relancer. `npm run check` suffit.
+  // ⚠⚠ REMESURÉ AU LOT ARRIVÉE-CARTE-ET-BUILD, 10/09, ET C'EST LE PREMIER LOT
+  // DEPUIS FICHE-JUSTE QUI **REND** DES OCTETS. Les commentaires de la feuille
+  // sortent au build : `tools/build.js` passe `minify: true` à esbuild pour le
+  // JavaScript SEUL, si bien qu'un commentaire de JS ne pèse rien dans le
+  // livrable quand un commentaire de CSS y part à l'octet — le fait que le lot
+  // PALETTES-ET-DEFENSE avait mesuré et écrit ici même. Le lot le referme.
+  // **9 425 421 → 9 331 195, soit −94 226**, mesuré contre le livrable rebâti
+  // dans un `git worktree` sur l'arbre pristine de `d68c4d1`, et ventilé :
+  // **feuille −97 361 · JavaScript +2 735 · balisage +400 · images +0 ·
+  // audio +0**, la somme des cinq postes tombant EXACTEMENT sur le total.
+  //
+  // ⚠⚠ ET LES IMAGES NE BOUGENT PAS D'UN OCTET, CE QUI EST LA MOITIÉ QUI COMPTE.
+  // Un retrait de commentaires écrit à l'expression régulière mange le `/*` qui
+  // tombe dans une chaîne base64 et casse une image en silence : `AC T8` mesure
+  // que les **306 URI** sont là des deux côtés, identiques à l'octet et
+  // décodables. Le compte de LIGNES `data:`, lui, passe de 311 à **307** — les
+  // quatre qui partent sont des commentaires qui NOMMAIENT `data:` sans en
+  // porter un.
+  //
+  // ⚠⚠ ET L'ANCRE D'AVANT MENTAIT DÉJÀ DE 14 936 OCTETS, sans qu'aucun test le
+  // dise. Elle écrivait `9_410_485`, mesuré au lot ART-90 sur la base
+  // `14dd4ac` ; `d68c4d1` en pèse **9 425 421** — le lot ÉCRANS n'avait pas
+  // réancré, et la dérive passait sous la tolérance de 50 000 octets de la
+  // dernière assertion de ce test. C'est ce qu'on lui demande : elle garde
+  // contre la dérive LENTE, elle ne remplace pas un remesurage quand un lot sait
+  // ce qu'il déplace.
+  //
+  // ⚠ LA BORNE NE BOUGE PAS. Elle a été relevée au lot ART-90 parce qu'une
+  // image entrait ; ce lot-ci ALLÈGE, et « baisser une borne pour faire passer
+  // un lot : jamais » se lit aussi dans l'autre sens — une borne ne se baisse
+  // pas non plus pour se féliciter d'un gain.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_410_485;          // mesuré le 10/09, lot ART-90, base `14dd4ac`
-  const MARGE = BORNE - MESURE;      // 189 515 octets
-  assert.equal(MARGE, 189_515);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.97);
+  const MESURE = 9_331_195;          // mesuré le 10/09, lot ARRIVÉE-CARTE-ET-BUILD, base `d68c4d1`
+  const MARGE = BORNE - MESURE;      // 268 805 octets
+  assert.equal(MARGE, 268_805);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.8);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
