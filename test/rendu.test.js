@@ -31,10 +31,15 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { casesAPortee, porteeQuiTire } from '../src/render/portee.js';
+import {
+  ARRIVEE_MS, OPACITE_ARRIVEE, OPACITE_PLEINE,
+  creerArrivees, noterLesArrivees, etatDeLArrivee, arriveesALEcran,
+} from '../src/render/arrivee.js';
+import { MUR_CASES } from '../src/render/fond.js';
 
 /** La racine du dépôt, pour les gardes qui lisent la SOURCE. */
 const RACINE_RENDU = join(dirname(fileURLToPath(import.meta.url)), '..');
-import { distanceCarreeMilli, milliDepuisCase, estDansLaGrille } from '../src/sim/grille.js';
+import { distanceCarreeMilli, milliDepuisCase, estDansLaGrille, MILLI_PAR_CASE } from '../src/sim/grille.js';
 
 // ---------------------------------------------------------------------------
 // Montage de référence pour la scène : une entité de chaque classe visuelle.
@@ -522,7 +527,11 @@ function creerEnregistreur() {
     'save', 'translate', 'rotate', 'restore']) {
     enregistreur[methode] = (...args) => appels.push([methode, ...args]);
   }
-  for (const propriete of ['fillStyle', 'strokeStyle', 'lineWidth']) {
+  // ⚠ `globalAlpha` ENTRE AU LOT SON-ET-ARRIVÉE, 10/09, et il entre comme les
+  // trois autres : COMPTÉ et ORDONNÉ. C'est un ÉTAT du contexte, pas un argument
+  // de `drawImage` — l'oublier repeindrait en translucide tout ce que la liste
+  // dessine ENSUITE —, et c'est la seule façon de le mesurer sans navigateur.
+  for (const propriete of ['fillStyle', 'strokeStyle', 'lineWidth', 'globalAlpha']) {
     Object.defineProperty(enregistreur, propriete, {
       set(valeur) { appels.push([propriete, valeur]); },
     });
@@ -887,4 +896,301 @@ test('ÉD T7 — une artillerie porte son trou, et une tourelle n\'en a pas', ()
   assert.equal(porteeQuiTire({ portee: 3, porteeMini: 0, degats: { infanterie: 0, vehicule: 0, structureOuAviation: 0 } }),
     null, 'une pièce à portée non nulle et sans dégât se met à tirer');
   assert.ok(COLONNES_DEGATS.length === 3);
+});
+
+// ---------------------------------------------------------------------------
+// SB T4 / SB T5 — l'arrivée fantôme des unités (lot SON-ET-ARRIVÉE, 10/09).
+//
+// Ethan : « Lors des raids faire apparaître les unités une case en dessous
+// fantôme pour qu'on voit les véhicules arrivés pour pas qu'ils apparaissent
+// directement sur la bande du bas. »
+// ---------------------------------------------------------------------------
+
+/** Un montage à UNE unité d'assaut, pour que « le sprite de l'attaquant » ne
+ *  soit pas ambigu. Le Fendeur est un blindé : c'est le « véhicule » du point. */
+function montageDArrivee(vagues = [[{ id: 'fendeur', colonne: 4 }]]) {
+  return {
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [{ id: 'gangue', rangee: 11, colonne: 5 }],
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 4 }],
+    vagues,
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+  };
+}
+
+/** La projection du raid, à la géométrie mesurée du S25 FE en plein cadre. */
+function projectionDuRaid() {
+  return calculerProjection(1080, 2160, MUR_CASES, { lignesVisibles: GRILLE.longueur + MUR_CASES });
+}
+
+test('SB T4 — l\'arrivée est une rampe monotone qui tombe juste aux deux bouts', () => {
+  const arrivees = creerArrivees();
+  const combat = creerCombat(montageDArrivee());
+  const attaquant = combat.entites.find((e) => e.camp === 'attaque');
+  assert.ok(attaquant !== undefined, 'le montage ne porte aucun attaquant');
+
+  noterLesArrivees(arrivees, combat, 0);
+
+  // Les six instants du brief : 0, 100, 200, 300, 400 et 500 ms.
+  const releve = [0, 100, 200, 300, 400, 500]
+    .map((t) => etatDeLArrivee(arrivees, attaquant.indice, t));
+
+  // ⚠ LA RAMPE PART D'UNE CASE ENTIÈRE ET TOMBE EXACTEMENT SUR ZÉRO. Une rampe
+  // qui manquerait le zéro laisserait l'unité posée sous sa case pour toujours.
+  assert.equal(releve[0].decalageMilli, MILLI_PAR_CASE, 'le fantôme ne part pas d\'une case');
+  assert.equal(releve[4].decalageMilli, 0, 'le fantôme n\'arrive pas exactement sur sa case');
+  assert.equal(releve[5], null, 'l\'arrivée ne finit jamais');
+
+  // Strictement décroissant sur les cinq premiers, strictement croissant en
+  // opacité : une rampe plate passerait les deux égalités de bout.
+  for (let i = 1; i < 5; i += 1) {
+    assert.ok(releve[i].decalageMilli < releve[i - 1].decalageMilli,
+      `décalage non décroissant entre ${(i - 1) * 100} et ${i * 100} ms`);
+    assert.ok(releve[i].opacite > releve[i - 1].opacite,
+      `opacité non croissante entre ${(i - 1) * 100} et ${i * 100} ms`);
+  }
+
+  // ⚠ ET LES DEUX BOUTS DE L'OPACITÉ SONT EXACTS EUX AUSSI : 350 ‰ au départ,
+  // 1000 ‰ à l'arrivée. Un sprite qui finirait à 999 ‰ resterait translucide.
+  assert.equal(releve[0].opacite, OPACITE_ARRIVEE);
+  assert.equal(releve[4].opacite, OPACITE_PLEINE);
+
+  // ⚠ EN ENTIERS, LES DEUX, ET SUR TOUTE LA PLAGE — pas seulement aux instants
+  // ronds : `canvas2d` pose l'opacité sur le contexte, et un flottant y ferait
+  // diverger deux exécutions de la même image.
+  for (let t = 0; t <= ARRIVEE_MS; t += 7) {
+    const e = etatDeLArrivee(arrivees, attaquant.indice, t);
+    assert.ok(Number.isInteger(e.decalageMilli) && Number.isInteger(e.opacite),
+      `rampe non entière à ${t} ms`);
+    assert.ok(e.decalageMilli >= 0 && e.decalageMilli <= MILLI_PAR_CASE, `décalage hors case à ${t} ms`);
+    assert.ok(e.opacite >= OPACITE_ARRIVEE && e.opacite <= OPACITE_PLEINE, `opacité hors bornes à ${t} ms`);
+  }
+
+  // ⚠ UN INSTANT ANTÉRIEUR AU STAMP REND LE DÉPART, il ne lève pas : le
+  // pas-à-pas peut redessiner le même instant, et le fantôme doit rester dans
+  // sa case plutôt que de sauter au-delà.
+  assert.equal(etatDeLArrivee(arrivees, attaquant.indice, -50).decalageMilli, MILLI_PAR_CASE);
+
+  // Une entité jamais notée n'arrive pas.
+  assert.equal(etatDeLArrivee(arrivees, 9999, 0), null);
+
+  // ⚠⚠ LES DEUX CONDITIONS DE `arrive` SE MESURENT SUR UN ÉTAT FORGÉ, ET IL
+  // FAUT DIRE POURQUOI. Sur un vrai combat elles se couvrent l'une l'autre :
+  // mesuré sur douze graines et quatre vagues, **les 60 attaquants naissent
+  // tous aux rangées 1 et 2**, et les défenseurs naissent tous hors de cette
+  // bande. Retirer l'une ou l'autre ne fait donc tomber AUCUN montage de
+  // combat — vérifié par falsification, les deux sont muettes. Un état forgé
+  // est la seule façon de les séparer, et c'est l'idiome que le dépôt emploie
+  // déjà pour un cas inatteignable (`F-J T5`, le `parVoisin` monté à la main).
+  const forge = (entites) => ({ entites: entites.map((e, indice) => ({ indice, ...e })) });
+  const rampes = (entites) => {
+    const a = creerArrivees();
+    noterLesArrivees(a, forge(entites), 0);
+    return forge(entites).entites.map((e) => etatDeLArrivee(a, e.indice, 0) !== null);
+  };
+
+  // Un attaquant dans la bande de déploiement arrive ; un DÉFENSEUR de la même
+  // rangée, non. C'est la condition de CAMP, et elle seule.
+  assert.deepEqual(rampes([
+    { camp: 'attaque', rangeeMilli: 1000 },
+    { camp: 'defense', rangeeMilli: 1000 },
+    { camp: 'attaque', rangeeMilli: 2000 },
+    { camp: 'defense', rangeeMilli: 2000 },
+  ]), [true, false, true, false], 'la condition de camp ne mord pas');
+
+  // ⚠ ET UN ATTAQUANT NÉ HORS DE LA BANDE N'ARRIVE PAS — c'est la condition de
+  // RANGÉE. Elle est VACUEUSE aujourd'hui : aucun chemin du moteur ne crée un
+  // attaquant ailleurs qu'aux rangées 1 et 2, et c'est écrit dans
+  // `render/arrivee.js`. Elle tiendra le jour où un renfort, un largage ou une
+  // pièce créée en cours de combat naîtrait au milieu du terrain — et cette
+  // ligne-ci est ce qui l'empêchera de monter du bas de l'écran.
+  const bande = GRILLE.bandes.deploiement;
+  assert.deepEqual(rampes([
+    { camp: 'attaque', rangeeMilli: bande.premiere * 1000 },
+    { camp: 'attaque', rangeeMilli: (bande.derniere + 1) * 1000 },
+    { camp: 'attaque', rangeeMilli: 11_000 },
+    { camp: 'attaque', rangeeMilli: 0 },
+  ]), [true, false, false, false], 'la condition de rangée ne mord pas');
+});
+
+test('SB T5 — l\'unité arrivée est dessinée PLUS BAS que sa case, puis dessus', () => {
+  const projection = projectionDuRaid();
+  const combat = creerCombat(montageDArrivee());
+  const attaquant = combat.entites.find((e) => e.camp === 'attaque');
+  const arrivees = creerArrivees();
+  noterLesArrivees(arrivees, combat, 0);
+
+  /** Le `y` du sprite de l'attaquant dans la liste, à cet instant. */
+  const yDuSprite = (maintenantMs) => {
+    const liste = listeAffichage(combat, projection, null, 0, null, 0, null,
+      arriveesALEcran(arrivees, maintenantMs));
+    const siens = liste.filter((p) => p.forme === 'sprite' && p.nom.startsWith('off_j_'));
+    assert.ok(siens.length > 0, 'aucun sprite d\'attaquant dans la liste');
+    return Math.min(...siens.map((p) => p.y));
+  };
+
+  // La case de l'attaquant, telle que la projection la pose — c'est la VALEUR
+  // de référence, jamais une présence.
+  const yDeSaCase = yDeRangeeMilli(projection, attaquant.rangeeMilli);
+
+  // ⚠⚠ AU TICK D'APPARITION, IL EST PLUS BAS — donc `y` PLUS GRAND, l'axe des y
+  // descendant quand la rangée monte. Mesuré sur l'arbre intact avant le lot :
+  // les deux valeurs étaient ÉGALES, et c'est très exactement le défaut
+  // qu'Ethan décrit — l'unité apparaît directement sur la bande du bas.
+  assert.ok(yDuSprite(0) > yDeSaCase,
+    `l'unité apparaît directement sur sa case : y = ${yDuSprite(0)}, case = ${yDeSaCase}`);
+
+  // Et d'une CASE ENTIÈRE, pas d'un pixel : le décalage vaut `tailleCase`.
+  assert.equal(yDuSprite(0) - yDeSaCase, projection.tailleCase,
+    'le fantôme ne part pas d\'une case entière sous sa case');
+
+  // ⚠ LA MONTÉE EST MONOTONE À L'ÉCRAN AUSSI, pas seulement dans la rampe pure.
+  assert.ok(yDuSprite(200) > yDeSaCase && yDuSprite(200) < yDuSprite(0), 'la montée n\'est pas monotone');
+
+  // ⚠⚠ ET À LA FIN IL EST EXACTEMENT SUR SA CASE — l'égalité, pas un voisinage.
+  assert.equal(yDuSprite(ARRIVEE_MS), yDeSaCase, 'le fantôme ne se pose pas sur sa case');
+  assert.equal(yDuSprite(500), yDeSaCase, 'le fantôme rebouge après son arrivée');
+
+  // ⚠ ET LE SPRITE EST TRANSLUCIDE PENDANT LA MONTÉE, PLEIN APRÈS. Sans cette
+  // moitié, un décalage seul ferait sauter l'unité sans qu'elle « arrive ».
+  const alphaAu = (maintenantMs) => listeAffichage(combat, projection, null, 0, null, 0, null,
+    arriveesALEcran(arrivees, maintenantMs))
+    .filter((p) => p.forme === 'sprite' && p.nom.startsWith('off_j_'))
+    .map((p) => p.alpha);
+  assert.deepEqual([...new Set(alphaAu(0))], [OPACITE_ARRIVEE], 'le fantôme n\'est pas translucide');
+  assert.deepEqual([...new Set(alphaAu(500))], [OPACITE_PLEINE], 'l\'unité reste translucide après son arrivée');
+
+  // ⚠ LE DÉFENSEUR ET LE BÂTIMENT NE BOUGENT PAS D'UN PIXEL, eux : le fantôme
+  // ne vaut que pour ce qui ARRIVE, et un décalage qui fuirait sur toute la
+  // scène ferait descendre la base entière pendant quatre dixièmes de seconde.
+  const yDesAutres = (maintenantMs) => listeAffichage(combat, projection, null, 0, null, 0, null,
+    arriveesALEcran(arrivees, maintenantMs))
+    .filter((p) => p.forme === 'sprite' && !p.nom.startsWith('off_j_'))
+    .map((p) => `${p.nom}:${p.y}`);
+  assert.deepEqual(yDesAutres(0), yDesAutres(500), 'le fantôme a déplacé autre chose que lui');
+});
+
+// ---------------------------------------------------------------------------
+// SB T6 — `globalAlpha` est posé, puis REMIS À UN
+// ---------------------------------------------------------------------------
+
+test('SB T6 — un sprite translucide ne laisse pas le contexte translucide', () => {
+  const enregistreur = creerEnregistreur();
+  const spriteNu = (alpha, angle = 0) => ({
+    forme: 'sprite', famille: 'unite', nom: 'off_j_meute',
+    sx: 64, sy: 0, sl: 64, sh: 64, x: 12, y: 13, l: 14, h: 15, angle, alpha,
+  });
+
+  executer(enregistreur, [spriteNu(400)], ATLAS_FACTICE);
+  const ecritures = enregistreur.appels.filter(([m]) => m === 'globalAlpha').map(([, v]) => v);
+
+  // ⚠⚠ LA DERNIÈRE ÉCRITURE VAUT UN, ET C'EST TOUT L'OBJET DE CE TEST. Un
+  // `globalAlpha` posé et non remis repeindrait la moitié de la scène en
+  // translucide — barres de vie et traits de tir compris —, et **aucun test sans
+  // navigateur ne le verrait** : la liste d'affichage serait juste, seule
+  // l'image serait fausse.
+  assert.deepEqual(ecritures, [0.4, 1],
+    'le contexte n\'est pas rendu opaque après un sprite translucide');
+
+  // ⚠ ET LE MILLIÈME EST TRADUIT, PAS RECOPIÉ : 400 ‰ vaut 0,4 sur le contexte.
+  assert.equal(ecritures[0], 0.4);
+
+  // ⚠⚠ LA MÊME CHOSE AVEC UNE ROTATION, ET C'EST LE CAS QUI PIÈGE. `save`
+  // capture `globalAlpha` avec le reste du contexte, donc `restore` le REMET à
+  // la valeur translucide qu'on venait de poser : remettre l'opacité AVANT le
+  // `restore` la laisserait à 0,4 pour toute la suite de la liste. L'ordre des
+  // écritures le dit.
+  const tournant = creerEnregistreur();
+  executer(tournant, [spriteNu(400, 90)], ATLAS_FACTICE);
+  const sequence = tournant.appels
+    .filter(([m]) => ['globalAlpha', 'save', 'restore', 'drawImage'].includes(m))
+    .map(([m, v]) => (m === 'globalAlpha' ? `globalAlpha=${v}` : m));
+  assert.deepEqual(sequence,
+    ['globalAlpha=0.4', 'save', 'drawImage', 'restore', 'globalAlpha=1'],
+    'l\'opacité est remise avant le `restore`, qui la défait');
+
+  // ⚠ UN SPRITE OPAQUE NE TOUCHE PAS AU CONTEXTE DU TOUT, exactement comme un
+  // angle nul : sinon la scène entière paierait deux écritures par primitive
+  // pour une valeur qu'elle a déjà.
+  for (const alpha of [undefined, 1000]) {
+    const muet = creerEnregistreur();
+    executer(muet, [spriteNu(alpha)], ATLAS_FACTICE);
+    assert.deepEqual(muet.appels.filter(([m]) => m === 'globalAlpha'), [],
+      `un sprite à alpha ${alpha} écrit sur le contexte`);
+  }
+
+  // ⚠⚠ ET LE CONTEXTE REDEVIENT OPAQUE ENTRE DEUX PRIMITIVES, pas seulement à
+  // la fin : c'est ce qui garantit qu'un sprite translucide ne teinte pas celui
+  // qui le suit dans la MÊME liste.
+  const deux = creerEnregistreur();
+  executer(deux, [spriteNu(350), spriteNu(1000)], ATLAS_FACTICE);
+  assert.deepEqual(deux.appels.filter(([m]) => m === 'globalAlpha').map(([, v]) => v),
+    [0.35, 1], 'le second sprite hérite de l\'opacité du premier');
+});
+
+test('SB T5 bis — la passagère monte AVEC son porteur, et ne remonte pas en débarquant', () => {
+  // ⚠⚠ CE MONTAGE EST EXIGÉ PAR LE BRIEF, ET IL MESURE CE QU'ON NE DOIT PAS
+  // DEVINER. `sim/combat.js` fait entrer une unité EMBARQUÉE avec son porteur et
+  // ne la DÉBARQUE qu'au franchissement de la ligne : si le fantôme la reprenait
+  // à ce moment-là, elle monterait du bas de l'écran jusqu'au milieu du terrain.
+  // ⚠ LA COLONNE DU PORTEUR EST LIBRE, ET C'EST LE MONTAGE QUI LE DIT. Le
+  // montage d'arrivée ordinaire pose sa Gangue en colonne 5, rangée 11 : le
+  // porteur s'y arrête et ne franchit jamais la ligne, donc la passagère ne
+  // débarque pas et le test mesurerait le contraire de ce qu'il annonce. On
+  // dégage donc sa colonne — la Gangue va au coin, hors de son chemin.
+  const combat = creerCombat({
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [{ id: 'gangue', rangee: 18, colonne: 1 }],
+    defenseurs: [],
+    vagues: [[
+      { id: 'ratisseur', colonne: 5, rangee: 2 },
+      { id: 'meute', colonne: 5, rangee: 2, embarquee: true },
+    ]],
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+  });
+  const arrivees = creerArrivees();
+  noterLesArrivees(arrivees, combat, 0);
+
+  const passagere = combat.entites.find((e) => e.embarquee === true);
+  assert.ok(passagere !== undefined, 'montage : aucune passagère embarquée');
+  const porteur = combat.entites[passagere.porteurIndice];
+  assert.equal(porteur.id, 'ratisseur', 'montage : la passagère ne suit pas son porteur');
+
+  // ⚠⚠ À LA NAISSANCE, ILS MONTENT ENSEMBLE — LA MÊME RAMPE, AU NOMBRE PRÈS.
+  // `visible` de `render/scene.js` vaut `e.vivant && !e.sorti` : il ne regarde
+  // PAS `embarquee`, donc la passagère EST dessinée, à la case de son porteur.
+  // L'exclure du fantôme la ferait apparaître à pleine opacité sur la case
+  // d'arrivée pendant que son porteur, une case plus bas, monte encore.
+  assert.deepEqual(etatDeLArrivee(arrivees, passagere.indice, 0),
+    etatDeLArrivee(arrivees, porteur.indice, 0),
+    'la passagère et son porteur ne montent pas ensemble');
+
+  // On fait tourner jusqu'au débarquement, en notant à chaque tick comme le fait
+  // la boucle d'images. À ×1, un tick vaut 100 ms de temps réel.
+  let tickDuDebarquement = null;
+  for (let t = 1; t <= 200 && tickDuDebarquement === null; t += 1) {
+    tick(combat);
+    noterLesArrivees(arrivees, combat, t * 100);
+    if (passagere.embarquee === false) tickDuDebarquement = t;
+  }
+  assert.ok(tickDuDebarquement !== null, 'montage : la passagère n\'a jamais débarqué');
+
+  // ⚠⚠ ET AU DÉBARQUEMENT ELLE N'A PLUS AUCUNE RAMPE. Mesuré : le débarquement
+  // tombe au tick 75, soit 7 500 ms à ×1 et 1 875 ms à ×4, contre 400 ms de
+  // montée — marge ×4,69 au pire. La borne théorique est plus serrée et tient
+  // aussi : neuf cases au moins à 240 milli-cases par tick font 37,5 ticks, donc
+  // 940 ms à ×4, soit ×2,35.
+  assert.ok(tickDuDebarquement * 100 > ARRIVEE_MS * 4,
+    `débarquement au tick ${tickDuDebarquement} : la marge sur la montée est trop mince à ×4`);
+  assert.equal(etatDeLArrivee(arrivees, passagere.indice, tickDuDebarquement * 100), null,
+    'la passagère remonte du bas de l\'écran en débarquant');
+
+  // ⚠ ET ELLE DÉBARQUE BIEN LOIN DE LA BANDE DE DÉPLOIEMENT — sans quoi le test
+  // serait vert parce que le montage ne mesure rien.
+  assert.ok(passagere.rangeeMilli / 1000 > GRILLE.bandes.deploiement.derniere + 5,
+    'montage : la passagère débarque au ras de sa bande de départ');
 });
