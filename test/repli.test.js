@@ -30,6 +30,27 @@ function jouer(etat, jusquAuTick) {
 /** Un bâtiment hors de portée, pour que la fin ne vienne pas d'une grille vide. */
 const GANGUE_LOINTAINE = { id: 'gangue', rangee: 18, colonne: 9 };
 
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
+
 // ---------------------------------------------------------------------------
 // T1 — l'écrasement ne franchit pas la ligne de camp
 // ---------------------------------------------------------------------------
@@ -75,7 +96,7 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'fendeur', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'fendeur', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const combat = creerCombat(ennemi);
@@ -172,7 +193,7 @@ test('T3 — une unité qui ne peut plus rien faire rentre à la base', () => {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
-    vagues: [[{ id: 'meute', colonne: 1 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 1 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -286,7 +307,7 @@ test('T5 — nuire suffit à rester, même bloqué contre un mur', () => {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -369,7 +390,17 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // sur leur case devant ce qui les bloque. Un raid qui s'arrête plus souvent met
   // plus longtemps : soixante-deux ticks de plus. Ce que ce test existe pour
   // tenir ne bouge pas — au moins une unité rentre à la base.
-  assert.equal(r.nbTicks, 458);
+  //
+  // ⚠⚠ LOT APPROCHE (11/09) : 458 → 489, ET LES TRENTE ET UN TICKS SONT
+  // L'APPROCHE ELLE-MÊME. Les vagues naissent désormais en rangée 0, deux cases
+  // plus bas qu'avant, et c'est un effet d'équilibrage ASSUMÉ — Ethan a écarté
+  // l'option qui aurait fait naître la vague 1 à un tick négatif pour que
+  // l'équilibre ne bouge pas. Ni la disposition, ni la garnison, ni le déroulé
+  // ne changent : l'invariance est mesurée au §4.1 du lot — avec l'ancien point
+  // d'apparition écrit explicitement, les deux cents témoins rendent 0 écart.
+  // Ce que ce test existe pour tenir ne bouge toujours pas : au moins une unité
+  // rentre à la base.
+  assert.equal(r.nbTicks, 489);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -400,8 +431,13 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // ⚠ LOT PAQUETS : le butin tombe à zéro et les survivants de 11 à 4 — le raid
   // C ne franchit plus la garnison. Ce que ce test garde est intact : il ne se
   // traîne pas jusqu'au plafond, et des unités RENTRENT.
-  assert.deepEqual(r.butin, { quartz: 0, scorie: 0 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
+  // ⚠ LOT APPROCHE : le butin remonte de zéro à 36 quartz et 12 scorie, et les
+  // survivants de 4 à 5. Trente et un ticks de plus veulent dire trente et un
+  // ticks de tirs de plus : une unité qui rentrait détruite rentre vivante, et
+  // les bâtiments sont griffés pour la première fois depuis PAQUETS. C'est
+  // l'effet d'équilibrage déclaré, et il est ici mesuré, pas cherché.
+  assert.deepEqual(r.butin, { quartz: 36, scorie: 12 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
@@ -578,7 +614,7 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -609,7 +645,7 @@ test('T8 bis — l\'inspecteur nomme ce qu\'il y a sur la case', () => {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [],
-    vagues: [[{ id: 'meute', colonne: 1 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 1 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   jouer(seul, 272);

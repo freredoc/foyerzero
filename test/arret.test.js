@@ -31,7 +31,7 @@ import { dirname, join } from 'node:path';
 
 import { creerCombat, tick, TICKS_AVANT_REPLI } from '../src/sim/combat.js';
 import { MILLI_PAR_CASE } from '../src/sim/grille.js';
-import { DEFENSES, UNITES } from '../src/data/combat.js';
+import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -47,18 +47,42 @@ function sansCommentaires(source) {
  * bâtiment : sans un objectif quelque part, le combat se conclut faute de
  * cible et la trace s'arrête avant ce qu'on veut voir.
  */
-const montage = (o) => ({
-  niveau: 1,
-  saveur: null,
-  obstacles: [],
-  batiments: [],
-  defenseurs: [],
-  vagues: [[]],
-  modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
-  ...o,
-});
+const montage = (o) => {
+  const brut = {
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [],
+    defenseurs: [],
+    vagues: [[]],
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+    ...o,
+  };
+  return { ...brut, vagues: brut.vagues.map((v) => v.map((u) => ({ rangee: DEPART, ...u }))) };
+};
 
 const GANGUE_LOINTAINE = { id: 'gangue', rangee: 18, colonne: 1 };
+
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
 
 /** L'assaillant du montage — il n'y en a qu'un. */
 function assaillant(etat) {

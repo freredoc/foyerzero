@@ -22,6 +22,27 @@ import { genererAssaut } from '../src/sim/generateur.js';
 
 const VIEWPORTS = [[412, 810], [360, 640], [800, 800]];
 
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
+
 /** Un site minimal : un bâtiment hors de portée, pour que le moteur accepte. */
 const socle = (vagues) => ({
   niveau: 1,
@@ -279,9 +300,9 @@ test('T7 — une unité rapide derrière une lente perd 70 ticks, et l\'Arsenal 
   // ticks plus tôt et sortirait au 208 — et il ne sort pas « par le haut ». Un
   // blindé n'est pas traversant : il monte jusqu'à la dernière rangée, s'y
   // trouve inutile, et rentre à la base après 30 ticks — le repli du lot 3B.
-  const seul = tickDeSortie([[], [{ id: 'fendeur', colonne: 5 }]], 'fendeur');
+  const seul = tickDeSortie([[], [{ rangee: DEPART, id: 'fendeur', colonne: 5 }]], 'fendeur');
   const derriere = tickDeSortie(
-    [[{ id: 'meute', colonne: 5 }], [{ id: 'fendeur', colonne: 5 }]], 'fendeur',
+    [[{ rangee: DEPART, id: 'meute', colonne: 5 }], [{ rangee: DEPART, id: 'fendeur', colonne: 5 }]], 'fendeur',
   );
   assert.equal(seul, 257);
   assert.equal(derriere, 327);
@@ -290,7 +311,7 @@ test('T7 — une unité rapide derrière une lente perd 70 ticks, et l\'Arsenal 
   // C'est bien la COLONNE qui décide : le même Fusilier en colonne 4 ne coûte
   // rien du tout.
   assert.equal(tickDeSortie(
-    [[{ id: 'meute', colonne: 4 }], [{ id: 'fendeur', colonne: 5 }]], 'fendeur',
+    [[{ rangee: DEPART, id: 'meute', colonne: 4 }], [{ rangee: DEPART, id: 'fendeur', colonne: 5 }]], 'fendeur',
   ), 257);
 
   // Et l'Arsenal signale la colonne 5, et elle seule.
@@ -319,13 +340,13 @@ test('T7 — une unité rapide derrière une lente perd 70 ticks, et l\'Arsenal 
   // une Crécelle, comme derrière un Fusilier.
   assert.equal(UNITES.frappeur.masse, 0);
   assert.equal(UNITES.crecelle.masse, 0);
-  const frappeurSeul = tickDeSortie([[], [{ id: 'frappeur', colonne: 5 }]], 'frappeur');
+  const frappeurSeul = tickDeSortie([[], [{ rangee: DEPART, id: 'frappeur', colonne: 5 }]], 'frappeur');
   assert.equal(frappeurSeul, 120);
   assert.equal(tickDeSortie(
-    [[{ id: 'crecelle', colonne: 5 }], [{ id: 'frappeur', colonne: 5 }]], 'frappeur',
+    [[{ rangee: DEPART, id: 'crecelle', colonne: 5 }], [{ rangee: DEPART, id: 'frappeur', colonne: 5 }]], 'frappeur',
   ), frappeurSeul);
   assert.equal(tickDeSortie(
-    [[{ id: 'meute', colonne: 5 }], [{ id: 'frappeur', colonne: 5 }]], 'frappeur',
+    [[{ rangee: DEPART, id: 'meute', colonne: 5 }], [{ rangee: DEPART, id: 'frappeur', colonne: 5 }]], 'frappeur',
   ), frappeurSeul);
 
   // Et aucun indice n'est levé pour eux, dans les deux sens.
@@ -610,7 +631,17 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // c'est le DÉROULÉ du combat qui change, les anti-structure s'arrêtant devant
   // les murs et les autres se rangeant devant ce qui les bloque. La cause, elle,
   // ne bouge toujours pas.
-  assert.equal(r.nbTicks, 458);
+  //
+  // ⚠⚠ LOT APPROCHE (11/09) : 458 → 489, ET LA SIXIÈME CAUSE EST L'APPROCHE
+  // ELLE-MÊME. `executerRaidComplet` passe par la porte de PRODUCTION —
+  // `genererAssaut` compose des vagues SANS `rangee`, donc elles naissent au
+  // point d'apparition du jour, qui est désormais la voie d'approche. Trente et
+  // un ticks de plus, et c'est exactement le nombre que `repli.test.js T6`
+  // mesure sur le même raid C. Ni le flux, ni la position, ni le déroulé : le
+  // POINT DE DÉPART. Ce que ce test-ci mesure n'a toujours rien à voir avec la
+  // durée — ce sont les trois assertions d'équivalence au-dessus, et elles n'ont
+  // pas bougé ; les deux montages passent par le même point d'apparition.
+  assert.equal(r.nbTicks, 489);
   assert.equal(r.cause, 'attaquants');
 });
 

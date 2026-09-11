@@ -64,9 +64,25 @@ import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
 import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
 import { angleDeLaPiece } from '../sim/rendu-pose.js';
 import { nomDeVariante } from './variante.js';
-import { caseDepuisMilli, MILLI_PAR_CASE } from '../sim/grille.js';
-import { OPACITE_PLEINE } from './arrivee.js';
+import { caseDepuisMilli } from '../sim/grille.js';
 import { estNeutralisee } from '../sim/combat.js';
+
+/**
+ * L'opacité pleine, en millièmes — la valeur que porte TOUTE primitive.
+ *
+ * ⚠⚠ ELLE VIENT DE `render/arrivee.js`, RETIRÉ PAR LE LOT APPROCHE, 11/09. Ce
+ * module-là fabriquait la rampe d'une unité qui roulait depuis la case du
+ * dessous ; l'approche la remplace par un vrai déplacement du MOTEUR — la vague
+ * naît en rangée 0 et monte tick par tick — donc la rampe décorative n'a plus
+ * rien à décrire. La constante, elle, est la valeur par défaut de `sprite()` :
+ * elle survit à son module d'origine et se range chez son seul lecteur.
+ *
+ * ⚠ ELLE RESTE MALGRÉ L'ABSENCE DE CLIENT TRANSLUCIDE, et c'est délibéré — voir
+ * le champ `alpha` de `sprite()` : la plomberie de `globalAlpha` est gardée par
+ * `SB T6`, et la retirer parce que son premier client s'en va obligerait le
+ * suivant à la réécrire.
+ */
+export const OPACITE_PLEINE = 1000;
 
 // --- palette — transcription stricte de FICHE-STYLE.md §3 --------------------
 
@@ -903,7 +919,7 @@ function positionAffichee(e, precedentes, alpha) {
  */
 export function listeAffichage(
   etat, projection, precedentes = null, alpha = 0, fond = null, graine = 0,
-  tombees = null, arrivees = null,
+  tombees = null,
 ) {
   const t = projection.tailleCase;
   const liste = [];
@@ -960,47 +976,34 @@ export function listeAffichage(
   const xDe = (e) => xDeColonneMilli(projection, positionDe(e).colonneMilli);
 
   /**
-   * L'ARRIVÉE D'UNE ENTITÉ, ou `null` — lot SON-ET-ARRIVÉE, 10/09.
+   * ⚠⚠ LA RAMPE D'ARRIVÉE A DISPARU AU LOT APPROCHE, 11/09, ET C'EST UN
+   * DÉPLACEMENT DE RESPONSABILITÉ, PAS UN RETRAIT DE FONCTION. Ce bloc portait
+   * un `arriveeDe` et un décalage ajouté APRÈS la projection : le sprite roulait
+   * depuis la case du dessous pendant que le modèle, lui, posait l'unité
+   * directement sur sa case. C'était un DESSIN qui mentait — d'un demi-tick à
+   * une case entière — sur la position d'une unité qui tirait déjà.
    *
-   * ⚠⚠ UNE TABLE D'INDICES DÉJÀ RÉSOLUE, PAS UN INSTANT, ET C'EST L'IDIOME DE
-   * `tombees`. Ce module ne porte AUCUNE horloge — il décrit une image, il ne
-   * sait pas quand elle est dessinée —, donc `ui/raid.js` résout la rampe par
-   * `arriveesALEcran` et passe le résultat, exactement comme il passe l'ensemble
-   * des tombées de l'effondrement. Un instant reçu ici aurait mis le temps dans
-   * le seul module de rendu qui n'en a jamais eu.
+   * ⚠⚠ CE QUI LE REMPLACE EST DU MOTEUR : la vague naît en rangée 0, sous la
+   * grille, et MONTE tick par tick comme n'importe quelle autre avance. Il n'y a
+   * donc plus rien à rattraper au dessin — `yDeRangeeMilli` suit la position
+   * réelle, et son plancher est tombé au §3.5 du même lot pour qu'elle puisse
+   * descendre sous la rangée 1.
+   *
+   * ⚠ ET LE DÉFAUT QU'ETHAN A VU PART AVEC : « elles arrivent très vite, puis
+   * elles arrivent dans le tas, comme si elles avaient un boost de vitesse. »
+   * `dureeDArrivee` valait EXACTEMENT le temps de franchir une case à ×1 — donc
+   * le sprite couvrait DEUX cases dans le temps d'une, et trois fois plus en
+   * vitesse ×2. Une seule case est parcourue désormais, et à la vitesse du
+   * moteur.
    */
-  const arriveeDe = (e) => (arrivees === null ? null : arrivees.get(e.indice) ?? null);
+  const yDe = (e) => yDeRangeeMilli(projection, positionDe(e).rangeeMilli);
 
-  /**
-   * ⚠⚠ LE DÉCALAGE S'AJOUTE APRÈS LA PROJECTION, ET C'EST UNE MESURE.
-   * `yDeRangeeMilli` BORNE sa sortie au bord haut de la rangée 1 : mesuré,
-   * `yDeRangeeMilli(p, 0)` et `yDeRangeeMilli(p, 1000)` rendent le même nombre.
-   * Faire descendre l'entité en lui donnant `rangeeMilli − 1000` l'écraserait
-   * donc sur sa propre case, et le fantôme n'existerait pas. On projette, PUIS
-   * on décale — le décalage est du dessin, pas une position de modèle.
-   *
-   * ⚠ IL S'AJOUTE, IL NE SE RETRANCHE PAS : l'axe des y descend quand la rangée
-   * monte, donc « une case en dessous » est un `y` PLUS GRAND.
-   *
-   * ⚠ ET IL PASSE PAR `yDe`, DONC IL EMPORTE TOUT CE QUI SUIT L'ENTITÉ — son
-   * sprite, ses deux barres, son cadre de neutralisation et le départ de ses
-   * traits de tir. Ne le poser que sur le sprite laisserait la barre de vie
-   * accrochée à la case pendant que l'unité monte vers elle.
-   */
-  const yDe = (e) => {
-    const y = yDeRangeeMilli(projection, positionDe(e).rangeeMilli);
-    const arrivee = arriveeDe(e);
-    if (arrivee === null) return y;
-    return y + Math.round((arrivee.decalageMilli * t) / MILLI_PAR_CASE);
-  };
-
-  // ⚠⚠ `alphaDe` A DISPARU AVEC LE FANTÔME — lot ARRIVÉE-CARTE-ET-BUILD, 10/09.
-  // Elle rendait `arriveeDe(e)?.opacite ?? OPACITE_PLEINE` ; `etatDeLArrivee` ne
-  // rend plus d'opacité, donc elle rendait `OPACITE_PLEINE` dans tous les cas,
-  // c'est-à-dire la valeur par défaut de `sprite()`. Les deux sites d'appel la
-  // laissent tomber plutôt que de passer une constante que la primitive pose
-  // déjà — un argument qui vaut toujours son défaut est un argument qu'on croit
-  // lu.
+  // ⚠⚠ `alphaDe` AVAIT DISPARU AVEC LE FANTÔME — lot ARRIVÉE-CARTE-ET-BUILD,
+  // 10/09 —, ET `arriveeDe` LA SUIT AU LOT APPROCHE. Il ne reste de toute cette
+  // affaire que `OPACITE_PLEINE`, déclarée en tête de ce fichier, et le champ
+  // `alpha` de `sprite()` qui vaut mille pour tout le monde. **Aucune primitive
+  // de la liste d'affichage n'est translucide**, et aucune ne peut l'être : il
+  // n'existe plus un seul appelant qui passe autre chose que le défaut.
 
   // ⚠⚠ LA LISTE DES DÉFENSES VIVANTES A DISPARU AVEC LE CHAÎNAGE, ET C'EST LE
   // LOT. Elle était calculée ici, une fois par image, pour que `liaisonDuMur`

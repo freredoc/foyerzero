@@ -33,6 +33,27 @@ import { cleCase } from '../src/sim/grille.js';
 // ---------------------------------------------------------------------------
 
 const TYPES = ['camp', 'avantPoste', 'base'];
+
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
 const NIVEAUX = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 const GRAINES = [1, 2, 3, 4, 5];
 
@@ -575,7 +596,7 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
       obstacles: [],
       batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau }],
       defenseurs: genre === 'defense' ? [{ id, rangee: 3, colonne: 5, niveau }] : [],
-      vagues: genre === 'unite' ? [[{ id, colonne: 5, niveau }]] : [],
+      vagues: genre === 'unite' ? [[{ rangee: DEPART, id, colonne: 5, niveau }]] : [],
       modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
     };
     const etat = creerCombat(montage);
@@ -622,7 +643,7 @@ test('T11 — réserve, portée, vitesse, masse et points ne montent pas avec le
       obstacles: [],
       batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau }],
       defenseurs: [],
-      vagues: [[{ id: 'meute', colonne: 1, niveau }]],
+      vagues: [[{ rangee: DEPART, id: 'meute', colonne: 1, niveau }]],
       modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
     };
     const etat = creerCombat(montage);
@@ -822,7 +843,20 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   // variante où `progresse` reste vrai devant un mur — les cinquante montages
   // échantillonnent d'autres combats encore, et l'écart y reste nul. Le brief
   // annonçait 29 ; la variante correcte en fait tomber **28**, celui-ci compris.
-  assert.equal(ecartMax, 1, `écart maximal ${ecartMax} ticks au lieu du 1 mesuré`);
+  //
+  // ⚠⚠ LOT APPROCHE (11/09) : 1 → 0, ET LA BORNE DE 1 % REDEVIENT VACUEUSE — LE
+  // MÊME MOUVEMENT QU'AU LOT PAQUETS, DANS L'AUTRE SENS. Le lot ne touche ni au
+  // générateur ni à la courbe de niveau : il fait naître les vagues deux cases
+  // plus bas, donc il échantillonne d'autres fins de combat, et l'arrondi
+  // redevient invisible là où MUR l'avait rendu visible. **Les 500 comparaisons
+  // rendent de nouveau le même tick.** Ce qui reste gardé est l'égalité des
+  // CAUSES et des TICKS sur les cinq niveaux ; ce qu'on perd est la mesure de
+  // l'arrondi, qui demanderait un autre montage.
+  //
+  // ⚠ ET C'EST UNE ÉGALITÉ, PAS UN `>=`. Un `>=` laisserait l'écart glisser à
+  // trois ticks sans un mot ; l'égalité oblige à remesurer et à écrire ce qu'on
+  // a mesuré, ce que ce bloc fait pour la troisième fois.
+  assert.equal(ecartMax, 0, `écart maximal ${ecartMax} ticks au lieu du 0 mesuré`);
 
   // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
   // du §4 aurait été choisi trop juste sans qu'on le sache.
@@ -926,7 +960,7 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9, niveau: 50 }],
     defenseurs: [{ id: 'broyeur', rangee: 3, colonne: 5, niveau: 50 }],
-    vagues: [[{ id: 'meute', colonne: 1, niveau: 50 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 1, niveau: 50 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const resultat = resoudre(creerCombat(montage), { maxTicks: 1 });
@@ -1001,7 +1035,7 @@ test('T14 — le coût du franchissement, ligne à ligne', () => {
       obstacles: [],
       batiments: [{ id: 'gangue', rangee: 18, colonne: 1 }],
       defenseurs: [{ id: barriere, rangee: 3, colonne: 5 }],
-      vagues: [[{ id: unite, colonne: 5 }]],
+      vagues: [[{ rangee: DEPART, id: unite, colonne: 5 }]],
       modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
     };
     const etat = creerCombat(montage);
@@ -1092,7 +1126,7 @@ test('T16 — un montage sans niveau par entité se comporte comme au lot 2A', (
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 11, colonne: 5 }],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);

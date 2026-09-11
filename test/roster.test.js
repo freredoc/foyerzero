@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  UNITES, DEFENSES, COLONNES_DEGATS, ECHELLE_DEGATS, OBSTACLES,
+  UNITES, DEFENSES, COLONNES_DEGATS, ECHELLE_DEGATS, OBSTACLES, GRILLE,
 } from '../src/data/combat.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import {
@@ -24,6 +24,27 @@ import { genererSite } from '../src/sim/generateur.js';
 import { executerRaidComplet } from '../src/ui/banc.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
 
 // ---------------------------------------------------------------------------
 // La transcription du §6 du relevé, colonne par colonne.
@@ -357,9 +378,9 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // moins. Mesuré : 2 ticks d'écart. Les colonnes sont donc portées en milli-PV
   // dès le profil, comme pvMaxMilli, et l'écart retombe à ZÉRO.
   const assaut = [
-    { id: 'pilon', colonne: 2 }, { id: 'pilon', colonne: 4 },
-    { id: 'broyeur', colonne: 6 }, { id: 'broyeur', colonne: 8 },
-    { id: 'fendeur', colonne: 3 }, { id: 'fendeur', colonne: 7 },
+    { rangee: DEPART, id: 'pilon', colonne: 2 }, { rangee: DEPART, id: 'pilon', colonne: 4 },
+    { rangee: DEPART, id: 'broyeur', colonne: 6 }, { rangee: DEPART, id: 'broyeur', colonne: 8 },
+    { rangee: DEPART, id: 'fendeur', colonne: 3 }, { rangee: DEPART, id: 'fendeur', colonne: 7 },
   ];
   const reference = genererSite({ type: 'avantPoste', niveau: 20, saveur: null, graine: 99 });
   const auNiveau = (n) => {
@@ -507,15 +528,29 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // l'assaut perd moins de monde, et il met plus longtemps là où la défense
     // tient mieux sa ligne. Les trois causes sont inchangées, et le contraste
     // que ce test garde — B ne rase PLUS la Souche à assaut budgété — aussi.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 280, butin: { quartz: 0, scorie: 0 }, survivants: 2 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 287, butin: { quartz: 25_199, scorie: 8_399 }, survivants: 6 },
+    // ⚠⚠ LOT APPROCHE (11/09) : LES TROIS BOUGENT, AUCUNE CAUSE NE BOUGE, ET LA
+    // SEULE CHOSE QUI A CHANGÉ EST LE POINT DE DÉPART. `executerRaidComplet`
+    // passe par la porte de PRODUCTION — `genererAssaut` compose des vagues SANS
+    // `rangee` —, donc l'assaut naît sur la voie d'approche et joue deux cases
+    // avant d'entrer en grille. A : 280 → 326 ticks, butin toujours nul,
+    // survivants 2 → 1. B : 287 → 309, butin 25 199 / 8 399 → 25 179 / 8 393,
+    // six survivants des deux côtés. **C : 458 → 489, et son butin quitte le
+    // zéro — 36 de quartz et 12 de scorie**, pour la première fois depuis
+    // PAQUETS ; survivants 4 → 5. Le même couple se lit dans `repli.test.js T6`
+    // et dans `assaut.test.js T7`, sur le même raid C. Ce n'est ni le flux, ni la
+    // position, ni le déroulé : c'est l'ENTRÉE, et c'est un effet d'équilibrage
+    // ASSUMÉ — Ethan a écarté l'option qui aurait décalé l'horloge des vagues
+    // pour que l'équilibre ne bouge pas. Rien n'est compensé ; le calibrage
+    // revient à Ethan.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 326, butin: { quartz: 0, scorie: 0 }, survivants: 1 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 309, butin: { quartz: 25_179, scorie: 8_393 }, survivants: 6 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 458, butin: { quartz: 0, scorie: 0 }, survivants: 4 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 489, butin: { quartz: 36, scorie: 12 }, survivants: 5 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

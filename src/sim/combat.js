@@ -46,7 +46,12 @@ import { NIVEAU } from '../data/niveaux.js';
 // crée aucun cycle : `data/base.js` ne lit que `data/`.
 import { BASE_BATIMENTS } from '../data/base.js';
 import {
+  PREMIERE_RANGEE,
   DERNIERE_RANGEE,
+  PREMIERE_COLONNE,
+  DERNIERE_COLONNE,
+  RANGEE_APPROCHE,
+  estEnApproche,
   enEntier,
   milliDepuisCase,
   caseDepuisMilli,
@@ -87,11 +92,30 @@ export const TICKS_PAR_VAGUE = enEntier(
 export const VAGUES_MAX = GRILLE.vaguesParRaid;
 
 /**
- * Rangée d'apparition par défaut d'une vague : le front de la bande de
- * déploiement. Une entrée de vague peut la surcharger (champ `rangee`), ce qui
+ * Rangée d'apparition par défaut d'une vague : **la voie d'approche, sous la
+ * grille**. Une entrée de vague peut la surcharger (champ `rangee`), ce qui
  * permet de monter un état déjà entamé sans jouer les ticks d'approche.
+ *
+ * ⚠⚠ ELLE VALAIT `GRILLE.bandes.deploiement.derniere` — LA RANGÉE 2 — JUSQU'AU
+ * 11/09, ET IL N'Y AVAIT DONC JAMAIS EU D'APPROCHE. La défense commence en
+ * rangée 3 : une vague naissait collée à elle. Ethan : « elles arrivent très
+ * vite, puis elles arrivent dans le tas, comme si elles avaient un boost de
+ * vitesse », puis « qu'elles apparaissent en dessous hors écran, du coup en
+ * rangée zéro, trois rangées avant la défense en gros ».
+ *
+ * ⚠⚠ ET LE « BOOST » ÉTAIT DE L'ARITHMÉTIQUE, PAS UNE IMPRESSION. Une rampe de
+ * DESSIN — `render/arrivee.js`, retiré par ce lot — posait le sprite une case
+ * plus bas et le rattrapait en `dureeDArrivee`, qui vaut exactement le temps de
+ * franchir une case à ×1. Pendant cette fenêtre l'unité avançait VRAIMENT d'une
+ * case et la rampe en rattrapait une autre : **le sprite parcourait deux cases
+ * dans le temps d'une**, ×3 à la vitesse de déroulé ×2, ×5 à ×4. Le sprite est
+ * désormais exactement là où l'unité est.
+ *
+ * ⚠ LE NOM NE CHANGE PAS. C'est lui que `src/ui/banc.js` documente et que les
+ * montages citent ; le renommer aurait fait un lot de renommage par-dessus un
+ * lot de comportement.
  */
-export const RANGEE_APPARITION = GRILLE.bandes.deploiement.derniere;
+export const RANGEE_APPARITION = RANGEE_APPROCHE;
 
 /**
  * La première rangée AU-DELÀ de la défense — « a traversé la défense » vaut
@@ -588,6 +612,40 @@ function verifierEntierPositif(valeur, contexte) {
  * case) ; elle vaut null à l'apparition d'une vague, où c'est l'occupation
  * courante qui tranche — l'aviation, elle, partage librement une case.
  */
+/**
+ * La case est-elle posable pour ce camp ? — lot APPROCHE, 11/09.
+ *
+ * ⚠⚠ L'OUVERTURE EST RÉSERVÉE AUX ATTAQUANTS, ET C'EST TOUT LE POINT. Seule une
+ * vague entre par la voie d'approche ; un défenseur garde sa bande `defense` et
+ * un bâtiment sa bande `batiments`, gardes qui ne bougent pas d'un caractère.
+ * Sans ce test de camp, un montage pourrait poser un mur en rangée 0 et plus
+ * rien ne le dirait.
+ *
+ * ⚠ ET CE N'EST PAS `estDansLaGrille` QUI S'ÉLARGIT : elle répond d'une
+ * GÉOMÉTRIE que `render/portee.js` et `caseDepuisPixels` lisent, où une rangée 0
+ * ferait désigner au doigt une case qui n'est pas à l'écran. Ce prédicat-ci
+ * répond d'un DROIT DE SÉJOUR, il vit dans le moteur, et il compose l'autre.
+ */
+function posePermise(camp, rangee, colonne) {
+  if (camp === 'attaque' && rangee === RANGEE_APPROCHE) {
+    return Number.isInteger(colonne)
+      && colonne >= PREMIERE_COLONNE && colonne <= DERNIERE_COLONNE;
+  }
+  return estDansLaGrille(rangee, colonne);
+}
+
+/**
+ * Les bornes de rangée à NOMMER dans un refus de pose.
+ *
+ * ⚠ UN MESSAGE QUI MENT COÛTE UNE DEMI-SESSION À QUELQU'UN DANS SIX MOIS.
+ * Celui-ci énumérait « rangées 1–18 » pour tout le monde ; il est devenu faux
+ * pour un attaquant le jour où la voie d'approche s'est ouverte.
+ */
+function bornesDePose(camp) {
+  const premiere = camp === 'attaque' ? RANGEE_APPROCHE : PREMIERE_RANGEE;
+  return `rangées ${premiere}–${DERNIERE_RANGEE}`;
+}
+
 function ajouterEntite(
   etat, contexte,
   { camp, genre, id, rangee, colonne, pvMilli, reserve, niveau, proprietaire, embarquee },
@@ -596,10 +654,10 @@ function ajouterEntite(
   const p = TABLES_PROFIL[genre][id];
   const ou = `${contexte} « ${id} » en (${rangee}, ${colonne})`;
 
-  if (!estDansLaGrille(rangee, colonne)) {
+  if (!posePermise(camp, rangee, colonne)) {
     throw new Error(
       `combat : ${ou} est hors de la grille `
-      + `(rangées 1–${DERNIERE_RANGEE}, colonnes 1–${GRILLE.largeur})`,
+      + `(${bornesDePose(camp)}, colonnes 1–${GRILLE.largeur})`,
     );
   }
   if (typeObstacleSur(obstaclesIndex, rangee, colonne) !== undefined) {
@@ -949,8 +1007,15 @@ export function creerCombat(montage) {
       }
       const rangee = u.rangee ?? RANGEE_APPARITION;
       const ou = `attaquant « ${u.id} » de la vague ${v + 1} en (${rangee}, ${u.colonne})`;
-      if (!estDansLaGrille(rangee, u.colonne)) {
-        throw new Error(`combat : ${ou} est hors de la grille`);
+      // ⚠ LA SECONDE DES DEUX VALIDATIONS, ET IL FAUT LES DEUX : celle-ci juge
+      // les vagues 2 à 4 que `creerCombat` ne pose pas encore, `ajouterEntite`
+      // juge ce qui entre pour de bon. Une seule des deux ouverte laisserait la
+      // vague 1 passer et les suivantes lever au tick de leur apparition.
+      if (!posePermise('attaque', rangee, u.colonne)) {
+        throw new Error(
+          `combat : ${ou} est hors de la grille `
+          + `(${bornesDePose('attaque')}, colonnes 1–${GRILLE.largeur})`,
+        );
       }
       if (typeObstacleSur(obstaclesIndex, rangee, u.colonne) !== undefined) {
         throw new Error(`combat : ${ou} est posée sur un obstacle`);
@@ -1309,6 +1374,30 @@ function ciblage(etat) {
       e.cibleIndice = null;
       continue;
     }
+    // ⚠⚠ LE VERROU DE LA VOIE D'APPROCHE — ETHAN, 11/09 : « elles peuvent
+    // engager le combat dès qu'elles sont VISIBLES ». Hors grille, une unité ne
+    // tire pas ; deux lignes plus bas, elle n'est pas tirable non plus. Elle
+    // entre au combat en atteignant la rangée 1, et le seuil est le même des
+    // deux côtés parce que c'est le même prédicat.
+    //
+    // ⚠⚠ ET IL EST DANS `ciblage`, PAS DANS `estActive`, MÊME SI C'ÉTAIT
+    // TENTANT. `estActive` est lue par `construireOccupation`, `ciblage`, `tir`,
+    // `deplacement`, `appliquerDegats` et `conditionsDeFin` — c'est écrit dans
+    // son propre commentaire. L'approche y ferait D'UN COUP trois choses qu'on
+    // ne veut pas : l'unité n'AVANCERAIT plus (elle resterait en rangée 0 pour
+    // toujours), elle ne BLOQUERAIT plus (donc plus de file hors écran, et deux
+    // unités sur une case), et un raid où il ne resterait que des approchantes
+    // se TERMINERAIT « attaquants éliminés ». `ciblage` est la seule étape qui
+    // décide de qui touche qui.
+    //
+    // ⚠ ET LA BRANCHE DE CIBLE CONSERVÉE N'A RIEN À RECEVOIR : aucune entité ne
+    // redescend sous la rangée 1 — le repli fait `sorti = true`, il ne fait pas
+    // marche arrière. Une condition de plus y serait une condition qu'on croit
+    // lue.
+    if (estEnApproche(e.rangeeMilli)) {
+      e.cibleIndice = null;
+      continue;
+    }
     // Seule la DÉFENSE est aveugle au camouflage. `null` là où il n'y a rien à
     // masquer évite un test de camp par candidat.
     const masque = e.camp === 'defense' ? camoufles : null;
@@ -1318,6 +1407,15 @@ function ciblage(etat) {
     let meilleureRangee = 0;
     for (const c of etat.entites) {
       if (c.camp === e.camp || !estActive(c)) continue;
+      // ⚠⚠ L'AUTRE MOITIÉ DU VERROU, ET ELLE N'EST PAS VACUEUSE — MESURÉ AVANT
+      // D'ÉCRIRE UNE LIGNE. Première intuition : « rien ne porte à trois cases,
+      // la garde sera morte ». **Faux.** Les trois artilleries — Faucheuse,
+      // Mortier, Harpon — portent à 5,5 avec un mini de 3,5 : posée en rangée 4
+      // ou 5, une artillerie est à distance 4 ou 5 de la rangée 0, donc DANS sa
+      // fourchette. Sans cette ligne, elle tirerait dans la voie d'approche et
+      // tuerait hors écran. Et le module `rayonMiniMoinsUn`, que les trois
+      // portent des deux camps, ramène le mini à 2,5 : depuis la rangée 3 aussi.
+      if (estEnApproche(c.rangeeMilli)) continue;
       if (masque !== null && masque.has(c.indice)) continue;
       const d2 = distanceCarreeMilli(
         e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
@@ -2780,9 +2878,23 @@ function avancer(etat, e, p, occupation, obstacles) {
   // MOITIÉ DU LOT COLONNE. Son commentaire dit « une unité OFFENSIVE […] rentre
   // à la base » ; ouvert à la garnison, il ferait quitter le terrain à une
   // défenseuse bloquée, qui n'a pas de base où rentrer.
+  //
+  // ⚠⚠ ET LE COMPTEUR EST GELÉ DANS LA VOIE D'APPROCHE — LOT APPROCHE, 11/09.
+  // Le cas nominal n'en a pas besoin : une approchante PROGRESSE à chaque tick,
+  // donc son compteur retombe à zéro tout seul. **Mais une approchante BLOQUÉE
+  // derrière une alliée dans sa colonne ne progresse pas, ne nuit pas — le
+  // verrou de `ciblage` l'en empêche — et ne force rien : au trentième tick elle
+  // passerait `sorti = true` et quitterait le raid SANS Y ÊTRE JAMAIS ENTRÉE.**
+  // La vague 2 naît au tick 50, c'est-à-dire à l'instant où une lente finit tout
+  // juste d'entrer : la voie va se congestionner chez les unités à `vitesse: 60`,
+  // et ce gel n'est donc pas une précaution.
+  //
+  // ⚠ ON NE REMET PAS À ZÉRO, ON N'INCRÉMENTE PAS : le compteur est LAISSÉ TEL
+  // QUEL, pour qu'une unité qui entre déjà bloquée reprenne son décompte là où
+  // la grille commence, et non trente ticks plus tard.
   if (progresse || nuit(e) || forcee !== undefined) {
     e.ticksInutiles = 0;
-  } else {
+  } else if (!estEnApproche(e.rangeeMilli)) {
     e.ticksInutiles += 1;
     if (e.ticksInutiles >= TICKS_AVANT_REPLI) {
       e.sorti = true;

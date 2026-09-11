@@ -183,9 +183,23 @@ export function xDeColonneMilli(projection, colonneMilli) {
  *   y = margeY + (18000 − m) × tailleCase / 1000
  *
  * (à m = r × 1000 exactement : y = margeY + (18 − r) × tailleCase). Un seul
- * floor, en bout. La valeur est BORNÉE à la grille : une entité peut porter un
- * m intermédiaire au sommet (un stoppeur arrêté à 18950) sans être dessinée
+ * floor, en bout. La valeur est BORNÉE EN HAUT : une entité peut porter un m
+ * intermédiaire au sommet (un stoppeur arrêté à 18950) sans être dessinée
  * au-dessus du champ.
+ *
+ * ⚠⚠ ET ELLE N'EST PLUS BORNÉE EN BAS DEPUIS LE LOT APPROCHE, 11/09 — C'EST
+ * EXACTEMENT CE QUI PERMET DE VOIR UNE VAGUE ARRIVER. Ethan : « qu'elles
+ * apparaissent en dessous hors écran, du coup en rangée zéro […] et elles
+ * arrivent normalement. » Une unité en approche porte un `rangeeMilli` sous
+ * `MILLI_PAR_CASE`, donc un y PLUS GRAND que le bas de la grille : le
+ * `Math.min(brut, bas)` d'hier la collait sur la rangée 1 pendant toute la
+ * traversée, et la voie d'approche n'aurait rien montré du tout. La borne HAUTE
+ * reste, elle, et pour la raison qu'elle a toujours eue — rien ne se dessine
+ * au-dessus du champ.
+ *
+ * ⚠ CE QUI EN DÉCOULE ET QU'IL FAUT SAVOIR : la valeur peut désormais tomber
+ * HORS du canevas, sous son bord bas. C'est voulu — « en dessous hors écran » —
+ * et le canevas rogne de lui-même ; il n'y a rien à garder ici.
  */
 export function yDeRangeeMilli(projection, rangeeMilli) {
   const { tailleCase, margeY } = projection;
@@ -193,8 +207,7 @@ export function yDeRangeeMilli(projection, rangeeMilli) {
     ((GRILLE.longueur * MILLI_PAR_CASE - rangeeMilli) * tailleCase) / MILLI_PAR_CASE,
   );
   const haut = margeY;
-  const bas = margeY + (GRILLE.longueur - 1) * tailleCase;
-  return Math.min(Math.max(brut, haut), bas);
+  return Math.max(brut, haut);
 }
 
 /** Bord haut de la case d'une RANGÉE entière (1 à 18) — obstacles, bâtiments. */

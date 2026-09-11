@@ -86,18 +86,42 @@ test('COL T12 — un delta négatif ne dépasse jamais ses deux bornes', () => {
  * bâtiment : sans un objectif quelque part, le combat se conclut faute de
  * cible et la trace s'arrête avant ce qu'on veut voir.
  */
-const montage = (o) => ({
-  niveau: 1,
-  saveur: null,
-  obstacles: [],
-  batiments: [],
-  defenseurs: [],
-  vagues: [[]],
-  modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
-  ...o,
-});
+const montage = (o) => {
+  const brut = {
+    niveau: 1,
+    saveur: null,
+    obstacles: [],
+    batiments: [],
+    defenseurs: [],
+    vagues: [[]],
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+    ...o,
+  };
+  return { ...brut, vagues: brut.vagues.map((v) => v.map((u) => ({ rangee: DEPART, ...u }))) };
+};
 
 const GANGUE_LOINTAINE = { id: 'gangue', rangee: 18, colonne: 1 };
+
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
 
 const jouer = (etat, n) => { for (let i = 0; i < n; i += 1) tick(etat); };
 
@@ -968,8 +992,20 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   // régression du lot** : c'est le même défaut, atteint par d'autres
   // dispositions. Il est TOUJOURS dans `pvCourantsDesDefenses` quand l'Étai est
   // tombé, et aucune ligne de ce lot ne l'a touché.
+  //
+  // ⚠⚠ LOT APPROCHE (11/09) : SIXIÈME RÉANCRAGE, ET LA DETTE N'EST TOUJOURS PAS
+  // PAYÉE. Les vagues naissent deux cases plus bas : chaque passe laisse d'autres
+  // survivants, donc `site-entame.js` range d'autres PV. Balayage du MÊME
+  // échantillon de 600 — `camp`, niveaux 25 à 30, graines 1 à 100 — :
+  // **cinq lèvent encore**, `25/1`, `25/92`, `26/42`, `27/42` et `28/68`, et le
+  // message n'a pas changé d'un caractère — `pvMilli N hors de 1…M`. Une seule
+  // des cinq d'hier survit, la `25/92`. **Le compte ne bouge pas**, et c'est la
+  // première fois : cinq avant, cinq après, sur d'autres scénarios.
+  //
+  // ⚠ ET LE DÉFAUT EST TOUJOURS LE MÊME, dans `pvCourantsDesDefenses` quand
+  // l'Étai est tombé. Aucune ligne de ce lot ne l'a touché.
   for (const [type, niveau, graine] of [
-    ['camp', 25, 92], ['camp', 26, 41], ['camp', 28, 54],
+    ['camp', 25, 1], ['camp', 25, 92], ['camp', 26, 42],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,
