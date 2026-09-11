@@ -4602,9 +4602,15 @@ test('TO T2 — le clic fantôme est avalé une fois, et jamais un clic voulu', 
   // ⚠ ET LES ONGLETS NE L'ARMENT PAS. Un bouton de la barre n'est pas un canevas
   // qui disparaît sous le doigt : son clic est parti avant la bascule, et armer
   // là serait armer sans fantôme à avaler.
+  //
+  // ⚠ SIX DEPUIS LE 11/09 : le journal est devenu un écran, donc un onglet. Son
+  // écouteur est de la MÊME forme que les cinq autres — la peinture du journal se
+  // fait dans `montrerEcran`, pas dans son écouteur, précisément pour que cette
+  // rangée reste six lignes identiques. Un onglet qui aurait son propre corps
+  // serait le premier à diverger, et cette garde ne le verrait plus.
   const brancheDUnOnglet = /\$\('onglet-[a-z]+'\)\.addEventListener\('click', \(\) => montrerEcran\('[a-z]+'\)\);/g;
   const onglets = session.match(brancheDUnOnglet) ?? [];
-  assert.equal(onglets.length, 5, `cinq onglets attendus dans la barre, ${onglets.length} trouvés`);
+  assert.equal(onglets.length, 6, `six onglets attendus dans la barre, ${onglets.length} trouvés`);
   for (const ligne of onglets) {
     assert.doesNotMatch(ligne, /depuisUnToucher/,
       `${ligne} arme l'avaleur : un onglet n'a pas de fantôme à avaler`);

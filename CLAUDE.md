@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **11/09/2026**, version 0.99.48 · build 150.
+Dernière révision : **11/09/2026**, version 0.99.49 · build 151.
 
 ---
 
@@ -41,6 +41,65 @@ Dernière révision : **11/09/2026**, version 0.99.48 · build 150.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 11/09/2026 (après le lot JOURNAL-ÉCRAN), à confronter :**
+⚠⚠ **LE JOURNAL EST UN ÉCRAN, ET IL A EU TROIS FORMES EN DEUX JOURS.** Ethan,
+11/09 : « journal : cela doit être un écran pas un onglet ». `npm test` rend
+**1577 pass / 0 fail** au sens de la garde de `documentation.test.js` — c'est le
+NOMBRE de tests déclarés ; le verdict mesuré est **1576 pass · 0 fail · 1
+skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort en
+0. `npm run build` → `dist/index.html`, **9 369 216 octets**, 0 référence
+externe. Le lot **REND 113 octets**, mesuré poste par poste contre le livrable
+rebâti dans un `git worktree` sur l'arbre pristine de `main` = `3a93b14`
+(**9 369 329**) : **balisage −100 · JavaScript −68 · feuille +55 · images +0 ·
+audio +0**, la somme des postes tombant EXACTEMENT sur le total des DEUX côtés,
+et **307 URI `data:` de part et d'autre**. Borne T10 **inchangée à 9 600 000**,
+marge **230 784 octets, 2,40 %**. Version et build passent à **0.99.49 · build
+151**. Le lot touche `src/index.src.html`, `src/ui/session.js`, `package.json`,
+quatre fichiers de `test/`, et **ne fait entrer ni ne sort aucun fichier**. **Pas
+une ligne de `src/sim/`, `src/data/`, `src/render/`, `src/son/`, `tools/` ni
+`art/`** — vérifié au diff.
+⚠⚠ **CE QUI A CHANGÉ N'EST PAS LE JOURNAL, C'EST SA NATURE.** Il a été DEUX
+boutons posés sur deux champs avec DEUX panneaux pour la même `vueDuJournal` (lot
+JOURNAL) ; puis UN bouton de la barre ouvrant UN panneau global (10/09, « Bouton
+rapport a deplacer en haut entre base et mission ») ; il est un ÉCRAN depuis. Le
+défaut de la forme du 10/09 était exactement celui qu'Ethan nomme : le bouton
+AVAIT L'AIR d'un onglet — même barre, même libellé, même graisse — et n'en était
+pas un. Il ne prenait jamais `.actif`, si bien qu'on lisait le journal pendant
+que la barre disait « Base ». **Ce qui n'a jamais bougé : `vueDuJournal` est
+écrite UNE fois, dans `ui/chantier.js`, et `JRN T8` refuse la seconde écriture.**
+⚠ **LA BARRE PORTE SIX ONGLETS ET PLUS RIEN D'AUTRE.** La garde du 10/09 comptait
+DEUX populations — « cinq onglets et un bouton » — précisément parce que le
+journal n'était pas un écran ; elle compte un seul ensemble. La largeur, elle,
+n'a pas bougé d'un pixel : même mot, même barre, même police. **Remesuré** au
+S25 FE : 57,31 + 57,31 + 57,31 + 74,44 (RECHERCHE) + 57,31 + 56,31 = **360 px
+pile**, aucun libellé coupé, aucun débordement.
+⚠⚠ **IL PORTE `.panneau-detail` POUR LE DESSIN ET DÉFAIT CE QUI PLACE UN
+PANNEAU** — trois déclarations, `position: static`, `max-height: none` et la
+bordure du haut. Les quatorze règles `.panneau-detail .xxx` dessinent le CONTENU
+que `peindreVueDuPanneau` produit : les recopier pour l'écran en aurait fait
+quatorze copies destinées à diverger. **Vérifié au banc** plutôt que déduit : les
+classes `h3`, `.ligne`, `.ligne.mineure`, `.paires` et `b` rendent dans l'écran
+exactement ce qu'elles rendent dans un panneau (8 px gris, 11 px, 9 px, grille,
+os), l'écran défile — 1 959 px de contenu dans un cadre de 624 — et **la tête
+reste collée à 110 px après 1 200 px de défilement**.
+⚠ **`#jeu` N'EST PLUS `position: relative`**, et c'est la même règle qui s'en va
+que celle posée la veille : elle n'existait que pour ancrer le panneau global. Une
+règle dont le motif est parti crée un bloc englobant où le prochain `absolute`
+s'accrocherait sans que personne l'ait décidé. Vérifié sélecteur par sélecteur
+avant de la retirer.
+⚠ **`fermerLeJournal` N'EXISTE PLUS**, et le crochet `pendantLeDeroule` ne
+l'appelle plus : il fermait le panneau pour qu'il ne reste pas seul par-dessus un
+combat dont tout le chrome venait d'être masqué. Un déroulé ne peut se produire
+que sur l'écran de raid — la question ne se pose plus.
+⚠ **AUCUN TEST NEUF, ET C'EST DÉLIBÉRÉ.** Trois gardes existantes portaient
+l'arbitrage inverse et ont été RÉÉCRITES sur celui-ci : `EC T2` (le journal était
+« global, au-dessus des écrans » ; il est un écran, dans `#ecrans`, déclaré dans
+les DEUX tables de `session.js`), `JRN T8` (les identifiants, l'ordre dans la
+barre, la règle propre) et la garde de la barre. Trois autres ont suivi le
+nombre d'écrans, qui passe de sept à huit : `SON T15`, `SON-V T2` et `SB T1` — le
+journal est **muet**, comme les six autres hors raid. Un quatrième test qui
+redirait la même chose n'aurait rien gardé de plus.
 
 **Référence au 11/09/2026 (après le lot PENDULE-ET-TOUCHER), à confronter :**
 ⚠⚠ **CINQ RETOURS D'ETHAN DU 11/09, ET LE DÉFAUT DU CLIC N'ÉTAIT PAS DANS LE

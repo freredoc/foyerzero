@@ -328,7 +328,7 @@ test('JRN T7 — un journal vide rend une PHRASE, jamais une vue blanche', () =>
 // T8 — une seule vue pour deux écrans
 // ---------------------------------------------------------------------------
 
-test('JRN T8 — UNE vue, UN lecteur, UN panneau : le journal a quitté les écrans', () => {
+test('JRN T8 — UNE vue, UN lecteur, UN écran : le journal a quitté les panneaux', () => {
   const chantier = sansCommentaires(lire('src/ui/chantier.js'));
   const offense = sansCommentaires(lire('src/ui/offense.js'));
   const session = sansCommentaires(lire('src/ui/session.js'));
@@ -370,14 +370,23 @@ test('JRN T8 — UNE vue, UN lecteur, UN panneau : le journal a quitté les écr
   assert.match(session, /peindreVueDuPanneau\(\s*\n?\s*doc, elementsJournal,/,
     'la session ne peint pas le journal par le rendu partagé');
 
-  // ⚠⚠ LE BALISAGE PORTE UN BOUTON ET UN PANNEAU, ET LES DEUX ANCIENS ONT
-  // DISPARU. La seconde moitié est celle qui compte : un bouton laissé dans un
-  // écran est le défaut le plus probable de ce déplacement, et `$('…')` rendrait
-  // `null` sans lever — le bouton serait simplement mort.
+  // ⚠⚠ LE BALISAGE PORTE UN ONGLET ET UN ÉCRAN, ET TOUTES LES FORMES ANTÉRIEURES
+  // ONT DISPARU. La seconde moitié est celle qui compte : un bouton laissé dans
+  // un écran est le défaut le plus probable de ces déplacements, et `$('…')`
+  // rendrait `null` sans lever — le bouton serait simplement mort.
+  //
+  // ⚠ TROIS FORMES EN DEUX JOURS, ET LES DEUX PREMIÈRES SONT NOMMÉES ICI POUR
+  // QU'ELLES NE REVIENNENT PAS : deux boutons posés sur deux champs (lot
+  // JOURNAL), puis un bouton de barre ouvrant un panneau global (10/09), puis un
+  // écran (11/09). `journal-titre` et `journal-corps` traversent les trois : ce
+  // sont eux que `peindreVueDuPanneau` écrit.
   const html = lire('src/index.src.html');
-  for (const id of ['tete-rapport', 'journal-panneau', 'journal-titre',
-    'journal-corps', 'journal-fermer']) {
+  for (const id of ['onglet-journal', 'ecran-journal', 'journal-titre', 'journal-corps']) {
     assert.ok(html.includes(`id="${id}"`), `le balisage n'a pas ${id}`);
+  }
+  for (const id of ['tete-rapport', 'journal-panneau', 'journal-fermer']) {
+    assert.ok(!html.includes(`id="${id}"`),
+      `le balisage porte encore ${id} : le journal est resté un panneau`);
   }
   for (const id of ['chantier-journal', 'chantier-journal-panneau', 'chantier-journal-titre',
     'chantier-journal-corps', 'chantier-journal-fermer', 'offense-journal',
@@ -386,24 +395,32 @@ test('JRN T8 — UNE vue, UN lecteur, UN panneau : le journal a quitté les écr
     assert.ok(!html.includes(`id="${id}"`), `le balisage porte encore ${id}`);
   }
 
-  // ⚠ LE BOUTON EST DANS LA BARRE D'ONGLETS, ENTRE BASE ET MISSION — c'est la
-  // demande, mot pour mot, et une position se garde par l'ORDRE, pas par la
-  // présence : le poser après « Options » passerait toutes les lignes ci-dessus.
+  // ⚠ L'ONGLET EST ENTRE BASE ET MISSION — c'est la demande du 10/09, mot pour
+  // mot, et devenir un écran ne l'a pas déplacé : une position se garde par
+  // l'ORDRE, pas par la présence, et le poser après « Options » passerait toutes
+  // les lignes ci-dessus.
   const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/)[1];
   const rang = (id) => barre.indexOf(`id="${id}"`);
-  assert.ok(rang('onglet-base') < rang('tete-rapport'),
-    'le rapport n\'est pas après l\'onglet Base');
-  assert.ok(rang('tete-rapport') < rang('onglet-mission'),
-    'le rapport n\'est pas avant l\'onglet Mission');
+  assert.ok(rang('onglet-base') < rang('onglet-journal'),
+    'le journal n\'est pas après l\'onglet Base');
+  assert.ok(rang('onglet-journal') < rang('onglet-mission'),
+    'le journal n\'est pas avant l\'onglet Mission');
 
   const feuille = html.replace(/\/\*[\s\S]*?\*\//g, '');
   // ⚠ ET LES DEUX ANCIENNES RÈGLES SONT PARTIES AVEC LEURS BOUTONS. Une règle
   // qui ne peint plus rien se réécrit sans qu'on s'aperçoive qu'elle ne fait rien.
   assert.ok(!/#chantier-journal|#offense-journal/.test(feuille),
     'la feuille garde une règle pour un bouton qui n\'existe plus');
-  // ⚠ AUCUNE RÈGLE PROPRE AU PANNEAU : il porte `panneau-detail`, et rien.
-  assert.ok(!/#journal-panneau \{/.test(feuille), '#journal-panneau a sa propre règle');
-  assert.match(html, /id="journal-panneau" class="panneau-detail"/);
+  // ⚠⚠ ET L'ÉCRAN PORTE `panneau-detail` POUR LE DESSIN, avec une SEULE règle à
+  // lui — celle qui défait ce qui plaçait un panneau. Le 10/09, ce bloc exigeait
+  // « aucune règle propre » ; un écran en a besoin d'une, et d'une seule : trois
+  // déclarations, `position`, `max-height` et la bordure du haut. Les quatorze
+  // règles de contenu, elles, restent partagées — c'est `EC T2` qui le garde.
+  assert.match(html, /id="ecran-journal" class="panneau-detail"/);
+  const propres = [...feuille.matchAll(/#ecran-journal\s*\{([^}]*)\}/g)];
+  assert.equal(propres.length, 1, 'l\'écran du journal a plus d\'une règle à lui');
+  assert.equal(propres[0][1].split(';').filter((d) => d.trim().length > 0).length, 3,
+    'la règle de l\'écran du journal a grossi : elle ne défait plus, elle dessine');
 });
 
 // ---------------------------------------------------------------------------

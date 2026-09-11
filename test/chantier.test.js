@@ -848,29 +848,28 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
   // chacun porte un identifiant (donc quelque chose l'écoute) et aucun n'est
   // éteint. Un onglet mort de plus tombe, quelle que soit la façon de l'écrire.
   //
-  // ⚠⚠ LA BARRE PORTE SIX BOUTONS DONT CINQ ONGLETS DEPUIS LE 10/09 — point 4
-  // d'Ethan, « Bouton rapport a deplacer en haut entre base et mission ». Ce test
-  // comptait CINQ boutons ; le relâcher en « cinq ou six » aurait rendu la garde
-  // muette sur le seul défaut qu'elle attrape, un onglet mort de plus. Il compte
-  // donc DEUX populations séparées, et il exige que la seconde soit EXACTEMENT le
-  // bouton du rapport — un septième bouton, onglet ou non, fait tomber l'une ou
-  // l'autre des deux lignes.
+  // ⚠⚠ LA BARRE PORTE SIX ONGLETS, ET PLUS RIEN D'AUTRE, DEPUIS LE 11/09 —
+  // « journal : cela doit être un écran pas un onglet ». Ce test a compté trois
+  // choses en trois jours, et l'histoire explique la forme actuelle : CINQ
+  // boutons ; puis, le 10/09, DEUX POPULATIONS — cinq onglets et un bouton —
+  // parce que le journal était monté dans la barre sans être un écran ; et
+  // maintenant SIX ONGLETS, puisqu'il en est un. Le relâcher en « cinq ou six »
+  // l'aurait rendu muet sur le seul défaut qu'il attrape, un onglet mort de plus.
   const barre = html.match(/<div id="tete-onglets">([\s\S]*?)<\/div>/);
   assert.ok(barre, 'la barre d\'onglets a disparu');
   const boutons = [...barre[1].matchAll(/<button[^>]*>[^<]*</g)].map((m) => m[0]);
   const onglets = boutons.filter((b) => /\sid="onglet-[a-z]+"/.test(b));
   const horsOnglets = boutons.filter((b) => !/\sid="onglet-[a-z]+"/.test(b));
-  assert.equal(onglets.length, 5, 'la barre ne porte plus cinq onglets');
-  assert.equal(horsOnglets.length, 1, 'la barre porte autre chose que le seul rapport');
-  assert.match(horsOnglets[0], /\sid="tete-rapport"/,
-    `le sixième bouton de la barre n'est pas le rapport : ${horsOnglets[0]}`);
-  // ⚠ ET IL N'EST PAS UN ONGLET : `ONGLET_DE_L_ECRAN` de `ui/session.js` ne le
-  // connaît pas, donc il ne prend jamais `.actif`. Le nommer `onglet-rapport`
-  // l'aurait fait compter parmi les cinq et cherché un écran qui n'existe pas.
-  assert.ok(!/id="onglet-rapport"/.test(html), 'le rapport s\'est déguisé en onglet');
-  // ⚠ LES SIX RÉPONDENT AU DOIGT — la garde vaut pour le rapport comme pour les
-  // onglets : un bouton `disabled` dans cette barre serait un contrôle inerte qui
-  // a l'air vif.
+  assert.equal(onglets.length, 6, 'la barre ne porte plus six onglets');
+  assert.deepEqual(horsOnglets, [],
+    `la barre porte un bouton qui n'est pas un onglet : ${horsOnglets.join(' ')}`);
+  // ⚠ ET LE JOURNAL EST BIEN L'UN DES SIX, sous son nom d'onglet. Le garder sous
+  // `tete-rapport` l'aurait laissé hors de `ONGLET_DE_L_ECRAN`, donc sans
+  // `.actif` : on lirait le journal pendant que la barre dirait « Base ».
+  assert.ok(!/id="tete-rapport"/.test(html), 'le journal est resté un bouton hors des onglets');
+  assert.ok(barre[1].includes('id="onglet-journal"'), 'l\'onglet du journal a disparu de la barre');
+  // ⚠ LES SIX RÉPONDENT AU DOIGT : un bouton `disabled` dans cette barre serait un
+  // contrôle inerte qui a l'air vif.
   for (const bouton of boutons) {
     assert.match(bouton, /\sid="[a-z-]+"/, `bouton sans identifiant : ${bouton}`);
     assert.ok(!/\sdisabled/.test(bouton), `bouton désactivé : ${bouton}`);
@@ -934,53 +933,74 @@ test('chantier — le HTML produit porte les sept bandeaux et le retour du banc'
 });
 
 // ---------------------------------------------------------------------------
-// EC T2 — le journal est GLOBAL : un bouton, un panneau, au-dessus des écrans
+// EC T2 — le journal est un ÉCRAN : un onglet, une entrée dans les deux tables
 // ---------------------------------------------------------------------------
 
-test('EC T2 — le journal est global, et il passe au-dessus des écrans', () => {
-  // ⚠⚠ ETHAN, 10/09, POINT 4 : « Bouton rapport a deplacer en haut entre base et
-  // mission ». `JRN T8` garde le compte — une vue, un lecteur, un panneau — et
-  // l'ORDRE du bouton dans la barre. Ce test-ci garde la STRUCTURE, qui est ce
-  // qui rend le déplacement possible : un panneau posé dans un écran ne peut pas
-  // s'ouvrir depuis un autre.
+test('EC T2 — le journal est un écran, et il vit dans `#ecrans`', () => {
+  // ⚠⚠ ETHAN, 11/09 : « journal : cela doit être un écran pas un onglet ». Ce
+  // test gardait exactement le contraire la veille — que le journal était un
+  // PANNEAU frère de `#ecrans`, écrit en DERNIER pour peindre par-dessus une
+  // fiche restée ouverte. Les deux formes étaient cohérentes ; c'est l'arbitrage
+  // qui a changé, et ce qui se garde maintenant est la structure d'un écran.
   const html = sansCommentairesHtml(
     readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'),
   );
 
-  // ⚠⚠ IL EST FRÈRE DE `#ecrans`, DONC ENFANT DE `#jeu`. Mesuré par les
-  // PROFONDEURS de `<div>` : compter la présence ne dirait rien, le panneau
-  // pourrait être n'importe où dans la page. On compte les balises ouvrantes et
-  // fermantes entre le début de `#jeu` et chaque cible.
+  // ⚠⚠ IL EST DANS `#ecrans`, PAS À CÔTÉ. Mesuré par les PROFONDEURS de `<div>` :
+  // compter la présence ne dirait rien, le bloc pourrait être n'importe où dans
+  // la page. On compte les balises ouvrantes et fermantes entre le début de
+  // `#jeu` et chaque cible. Un écran est à la profondeur de `#ecrans` PLUS UN.
   const profondeurA = (indice) => {
     const avant = html.slice(html.indexOf('<div id="jeu">'), indice);
     return (avant.match(/<div\b/g) ?? []).length - (avant.match(/<\/div>/g) ?? []).length;
   };
   const iEcrans = html.indexOf('<div id="ecrans">');
-  const iJournal = html.indexOf('<div id="journal-panneau"');
+  const iJournal = html.indexOf('<div id="ecran-journal"');
+  const iChantier = html.indexOf('<div id="ecran-chantier">');
   assert.ok(iEcrans > 0 && iJournal > 0, 'montage : un des deux blocs a disparu de la page');
-  assert.equal(profondeurA(iJournal), profondeurA(iEcrans),
-    'le journal n\'est pas au même niveau que `#ecrans` : il vit dans un écran');
   assert.equal(profondeurA(iEcrans), 1, 'montage : `#ecrans` n\'est plus un enfant direct de `#jeu`');
+  assert.equal(profondeurA(iJournal), profondeurA(iChantier),
+    'le journal n\'est pas au même niveau que les autres écrans');
+  assert.equal(profondeurA(iJournal), 2, 'le journal n\'est pas un enfant direct de `#ecrans`');
 
-  // ⚠⚠ ET IL EST LE DERNIER, CE QUI N'EST PAS COSMÉTIQUE. Les `.panneau-detail`
-  // partagent `z-index: 2` et ne créent aucun contexte d'empilement — à égalité,
-  // c'est le DERNIER ÉCRIT qui peint par-dessus. Posé avant `#ecrans`, le journal
-  // passerait SOUS la fiche d'un bâtiment restée ouverte, et le joueur toucherait
-  // « Fermer » sans rien fermer.
-  assert.ok(iJournal > iEcrans, 'le journal est écrit avant les écrans : une fiche ouverte le recouvre');
-  const bas = html.indexOf('<div id="barre-bas">');
-  assert.ok(iJournal > bas, 'le journal est écrit avant la barre du bas');
+  // ⚠ ET LE PANNEAU GLOBAL N'EXISTE PLUS — ni son identifiant, ni son bouton de
+  // fermeture. Un écran ne se ferme pas : on en sort par un autre onglet.
+  assert.ok(!/id="journal-panneau"/.test(html), 'le panneau global du journal est encore là');
+  assert.ok(!/id="journal-fermer"/.test(html), 'l\'écran du journal porte un bouton « Fermer »');
 
-  // ⚠ ET LE DÉROULÉ D'UN RAID LE REFERME. Le combat masque tout le chrome ; un
-  // panneau laissé ouvert par-dessus resterait le seul élément d'interface à
-  // l'écran, et son bouton « Fermer » serait le seul geste possible pendant le
-  // raid. C'est le crochet `pendantLeDeroule` qui le dit, et lui seul.
+  // ⚠⚠ IL PORTE `.panneau-detail` POUR LE DESSIN, ET DÉFAIT CE QUI PLACE UN
+  // PANNEAU. Les quatorze règles `.panneau-detail .xxx` dessinent le contenu que
+  // `peindreVueDuPanneau` produit ; les recopier pour l'écran en ferait quatorze
+  // copies destinées à diverger. Ce qu'il ne peut PAS garder, c'est l'`absolute`
+  // et le plafond de hauteur : un écran collé en bas sur 74 % de la page.
+  assert.match(html, /id="ecran-journal" class="panneau-detail"/,
+    'l\'écran du journal a perdu le dessin partagé du panneau');
+  const feuille = sansCommentairesHtml(
+    readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8'),
+  );
+  const regle = feuille.match(/#ecran-journal\s*\{([^}]*)\}/);
+  assert.ok(regle, 'l\'écran du journal n\'a plus de règle : il reste un panneau en bas de page');
+  assert.match(regle[1], /position:\s*static/, 'l\'écran du journal est encore en `absolute`');
+  assert.match(regle[1], /max-height:\s*none/, 'l\'écran du journal plafonne encore à 74 %');
+
+  // ⚠⚠ ET IL EST DÉCLARÉ DANS LES DEUX TABLES DE `ui/session.js`. Un écran absent
+  // d'`ECRANS` ne serait jamais masqué par les autres — il resterait affiché
+  // par-dessus eux —, et un écran absent d'`ONGLET_DE_L_ECRAN` se lirait sans
+  // qu'aucun onglet ne s'allume, ce qui était exactement le défaut du 10/09.
   const session = readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
-  const crochet = session.slice(session.indexOf('pendantLeDeroule'));
-  assert.match(crochet.slice(0, 200), /fermerLeJournal\(\)/,
-    'le déroulé d\'un raid laisse le journal ouvert par-dessus le combat');
+  assert.match(session, /const ECRANS = \[[^\]]*'journal'/, '« journal » n\'est pas un écran');
+  assert.match(session, /journal: 'onglet-journal'/,
+    'le journal n\'a pas d\'onglet à allumer : la barre dira « Base » pendant qu\'on le lit');
+
+  // ⚠ ET LE DÉROULÉ N'A PLUS RIEN À FERMER. Le crochet `pendantLeDeroule`
+  // appelait `fermerLeJournal` pour que le panneau ne reste pas seul par-dessus
+  // un combat dont tout le chrome venait d'être masqué. Un déroulé ne peut se
+  // produire que sur l'écran de raid : la question ne se pose plus, et la
+  // fonction n'existe plus.
+  assert.ok(!/fermerLeJournal/.test(session),
+    'la session ferme encore un journal qui n\'est plus un panneau');
 });
 
 // ---------------------------------------------------------------------------

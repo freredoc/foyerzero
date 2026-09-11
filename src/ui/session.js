@@ -949,7 +949,12 @@ export function initialiserSession(doc) {
   // offense »).
   // ⚠ SEPT ÉCRANS DEPUIS LE LOT RAID-A. Le raid s'ouvre depuis la carte, par un
   // SECOND toucher sur une cible déjà ouverte.
-  const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
+  // ⚠⚠ HUIT ÉCRANS DEPUIS LE 11/09 : le JOURNAL en est un — Ethan, « journal :
+  // cela doit être un écran pas un onglet ». Il était un panneau ouvert par un
+  // bouton de la barre, qui avait l'air d'un onglet sans en être un : rien ne
+  // s'allumait quand on le lisait. Il est posé ici juste après `chantier`, dans
+  // l'ORDRE DE LA BARRE, pour que la liste se lise comme l'écran se voit.
+  const ECRANS = ['chantier', 'journal', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
 
 
   // ⚠ QUEL ONGLET S'ALLUME POUR QUEL ÉCRAN — UNE TABLE, PAS DES CONDITIONS.
@@ -958,6 +963,10 @@ export function initialiserSession(doc) {
   // écran se déclare ici, et nulle part ailleurs.
   const ONGLET_DE_L_ECRAN = {
     chantier: 'onglet-base',
+    // ⚠ LE JOURNAL S'ALLUME SUR SON PROPRE ONGLET depuis le 11/09. Tant qu'il
+    // était un panneau, `#tete-rapport` n'était dans aucune table : on lisait le
+    // journal sans qu'aucun onglet ne soit allumé, et la barre disait « Base ».
+    journal: 'onglet-journal',
     // ⚠ LE RAID S'ALLUME SUR L'ONGLET MONDE : on y vient de la carte, on y
     // retourne. Il n'a pas d'onglet à lui — on n'y entre pas par le haut.
     raid: 'onglet-monde',
@@ -1059,6 +1068,13 @@ export function initialiserSession(doc) {
       if (nom === 'monde' && etat !== null) ecranMonde.peindre(etat);
       else ecranMonde.masquer();
     }
+    // ⚠ LE JOURNAL SE PEINT ICI PLUTÔT QUE DANS SON ÉCOUTEUR D'ONGLET, pour que
+    // les six onglets soient SIX LIGNES IDENTIQUES plus bas. Un onglet qui aurait
+    // son propre corps serait le premier à diverger — et `TO T2` compte
+    // justement ces lignes-là.
+    if (nom === 'journal') {
+      peindreLeJournal();
+    }
     // ⚠ ET LE RAID SE RETIRE QUAND ON LE QUITTE, pour la raison exacte de la
     // carte : il porte une boucle d'animation à lui, et la laisser tourner
     // derrière un autre écran ferait travailler l'appareil pour des pixels que
@@ -1070,48 +1086,40 @@ export function initialiserSession(doc) {
   $('onglet-options').addEventListener('click', () => montrerEcran('options'));
   $('onglet-mission').addEventListener('click', () => montrerEcran('mission'));
   $('onglet-recherche').addEventListener('click', () => montrerEcran('recherche'));
+  $('onglet-journal').addEventListener('click', () => montrerEcran('journal'));
   $('onglet-monde').addEventListener('click', () => montrerEcran('monde'));
 
-  // --- le journal des raids, une fois pour toute la page ---------------------
+  // --- le journal des raids, un écran ---------------------------------------
   //
-  // ⚠⚠ IL EST MONTÉ DANS LA BARRE LE 10/09 — Ethan, point 4 : « Bouton rapport a
-  // deplacer en haut entre base et mission ». Il y avait DEUX boutons et DEUX
-  // panneaux, un par écran, qui peignaient la même `vueDuJournal` : le journal ne
-  // dit rien d'un écran, il dit ce qui est arrivé à la PARTIE.
+  // ⚠⚠ IL A CHANGÉ DE NATURE DEUX FOIS EN DEUX JOURS. Deux boutons posés sur
+  // deux champs avec deux panneaux (lot JOURNAL) ; un bouton de barre ouvrant un
+  // panneau global (10/09, « Bouton rapport a deplacer en haut entre base et
+  // mission ») ; un ÉCRAN depuis le 11/09 — « journal : cela doit être un écran
+  // pas un onglet ». Ce qui n'a jamais bougé : `vueDuJournal` est écrite UNE
+  // fois, dans `ui/chantier.js`, et `JRN T8` refuse la seconde écriture.
   //
-  // ⚠⚠ ET C'EST LA SESSION QUI LE CÂBLE, PAS UN ÉCRAN. `#tete-onglets` ne
-  // appartient à aucun d'eux — « un écran ne touche jamais `#tete-onglets`
-  // lui-même », et la garde d'`offense.test.js` balaie les six écrans pour le
-  // refuser. Le bouton vit dans la barre, donc son écouteur vit ici.
-  //
-  // ⚠ LA VUE EST IMPORTÉE, PAS RECOPIÉE. `vueDuJournal` reste écrite dans
-  // `ui/chantier.js`, où sont ses trois briques — `formaterEntier`,
-  // `direLaDuree` et `peindreVueDuPanneau` ; la déplacer ici ferait importer un
-  // écran par la session, donc un cycle. `JRN T8` refuse la seconde écriture.
-  const panneauJournal = $('journal-panneau');
+  // ⚠ LA VUE RESTE IMPORTÉE, PAS RECOPIÉE. Ses trois briques — `formaterEntier`,
+  // `direLaDuree` et `peindreVueDuPanneau` — vivent dans l'écran du Chantier ; la
+  // déplacer ici ferait importer un écran par la session, donc un cycle.
   const elementsJournal = {
     titre: $('journal-titre'), corps: $('journal-corps'), bouton: null,
   };
-  function fermerLeJournal() {
-    if (panneauJournal !== null) panneauJournal.hidden = true;
-  }
-  // ⚠ FERMÉ AU CÂBLAGE, ET PAS SEULEMENT PAR L'ATTRIBUT DU BALISAGE. C'est la
-  // discipline de `fermerPanneau` au Chantier : un `hidden` oublié à la prochaine
-  // reprise du balisage ouvrirait le journal au démarrage, par-dessus la grille,
-  // sans qu'aucun test le voie.
-  fermerLeJournal();
-  $('tete-rapport').addEventListener('click', () => {
-    if (etat === null || panneauJournal === null) return;
-    // ⚠ IL SE PEINT À L'OUVERTURE, PAS À CHAQUE IMAGE. Rien ne peut changer
-    // pendant qu'on le regarde : un rapport n'entre au journal qu'à la RÉSOLUTION
-    // d'un raid, et le joueur n'est alors pas en train de lire le journal.
+  // ⚠⚠ IL SE PEINT À L'ENTRÉE DANS L'ÉCRAN, PAS À CHAQUE IMAGE, et c'est la même
+  // raison qu'à l'ouverture du panneau : rien ne peut changer pendant qu'on le
+  // regarde. Un rapport n'entre au journal qu'à la RÉSOLUTION d'un raid, et on ne
+  // résout pas un raid depuis le journal.
+  // ⚠ ET IL N'Y A PLUS DE `fermerLeJournal`. Un écran ne se ferme pas : on en
+  // sort par un autre onglet. Le crochet `pendantLeDeroule` l'appelait pour que
+  // le panneau ne reste pas seul par-dessus un combat dont tout le chrome venait
+  // d'être masqué ; un déroulé ne peut se produire QUE sur l'écran de raid, donc
+  // la question ne se pose plus.
+  function peindreLeJournal() {
+    if (etat === null) return;
     peindreVueDuPanneau(
       doc, elementsJournal,
       vueDuJournal(etat.rapports, etat.horloge.nbTicks),
     );
-    panneauJournal.hidden = false;
-  });
-  $('journal-fermer').addEventListener('click', fermerLeJournal);
+  }
 
   // --- le banc d'essai, derrière un appui long -------------------------------
   //
@@ -1488,7 +1496,6 @@ export function initialiserSession(doc) {
     // retour, et le retour repasse par le bouton.
     pendantLeDeroule: (enCours) => {
       derouleEnCours = enCours;
-      if (enCours) fermerLeJournal();
       appliquerLeChrome();
     },
     // ⚠ SEULE LA VRAIE ATTAQUE SONNE — l'écran le décide, pas la session : lui

@@ -725,17 +725,19 @@
   /* La page de jeu : en-tête commun, écran du moment, barre du bas commune.
      ⚠ `#jeu` EXISTE POUR LE BANC. Il remplaçait deux écrans nommés un par un ;
      maintenant qu'il y en a trois et deux barres partagées, il en cache UN. */
-  /* ⚠⚠ `relative` POUR LE PANNEAU DU JOURNAL, ET POUR LUI SEUL — point 4,
-     10/09. `#journal-panneau` est un `.panneau-detail`, donc `position: absolute`
-     avec `left/right/bottom: 0` ; il lui faut un ancêtre positionné, et il est
-     frère de `#ecrans` — qui, lui, est déjà `relative` pour les panneaux des
-     écrans. Sans cette ligne il s'ancrerait au bloc englobant initial, donc à la
-     PAGE : il couvrirait aussi la marge système du bas, que `body` réserve.
-     ⚠ ET ELLE NE DÉPLACE RIEN D'AUTRE. Tout ce qui est `absolute` sous `#jeu`
-     vit dans `#ecrans` ou plus bas, donc trouve déjà un ancêtre positionné plus
-     proche : vérifié sélecteur par sélecteur avant d'écrire la ligne. */
+  /* ⚠⚠ `relative` A ÉTÉ POSÉ LE 10/09 PUIS RETIRÉ LE 11/09, ET LES DEUX FOIS
+     POUR LE JOURNAL. Il lui fallait un ancêtre positionné tant qu'il était un
+     `.panneau-detail` frère de `#ecrans` ; il est un ÉCRAN depuis, donc dans
+     `#ecrans`, qui est déjà `relative` pour les panneaux des écrans. Une règle
+     dont le motif est parti ne se garde pas « au cas où » : elle crée un bloc
+     englobant, et le prochain `absolute` posé sous `#jeu` s'y accrocherait sans
+     que personne ait décidé qu'il le devait.
+     ⚠ VÉRIFIÉ AVANT DE LA RETIRER, sélecteur par sélecteur : tout ce qui est
+     `absolute` sous `#jeu` vit dans `#ecrans` ou plus bas, donc trouve un
+     ancêtre positionné plus proche. `#barre-bas` est le seul autre enfant, et il
+     est dans le flux. */
   #jeu {
-    flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column;
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
     background: #1E2124;
     font-family: "Roboto Condensed", "Segoe UI", system-ui, sans-serif;
   }
@@ -762,18 +764,19 @@
     border: 0; border-right: 1px solid #1E2124; padding: 0;
   }
   #tete-onglets button:last-child { border-right: 0; }
-  /* ⚠⚠ LE JOURNAL PORTE UN MOT, ET IL N'A PLUS AUCUNE RÈGLE À LUI — Ethan,
-     10/09 : « Pas d'emoji mais un mot journal comme les autres boutons ». La
-     règle `#tete-rapport` disparaît ENTIÈREMENT : elle posait `flex: 0 0 32px`,
-     `font-size: 16px`, `text-transform: none` et `letter-spacing: 0`, c'est-à-dire
-     exactement les quatre déclarations qui faisaient d'un pictogramme autre chose
-     qu'un libellé. Il prend donc sa part de `#tete-onglets button` comme les cinq
-     autres.
-     ⚠⚠ ET IL NE DEVIENT PAS UN ONGLET POUR AUTANT. Son identifiant reste
-     `tete-rapport` — il ne commence pas par `onglet-` —, il ne prend jamais
-     `.actif`, et `ONGLET_DE_L_ECRAN` de `ui/session.js` ne le connaît pas : il n'a
-     pas d'écran, il ouvre un panneau. La garde de la barre sépare les deux
-     populations, cinq onglets et un bouton, au lieu de compter six boutons.
+  /* ⚠⚠ LE JOURNAL PORTE UN MOT, ET IL N'A AUCUNE RÈGLE À LUI — Ethan, 10/09 :
+     « Pas d'emoji mais un mot journal comme les autres boutons ». La règle
+     `#tete-rapport` a disparu ENTIÈREMENT ce jour-là : elle posait
+     `flex: 0 0 32px`, `font-size: 16px`, `text-transform: none` et
+     `letter-spacing: 0`, c'est-à-dire exactement les quatre déclarations qui
+     faisaient d'un pictogramme autre chose qu'un libellé.
+     ⚠⚠ ET IL EST DEVENU UN ONGLET LE 11/09 — « journal : cela doit être un écran
+     pas un onglet ». Son identifiant est `onglet-journal`, il prend `.actif`
+     comme les cinq autres par la règle ci-dessous, et `ONGLET_DE_L_ECRAN` de
+     `ui/session.js` le connaît. La barre porte donc SIX onglets et rien d'autre :
+     la garde qui séparait deux populations n'a plus qu'un ensemble à compter.
+     ⚠ LA MESURE DE LARGEUR CI-DESSOUS N'A PAS BOUGÉ D'UN PIXEL : c'est le même
+     mot, dans la même barre, avec la même police. Seul son identifiant a changé.
      ⚠⚠ ET LA POLICE NE DESCEND PAS — MESURÉE, PAS SUPPOSÉE. Le brief prédisait
      que six mots à 11 px ne tiendraient pas dans 360 px CSS et qu'il faudrait
      baisser les six. Relevé dans Chromium à la géométrie du S25 FE, police
@@ -1412,6 +1415,21 @@
   #tuto-objectifs li.atteint .quoi { color: #8C9A72; }
   #tuto-objectifs li.atteint .compte { color: #6A7658; }
   #tuto-explication { margin: 3px 8px 7px; font-size: 9px; color: #68727E; }
+  /* ⚠⚠ L'ÉCRAN DU JOURNAL PORTE `.panneau-detail` ET NEUTRALISE CE QUI PLACE UN
+     PANNEAU — lot du 11/09. Les quatorze règles `.panneau-detail .xxx`
+     ci-dessous dessinent le CONTENU que `peindreVueDuPanneau` produit : les
+     sections, les titres, les paires, les lignes. Les redire pour `#ecran-journal`
+     en ferait quatorze copies destinées à diverger ; ne pas les avoir ferait un
+     journal sans dessin. La classe reste donc, et l'écran défait les TROIS
+     déclarations qui, elles, placent un panneau en bas d'un champ.
+     ⚠ `position: static` REND L'ÉCRAN AU FLUX de `#ecrans`, `max-height: none`
+     lui rend toute la hauteur — 74 % laisserait un quart de page vide sous les
+     onglets — et la bordure du haut part parce que `#tete-onglets` en pose déjà
+     une juste au-dessus : deux traits collés se lisent comme un défaut.
+     ⚠ LE RESTE DE `.panneau-detail` SERT TEL QUEL : la colonne flex, le fond, le
+     défilement sans barre, et la tête en `sticky` qui reste visible quand la
+     liste des rapports est longue. */
+  #ecran-journal { position: static; max-height: none; border-top: 0; }
   .panneau-detail .corps { padding: 4px 8px 8px; }
   .panneau-detail .section { margin-top: 6px; }
   .panneau-detail h3 {
@@ -2587,25 +2605,25 @@
        défaut qui n'existe plus. -->
   <div id="tete-onglets">
     <button type="button" class="actif" id="onglet-base">Base</button>
-    <!-- ⚠⚠ LE JOURNAL DES RAIDS MONTE DANS LA BARRE — Ethan, 10/09, point 4 :
-         « Bouton rapport a deplacer en haut entre base et mission ». Il était
-         POSÉ SUR LE CHAMP, en deux exemplaires — un au Chantier, un à l'Offense —
-         avec DEUX panneaux pour la même `vueDuJournal`. Un journal n'appartient à
-         aucun écran : il dit ce qui est arrivé à la PARTIE.
+    <!-- ⚠⚠ LE JOURNAL EST UN ÉCRAN DEPUIS LE 11/09 — Ethan : « journal : cela
+         doit être un écran pas un onglet ». Il a connu trois formes en deux
+         jours, et les deux premières sont la raison de la troisième : d'abord
+         DEUX boutons posés sur deux champs, avec DEUX panneaux pour la même
+         `vueDuJournal` ; puis, le 10/09, UN bouton dans cette barre ouvrant UN
+         panneau global. Le bouton avait l'air d'un onglet — même barre, même
+         libellé, même graisse — et n'en était pas un : il ne prenait jamais
+         `.actif`, si bien qu'on ne pouvait pas savoir, en regardant la barre,
+         qu'on était en train de lire le journal.
 
-         ⚠⚠ SON IDENTIFIANT NE COMMENCE PAS PAR `onglet-`, ET C'EST DÉLIBÉRÉ. Ce
-         n'est pas un onglet : il n'a pas d'écran, il ne prend jamais `.actif`, et
-         `ONGLET_DE_L_ECRAN` de `ui/session.js` ne le connaît pas. La garde de la
-         barre sépare donc les deux populations — cinq onglets et un bouton — au
-         lieu de compter six boutons, ce qui l'aurait relâchée.
+         ⚠⚠ SON IDENTIFIANT COMMENCE MAINTENANT PAR `onglet-`, ET LA GARDE DE LA
+         BARRE NE COMPTE PLUS DEUX POPULATIONS. Le 10/09 elle séparait « cinq
+         onglets et un bouton » précisément parce que celui-ci n'en était pas un ;
+         il y en a six, tous onglets, tous dans `ONGLET_DE_L_ECRAN`.
 
-         ⚠ ET IL NE COÛTE PAS UN PIXEL DE CHAMP : la barre garde ses 40 px, donc
-         les 288 px de chrome que `chantier.test.js` somme ne bougent pas. C'est
-         ce qui fait de ce point un DÉPLACEMENT et pas un ajout — deux boutons
-         posés sur deux champs deviennent un bouton dans une barre qui existait,
-         et les deux cases qu'ils couvraient sont rendues au joueur. -->
-    <button type="button" id="tete-rapport"
-            title="Journal des raids">Journal</button>
+         ⚠ ET IL NE COÛTE TOUJOURS PAS UN PIXEL DE CHAMP : la barre garde ses
+         40 px, les 288 px de chrome que `chantier.test.js` somme ne bougent pas,
+         et le journal ne se pose plus SUR un écran — il en est un. -->
+    <button type="button" id="onglet-journal">Journal</button>
     <button type="button" id="onglet-mission">Mission</button>
     <button type="button" id="onglet-recherche">Recherche</button>
     <button type="button" id="onglet-monde">Monde</button>
@@ -2709,8 +2727,9 @@
                « Bouton rapport a deplacer en haut entre base et mission ». Il
                était ici, en `absolute` au coin haut-droit, et son jumeau était à
                l'Offense : deux boutons, deux panneaux, une seule vue. Il vit
-               maintenant dans `#tete-onglets`, une fois, et son panneau est
-               `#journal-panneau`, frère de `#ecrans`.
+               maintenant dans `#tete-onglets`, une fois, et depuis le 11/09 ce
+               n'est plus un bouton qui ouvre un panneau mais l'ONGLET de
+               `#ecran-journal`.
                ⚠ ET LA CASE QU'IL COUVRAIT EST RENDUE. Le prix d'un contrôle posé
                sur le champ était relevé ici depuis le lot JOURNAL — « il couvre
                une case, comme la bascule en couvre une autre » ; il ne se paie
@@ -2802,6 +2821,28 @@
          la barre du bas sont communs, ce qui est exactement ce qu'Ethan a
          demandé. Son chrome fait 288 px, comme celui du Chantier.
          ====================================================================== -->
+    <!-- ======================================================================
+         ÉCRAN JOURNAL — ce qui est arrivé à la PARTIE, pas à un écran.
+         ⚠⚠ IL ÉTAIT UN PANNEAU FRÈRE DE `#ecrans` JUSQU'AU 11/09, et son
+         balisage n'a presque pas changé en devenant un écran : `#journal-titre`
+         et `#journal-corps` gardent leurs identifiants et leurs classes, parce
+         que c'est `peindreVueDuPanneau` de `ui/chantier.js` qui les écrit, et
+         que cette fonction-là n'avait aucune raison de bouger. Ce qui part, ce
+         sont les deux choses qui faisaient de lui un panneau : la classe
+         `panneau-detail`, donc le `position: absolute` et le plafond de hauteur,
+         et le bouton « Fermer ».
+         ⚠⚠ PAS DE BOUTON « FERMER », ET CE N'EST PAS UN OUBLI. On sort d'un
+         écran par un autre onglet — aucun des six n'a de croix. Un « Fermer »
+         ici aurait posé la question « fermer vers quoi ? », à laquelle seule la
+         barre répond.
+         ⚠ ET IL N'A PAS DE BOUTON D'ACTION NON PLUS : un journal se lit. C'est
+         le `bouton: null` que `peindreVueDuPanneau` attend. -->
+    <div id="ecran-journal" class="panneau-detail" hidden>
+      <div class="tete">
+        <b id="journal-titre" class="titre">—</b>
+      </div>
+      <div id="journal-corps" class="corps"></div>
+    </div>
     <!-- ⚠ L'ÉCRAN DU TUTORIEL. Il ne porte AUCUNE règle : ce qui est fait ou
          non se décide dans `sim/missions.js`, qui lit la base. Il n'a pas de
          barre à hauteur fixe — il défile dans `#ecrans` comme les autres, et
@@ -2865,7 +2906,8 @@
              s'y poser est ce qui rend le paraître gratuit. -->
         <p id="offense-avis" hidden></p>
         <!-- ⚠ LE BOUTON DU JOURNAL A QUITTÉ CET ÉCRAN LE 10/09, avec celui du
-             Chantier et dans le même geste — point 4. Voir `#tete-rapport`. -->
+             Chantier et dans le même geste — point 4. Il est devenu l'onglet
+             `#onglet-journal` le 11/09. -->
         <!-- ⚠ LE MÊME PANNEAU QUE CELUI DU CHANTIER, à la classe près : les
              règles vivent sur `.panneau-detail`, et le rendu est la fonction
              `peindreVueDuPanneau` de `ui/chantier.js`. Deux DOM voisins dont un
@@ -3488,40 +3530,12 @@
        veut, et le contenu de l'écran dit lequel on regarde. -->
   <div id="barre-bas"></div>
 
-  <!-- ⚠⚠ LE PANNEAU DU JOURNAL EST GLOBAL, ET FRÈRE DE `#ecrans` — point 4,
-       10/09. Il y en avait DEUX, un par écran, qui peignaient la MÊME vue :
-       `vueDuJournal` est écrite une seule fois dans `ui/chantier.js`, et `JRN T8`
-       refusait déjà une seconde écriture. Ce qui restait dédoublé, c'était le
-       DOM et son câblage — donc deux endroits à corriger pour un seul journal.
-
-       ⚠⚠ IL EST HORS DU FLUX, ET C'EST LA LEÇON DU POINT 5 PRISE D'AVANCE.
-       `.panneau-detail` est `position: absolute` ; posé ici, il s'ancre sur
-       `#jeu`, qui devient `position: relative` pour lui et pour lui seul. Dans le
-       flux, il pousserait `#ecrans` — donc recadrerait TOUS les écrans à chaque
-       ouverture, ce que le point 5 fait justement corriger deux barres plus bas.
-
-       ⚠⚠ ET IL EST LE DERNIER ENFANT DE `#jeu`, PAS LE PREMIER — c'est l'ORDRE
-       DU DOCUMENT qui le met au-dessus, pas un `z-index` de plus. Les panneaux
-       des écrans sont des `.panneau-detail` eux aussi, donc au MÊME niveau 2 ;
-       ni `#jeu` ni `#ecrans` ne créent de contexte d'empilement — les deux sont
-       `position: relative` sans `z-index` —, si bien qu'à égalité c'est le
-       dernier écrit qui peint par-dessus. Posé AVANT `#ecrans`, le journal
-       serait passé SOUS la fiche d'un bâtiment restée ouverte.
-       ⚠ CONSÉQUENCE, DÉCLARÉE : ouvrir le journal ne FERME plus la fiche, il la
-       recouvre, et la refermer la rend. C'est un changement par rapport au lot
-       JOURNAL, où les deux vivaient dans le même conteneur et où l'écran devait
-       fermer l'un pour ouvrir l'autre. Ce qui motivait ce `fermerPanneau` était
-       qu'un panneau caché AVALAIT les touchers de l'autre ; ici le journal est
-       au-dessus, donc c'est lui qui les reçoit, et rien n'est volé.
-       ⚠ ET IL N'A PAS DE BOUTON D'ACTION : un journal se lit. C'est le
-       `bouton: null` que `peindreVueDuPanneau` attend. -->
-  <div id="journal-panneau" class="panneau-detail" hidden>
-    <div class="tete">
-      <b id="journal-titre" class="titre">—</b>
-      <button type="button" id="journal-fermer" class="fermer">Fermer</button>
-    </div>
-    <div id="journal-corps" class="corps"></div>
-  </div>
+  <!-- ⚠⚠ LE PANNEAU GLOBAL DU JOURNAL A DISPARU LE 11/09 : il est devenu
+       `#ecran-journal`, dans `#ecrans`. Ce qui l'avait amené ici tenait à sa
+       nature de PANNEAU — il fallait qu'il soit hors du flux pour ne pas pousser
+       les écrans, et le dernier enfant de `#jeu` pour peindre par-dessus une
+       fiche restée ouverte. Un écran n'a ni l'un ni l'autre de ces problèmes :
+       il ne se superpose à rien, il REMPLACE. -->
 
 </div>
 

@@ -1157,10 +1157,12 @@ test('SON T15 — l\'ensemble désiré se déduit de l\'état, et la différence
   const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
     .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
     .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
-  assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
+  // ⚠ HUIT DEPUIS LE 11/09 : le journal est devenu un écran. Il est MUET, comme
+  // les six autres hors raid — un journal se lit, il ne sonne pas.
+  assert.equal(ecrans.length, 8, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
   assert.deepEqual(
     ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)).sort(),
-    ['chantier', 'mission', 'monde', 'offense', 'options', 'recherche'],
+    ['chantier', 'journal', 'mission', 'monde', 'offense', 'options', 'recherche'],
     'la liste des écrans SANS ambiance a changé : le rapport doit la redire');
   assert.deepEqual(
     ecrans.filter((e) => Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
@@ -2407,7 +2409,9 @@ test('SON-V T2 — UN écran sur sept garde son ambiance, et c\'est le raid (SB 
   const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
     .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
     .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
-  assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
+  // ⚠ HUIT DEPUIS LE 11/09 : le journal est devenu un écran. Il est MUET, comme
+  // les six autres hors raid — un journal se lit, il ne sonne pas.
+  assert.equal(ecrans.length, 8, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
   assert.deepEqual(
     ecrans.filter((e) => Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)),
     ['raid'],
@@ -2416,7 +2420,7 @@ test('SON-V T2 — UN écran sur sept garde son ambiance, et c\'est le raid (SB 
   // ⚠ ET LES SIX AUTRES SONT NOMMÉS, DANS L'AUTRE SENS — égalité, pas inclusion.
   assert.deepEqual(
     ecrans.filter((e) => !Object.prototype.hasOwnProperty.call(AMBIANCE_PAR_ECRAN, e)).sort(),
-    ['chantier', 'mission', 'monde', 'offense', 'options', 'recherche'],
+    ['chantier', 'journal', 'mission', 'monde', 'offense', 'options', 'recherche'],
     'la liste des écrans sans ambiance a changé',
   );
 });
@@ -2565,7 +2569,9 @@ test('SB T1 — un seul écran demande une ambiance, et c\'est le raid', () => {
   const ecrans = [...sansCommentaires(lire('src', 'ui', 'session.js'))
     .matchAll(/const ECRANS = \[([^\]]+)\]/g)][0][1]
     .split(',').map((m) => m.trim().replace(/'/g, '')).filter((m) => m.length > 0);
-  assert.equal(ecrans.length, 7, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
+  // ⚠ HUIT DEPUIS LE 11/09 : le journal est devenu un écran. Il est MUET, comme
+  // les six autres hors raid — un journal se lit, il ne sonne pas.
+  assert.equal(ecrans.length, 8, 'le nombre d\'écrans a bougé : relire AMBIANCE_PAR_ECRAN');
 
   const estUneAmbiance = (nom) => EVENEMENTS[nom].variantes
     .every((v) => SONS[v].bus === 'ambiances');
@@ -2795,7 +2801,10 @@ test('AC T1 — hors du raid, aucune boucle n\'est demandée, quelle que soit la
   // d'écran, d'un roulement d'unité, d'une seconde table. En interrogeant la
   // fonction que `ui/session.js` appelle pour de bon, on mesure ce que le jeu
   // demande, pas ce qu'une table contient.
-  const ECRANS = ['chantier', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
+  // ⚠ LA LISTE EST RECOPIÉE ICI, ET ELLE DOIT SUIVRE `ui/session.js` : le
+  // journal est un écran depuis le 11/09. Les deux autres gardes de ce fichier,
+  // elles, LISENT la liste dans la source plutôt que de la recopier.
+  const ECRANS = ['chantier', 'journal', 'mission', 'offense', 'recherche', 'monde', 'options', 'raid'];
 
   // ⚠ LA DISPOSITION PORTE LES QUATRE BÂTIMENTS QUI SONNAIENT, POSÉS ET EN
   // SERVICE. Une base vide rendrait l'ensemble vide sur n'importe quel code : le
