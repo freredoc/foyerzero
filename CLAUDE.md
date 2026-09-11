@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **11/09/2026**, version 0.99.45 · build 147.
+Dernière révision : **11/09/2026**, version 0.99.46 · build 148.
 
 ---
 
@@ -42,7 +42,170 @@ Dernière révision : **11/09/2026**, version 0.99.45 · build 147.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 11/09/2026 (après le lot TERRITOIRE-ET-ÉCHELLE), à confronter :**
+**Référence au 11/09/2026 (après le lot APPROCHE), à confronter :**
+⚠⚠ **LES VAGUES ARRIVENT PAR LE BAS, POUR DE BON, ET LA RAMPE DÉCORATIVE
+DISPARAÎT.** Ethan, 11/09 : « qu'elles apparaissent en dessous hors écran, du
+coup en rangée zéro, trois rangées avant la défense en gros, et elles arrivent
+normalement. Et elles peuvent engager le combat dès qu'elles sont visibles », et
+le défaut qu'il voyait : « elles arrivent très vite, puis elles arrivent dans le
+tas, comme si elles avaient un boost de vitesse. » `npm test` rend
+**1572 pass / 0 fail** au sens de la garde de `documentation.test.js` — c'est le
+NOMBRE de tests déclarés ; le verdict mesuré est **1571 pass · 0 fail · 1 skipped**
+(`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort en 0.
+`npm run build` → `dist/index.html`, **9 366 695 octets**, 0 référence externe.
+Le lot **REND 761 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste
+contre le livrable rebâti dans un `git worktree` sur l'arbre pristine de `main` =
+`dff2689` (**9 367 456**) : **JavaScript −761 · images +0 · audio +0 · feuille
++0 · balisage +0**, la somme des cinq postes tombant EXACTEMENT sur le total des
+DEUX côtés, et **307 lignes `data:` / 306 URI de part et d'autre**. Borne T10
+**inchangée à 9 600 000** — le lot ne fait entrer aucune ressource, et une borne
+ne se baisse pas non plus parce qu'un lot rend —, marge **233 305 octets,
+2,43 %**. Version et build passent à **0.99.46 · build 148**, le suivant
+disponible ; `main` n'a pas bougé sous le lot, vérifié au `git fetch`, et
+**`dff2689` EST le commit de fusion du lot TERRITOIRE-ET-ÉCHELLE**. Le lot touche
+`src/sim/grille.js`, `src/sim/combat.js`, `src/render/projection.js`,
+`src/render/scene.js`, `src/ui/raid.js`, `package.json`, quinze fichiers de
+`test/`, et fait entrer `test/approche.test.js` et `RAPPORT-lotAPPROCHE.md`.
+**`src/render/arrivee.js` SORT du dépôt.** **Pas une ligne de `src/data/`,
+`src/son/`, `tools/` ni `art/`** — vérifié au diff.
+⚠⚠ **LE « BOOST DE VITESSE » ÉTAIT DE L'ARITHMÉTIQUE, PAS UNE IMPRESSION.**
+`render/arrivee.js` posait le sprite d'une unité neuve **une case plus bas** et
+le rattrapait en `dureeDArrivee`, qui valait EXACTEMENT le temps de franchir une
+case **à vitesse ×1**. Le sprite couvrait donc **deux cases dans le temps d'une**
+— et l'écran de raid tourne jusqu'à ×4 : **×3 à ×2, ×5 à ×4**. Ce n'est pas un
+réglage à adoucir, c'est un mensonge de dessin, et il part avec son module.
+⚠⚠ **`RANGEE_APPARITION` VAUT DÉSORMAIS `PREMIERE_RANGEE − 1`, ET LE NOM QUI LE
+DIT EST DANS `sim/grille.js`.** `RANGEE_APPROCHE` et `estEnApproche` y entrent,
+PURES et exportées ; `combat.js` les lit. **`estDansLaGrille` n'est PAS élargie**
+— elle est lue par `render/portee.js` et `caseDepuisPixels`, et l'ouvrir ferait
+cercler une case qui n'existe pas et rendrait un toucher hors grille. Ce sont les
+DEUX validations de pose qui s'ouvrent, `posePermise` et la validation de vague,
+et **pour `camp === 'attaque'` seulement**.
+⚠⚠ **LE VERROU DE COMBAT EST DANS `ciblage`, ET NULLE PART AILLEURS — SURTOUT
+PAS DANS `estActive`.** Celle-ci est lue par `construireOccupation`, `ciblage`,
+`tir`, `deplacement`, `appliquerDegats` et `conditionsDeFin` : l'approche y ferait
+D'UN COUP trois choses qu'on ne veut pas — l'unité n'avancerait plus, elle ne
+bloquerait plus sa case (donc plus de file hors écran, et deux unités superposées),
+et un raid où il ne resterait que des approchantes se terminerait « attaquants
+éliminés ». Une unité en approche AVANCE, BLOQUE et COMPTE ; elle ne fait que ne
+pas tirer et n'être pas tirée.
+⚠⚠ **ET LE VERROU N'EST PAS DÉCORATIF — MESURÉ AVANT D'ÉCRIRE UNE LIGNE.** Les
+trois artilleries — Faucheuse, Mortier, Harpon — portent **5,5 avec un minimum de
+3,5** : posée en rangée 4 ou 5, une artillerie est à distance 4 ou 5 de la rangée
+0, donc DANS sa fourchette. Sans la garde, elle tirerait dans la voie d'approche
+et tuerait hors écran. Le module `rayonMiniMoinsUn`, que les trois portent des
+DEUX camps, ramène le minimum à 2,5 : depuis la rangée 3 aussi.
+⚠⚠ **ET LA MOITIÉ SYMÉTRIQUE — « CELUI QUI APPROCHE NE VISE PERSONNE » — EST
+INERTE AUJOURD'HUI, ET ELLE SE DÉCLARE.** Un attaquant en rangée 0 ne peut
+atteindre que la bande de défense, dont la première rangée est la TROISIÈME : il
+lui faudrait une portée de 3 au moins. **Mesuré : la plus longue du roster vaut
+2,5**, et `creerCombat` refuse de toute façon un défenseur hors de la bande — il
+n'existe AUCUN montage d'aujourd'hui où cette ligne morde. Elle est écrite quand
+même, et `APPROCHE T1` garde sa PRÉMISSE plutôt que son effet : le jour où une
+unité portera plus loin, le test tombera et obligera à remesurer. *Un test qui ne
+peut tomber sur aucun état d'aujourd'hui se déclare, il ne se compte pas.*
+⚠⚠ **LE REPLI EST GELÉ PENDANT L'APPROCHE, ET CE N'ÉTAIT PAS OPTIONNEL.**
+`TICKS_AVANT_REPLI` vaut 30 ; une unité bloquée derrière une alliée sur la voie
+d'approche y passerait trente ticks sans avancer ni tirer, et **rentrerait à la
+base sans jamais être entrée**. Le compteur est donc laissé tel quel — ni remis à
+zéro, ni incrémenté — tant que `estEnApproche`. **Mesuré sur les deux cents
+combats témoins : 2 100 entités passent par la voie, `ticksInutiles` n'y dépasse
+JAMAIS zéro, et ZÉRO attaquant en sort par le repli.** Contre-épreuve, la garde
+retirée : **14 attaquants sur 200 combats** se replient depuis l'approche, et le
+compteur y monte à 29. ⚠ Et la falsification fait tomber `JOURNAL T1` : le gel
+est gardé par les deux cents témoins, pas par une assertion écrite pour lui.
+⚠⚠ **`yDeRangeeMilli` PERD SA BORNE BASSE ET GARDE LA HAUTE.** Le
+`Math.min(brut, bas)` collait toute rangée sous la 1 sur la rangée 1 : la voie
+d'approche n'aurait rien montré du tout. Relevé sur la projection RÉELLE du
+déroulé (S25 FE plein cadre, `tailleCase` **70**, `margeY` **43**) : rangée 1 à
+**y 1233**, rangée 0 à **y 1303**, soit exactement le bas de la grille — **zéro
+pixel du sprite dans le champ**, contre 70 sur 70 avant. Le débord sous le
+canevas vaut **62 px**. La borne HAUTE reste : rien ne se dessine au-dessus du
+champ.
+⚠ **ET IL RESTE 8 PIXELS DE BUFFER SOUS LA RANGÉE 1** — mesuré : contenu 1 295
+dans 1 311, `margeY` 43. Le haut du sprite d'une unité en rangée 0 y affleure.
+C'est le letterboxing, sous le fond peint, **hors de ce lot** : la correction
+serait une demi-case réservée dans `calculerProjection`, qui déplacerait la
+douzaine de positions en pixels que `banc.test.js` asserte. **Ethan tranche.**
+⚠⚠ **`src/render/arrivee.js` SORT — 282 LIGNES — ET `OPACITE_PLEINE` DÉMÉNAGE
+DANS `render/scene.js`.** `listeAffichage` perd son huitième paramètre,
+`arriveeDe` et le décalage de `yDe` ; `ui/raid.js` perd l'import, l'état
+`arrivees` de sa fermeture, l'appel à `noterLesArrivees` et la remise à zéro.
+**CINQ tests sortent** — `SB T4`, `SB T5`, `SB T5 bis`, `AC T3`, `AC T4` —, et
+`SB T6` reste : il garde la restauration de `globalAlpha` chez celui qui peint,
+et ce mécanisme-là n'a jamais été propre à l'arrivée.
+⚠ **`AC T2` RESTE, TRIMÉ, ET C'EST UN ÉCART DÉCLARÉ AU BRIEF.** Il le range parmi
+les six qui sortent ; mesuré, ce qu'il garde ne dépend PAS de la rampe — « aucune
+primitive de la liste d'affichage n'est translucide » reste vrai, reste
+mesurable, et reste la seule garde du dépôt qui attrape une opacité partielle
+rebranchée ailleurs. Le retirer laisserait `OPACITE_PLEINE` sans aucun lecteur de
+test. Ce qui part est le HARNAIS ; ce qui reste est le balayage.
+⚠⚠ **LES DEUX CENTS TÉMOINS DE COMBAT SONT RECAPTURÉS, ET C'EST LA SECONDE FOIS
+DE L'HISTOIRE DU FICHIER — APRÈS PAQUETS.** Mesuré contre la table du lot MUR,
+couche comprise : **1 132 champs sur 1 600 bougent, 468 tiennent**, et **aucun
+des deux cents combats n'est intact** — 199 ticks de fin sur 200, 8 causes. Une
+sixième couche couvrirait 71 % de la table : plus rien à adosser.
+⚠⚠ **ET LA PREUVE D'INVARIANCE EST JOUÉE À CHAQUE `npm test`, PAS UNE FOIS
+AVANT.** `JOURNAL T1 bis` rejoue les empreintes d'AVANT PAQUETS avec l'ancien
+point d'apparition **ÉCRIT EXPLICITEMENT** — `montagesTemoins` prend une rangée —
+et rend **0 écart, 1 331 surchargés, 269 gardés**, exactement le compte d'avant.
+C'est le §4.1 du brief rendu permanent : **si ce test tombe, la recapture cesse
+d'être légitime.** ⚠ `TEMOINS_COMBAT_AVANT_PAQUETS` et les six couches
+`COMBATS_DEPLACES_PAR_*` ne sont pas touchées. ⚠ Et `COMBATS_DEPLACES_PAR_MUR`
+n'a plus de lecteur : elle a perdu sa table de base, elle est GARDÉE sans être
+lue, et le fichier le dit à côté d'elle plutôt que de la retirer en silence.
+⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGTIÈME COUCHE, PAS UNE RECAPTURE** —
+`DEPLACES_PAR_APPROCHE`, **35 couples sur 350**, plus les trois tables de rapport
+(25 graines, 25 rapports de proximité, 25 de l'Ouvrage). **Les SIX PREMIÈRES
+PHASES sont identiques AU BIT** : le scénario ne combat pas avant son premier
+raid. ⚠ **Aucun scalaire ne bouge** — ni les gestes de construction, ni ceux
+d'armement, ni la taille de la sauvegarde, ni les cases atteignables, ni le
+déplacement, ni le nombre de bases attaquantes, ni le nombre de cibles, ni la
+cible retenue.
+⚠⚠ **ET LA COUCHE DÉPLACE LES DEUX RAIDS SUR LES VINGT-CINQ GRAINES, LÀ OÙ MUR
+N'EN DÉPLAÇAIT QUE 4 SUR 25 CÔTÉ OUVRAGE.** C'est l'attribution du lot : MUR
+touchait ce qu'un camp a de murs, que la base du JOUEUR n'a pas ; ici le
+changement porte sur l'ENTRÉE d'une vague, et les deux camps entrent par la même
+porte.
+⚠⚠ **C'EST UN EFFET D'ÉQUILIBRAGE ASSUMÉ, ET IL EST MESURÉ PLUTÔT QUE
+COMPENSÉ.** Les 900 ticks du raid ne bougent pas et l'approche est EN PLUS —
+option (a) arbitrée par Ethan le 11/09, l'option (b) (faire naître la vague 1 à
+un tick négatif) étant écartée. Les trois raids de référence : **A 280 → 326
+ticks**, **B 287 → 309**, **C 458 → 489**, aucune cause changée ; le raid C
+**quitte le zéro de butin** pour 36 de quartz et 12 de scorie, premier depuis
+PAQUETS. Sur les 54 raids du balayage, il reste **UN seul** qui touche le plafond
+de 900 — `mixte/base/42` —, et il se conclut par `attaquants` au tick **940**,
+soit **1,04 fois le plafond** : le meilleur dépassement que ce test ait jamais
+relevé, contre 4 645 au lot CARTE et 5 478 au lot COLONNE. **Aucun barème n'a été
+touché.**
+⚠⚠ **QUATRE FALSIFICATIONS JOUÉES, TROIS CHUTES, ET LA MUETTE SE DÉCLARE.** La
+garde de cible en approche retirée fait tomber `APPROCHE T1` ; la borne basse
+remise fait tomber `APPROCHE T2` — les deux `y` redeviennent ÉGAUX, ce qui EST le
+défaut ; le gel du repli retiré fait tomber `JOURNAL T1`. La quatrième — la
+moitié « celui qui approche ne vise personne » — **ne mord sur aucun montage
+d'aujourd'hui**, mesurée et déclarée ci-dessus.
+⚠ **DEUX TESTS ENTRENT — `APPROCHE T1` ET `T2` — CINQ SORTENT, ET LE COMPTE PASSE
+DE 1 575 À 1 572.** **Aucune assertion n'a été retirée ni assouplie** hors les
+cinq tests dont le SUJET a disparu ; **quinze fichiers de `test/` sont
+réancrés**, chacun en écrivant le nombre d'avant à côté de celui d'après, et
+**les montages dont l'entrée n'est pas le sujet sont RÉPARÉS** — un `rangee:
+DEPART` explicite, dérivé de `GRILLE.bandes`, jamais écrit `2`.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 32** — vérifié au diff : aucun champ
+d'entité n'entre dans la sauvegarde, et une rangée d'apparition est une décision
+de montage.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
+est précisément ce qu'Ethan regarde — des unités qui montent depuis le bas de
+l'écran au lieu de paraître sur la bande du bas —, et rien n'a été ouvert dans un
+navigateur : tout est mesuré sur `rangeeMilli`, sur la LISTE D'AFFICHAGE et sur
+des fonctions PURES. **À regarder au premier essai** : la file qui se forme hors
+écran chez les unités lentes (la vague 2 naît au tick 50, quand une lente finit
+tout juste d'entrer), et le son de déploiement, qui part à l'apparition — donc
+jusqu'à 1,7 s avant qu'on voie la vague. Aucune correction dans ce lot ; **Ethan
+tranche** s'il veut le son décalé.
+
+**Auparavant, après le lot TERRITOIRE-ET-ÉCHELLE :**
 ⚠⚠ **UNE RUINE GARDE SON CARRÉ, ÉMET À LA PORTÉE DE CE QU'ELLE ÉTAIT, ET LA
 PRIME DE NIVEAU EST DEUX FOIS MOINS AGRESSIVE.** Ethan, 10/09 : « j'ai rasé des
 bases lointaines et le territoire ne m'est pas revendiqué. Pourtant quand je
@@ -10459,10 +10622,9 @@ src/sim/                simulation déterministe, sans DOM — 35 fichiers
     MAIN entre les deux touchers —, et elle LÈVE sur deux fois le même indice :
     l'écran route ce cas-là vers le DÉPLACEMENT, où rester sur place est légal.
 
-src/render/             rendu, sans DOM non plus : rend des primitives — 16 fichiers
+src/render/             rendu, sans DOM non plus : rend des primitives — 15 fichiers
   projection.js  canvas2d.js  interpolation.js  scene.js
   orientation.js        où une rangée tombe à l'écran, et la réciproque
-  arrivee.js            à quelle hauteur une unité neuve roule vers sa case, et pendant combien de temps
   mini-carte.js         les 31 × 300 cases sur 1080 × 1920 : bandes, marqueurs, rien d'autre
   bandes.js             où une bande tombe à l'écran, et jusqu'où l'on défile dedans
   portee.js             quelles cases une pièce de défense couvre, et si elle tire
@@ -10766,7 +10928,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   68 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   69 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -10777,7 +10939,7 @@ test/                   68 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage  paquets  art-90  emprises-et-delai  mur
+  voisinage  paquets  art-90  emprises-et-delai  mur  approche
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

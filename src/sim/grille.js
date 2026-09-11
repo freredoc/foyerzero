@@ -21,6 +21,23 @@ export const MILLI_PAR_CASE = 1000;
 export const PREMIERE_RANGEE = 1;
 export const DERNIERE_RANGEE = GRILLE.longueur;
 
+/**
+ * La VOIE D'APPROCHE : la rangée d'où les vagues entrent, sous la grille.
+ *
+ * ⚠⚠ ETHAN, 11/09 : « qu'elles apparaissent en dessous hors écran, du coup en
+ * rangée zéro, trois rangées avant la défense en gros, et elles arrivent
+ * normalement. Et elles peuvent engager le combat dès qu'elles sont visibles. »
+ * Jusque-là `RANGEE_APPARITION` valait le FRONT de la bande de déploiement — la
+ * rangée 2, collée à la défense qui commence en 3 : il n'y avait jamais eu
+ * d'approche, et une rampe de dessin la mimait en posant le sprite une case plus
+ * bas. L'unité naît maintenant là où le sprite la montrait.
+ *
+ * ⚠⚠ DÉRIVÉE, JAMAIS ÉCRITE `0`. `PREMIERE_RANGEE - 1` dit ce que le nombre EST
+ * — la case sous la grille — et il suivra le jour où la grille changerait de
+ * numérotation. Un zéro écrit à la main serait le premier à rester derrière.
+ */
+export const RANGEE_APPROCHE = PREMIERE_RANGEE - 1;
+
 /** Première et dernière colonne (1 à gauche). */
 export const PREMIERE_COLONNE = 1;
 export const DERNIERE_COLONNE = GRILLE.largeur;
@@ -118,6 +135,31 @@ export function bornesBande(nomBande) {
   const bande = GRILLE.bandes[nomBande];
   if (!bande) throw new Error(`grille : bande inconnue « ${nomBande} »`);
   return { premiere: bande.premiere, derniere: bande.derniere };
+}
+
+/**
+ * L'entité est-elle encore SOUS la grille, dans la voie d'approche ?
+ *
+ * ⚠⚠ C'EST LE PRÉDICAT DES DEUX VERROUS D'ETHAN — « elles peuvent engager le
+ * combat dès qu'elles sont visibles ». Hors grille, une attaquante ne tire pas
+ * et n'est pas tirable ; elle entre au combat en atteignant la rangée 1. Les
+ * deux moitiés se lisent dans `ciblage` de `sim/combat.js`, et nulle part
+ * ailleurs.
+ *
+ * ⚠⚠ IL PREND UN MILLI, PAS UNE CASE, ET C'EST STRUCTUREL. Tout le moteur
+ * raisonne en milli-cases depuis le lot 2A : une entité franchit la rangée 1 au
+ * milieu d'un tick, et un prédicat en cases obligerait chaque appelant à faire
+ * son propre `caseDepuisMilli`. Le premier qui l'oublierait le ferait en
+ * silence — et le seuil est justement l'endroit où la règle bascule.
+ *
+ * ⚠⚠ ET `estDansLaGrille` N'EST PAS ÉLARGIE, SURTOUT PAS. Elle est lue par
+ * `render/portee.js` et par `caseDepuisPixels` de `render/projection.js` : une
+ * rangée 0 acceptée y ferait DÉSIGNER AU DOIGT une case sous la grille, et le
+ * banc rendrait une case là où le joueur n'a rien touché. C'est une fonction de
+ * géométrie, pas un droit de séjour.
+ */
+export function estEnApproche(rangeeMilli) {
+  return rangeeMilli < milliDepuisCase(PREMIERE_RANGEE);
 }
 
 /**

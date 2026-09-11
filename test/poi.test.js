@@ -873,8 +873,16 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   // ⚠ LOT PAQUETS (09/09) : 939 · 313 → 52 · 17, 1 095 · 365 → 70 · 23. Le camp
   // visé change de disposition et de garnison ; la durée coïncide encore
   // (417 ticks), et le bonus se lit toujours sur le butin.
-  assert.deepEqual(rNu.butin, { quartz: 52, scorie: 17 });
-  assert.deepEqual(rAvec.butin, { quartz: 70, scorie: 23 });
+  // ⚠ LOT APPROCHE (11/09) : 52 · 17 → 69 · 23, et 70 · 23 → 92 · 30. Les six
+  // Meutes naissent sur la voie d'approche et jouent deux cases avant d'entrer
+  // en grille — `composerLesVagues` ne pose aucun `rangee`, donc ce raid-ci
+  // passe par la porte de production comme tous les autres. Trente-quatre ticks
+  // de plus (417 → 451), donc trente-quatre ticks de tirs de plus, donc les deux
+  // butins montent ENSEMBLE. **L'ÉCART RELATIF — ce que ce test mesure — vaut
+  // +33,3 %**, contre +34,6 % au lot PAQUETS : au point de mesure près, le bonus
+  // se lit toujours pareil. Les durées coïncident toujours des deux côtés.
+  assert.deepEqual(rNu.butin, { quartz: 69, scorie: 23 });
+  assert.deepEqual(rAvec.butin, { quartz: 92, scorie: 30 });
   assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),

@@ -27,6 +27,7 @@ import {
 } from '../src/sim/combat.js';
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { BUTIN } from '../src/data/sites.js';
+import { GRILLE } from '../src/data/combat.js';
 
 // ---------------------------------------------------------------------------
 // T2 — aucun aléa, pour TOUTE la durée du fichier
@@ -83,6 +84,27 @@ function attaquantsPresents(etat) {
 const GANGUE_LOINTAINE = { id: 'gangue', rangee: 18, colonne: 1 };
 
 /**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
+
+/**
  * Montage riche : 4 vagues, obstacles, murs, barrières, tourelles, artilleries,
  * unités défensives, aviation traversante et stoppeuse. Sert à T1 et T2.
  */
@@ -118,10 +140,10 @@ function montageRiche() {
       { id: 'fendeur', rangee: 3, colonne: 6 },
     ],
     vagues: [
-      [{ id: 'meute', colonne: 1 }, { id: 'perceurs', colonne: 2 }, { id: 'fendeur', colonne: 3 }],
-      [{ id: 'crecelle', colonne: 4 }, { id: 'busard', colonne: 5 }],
-      [{ id: 'frappeur', colonne: 6 }, { id: 'pilon', colonne: 7 }],
-      [{ id: 'broyeur', colonne: 8 }, { id: 'enclume', colonne: 9 }],
+      [{ rangee: DEPART, id: 'meute', colonne: 1 }, { rangee: DEPART, id: 'perceurs', colonne: 2 }, { rangee: DEPART, id: 'fendeur', colonne: 3 }],
+      [{ rangee: DEPART, id: 'crecelle', colonne: 4 }, { rangee: DEPART, id: 'busard', colonne: 5 }],
+      [{ rangee: DEPART, id: 'frappeur', colonne: 6 }, { rangee: DEPART, id: 'pilon', colonne: 7 }],
+      [{ rangee: DEPART, id: 'broyeur', colonne: 8 }, { rangee: DEPART, id: 'enclume', colonne: 9 }],
     ],
     modulesDebloques: {
       ouvrage: { offense: [], defense: ['pvPlusVingt', 'munitionSpeciale'] },
@@ -304,7 +326,7 @@ function montageMeuteContreMerlon(surchargeMeute = {}) {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5, ...surchargeMeute }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5, ...surchargeMeute }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
 }
@@ -423,7 +445,7 @@ test('T7 a — masse supérieure : la bloquante meurt, la mobile ne s\'arrête p
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'fendeur', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'fendeur', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -456,7 +478,7 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'fendeur', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'fendeur', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'fendeur', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -506,7 +528,7 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'belier', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'ratisseur', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'ratisseur', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const marche = creerCombat(montageMarche);
@@ -593,10 +615,10 @@ test('T9 — les quatre vagues apparaissent aux ticks 0, 50, 100 et 150', () => 
     // Une unité par vague, même colonne : au tick 50, l'unité de la vague 1 est
     // à 2000 + 50 × 60 = 5000, soit la case 5 — la case 2 est libre.
     vagues: [
-      [{ id: 'meute', colonne: 1 }],
-      [{ id: 'meute', colonne: 1 }],
-      [{ id: 'meute', colonne: 1 }],
-      [{ id: 'meute', colonne: 1 }],
+      [{ rangee: DEPART, id: 'meute', colonne: 1 }],
+      [{ rangee: DEPART, id: 'meute', colonne: 1 }],
+      [{ rangee: DEPART, id: 'meute', colonne: 1 }],
+      [{ rangee: DEPART, id: 'meute', colonne: 1 }],
     ],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
@@ -623,7 +645,7 @@ test('T10 — une Casemate descend jusqu\'à 0, pas jusqu\'à 1 %', () => {
     // ⚠ Seuil déplacé au lot 4A : la Casemate (MG Nest) passe de 350 à
     // 1 000 PV. Montée à 100 000 milli-PV, soit 10 % de ses 1 000 000.
     defenseurs: [{ id: 'casemate', rangee: 3, colonne: 5, pvMilli: 100_000 }],
-    vagues: [[{ id: 'fouisseurs', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'fouisseurs', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -804,7 +826,7 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     // Un attaquant en (2,1) : distance² au Merlon = 1 000 000 + 16 000 000
     // = 17 000 000, hors de sa portée² de 2 250 000. Rien ne bouge en un tick.
-    vagues: [[{ id: 'meute', colonne: 1 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 1 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -902,7 +924,7 @@ test('T14 — un adversaire hors d\'échelle fait durer le raid jusqu\'au tick 9
     // 137 millions de ticks, contre 100 millions avant. La conclusion est la
     // même et le plafond de 900 mord toujours.
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5, niveau: 50 }],
-    vagues: [[{ id: 'meute', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -937,7 +959,7 @@ test('T15 — chacun des cas de refus lève, en nommant l\'entité fautive', () 
     obstacles: [{ rangee: 4, colonne: 4, type: 'infanterie' }],
     batiments: [{ id: 'gangue', rangee: 12, colonne: 4 }],
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   // Le montage de référence, lui, passe.
@@ -995,9 +1017,9 @@ test('T15 — chacun des cas de refus lève, en nommant l\'entité fautive', () 
       montage: {
         ...valide,
         vagues: [
-          [{ id: 'meute', colonne: 1 }], [{ id: 'meute', colonne: 2 }],
-          [{ id: 'meute', colonne: 3 }], [{ id: 'meute', colonne: 4 }],
-          [{ id: 'meute', colonne: 5 }],
+          [{ rangee: DEPART, id: 'meute', colonne: 1 }], [{ rangee: DEPART, id: 'meute', colonne: 2 }],
+          [{ rangee: DEPART, id: 'meute', colonne: 3 }], [{ rangee: DEPART, id: 'meute', colonne: 4 }],
+          [{ rangee: DEPART, id: 'meute', colonne: 5 }],
         ],
       },
       motif: /5 vagues déclarées, 4 au plus/,
@@ -1097,7 +1119,7 @@ test('§9 — un raid ne s\'arrête pas tant qu\'il reste une vague à venir', (
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'casemate', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5 }], [{ id: 'meute', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }], [{ rangee: DEPART, id: 'meute', colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   };
   const etat = creerCombat(montage);
@@ -1144,7 +1166,7 @@ test('§7 — une barrière ne bloque pas, elle saigne, et on en réchappe', () 
     obstacles: [],
     batiments: [GANGUE_LOINTAINE],
     defenseurs: [{ id: 'ronce', rangee: 3, colonne: 5 }],
-    vagues: [[{ id, colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id, colonne: 5 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
   const etat = creerCombat(montage('meute'));
@@ -1222,7 +1244,7 @@ test('§7 — la traversante sort par le haut, la stoppeuse rentre à la base', 
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
     defenseurs: [],
-    vagues: [[{ id, colonne: 1 }]],
+    vagues: [[{ rangee: DEPART, id, colonne: 1 }]],
     modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
   });
 

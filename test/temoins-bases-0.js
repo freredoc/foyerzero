@@ -4126,3 +4126,181 @@ export const RAPPORTS_OUVRAGE_MUR = {
  "14": "7bf9e142b36a56a5",
  "25": "774365ba1ed2e630"
 };
+
+
+/**
+ * ⚠⚠ VINGTIÈME COUCHE — lot APPROCHE, 11/09. **Trente-cinq couples sur 350**, et
+ * les SIX PREMIÈRES PHASES sont identiques AU BIT : le scénario ne combat pas
+ * avant son premier raid, et tout ce que le lot change est le POINT D'ENTRÉE
+ * d'une vague — elle naît en rangée 0, sous la grille, et joue deux cases avant
+ * d'atteindre la défense.
+ *
+ * ⚠⚠ ET LA PREUVE D'INVARIANCE A ÉTÉ FAITE AVANT LA COUCHE, comme le §4.1 du
+ * brief l'exige : avec l'ancien point d'apparition ÉCRIT EXPLICITEMENT dans les
+ * montages, `bases.test.js` rend **30 pass / 0 fail** et `journal.test.js`
+ * **11 pass / 0 fail** — 0 écart des deux côtés. Le lot n'a donc rien changé
+ * d'autre que l'entrée, et c'est ce qui autorise à surcharger plutôt qu'à
+ * chercher un défaut.
+ *
+ * ⚠ AUCUN SCALAIRE NE BOUGE — ni les gestes de construction, ni ceux
+ * d'armement, ni la taille de la sauvegarde, ni les cases atteignables, ni le
+ * déplacement, ni le nombre de bases attaquantes, ni le nombre de cibles, ni la
+ * cible retenue. Mesuré sur les vingt-cinq graines : c'est cette moitié-là qui
+ * dit que le lot ne touche ni la carte, ni l'économie, ni la pose.
+ */
+export const DEPLACES_PAR_APPROCHE = {
+  p07_raidProcheApres: {
+    sitesEntames: '1087482c230abab8',
+    rapports: '357d4d9f7e7ddc91',
+    armee: 'd009211511b55e44',
+    economie: '892c0be72432f7ba',
+  },
+  p08_100ticks: {
+    sitesEntames: '1087482c230abab8',
+    rapports: '357d4d9f7e7ddc91',
+    armee: 'd009211511b55e44',
+    economie: '26ef0ade9eb89f58',
+  },
+  p09_deplace: {
+    sitesEntames: '1087482c230abab8',
+    rapports: '357d4d9f7e7ddc91',
+    armee: 'd009211511b55e44',
+    economie: '26ef0ade9eb89f58',
+  },
+  p10_montee: {
+    sitesEntames: '1087482c230abab8',
+    rapports: '357d4d9f7e7ddc91',
+    armee: 'd009211511b55e44',
+    economie: '26ef0ade9eb89f58',
+  },
+  p11_raidOuvrageApres: {
+    recherche: '3c3759a36fdfb6c0',
+    sitesEntames: 'b0903f96fe000695',
+    rapports: 'd7f542d6c313fe6d',
+    armee: 'afa362fed16da647',
+    economie: '26ef0ade9eb89f58',
+  },
+  p12_veilleDuRaid: {
+    recherche: '3c3759a36fdfb6c0',
+    sitesEntames: 'e807e56b5a257ba4',
+    rapports: 'd7f542d6c313fe6d',
+    armee: 'afa362fed16da647',
+    economie: '26ef0ade9eb89f58',
+  },
+  p13_apresLeRaid: {
+    recherche: '3c3759a36fdfb6c0',
+    sitesEntames: 'dacdd2df4c00cd10',
+    rapports: '568311b66da27563',
+    armee: 'afa362fed16da647',
+    economie: '1d190e1126b8a87d',
+  },
+  p14_sousLeFeu: {
+    recherche: '3c3759a36fdfb6c0',
+    sitesEntames: '215f43185db4d62b',
+    rapports: '9b3802b67951994e',
+    armee: 'afa362fed16da647',
+  },
+};
+
+
+/**
+ * ⚠ LES VINGT-CINQ GRAINES BOUGENT, et c'est attendu : la phase 7 porte un raid
+ * sur toute graine, et tout attaquant entre désormais deux cases plus bas. Le
+ * `??` de `bases.test.js` reste NÉCESSAIRE pour les couches d'avant, qui, elles,
+ * n'en déplaçaient pas toujours vingt-cinq.
+ */
+export const EMPREINTES_PAR_GRAINE_APPROCHE = {
+  1: '27e5c3c507a0a16c',
+  2: '35ae227e105d3439',
+  3: '80a765f5ece15cab',
+  4: 'c756d67a288c4a5d',
+  5: '100f9b49fa7e7e2c',
+  6: 'f79a4f7b92685dc5',
+  7: 'f5996df4ab1be9d6',
+  8: '94a3e62f878dbcfb',
+  9: '9791c230bae85aba',
+  10: '18ae6222fdcc9116',
+  11: '9f8c780676da3650',
+  12: '8afb69b13d68e882',
+  13: '9d4c1838ecfc9112',
+  14: '95096779353a4e82',
+  15: '17aa334daad47f00',
+  16: 'c22906dc33098ce4',
+  17: 'dd36183d7dc36fe9',
+  18: '1de0f95a6211eb2a',
+  19: 'b72946bcfb78cbd9',
+  20: '9e6f78768ddebd0f',
+  21: 'd9f0c428e1e33369',
+  22: '6d348b3b22f54e17',
+  23: 'e4a768201b93b09a',
+  24: 'bce6c2f0624b068f',
+  25: '750e84f97f962d89',
+};
+
+
+/**
+ * ⚠⚠ LES DEUX RAIDS BOUGENT SUR LES VINGT-CINQ GRAINES, ET C'EST LE PROPRE DE CE
+ * LOT-CI. Les couches d'avant déplaçaient l'un ou l'autre selon ce qu'elles
+ * touchaient — le lot MUR n'en déplaçait que 4 sur 25 côté Ouvrage, parce que la
+ * base du joueur n'a pas de murs. Ici le changement porte sur l'ENTRÉE d'une
+ * vague, et les deux camps entrent par la même porte : le raid du joueur sur un
+ * camp comme le raid de l'Ouvrage sur la base du joueur.
+ */
+export const RAPPORTS_PROCHE_APPROCHE = {
+  1: '952671367b79f606',
+  2: 'e1f745586aca1d27',
+  3: 'b5b7441d87d24cb5',
+  4: '04505cbcea6c3964',
+  5: 'abf00b6d5f603309',
+  6: '6254ae0a1ed420d6',
+  7: 'd255b5917314da16',
+  8: 'b87404e99a19af11',
+  9: '2bd4f19d76a007b3',
+  10: 'a233c0f03c451389',
+  11: '64fff59d6b9143c6',
+  12: '575012b851252597',
+  13: '1582bd7150674709',
+  14: 'cb0c8a4cd7b03434',
+  15: '764c6dbef389f9e0',
+  16: '2062e6757b43720c',
+  17: '207ebcd4052d7add',
+  18: '3dd75ed252baf319',
+  19: '590942b65946ae58',
+  20: '5bc714b0e98fd820',
+  21: 'a05a5cf44d2da5aa',
+  22: '2cdac8d75996b358',
+  23: '3975370c158e2026',
+  24: '2613059c78c718c7',
+  25: '6a52aa5b193ea59a',
+};
+
+
+/** ⚠ Voir le pavé de `RAPPORTS_PROCHE_APPROCHE` : les deux camps entrent par la
+ *  même porte, donc les deux rapports bougent sur les vingt-cinq graines. */
+export const RAPPORTS_OUVRAGE_APPROCHE = {
+  1: '879f141d09172211',
+  2: 'd294ff718033541e',
+  3: '4636330f2098493d',
+  4: '52ec836c77697e52',
+  5: 'b7216f07dbb5ec48',
+  6: 'e5605a092db59dd2',
+  7: 'b6ecddf51041cd48',
+  8: '049c9f57a48008a0',
+  9: '251196d7311bbd96',
+  10: 'fe17f32e9546af53',
+  11: 'cc8d0e5164eaf997',
+  12: 'd73a441de1f99022',
+  13: '2c4023127a2cd418',
+  14: 'abab49a0285dc434',
+  15: '13707030f27d2344',
+  16: '225b614bea058a01',
+  17: '4067e41f9a2b0491',
+  18: 'cdad184e5d81ef46',
+  19: '4feab1f4742e5373',
+  20: '4c066309d6a1c7b3',
+  21: 'ddd51f07ce844a31',
+  22: 'ddef744df5aa0629',
+  23: '4c4839b980989e4a',
+  24: '8e262b7101355f72',
+  25: '29fc853237ed8ecd',
+};

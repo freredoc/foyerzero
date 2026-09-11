@@ -393,12 +393,22 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // met deux fois et demie plus longtemps à passer. Un préréglage FIGÉ aligne
   // Broyeur et Pilon au niveau 15, donc il traverse ; ce qui a changé est le
   // temps que la défense met à s'écarter de son chemin.
+  // ⚠⚠ LOT APPROCHE (11/09) : LES SIX BOUGENT, AUCUNE CAUSE NE BOUGE, ET LA
+  // SEULE CHOSE QUI A CHANGÉ EST LE POINT DE DÉPART. Les deux séries passent par
+  // la porte de PRODUCTION — `montagePreregle` comme `genererAssaut` composent
+  // des vagues SANS `rangee` —, donc elles naissent désormais sur la voie
+  // d'approche, deux cases sous la grille, et jouent l'approche avant d'entrer.
+  // Figés : `A 670 → 704`, `B 667 → 700`, `C 446 → 478`. Budgétés : `A 280 →
+  // 326`, `B 287 → 309`, `C 458 → 489`. Ce n'est ni le flux, ni la position, ni
+  // le déroulé : c'est l'entrée, et les écarts le disent — trente-deux à
+  // quarante-six ticks, du même ordre partout. **Le contraste que ce test garde
+  // est intact** : les deux séries ne rendent toujours pas les mêmes durées.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 670);
+  assert.equal(figes[0].tick, 704);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
-  assert.equal(figes[1].tick, 667);
+  assert.equal(figes[1].tick, 700);
   assert.equal(figes[2].cause, 'attaquants');
-  assert.equal(figes[2].tick, 446);
+  assert.equal(figes[2].tick, 478);
 
   // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
   // que le figé de B rase : les deux séries se distinguent de nouveau par leur
@@ -417,7 +427,7 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // budgété met seize ticks de plus à mourir parce que les pièces qui le
   // précèdent s'arrêtent devant la défense au lieu de la longer. Le butin reste à
   // ZERO, et c'est toujours du calibrage à trancher par Ethan, pas un défaut.
-  assert.equal(budgetes[0].nbTicks, 280);
+  assert.equal(budgetes[0].nbTicks, 326);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -460,9 +470,9 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // parce qu'il s'arrête dessus, l'assaut d'infanterie de C se traîne parce qu'il
   // bute sur ce qu'il ne peut pas percer. Les trois causes ne bougent pas.
   // ⚠ SECOND GESTE DU LOT MUR : **B SEUL BOUGE, 244 → 287**, A et C intacts.
-  assert.equal(budgetes[1].nbTicks, 287);
+  assert.equal(budgetes[1].nbTicks, 309);
   assert.equal(budgetes[2].cause, 'attaquants');
-  assert.equal(budgetes[2].nbTicks, 458);
+  assert.equal(budgetes[2].nbTicks, 489);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -485,7 +495,14 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // ⚠⚠ LOT PAQUETS : ZÉRO, en 396 ticks. Le raid C n'atteint plus les bâtiments
   // du camp de la graine 1 : la garnison posée par paquets le tient dans la
   // bande de défense, et il en repart sans butin. Mesuré, pas compensé.
-  assert.equal(budgetes[2].butin.quartz, 0);
+  //
+  // ⚠⚠ LOT APPROCHE (11/09) : 0 → 36, ET LE RAID C GRIFFE DE NOUVEAU. Trente et
+  // un ticks d'approche veulent dire trente et un ticks de tirs de plus avant
+  // l'entrée en grille : l'assaut d'infanterie budgété franchit la bande de
+  // défense et atteint les bâtiments, pour la première fois depuis PAQUETS. Le
+  // même nombre se lit dans `repli.test.js T6`, sur le même raid C. C'est du
+  // CALIBRAGE, pas un défaut, et le rapport le porte pour Ethan.
+  assert.equal(budgetes[2].butin.quartz, 36);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

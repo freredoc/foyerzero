@@ -339,7 +339,16 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // butin, ni les survivants. Le site n'a changé ni de composition ni de forme ;
   // seul le déroulé bouge, et à peine. Ce que ce test existe pour tenir — le raid
   // ne se traîne plus jusqu'au plafond de 900 — est intact.
-  assert.equal(r.nbTicks, 309);
+  //
+  // ⚠⚠ LOT APPROCHE (11/09) : 309 → 334, ET LA CAUSE EST LE POINT DE DÉPART.
+  // `executerRaidComplet` passe par la porte de PRODUCTION — `genererAssaut`
+  // compose des vagues SANS `rangee` —, donc l'assaut naît désormais sur la voie
+  // d'approche et joue deux cases avant d'entrer en grille. Vingt-cinq ticks, et
+  // ce n'est ni le flux, ni la position, ni le déroulé : c'est l'ENTRÉE. Ce que
+  // ce test tient est inchangé depuis le lot 3C, à travers les huit réancrages :
+  // **le raid ne se termine pas faute de mieux**, et la cause reste
+  // `attaquants`.
+  assert.equal(r.nbTicks, 334);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -393,7 +402,14 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // donc autrement, l'assaut lourd atteint davantage de bâtiments, et le
   // multiplicateur de 3,25 amplifie la remontée comme il amplifiait la baisse.
   // **Aucun barème n'a été touché**, et la cause reste `attaquants`.
-  assert.deepEqual(r.butin, { quartz: 18_540, scorie: 6_180 });
+  // ⚠ LOT APPROCHE (11/09) : 17 962 et 5 987, soit −3,1 %, pour vingt-cinq ticks
+  // de PLUS. L'assaut lourd passe ces ticks-là sur la voie d'approche, où il n'a
+  // rien à griffer, et il y entre déjà sous le feu des artilleries — les trois
+  // portent 5,5 de portée et atteignent la rangée 0 depuis la 4 ou la 5. Il
+  // arrive donc un peu plus entamé devant les bâtiments, et le multiplicateur de
+  // 3,25 de l'avant-poste amplifie la baisse comme il amplifiait la hausse.
+  // **Aucun barème n'a été touché**, et la cause reste `attaquants`.
+  assert.deepEqual(r.butin, { quartz: 17_962, scorie: 5_987 });
   // ⚠ ET LE SURVIVANT REVIENT — trois au premier geste, **quatre** au second.
   // La première moitié du lot faisait s'arrêter les anti-structure sous le feu
   // des tourelles ; la seconde écarte les défenseuses de leur trajet. Les deux
@@ -567,10 +583,24 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // à remonter pour la même raison : ce n'est pas un dépassement, c'est un autre
   // régime. **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan.
   //
+  // ⚠⚠ LOT APPROCHE (11/09) : IL Y EN A TOUJOURS UN, ET CE N'EST PLUS LE MÊME.
+  // `mixte/camp/7` sort, `mixte/base/42` entre — la liste bouge des DEUX côtés,
+  // ce qu'un allongement uniforme ne ferait pas. La cause est le POINT DE
+  // DÉPART : les vagues naissent sur la voie d'approche et jouent deux cases
+  // avant d'entrer, donc chaque raid arrive autrement entamé devant la défense.
+  // Un raid qui traînait s'achève, un raid qui s'achevait traîne.
+  //
+  // ⚠⚠ ET C'EST LE MEILLEUR DÉPASSEMENT QUE CE TEST AIT JAMAIS RELEVÉ. Il n'est
+  // pas un gel, vérifié comme les fois précédentes en portant `maxTicks` à
+  // 20 000 : il se conclut par `attaquants` au tick **940**, soit **1,04 fois le
+  // plafond**. Le « autre régime » n'a plus d'équivalent — 4 645 au lot CARTE,
+  // 5 478 au lot COLONNE, 3 539 au lot DISPOSITION-OUVRAGE, 2 618 au lot MUR, et
+  // quarante ticks ici. **Aucun barème n'a été touché.**
+  //
   // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
   // n'importe quel autre raid. Celui-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), ['mixte/camp/7'],
+    expires.sort(), ['mixte/base/42'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.

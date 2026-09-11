@@ -105,6 +105,8 @@ import {
   DEPLACES_PAR_REGLES_DE_CARTE, EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE,
   DEPLACES_PAR_MUR, EMPREINTES_PAR_GRAINE_MUR,
   RAPPORTS_PROCHE_MUR, RAPPORTS_OUVRAGE_MUR,
+  DEPLACES_PAR_APPROCHE, EMPREINTES_PAR_GRAINE_APPROCHE,
+  RAPPORTS_PROCHE_APPROCHE, RAPPORTS_OUVRAGE_APPROCHE,
   OCTETS_AJOUTES_PAR_REGLES_DE_CARTE, RAPPORTS_OUVRAGE_REGLES_DE_CARTE,
   RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
 } from './temoins-bases-0.js';
@@ -205,7 +207,15 @@ function empreinteAttendue(phase, champ) {
   // sur leur case au lieu de fluer dedans. ⚠ Aucun scalaire ne bouge hors les
   // deux rapports de raid : ni les gestes, ni la sauvegarde, ni les cases
   // atteignables, ni le déplacement, ni la cible retenue.
-  return DEPLACES_PAR_MUR[phase]?.[champ]
+  // ⚠⚠ VINGTIÈME COUCHE — lot APPROCHE, 11/09. **Trente-cinq couples sur 350**,
+  // et les SIX PREMIÈRES PHASES sont identiques AU BIT : le scénario ne combat
+  // pas avant son premier raid, et ce que le lot change est le POINT D'ENTRÉE
+  // d'une vague — elle naît en rangée 0, sous la grille, et joue deux cases
+  // avant d'atteindre la défense. ⚠ Aucun scalaire ne bouge : ni les gestes, ni
+  // la sauvegarde, ni les cases atteignables, ni le déplacement, ni le nombre de
+  // bases attaquantes, ni le nombre de cibles, ni la cible retenue.
+  return DEPLACES_PAR_APPROCHE[phase]?.[champ]
+    ?? DEPLACES_PAR_MUR[phase]?.[champ]
     ?? DEPLACES_PAR_REGLES_DE_CARTE[phase]?.[champ]
     ?? DEPLACES_PAR_PAQUETS[phase]?.[champ]
     ?? DEPLACES_PAR_DISPOSITION_OUVRAGE[phase]?.[champ]
@@ -601,7 +611,12 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // pas une précaution — sans lui, trois graines seraient comparées à
     // `undefined` et le test dirait qu'elles divergent alors qu'elles sont
     // IDENTIQUES.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
+    // ⚠ APPROCHE (11/09) DÉPLACE LES VINGT-CINQ : la phase 7 porte un raid sur
+    // toute graine, et tout attaquant entre deux cases plus bas. Le `??` reste
+    // NÉCESSAIRE pour les couches d'avant, qui n'en déplaçaient pas toujours
+    // vingt-cinq — c'est la leçon des graines 15, 21 et 24 du lot MUR.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_APPROCHE[g]
+      ?? EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
       ecarts.push(g);
     }
   }
@@ -750,8 +765,17 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // scénario a posé. Ce qui NE bouge pas juste au-dessus — nombre de cibles,
       // cible retenue, non-fuite et exactitude de la simulation — dit que seul
       // le DÉROULÉ du combat a changé.
+      // ⚠⚠ ET LE LOT APPROCHE LES DÉPLACE TOUS LES DEUX, SUR LES VINGT-CINQ
+      // GRAINES — ET C'EST CE QUI LE DISTINGUE DE MUR. Celui-ci n'en déplaçait
+      // que 4 sur 25 côté Ouvrage, parce que la base du JOUEUR n'a ni murs ni
+      // barrières ; ici le changement porte sur l'ENTRÉE d'une vague, et les
+      // deux camps entrent par la même porte. Ce qui NE bouge pas juste
+      // au-dessus — gestes, sauvegarde, cases atteignables, déplacement, bases
+      // attaquantes, nombre de cibles et cible retenue — dit que le lot ne
+      // touche ni la carte, ni l'économie, ni la pose.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
+        ? (RAPPORTS_OUVRAGE_APPROCHE[g]
+          ?? RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
           ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
           ?? RAPPORTS_OUVRAGE_TERRITOIRE_LU[g]
@@ -759,7 +783,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
+        : (RAPPORTS_PROCHE_APPROCHE[g]
+          ?? RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_PROCHE_RETOUCHES[g]
           ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
           ?? RAPPORTS_PROCHE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_PROCHE_COLONNE[g]

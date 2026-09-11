@@ -20,13 +20,13 @@ import {
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
 import { genererSiteAncien } from './generateur-ancien.js';
-import { UNITES } from '../src/data/combat.js';
+import { UNITES, GRILLE } from '../src/data/combat.js';
 import {
   TEMOINS_COMBAT, TEMOINS_COMBAT_AVANT_PAQUETS,
   COMBATS_DEPLACES_PAR_ARRET, COMBATS_DEPLACES_PAR_COLONNE,
   COMBATS_DEPLACES_PAR_CIBLES_RANGEES,
   COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE,
-  COMBATS_DEPLACES_PAR_MUR, COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -39,17 +39,39 @@ function sansCommentaires(source) {
 
 const TOUTES = Object.keys(UNITES);
 
-/** Quatre vagues de neuf, remplies dans l'ordre du roster. */
-function armee(ids, niveau) {
+/**
+ * ⚠⚠ LE POINT D'APPARITION D'AVANT LE LOT APPROCHE, ET IL NE SERT QU'À `T1 bis`.
+ * `RANGEE_APPARITION` de `sim/combat.js` valait le FRONT de la bande de
+ * déploiement ; elle vaut désormais la voie d'approche, sous la grille. Écrit
+ * ici, il fait rejouer à `T1 bis` EXACTEMENT le comportement d'hier, ce qui est
+ * tout ce qu'on lui demande — voir son en-tête.
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ */
+const DEPART_AVANT_APPROCHE = GRILLE.bandes.deploiement.derniere;
+
+/**
+ * Quatre vagues de neuf, remplies dans l'ordre du roster.
+ *
+ * ⚠ `rangee` À `null` VEUT DIRE « LE POINT D'APPARITION DU JOUR », pas « la
+ * rangée nulle » : le champ est alors ABSENT du littéral, et `creerCombat`
+ * applique son défaut. C'est ce que `T1` doit jouer — la porte de production.
+ */
+function armee(ids, niveau, rangee = null) {
   const vagues = [[], [], [], []];
   ids.forEach((id, i) => {
-    vagues[i % 4].push({ id, colonne: (Math.floor(i / 4) % 9) + 1, niveau });
+    vagues[i % 4].push({
+      ...(rangee === null ? {} : { rangee }),
+      id, colonne: (Math.floor(i / 4) % 9) + 1, niveau,
+    });
   });
   return vagues.filter((v) => v.length > 0);
 }
 
-function montageDe(type, saveur, niveau, graine, ids = TOUTES, gen = genererSite) {
-  return { ...gen({ type, saveur, niveau, graine }), vagues: armee(ids, niveau) };
+function montageDe(type, saveur, niveau, graine, ids = TOUTES, gen = genererSite,
+  rangee = null) {
+  return { ...gen({ type, saveur, niveau, graine }), vagues: armee(ids, niveau, rangee) };
 }
 
 const TYPES_TEMOINS = [
@@ -58,7 +80,7 @@ const TYPES_TEMOINS = [
 ];
 
 /** Les deux cents montages des témoins, dans l'ordre de la table. */
-function* montagesTemoins(gen) {
+function* montagesTemoins(gen, rangee = null) {
   for (const graine of [1, 2, 3, 4, 5]) {
     for (const niveau of [5, 20, 35, 50]) {
       for (const [type, saveur] of TYPES_TEMOINS) {
@@ -67,7 +89,7 @@ function* montagesTemoins(gen) {
         ]) {
           yield [
             `${type}/${saveur ?? '-'}/n${niveau}/g${graine}/${nomArmee}`,
-            montageDe(type, saveur, niveau, graine, ids, gen),
+            montageDe(type, saveur, niveau, graine, ids, gen, rangee),
           ];
         }
       }
@@ -114,60 +136,45 @@ function ligneDeTemoin(nom, montage) {
 // procédure : prouver d'abord que l'ANCIEN placement rejoue l'ancienne table
 // sur le moteur courant (`T1 bis`, 0 écart), et recapturer ALORS.
 //
-// ⚠⚠ LOT MUR (10/09) : LA CAPTURE N'EST PAS REFAITE, ELLE PREND SA PREMIÈRE
-// COUCHE. C'est la consigne que la table porte elle-même — « le prochain lot qui
-// touchera au combat devra à nouveau EMPILER, jamais recapturer » — et le seuil
-// n'est pas atteint de loin : **561 champs bougent, 1 039 restent adossés à la
-// capture du lot PAQUETS**, là où PAQUETS avait dû recapturer à 1 267. Les deux
-// règles du 10/09 y sont, et elles ne se recouvrent pas : les six unités
-// anti-structure s'ARRÊTENT devant un mur, une barrière ou une tourelle, toutes
-// les autres se RANGENT sur leur case au lieu de fluer dedans.
-test('JOURNAL T1 — deux cents combats rendent le même résultat qu\'au lot PAQUETS, hors ce que MUR déplace (falsification n° 1)', () => {
+// ⚠⚠ LOT APPROCHE (11/09) : LA TABLE EST RECAPTURÉE, ET LA COUCHE `MUR` DESCEND
+// DANS `T1 bis` AVEC LES QUATRE AUTRES. Les vagues naissent en rangée 0 au lieu
+// du front de la bande de déploiement : tout attaquant entre deux cases plus
+// bas, donc les deux cents combats changent. Mesuré contre la table du lot MUR,
+// couche comprise : **1 132 champs sur 1 600 bougent, 468 tiennent**, et
+// **aucun des deux cents combats n'est intact**. Une sixième couche couvrirait
+// 71 % de la table — plus rien à adosser, exactement la situation de PAQUETS.
+//
+// ⚠⚠ ET LA PREUVE QUI L'AUTORISE EST `T1 bis`, JOUÉ À CHAQUE `npm test`. Le §4.1
+// du brief exige de montrer, AVANT toute recapture, que le MOTEUR n'a pas bougé.
+// Ce test-là rejoue désormais les empreintes d'AVANT PAQUETS avec l'ancien point
+// d'apparition ÉCRIT EXPLICITEMENT, et rend 0 écart sous les cinq couches. La
+// recapture ci-dessous n'est légitime que tant qu'il est vert.
+//
+// ⚠ ET LA CONSIGNE NE CHANGE PAS : **le prochain lot qui touchera au combat
+// devra EMPILER une couche, jamais recapturer.**
+test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APPROCHE (falsification n° 1)', () => {
   let i = 0;
   let champs = 0;
-  let surcharges = 0;
   for (const [nom, montage] of montagesTemoins(genererSite)) {
     const vu = ligneDeTemoin(nom, montage);
     const attendu = TEMOINS_COMBAT[i];
     assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT.length} lignes`);
     assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
-    const deplaces = COMBATS_DEPLACES_PAR_MUR[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
-      const surcharge = Object.prototype.hasOwnProperty.call(deplaces, c);
-      assert.equal(vu[c], surcharge ? deplaces[c] : attendu[c],
-        `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot PAQUETS`);
+      assert.equal(vu[c], attendu[c],
+        `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot APPROCHE`);
       champs += 1;
-      if (surcharge) surcharges += 1;
     }
     i += 1;
   }
   assert.equal(i, TEMOINS_COMBAT.length, 'le nombre de combats joués a changé');
   assert.equal(i, 200);
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
-  // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON LE
-  // VOIE. C'est la même garde qu'en `T1 bis`, posée dès la première couche
-  // plutôt qu'après coup : **583 champs sur 1 600**, **124 combats sur 200**, et
-  // **1 017 champs encore adossés** à la capture du lot PAQUETS — dont
-  // soixante-seize combats entiers. Une couche qui grandirait sans qu'un lot le
-  // déclare fait tomber ce test.
-  //
-  // ⚠⚠ LE SECOND GESTE DU LOT MUR L'A FAIT MONTER DE 561 À 583, ET DE 110 À 124
-  // COMBATS — le rangement latéral de `seDecaler`, demandé par Ethan le 10/09
-  // après qu'on lui eut MESURÉ le jumeau du point 2 sur l'axe des colonnes. Une
-  // défenseuse qui se range sur sa case au lieu de fluer à 96 % dans celle du
-  // merlon n'est plus à la même distance de rien : `distanceCarreeMilli` lit des
-  // MILLIÈMES, donc le ciblage et le départage suivent. Vingt-deux champs de
-  // plus, quatorze combats de plus — le périmètre est étroit parce que seule une
-  // défenseuse BLOQUÉE PAR UNE STRUCTURE change de position.
-  //
-  // ⚠ LA COUCHE EST RECALCULÉE, LA CAPTURE NE L'EST PAS. `TEMOINS_COMBAT` n'a
-  // pas une ligne de changée ; ce qui est refait est la DESCRIPTION de ce que ce
-  // lot-ci déplace contre elle. Contre-épreuve jouée : le même générateur, sur
-  // le `combat.js` d'avant le second geste, rend EXACTEMENT 110 combats et 561
-  // champs — les nombres que cette ligne portait.
-  assert.equal(surcharges, 583, `champs surchargés : ${surcharges}`);
-  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR).length, 124);
-  assert.equal(champs - surcharges, 1017, 'le compte des champs encore gardés a changé');
+  // ⚠ LA CAPTURE REPART DE ZÉRO, DONC IL N'Y A PLUS DE SURCHARGE À COMPTER ICI.
+  // La garde qui comptait les champs couverts descend avec sa couche dans
+  // `T1 bis` ; ce qui reste est la comparaison nue, qui est le cas le plus fort.
+  // Le prochain lot qui déplacera le combat rouvrira une couche, et rouvrira le
+  // compte avec elle.
 });
 
 // ---------------------------------------------------------------------------
@@ -186,7 +193,7 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
   let i = 0;
   let champs = 0;
   let surcharges = 0;
-  for (const [nom, montage] of montagesTemoins(genererSiteAncien)) {
+  for (const [nom, montage] of montagesTemoins(genererSiteAncien, DEPART_AVANT_APPROCHE)) {
     {
       const vu = ligneDeTemoin(nom, montage);
       const attendu = TEMOINS_COMBAT_AVANT_PAQUETS[i];

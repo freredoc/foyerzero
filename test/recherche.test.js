@@ -13,7 +13,7 @@ import {
   ARBRE_RECHERCHE, BRANCHES, SPECIAL, gratuitesDe, NOEUD_BASE_SUPPLEMENTAIRE,
 } from '../src/data/recherche.js';
 import { MODULES, moduleEstCable } from '../src/data/modules.js';
-import { UNITES, DEFENSES } from '../src/data/combat.js';
+import { UNITES, DEFENSES, GRILLE } from '../src/data/combat.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import {
   creerCombat, tick, resoudre, pointsRecherche, serialiserEtat, butin, facteurMilli,
@@ -54,6 +54,27 @@ function partie(pointsMilli = '0') {
   etat.recherche.pointsMilli = pointsMilli;
   return etat;
 }
+
+/**
+ * ⚠⚠ LE POINT D'APPARITION S'ÉCRIT EXPLICITEMENT DEPUIS LE LOT APPROCHE, 11/09,
+ * ET C'EST LE MONTAGE QU'ON RÉPARE — JAMAIS L'ASSERTION. `RANGEE_APPARITION` de
+ * `sim/combat.js` valait le FRONT de la bande de déploiement ; elle vaut
+ * désormais la voie d'approche, sous la grille, et une vague joue deux cases de
+ * plus avant d'entrer. Ces montages-ci ne mesurent pas l'entrée : ils mesurent
+ * ce qui se passe une fois l'unité en face de la défense. On leur redonne donc
+ * le point de départ qu'ils supposaient, par le champ `rangee` que
+ * `creerCombat` accepte depuis toujours pour « monter un état déjà entamé sans
+ * jouer les ticks d'approche ».
+ *
+ * ⚠ IL SE DÉRIVE DE `GRILLE.bandes`, IL NE S'ÉCRIT PAS `2` : c'est exactement ce
+ * que l'ancien défaut valait, et un nombre écrit à la main cesserait de le dire.
+ *
+ * ⚠⚠ ET L'INVARIANCE EST MESURÉE, PAS SUPPOSÉE : avec ce champ posé, les deux
+ * cents témoins de combat et les quatorze phases de BASES-0 rendent EXACTEMENT
+ * les empreintes d'avant le lot — 0 écart. C'est la preuve du §4.1 du brief, et
+ * c'est elle qui autorise la recapture des témoins.
+ */
+const DEPART = GRILLE.bandes.deploiement.derniere;
 
 // ---------------------------------------------------------------------------
 // T1 — T3bis : la table
@@ -560,7 +581,7 @@ function duel(structure, avecEcraseur, attaquant = 'fendeur') {
     obstacles: [],
     batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
     defenseurs: [{ id: structure, rangee: 5, colonne: 5, niveau: 1 }],
-    vagues: [[{ id: attaquant, colonne: 5, niveau: 1 }]],
+    vagues: [[{ rangee: DEPART, id: attaquant, colonne: 5, niveau: 1 }]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: [] },
       joueur: { offense: avecEcraseur ? ['ecraseur'] : [], defense: [] },
@@ -686,7 +707,7 @@ test('T12 — sans le module acquis, ou sur une pièce qui ne le porte pas, rien
     obstacles: [],
     batiments: [{ id: 'souche', rangee: 15, colonne: 5, niveau: 1 }],
     defenseurs: [{ id: 'merlon', rangee: 5, colonne: 5, niveau: 1 }],
-    vagues: [[{ id: 'fendeur', colonne: 5, niveau: 1 }]],
+    vagues: [[{ rangee: DEPART, id: 'fendeur', colonne: 5, niveau: 1 }]],
     modulesDebloques: {
       ouvrage: { offense: ['ecraseur'], defense: [] },
       joueur: { offense: [], defense: [] },
@@ -4921,7 +4942,7 @@ test('MODULES-F T3 — le franchissement des barrières n\'est PAS majoré', () 
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 1 }],
     defenseurs: [{ id: 'herse', rangee: 3, colonne: 5 }],
-    vagues: [[{ id: 'fendeur', colonne: 5 }]],
+    vagues: [[{ rangee: DEPART, id: 'fendeur', colonne: 5 }]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: arme ? ['munitionSpeciale'] : [] },
       joueur: RIEN,
@@ -5378,14 +5399,14 @@ test('MODULES-F T13 — un site généré entre tel quel dans `creerCombat`', ()
   // niveau 46 porte les cinq modules — c'est le cas le plus chargé.
   const site = genererSite({ type: 'base', niveau: 46, saveur: null, graine: 46 });
   assert.equal(site.modulesDebloques.ouvrage.defense.length, 5, 'montage : le canal est vide');
-  const etat = creerCombat({ ...site, vagues: [[{ id: 'meute', colonne: 5 }]] });
+  const etat = creerCombat({ ...site, vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]] });
   assert.deepEqual(etat.modulesDebloques.ouvrage.defense, site.modulesDebloques.ouvrage.defense);
   assert.deepEqual(etat.modulesDebloques.joueur, { offense: [], defense: [] });
 
   // ⚠ ET L'ANCIENNE FORME PLATE LÈVE TOUJOURS. Sans cette moitié, la garde
   // ci-dessus passerait sur un `creerCombat` qui accepte n'importe quoi.
   const bancal = (modulesDebloques) => () => creerCombat({
-    ...site, vagues: [[{ id: 'meute', colonne: 5 }]], modulesDebloques,
+    ...site, vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]], modulesDebloques,
   });
   assert.throws(bancal({ ouvrage: ['camouflage'], joueur: { offense: [], defense: [] } }),
     /liste plate/);
@@ -5400,7 +5421,7 @@ test('MODULES-F T13 — un site généré entre tel quel dans `creerCombat`', ()
   // forme plate porte sur chaque PROPRIÉTAIRE, un cran plus bas. Rien à corriger
   // ici : le générateur, lui, livre toujours la forme complète.
   const plat = creerCombat({
-    ...site, vagues: [[{ id: 'meute', colonne: 5 }]], modulesDebloques: ['camouflage'],
+    ...site, vagues: [[{ rangee: DEPART, id: 'meute', colonne: 5 }]], modulesDebloques: ['camouflage'],
   });
   assert.deepEqual(plat.modulesDebloques,
     { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } });
@@ -5411,9 +5432,9 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // sont celles mesurées sur `origin/main` (0.55.0 · build 56) avec la MÊME
   // graine et la MÊME armée. On ne compense rien, on ne touche à aucun barème.
   const ARMEE = [
-    { id: 'meute', colonne: 2 }, { id: 'meute', colonne: 4 },
-    { id: 'belier', colonne: 6 }, { id: 'crecelle', colonne: 8 },
-    { id: 'perceurs', colonne: 3 }, { id: 'perceurs', colonne: 7 },
+    { rangee: DEPART, id: 'meute', colonne: 2 }, { rangee: DEPART, id: 'meute', colonne: 4 },
+    { rangee: DEPART, id: 'belier', colonne: 6 }, { rangee: DEPART, id: 'crecelle', colonne: 8 },
+    { rangee: DEPART, id: 'perceurs', colonne: 3 }, { rangee: DEPART, id: 'perceurs', colonne: 7 },
   ];
   // ⚠⚠ LOT ARRÊT (04/09) : LA COMPARAISON SE PREND SOUS LE MÊME CODE, ET C'EST
   // UNE CORRECTION DE MÉTHODE. Ce test opposait les points d'aujourd'hui à des
@@ -5563,9 +5584,9 @@ test('MODULES-F T14 bis — le Camouflage côté Ouvrage ne fait RIEN, et c\'est
   // même examinée. Le module est donc inerte de ce côté, PAR CONSTRUCTION.
   // Le lot ne symétrise pas : ce serait un changement de règle, pas un câblage.
   const ARMEE = [
-    { id: 'meute', colonne: 2 }, { id: 'meute', colonne: 4 },
-    { id: 'belier', colonne: 6 }, { id: 'crecelle', colonne: 8 },
-    { id: 'perceurs', colonne: 3 }, { id: 'perceurs', colonne: 7 },
+    { rangee: DEPART, id: 'meute', colonne: 2 }, { rangee: DEPART, id: 'meute', colonne: 4 },
+    { rangee: DEPART, id: 'belier', colonne: 6 }, { rangee: DEPART, id: 'crecelle', colonne: 8 },
+    { rangee: DEPART, id: 'perceurs', colonne: 3 }, { rangee: DEPART, id: 'perceurs', colonne: 7 },
   ];
   // Au niveau 28 le canal ne contient QUE `camouflage` : le site isole le module.
   //
