@@ -2431,7 +2431,12 @@
     margin: 0; padding: 8px; font-size: 11px; line-height: 1.4;
     color: #E43E32; background: #161914; border: 1px solid #8A1E17;
   }
-  #monde-panneau-deplacer {
+  /* ⚠⚠ UN SEUL BLOC POUR LES DEUX BOUTONS DE GESTE — lot BASES-2, 11/09. « Fonder
+     une base » s'ajoute à « Déplacer la base » sur le panneau de sa propre base,
+     et deux règles identiques auraient divergé au premier ajustement de taille
+     ou de teinte : c'est la même forme, la même place et le même vocabulaire de
+     geste, donc un seul sélecteur. */
+  #monde-panneau-deplacer, #monde-panneau-fonder {
     margin: 0 8px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
   }
   /* La confirmation d'un déplacement. Aucune teinte neuve : le fond du panneau
@@ -3298,11 +3303,31 @@
       <div id="monde-panneau-confirmation" hidden>
         <p id="monde-panneau-menace"></p>
         <div class="choix">
+          <!-- ⚠⚠ LE LIBELLÉ EST UNE VALEUR DE DÉPART, ET LES DEUX CHEMINS
+               L'ÉCRIVENT — lot BASES-2. Le panneau de confirmation est PARTAGÉ
+               entre les deux gestes depuis que la fondation existe : réutilisé
+               sans être reposé, il ferait dire « Déplacer ici » à une
+               confirmation de fondation. `LIBELLE_DU_GESTE` de `ui/monde.js`
+               porte les deux mots, et `demanderLeDeplacement` comme
+               `demanderLaFondation` le posent avant d'ouvrir. -->
           <button type="button" id="monde-panneau-confirmer">Déplacer ici</button>
           <button type="button" id="monde-panneau-renoncer">Renoncer</button>
         </div>
       </div>
       <button type="button" id="monde-panneau-deplacer" hidden>Déplacer la base</button>
+      <!-- ⚠⚠ FONDER UNE BASE DE PLUS — lot BASES-2, 11/09. Le moteur est écrit et
+           testé depuis BASES-1 — `problemesDeLaFondation`, `butinDeLaFondation`,
+           `fonderUneBase` — et **aucun écran ne l'appelait** : c'est le premier
+           trou que le rapport de ce lot-là nommait.
+           ⚠ IL S'AFFICHE SUR SA PROPRE BASE, exactement comme son jumeau, et par
+           le MÊME discriminant — `gesteDuSecondToucher(site) === 'base'`. La base
+           qui fonde est la COURANTE, et le panneau de sa propre base est le seul
+           endroit où le geste a un sens.
+           ⚠⚠ ET IL S'AFFICHE MÊME QUAND C'EST IMPOSSIBLE : « un indice n'est pas
+           une interdiction » (§4 de CLAUDE.md). C'est en appuyant que le joueur
+           lit « il faut d'abord acheter la recherche "Base supplémentaire" », et
+           un bouton mort ne lui apprendrait pas où aller la chercher. -->
+      <button type="button" id="monde-panneau-fonder" hidden>Fonder une base</button>
         </div>
       </div>
     </div>

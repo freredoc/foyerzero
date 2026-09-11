@@ -202,6 +202,59 @@ export function problemesDeLaFondation(etat, cible) {
 }
 
 /**
+ * Les cases où une base peut se poser, pour que l'écran les montre.
+ *
+ * ⚠⚠ ELLE INTERROGE `problemesDeLaFondation`, ELLE NE RÉÉCRIT AUCUNE DE SES
+ * HUIT RÈGLES. C'est mot pour mot le motif de `casesAtteignables`
+ * (`sim/deplacement.js`) et de `casesPosables` de l'écran Chantier : une
+ * seconde liste de règles dans l'écran finirait par montrer une case que le
+ * geste refuse — et le joueur lirait un liseré comme une promesse.
+ *
+ * ⚠⚠ ON BALAIE AUTOUR DE CHAQUE BASE, PAS AUTOUR DE LA COURANTE, parce que
+ * `distanceCarreeAuPlusProche` mesure vers N'IMPORTE LAQUELLE : une case à
+ * portée de la troisième base est fondable sans qu'on ait à basculer d'abord,
+ * et n'en balayer qu'une la cacherait.
+ *
+ * ⚠⚠ ET ON DÉDOUBLONNE, CE QUI N'EST PAS DÉCORATIF. Deux bases à moins de vingt
+ * cases font se RECOUVRIR leurs carrés ; sans clé, la même case entrerait deux
+ * fois. Le liseré peint deux fois ne se verrait pas — c'est le COMPTE qui
+ * mentirait, et l'écran s'en sert pour choisir entre « touchez une case » et le
+ * refus que `problemesDeLaFondation` formule.
+ *
+ * ⚠ ELLE NE S'APPELLE QU'À L'ARMEMENT, jamais dans une boucle de dessin. C'est
+ * la discipline que `PC T3` mesure déjà pour le bilan de territoire : 441 cases
+ * par base et par appel sont payables au moment d'un toucher, elles ne le
+ * seraient pas à chaque image.
+ *
+ * ⚠ ET LE CARRÉ EST BIEN UN CARRÉ, quand la portée est un DISQUE : c'est le
+ * sur-ensemble qu'on balaie, et `problemesDeLaFondation` écarte les coins par
+ * `trop-loin`. Balayer le disque demanderait une seconde écriture de la
+ * géométrie d'EUCLIDE, pour ne rien gagner.
+ *
+ * @param {object} etat
+ * @returns {Array<{rangee: number, colonne: number}>}
+ */
+export function casesFondables(etat) {
+  const portee = FONDATION.porteeMaxCases;
+  const vues = new Set();
+  const cases = [];
+  for (const base of etat.bases) {
+    const r0 = base.position.rangee;
+    const c0 = base.position.colonne;
+    for (let r = r0 - portee; r <= r0 + portee; r += 1) {
+      for (let c = c0 - portee; c <= c0 + portee; c += 1) {
+        const cle = `${r}:${c}`;
+        if (vues.has(cle)) continue;
+        vues.add(cle);
+        if (problemesDeLaFondation(etat, { rangee: r, colonne: c }).length > 0) continue;
+        cases.push({ rangee: r, colonne: c });
+      }
+    }
+  }
+  return cases;
+}
+
+/**
  * La distance en cases entières, arrondie au supérieur — POUR L'AFFICHAGE.
  *
  * ⚠ SANS `Math.sqrt`, comme `casesArrondiesAuSuperieur` de `points-attaque.js`

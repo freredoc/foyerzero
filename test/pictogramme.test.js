@@ -696,11 +696,23 @@ test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 e
   // rien au livrable**, `GRILLE_ATLAS` valant 128.
   // ⚠ AUCUNE RESSOURCE N'ENTRE — ce sont les MÊMES 306 URI, dont un qui pèse plus
   // lourd : la borne NE BOUGE PAS.
+  // ⚠⚠ ET LE LOT BASES-2 LE RÉANCRE À NOUVEAU, 11/09, POUR LA MÊME RAISON QUE LA
+  // DERNIÈRE ASSERTION DE CE TEST DONNE. L'ancre écrivait **9 367 456**, mesurée
+  // au lot TERRITOIRE-ET-ÉCHELLE ; le disque en rend **9 377 421**, soit
+  // **9 965 octets de dérive** — sous la tolérance de 50 000, donc VERT, et
+  // faux. Quatre lots sont passés dessus sans la toucher (APPROCHE, qui REND
+  // 761, PENDULE-ET-TOUCHER +2 634, JOURNAL-ÉCRAN qui rend 113, puis
+  // RAPPORTS-ET-PLEIN), et celui-ci coûte **+5 235**.
+  // ⚠ VENTILÉ POSTE PAR POSTE contre le livrable rebâti dans un `git worktree`
+  // sur l'arbre pristine de `main` = `5d654d8` (**9 372 186**) : **JavaScript
+  // +5 105 · balisage +104 · feuille +26 · images +0 · audio +0**, la somme des
+  // cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI de
+  // part et d'autre**. Le lot ne fait entrer ni une image ni un son.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_367_456;          // remesuré au lot TERRITOIRE-ET-ÉCHELLE, base `72245db`
-  const MARGE = BORNE - MESURE;      // 232 544 octets
-  assert.equal(MARGE, 232_544);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.42);
+  const MESURE = 9_377_421;          // remesuré au lot BASES-2, base `5d654d8`
+  const MARGE = BORNE - MESURE;      // 222 579 octets — 232 544 avant ce lot
+  assert.equal(MARGE, 222_579);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.32);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
