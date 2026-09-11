@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **10/09/2026**, version 0.99.44 · build 146.
+Dernière révision : **11/09/2026**, version 0.99.45 · build 147.
 
 ---
 
@@ -42,7 +42,238 @@ Dernière révision : **10/09/2026**, version 0.99.44 · build 146.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 10/09/2026 (après le lot RAID-ET-ÉCRAN), à confronter :**
+**Référence au 11/09/2026 (après le lot TERRITOIRE-ET-ÉCHELLE), à confronter :**
+⚠⚠ **UNE RUINE GARDE SON CARRÉ, ÉMET À LA PORTÉE DE CE QU'ELLE ÉTAIT, ET LA
+PRIME DE NIVEAU EST DEUX FOIS MOINS AGRESSIVE.** Ethan, 10/09 : « j'ai rasé des
+bases lointaines et le territoire ne m'est pas revendiqué. Pourtant quand je
+clique dessus, il est censé être à moi », puis, sur question directe, « quoi
+qu'il arrive la ruine conserve son carré original. Comme une base […] Juste le
+petit carré, même pas l'octogone » et « quelques niveaux suffisent à totalement
+renverser l'équilibre, et ce n'est pas ce que je veux. Il faut que ce soit à peu
+près deux fois moins agressif ». `npm test` rend **1575 pass / 0 fail** au sens
+de la garde de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le
+verdict mesuré est **1574 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par
+Ethan le 08/09), et `npm run check` sort en 0. `npm run build` →
+`dist/index.html`, **9 367 456 octets**, 0 référence externe. Coût **+53 066
+octets**, mesuré poste par poste contre le livrable rebâti dans un `git worktree`
+sur l'arbre pristine de `main` = `72245db` (**9 314 390**) : **images +52 360 ·
+JavaScript +706 · feuille +0 · balisage +0 · audio +0**, la somme des cinq postes
+tombant EXACTEMENT sur le total, et **307 lignes `data:` / 306 URI de part et
+d'autre**. Borne T10 **inchangée à 9 600 000** — aucune ressource n'entre, ce
+sont les MÊMES 306 URI dont un pèse plus lourd —, marge **232 544 octets,
+2,42 %**. Version et build passent à **0.99.45 · build 147**, le suivant
+disponible ; `main` n'a pas bougé sous le lot, vérifié au `git fetch`, et
+**`72245db` EST le commit de fusion du lot RAID-ET-ÉCRAN** — l'ordre de merge du
+§10 du brief est donc tenu. Le lot touche `src/data/sites.js`,
+`src/sim/territoire.js`, `tools/batiments_v2.py`, `tools/final128.py`,
+`package.json`, quatre fichiers de `test/`, **132 PNG de
+`art/sprites/bâtiment/`**, les deux atlas `batiment`,
+`art/sprites/atlas-empreintes.json`, et fait entrer
+`rapports/planche-echelle-quatre-etats.png` et
+`RAPPORT-lotTERRITOIRE-ET-ECHELLE.md`. **Pas une ligne de `src/ui/`,
+`src/render/`, `src/son/`, `src/sim/combat.js` ni `art/sources/`** — vérifié au
+diff.
+⚠⚠ **`SAVE_VERSION` RESTE À 32, ET LE BRIEF DISAIT 31 — ÉCART DE BASE, PAS DE
+DÉCISION.** Il annonce « `SAVE_VERSION` reste à 31 » ; il valait déjà **32**
+depuis le lot RAID-ET-ÉCRAN, mergé avant celui-ci. Ce que le brief voulait dire
+est tenu : **le lot n'ajoute, ne retire et ne convertit aucun champ** — les trois
+correctifs du territoire sont des LECTURES de `basesRasees`, qui porte `type`,
+`vainqueur`, `niveau` et `tick` depuis la v28, et l'échelle des sprites est un
+dessin.
+⚠⚠ **LA RUINE A UN PLANCHER, ET LE BLOC QUI DISAIT LE CONTRAIRE EST PARTI AVEC
+LA LECTURE QU'IL PORTAIT.** Le lot CONQUÊTE-24H écrivait « une ruine n'est pas une
+base, elle peut donc perdre sa propre case », et l'annonçait réversible au
+retrait de deux mots. Ethan a tranché l'autre sens. **Le plancher porte sur LA
+SEULE CASE de la ruine** — « juste le petit carré, même pas l'octogone » — et le
+reste de son octogone se dispute comme n'importe quel autre : `C24 T1` et
+`RT T1` gardent les deux moitiés ensemble, sans quoi un plancher élargi rendrait
+une ruine INDÉLOGEABLE sur trente-sept cases.
+⚠⚠ **ET LE DÉFAUT QU'ETHAN A VU ÉTAIT DEUX VÉRITÉS SUR LA MÊME CASE, MESURÉ.**
+`lignesDeLaRuine` de `ui/monde.js` annonce « Terrain : Vous » en lisant le
+`vainqueur` de l'entrée, sans demander à qui la case appartient. Sur **1 630
+rasages simulés** — dix graines, les rangées 120 à 290, chaque base de l'Ouvrage
+rasée tour à tour — la ruine PERDAIT sa propre case **826 fois sous l'ancien
+barème (50,7 %)**, et en perdrait **885 sous celui du jour (54,3 %)**, pendant
+que le panneau annonçait « Vous » 1 630 fois sur 1 630. **Le panneau n'a pas été
+touché : il devient vrai par l'autre bout.**
+⚠⚠ **UNE RUINE ÉMET AU RAYON DE CE QU'ELLE ÉTAIT, ET LA CORRESPONDANCE EST
+ÉCRITE UNE FOIS.** `CAMP_D_ORIGINE_DE_LA_RUINE` de `sim/territoire.js` mappe
+`type` → camp d'origine — `base` → OUVRAGE, `baseJoueur` → JOUEUR —, et
+`rayonDeLaForce` est le SEUL lecteur, appelé par `campDeLaCase` ET par
+`peindre`. Un type inconnu LÈVE plutôt que de rendre un rayon par défaut.
+**Mesuré : une ruine isolée de type `base` peint 37 cases, une de type
+`baseJoueur` en peint 21** — les deux nombres ne se confondent pas, donc la
+correspondance est observable. C'est la seconde lecture du §1 de CONQUÊTE-24H,
+qui annonçait 37 dans ce sens-là.
+⚠⚠ **LA PRIME DE NIVEAU DEVIENT UNE FRACTION, ET IL Y A DEUX RAISONS AU LIEU
+D'UNE.** L'exposant était `niveau − distance` : **un seul nombre gouvernait la
+prime de niveau ET la décroissance en distance**, et `raisonDeLaForce` est un
+`BigInt` — 2, 3, 4, tous plus durs. `GEOGRAPHIE` porte donc
+`raisonDeNiveau: { numerateur: 7, denominateur: 5 }` à côté de
+`raisonDeLaForce: 2`, et `forceDUneBase` rend
+`NUM^n × DEN^(50−n) × 2^(3−d)`. **Aucun flottant n'entre** : diviser chaque terme
+par `5^50 × 2^3` — un facteur COMMUN, qui ne change aucune comparaison — rend
+`(7/5)^niveau × 2^(−distance)`.
+⚠⚠ **BARÈME MESURÉ, ET LE RAPPORT DE DISTANCE VAUT EXACTEMENT 2.** +1 niveau vaut
+**1,400** base au lieu de 2 ; +2 → 1,960 ; +3 → 2,744 ; +4 → 3,842 ; +5 → 5,378 ;
++10 → **28,925**. Il faut **29 bases de niveau 10 pour DÉPASSER une base de
+niveau 20** — 28 restent dessous — contre 1 024 hier, et **2,06 niveaux pour
+doubler la force** au lieu de 1,00. ⚠ **À niveau égal, une base à une case pèse
+EXACTEMENT deux fois une base à deux cases** : la distance n'est pas adoucie, et
+c'est ce que le brief demandait de vérifier plutôt que de consigner.
+⚠⚠ **ET UNE PROPRIÉTÉ ARBITRÉE DISPARAÎT — LE RAPPORT LA NOMME.** « Deux bases 10
+est moins fort qu'une base 20 » TIENT (il en faut 29). Mais l'égalité exacte
+« deux bases de niveau 10 valent EXACTEMENT une base de niveau 11 », vraie
+seulement à la raison 2, devient une inégalité : **deux bases 10 valent un peu
+PLUS qu'une base 11, et essaimer devient légèrement meilleur que monter.** C'est
+le prix de l'adoucissement, il a été annoncé à Ethan avant l'arbitrage, et
+`TF T1` est RETOURNÉ pour le DIRE au lieu de disparaître.
+⚠⚠ **NEUF TÉMOINS DE CALIBRAGE SONT RÉALIGNÉS SUR LA VALEUR MESURÉE, ET CHACUN
+PORTE LA LIGNE QUI LE DIT.** `C24 T1` (21 → **37**, et l'assertion du plancher
+INVERSÉE), `C24 T2`, `C24 T5`, `C24 T7`, `C24 T12` (21 → **37** chacun), `TF T1`
+(égalité → inégalité), `TF T2` (1 024 → **29**), `TF T3` (le rognage RÉTRÉCIT),
+`RC T2`. Chacun porte « témoin de calibrage, valeur arbitrée par Ethan le
+10/09, à réaligner au prochain arbitrage sans jamais servir d'argument CONTRE
+lui » — sans ce commentaire, un lot futur défendrait le chiffre au lieu de le
+suivre. **Aucun témoin d'équilibrage n'est AJOUTÉ.**
+⚠⚠ **`C24 T5`, `T7` ET `T12` TOMBAIENT SUR DES COMPTES DE CASES, PAS SUR DES
+SEUILS D'HORLOGE — VÉRIFIÉ AVANT DE TOUCHER AU MONTAGE.** `TICKS_DE_RUINE` n'a
+pas bougé d'un tick, `C24 T6` garde toujours l'autre côté du seuil, et
+`ruineEstActive` n'a pas une ligne de changée. Ce qui change est le nombre de
+cases qu'une ruine peint.
+⚠⚠ **ET DEUX MONTAGES ONT PERDU LEUR PRÉMISSE — C'EST LE MONTAGE QU'ON RÉPARE,
+JAMAIS L'ASSERTION.** (1) `C24 T2` opposait une ruine de 20 puis de 17 à un
+adversaire de **18** ; sous 7/5 les deux perdent, donc le test cessait de
+distinguer quoi que ce soit — c'est-à-dire qu'il aurait passé au vert sur un code
+qui émettrait au niveau du VAINQUEUR. L'adversaire passe à **17**, mesuré sur
+`forceDUneBase` : trois niveaux d'avance battent une case de retard, l'égalité de
+niveau non. (2) `RC T2` cherchait sa cible sous le niveau **5** ; il en faut
+désormais cinq PLEINS d'écart pour franchir deux cases, et à niveau 5 l'Ouvrage
+l'emporte. La cible se cherche sous le niveau **4** — la capture d'Ethan, base du
+joueur à 8,6, n'a pas bougé d'une ligne.
+⚠⚠ **DEUX TESTS NEUFS, ET LE SECOND EST CELUI QUI VAUT LE PLUS.** `RT T1` monte
+une ruine sous le feu de quatre ruines bien plus fortes — le montage prouve son
+mordant par l'arithmétique AVANT d'asserter quoi que ce soit — et `RT T2`
+confronte `campDeLaCase` à `territoireDeLaFenetre` **case par case** sur une
+fenêtre portant une ruine dominée. Deux boucles distinctes sur le même état :
+leur divergence est SILENCIEUSE, et c'est exactement ce qui vient d'être corrigé.
+⚠⚠ **CINQ FALSIFICATIONS JOUÉES, CINQ CHUTES, ZÉRO MUETTE — ET LA TROISIÈME EST
+CELLE QUI JUSTIFIE `RT T2`.** Le plancher retiré des DEUX ancres (l'état d'avant
+le lot) fait tomber `C24 T1`, `RT T1` et `RT T2` ; corrigé sur la SEULE ancre A
+(`campDeLaCase`) ou sur la SEULE ancre B (`peindre`), **les trois tombent
+encore** — une demi-correction ne passe pas. Le rayon repris au camp qui TIENT
+fait tomber `C24 T1`, `T5`, `T7` et `T12` ; la raison de niveau remise à 2 fait
+tomber `TF T1`, `T2` et `T3`, et eux seuls.
+⚠⚠ **L'ÉCHELLE DES QUATRE ÉTATS : LE CORPS DU BÂTIMENT NE RÉTRÉCIT PLUS EN
+BRÛLANT.** Ethan : « les bâtiments abîmés ont tous la même dimension, fumée et
+destruction incluses. C'est pour ça qu'un bâtiment abîmé semble réduit. Les
+sprites doivent être réduits de la même façon, pas sprite par sprite », puis
+« l'emprise est atteinte par l'état neuf, pas par l'état abîmé ».
+`tools/batiments_v2.py` appelait `recadrer` **sans `cote_ref`** : chaque état
+était normalisé sur SA propre boîte d'encre, et celle d'un état abîmé est plus
+large — la fumée monte, les gravats s'étalent. Il reçoit désormais un `cote_ref`
+**commun à la famille**, égal au côté du contenu de l'état NEUF, et
+`ancrage='bas'`.
+⚠⚠ **ET LE CÔTÉ NE SE RECALCULE PAS : `boite_dencre` EST EXTRAITE DE
+`recadrer`.** Même clé DÉTECTÉE, même seuil d'encre, même `max(largeur,
+hauteur)` — une seconde version dans `batiments_v2.py` aurait donné deux
+définitions de la même boîte, dont une seule aurait reçu la prochaine
+correction. `ED T3` lit l'appel dans la source.
+⚠⚠ **RÉSULTAT MESURÉ, SUR LES DEUX GRILLES : LES VINGT-ET-UN ÉTATS NEUFS
+ATTEIGNENT LEUR EMPRISE EXACTEMENT — ZÉRO ÉCART, NI TOLÉRANCE NI EXCEPTION.**
+Des soixante états abîmés, **cinquante la dépassent** et dix restent dessous —
+ce sont des `_detruit` dont les gravats sont plus bas et plus étroits que le
+bâtiment debout, ce qui est juste. Sans `cote_ref`, les quatre-vingt-un
+tomberaient exactement sur leur emprise : `ED T1` falsifie l'ancienne règle de
+face en exigeant ce cinquante.
+⚠⚠ **LE DÉBORDEMENT VA VERS LE HAUT, ET IL EST RÉEL — MESURÉ, PAS ESTIMÉ.** Le
+brief annonçait « dix-neuf familles sur vingt tiennent sans un pixel coupé » :
+**faux, et l'écart est déclaré.** Sa marge comparait le côté du contenu à la
+CASE ; sous `ancrage='bas'` le contenu repose sur la ligne de sol de la
+référence, donc il ne dispose que de `1,05 × référence` au-dessus d'elle, pas de
+la case entière. Relevé en grille 128 : **28 sprites sur 81 ont de l'encre au
+bord HAUT** — leur panache est coupé net — et **5 au bord LATÉRAL** ; en grille
+64, 29 et 8. Pire coupe mesurée : la Caserne très abîmée, **108 pixels source sur
+873, soit 15,8 px de 128**. ⚠ **Aucun sprite ne touche le bord BAS** : c'est
+exactement ce que `ancrage='bas'` achète, et centré le bâtiment aurait été coupé
+à sa base.
+⚠ **ET C'EST STRUCTUREL, PAS UN RÉGLAGE.** La boîte de recadrage DÉCIDE de
+l'échelle : l'agrandir pour tout contenir rétrécirait le bâtiment, c'est-à-dire
+rouvrirait le défaut qu'on corrige. Un sprite qui déborderait de sa case sortirait
+les 81 de l'atlas cousu — `coudre` exige des cellules carrées — et les paierait
+en `data:` séparés. **La planche de contact est là pour qu'Ethan arbitre là-dessus.**
+⚠⚠ **LA SOUCHE PASSE À 92 %, ET C'EST UNE LIGNE QUI PART.** À 98 % son état
+DÉTRUIT touche les deux bords latéraux ; 92 % EST le défaut, donc réécrire
+`'souche': EMPRISE_QUATRE_VINGT_DOUZE` ferait la ligne que la table interdit —
+celle qui ne dit rien et qui survivrait à un changement de défaut. **Le Chantier
+RESTE à 98 % : il tient.** L'Étai était déjà au défaut sans être dans la table :
+rien à faire pour lui. ⚠ Les deux ruines lisent le palier du CHANTIER et n'ont
+pas eu une ligne à changer.
+⚠⚠ **L'EXCEPTION DU PANACHE D'ART-90 EST LEVÉE, ET ELLE EST FALSIFIÉE DE FACE.**
+`bat_j_artillerie_anti_infanterie_tres_abime` était le seul sprite SOUS son
+palier — 57 sur 58 en 64, 114 sur 116 en 128 — à cause de `eroder(m, 3)`. La
+cause n'a pas disparu ; ce qui a changé, c'est qu'il n'est plus normalisé sur sa
+propre boîte : il sort à **61** et **122**, donc AU-DESSUS. `ED T1` l'asserte
+levée plutôt que de la retirer en silence.
+⚠ **LA VIGNETTE MIXTE NE BOUGE PAS, ET C'EST UN NON-CHANGEMENT DÉLIBÉRÉ.** Elle
+n'a qu'UN état : il n'y a aucune famille à mettre à la même échelle. Elle garde
+`cote_ref=None` et `ancrage='centre'` — lui prêter la référence du collecteur
+quartz déplacerait l'icône de la palette, qu'Ethan n'a pas visée.
+⚠⚠ **132 PNG SUR 162 CHANGENT DE DESSIN, ET LES TRENTE AUTRES SONT RENDUS À
+`HEAD` À L'OCTET.** L'outil réécrit ses 162 fichiers ; **l'encodeur PNG de cette
+machine ne reproduit pas celui du dépôt**, donc les laisser tels quels aurait mis
+au diff trente images identiques au pixel. `CLAUDE.md` §6 l'interdit — « ne
+jamais rafraîchir les fichiers commités pour faire taire l'outil ». Les trente
+sont les états neufs que l'ancrage ne déplace pas, plus la vignette.
+⚠ **SEULE LA FAMILLE `batiment` EST RECOUSUE** — `--forcer batiment`, sans quoi
+l'outil imprime « ÉCART » et n'écrit pas. `carte-64`, `carte-128` et
+`interface-128` restent exactement où ART-90 les a trouvés. `src/data/atlas.js`
+est **identique** : la géométrie des cellules ne change pas, 83 sprites en 10 × 9
+des deux côtés. `atlas-batiment-128.webp` passe de 491 442 à **530 710** —
++52 360 en base64, c'est-à-dire TOUT le poste `images` du lot.
+⚠⚠ **ET LA CHAÎNE D'ART NE REPRODUIT PLUS LE DÉPÔT À L'OCTET SUR CETTE MACHINE —
+MESURÉ SUR UN ARBRE PRISTINE, AVANT D'ÉCRIRE UNE LIGNE, ET LES PIXELS SONT
+IDENTIQUES.** `tools/verifier.py` rejoué outil par outil rend **46 identiques ·
+798 différents · 0 nouveau** ; le même arbre passé au comparateur de PIXELS rend
+**0 différence sur les quinze producteurs**, `batiments_v2` compris (162 sur 162
+identiques au pixel). C'est l'encodeur PNG, et lui seul — la situation que §6
+documente pour PICTOGRAMMES, à une autre échelle. Toolchain ici : Pillow 12.3.0,
+numpy **2.5.3**, scipy **1.18.1** ; ART-90 mesurait 1 110 identiques sous numpy
+2.4.6 / scipy 1.17.1.
+⚠⚠ **ET LA CHAÎNE COMPLÈTE N'A PAS PU ÊTRE LANCÉE — `opusenc` EST ABSENT ET NE
+PEUT PAS ÊTRE INSTALLÉ ICI.** `choco install opus-tools` échoue sans droits
+d'administrateur (« l'accès au chemin `C:\ProgramData\chocolatey\lib-bad` est
+refusé »). Le vérificateur a donc été joué **outil par outil, sans `sons`**, sous
+`--outil`, ce qui **restreint la comparaison à la FAMILLE et ne rend AUCUN
+manquant** — le vérificateur le dit lui-même. **Le verdict est donc plus faible
+que celui de la chaîne entière, et c'est écrit ici.** ⚠ Deux outils sortent en 2
+pour une raison de MONTAGE et non de chaîne : `ancres-ouvrage.py` lit
+`ancres-blindes.json` dans le dossier dérouté, que seul un passage COMPLET écrit
+avant lui ; `entrees.py` rejoue la chaîne, donc `sons`, donc `opusenc`.
+⚠ **`tools/atlas.py --verifier` rend 17 identiques · 3 différents AVANT et
+APRÈS**, les mêmes trois : `carte-64`, `carte-128`, `interface-128`.
+⚠⚠ **LA PLANCHE DE CONTACT EST LIVRÉE, ET C'EST LA SEULE VÉRIFICATION QUI VAILLE
+POUR CETTE MOITIÉ.** `rapports/planche-echelle-quatre-etats.png` — huit familles
+en rangées, les quatre états en colonnes, **AVANT à gauche et APRÈS à droite**,
+cadre de case dessiné. Aucune assertion ne dit qu'un bâtiment « a l'air de la
+même taille » ; **Ethan arbitre dessus**, et c'est là que se juge le panache
+coupé.
+⚠ **LE RENDU EN JEU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot
+change est ce qu'on regarde — la taille d'un bâtiment qui brûle sur l'écran du
+Chantier et sur celui d'un raid —, et rien n'a été ouvert dans un navigateur :
+tout est mesuré sur les PIXELS des PNG et sur des fonctions PURES. La carte du
+monde non plus, dont les frontières bougent sur toutes les graines.
+⚠ **LES DEUX CENTS TÉMOINS DE COMBAT ET CELUI DE BASES-0 NE BOUGENT PAS D'UN
+BIT** : `src/sim/combat.js`, `src/sim/generateur.js` et `src/sim/raid*.js` n'ont
+pas une ligne de changée, et le territoire n'entre dans aucun des deux scénarios.
+⚠ **DEUX TESTS ENTRENT — `RT T1` ET `RT T2` — ET LE COMPTE PASSE DE 1 573 À
+1 575.** **Aucune assertion n'a été retirée ni assouplie** ; **trois gardes sont
+RETOURNÉES** (`C24 T1` sur le plancher, `TF T1` sur l'égalité, `ED T1` sur
+l'emprise), **six changent de valeur en écrivant le nombre d'avant à côté de
+celui d'après** (`C24 T5`, `T7`, `T12`, `TF T2`, `TF T3`, `PIC T6` et `PIC T7`),
+et **deux montages sont réparés** (`C24 T2`, `RC T2`).
+
+**Auparavant, après le lot RAID-ET-ÉCRAN :**
 ⚠⚠ **LA FORMATION DE RAID RESTE EN PLACE D'UN RAID À L'AUTRE, ET C'EST LE SEUL
 CHAMP NEUF DE LA SAUVEGARDE.** Ethan, 10/09 : « la position des unités dans le
 menu Offense revient à chaque fois. Je vais attaquer une cible, je fais un raid,

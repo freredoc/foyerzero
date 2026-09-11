@@ -102,6 +102,31 @@ export const RAYONS = {
 export const RAISON = BigInt(GEOGRAPHIE.raisonDeLaForce);
 
 /**
+ * La prime de niveau, en FRACTION EXACTE — lot TERRITOIRE-ET-ÉCHELLE, 10/09.
+ *
+ * ⚠⚠ ELLE EST SÉPARÉE DE `RAISON`, ET C'EST TOUT L'ARBITRAGE. L'exposant valait
+ * `niveau − distance` : **un seul nombre gouvernait la prime de niveau ET la
+ * décroissance en distance**, si bien qu'on ne pouvait pas adoucir l'une sans
+ * l'autre. Ethan ne demande que la première — « quelques niveaux suffisent à
+ * totalement renverser l'équilibre » —, et mesuré, adoucir les deux ensemble
+ * fait basculer 22 cases sur 420 VERS L'OUVRAGE sur un champ contesté.
+ *
+ * ⚠ ET ELLES NE SE RECOPIENT PAS : `GEOGRAPHIE` porte les deux entiers, ce
+ * module les convertit.
+ */
+export const NIVEAU_NUM = BigInt(GEOGRAPHIE.raisonDeNiveau.numerateur);
+export const NIVEAU_DEN = BigInt(GEOGRAPHIE.raisonDeNiveau.denominateur);
+
+/**
+ * Le plafond de niveau, en `BigInt` — le budget d'exposants du dénominateur.
+ *
+ * ⚠ LU DANS `GEOGRAPHIE`, comme les rayons. Un plafond qui monterait sans que ce
+ * nombre suive rendrait un exposant NÉGATIF, et `BigInt` lève dessus — bruyant,
+ * ce qui est ce qu'on veut, mais loin de la cause.
+ */
+export const NIVEAU_MAX = BigInt(GEOGRAPHIE.niveauPlafond);
+
+/**
  * De combien tous les exposants sont décalés pour rester positifs.
  *
  * ⚠⚠ `niveau − distance` EST NÉGATIF POUR UNE BASE DE NIVEAU 1 À TROIS CASES, ET
@@ -114,6 +139,24 @@ export const RAISON = BigInt(GEOGRAPHIE.raisonDeLaForce);
  * ce nombre suive ferait lever la puissance, et la carte entière avec elle.
  */
 export const DECALAGE_DES_EXPOSANTS = Math.max(...Object.values(RAYONS));
+
+/**
+ * De quel camp venait la base dont une ruine est le décombre.
+ *
+ * ⚠⚠ LES DEUX SEULES CLÉS SONT CELLES QUE `spriteDeLaRuine` ACCEPTE — `base` et
+ * `baseJoueur`, « seules les bases en laissent ». La table est donc close par
+ * construction, et une clé inconnue fait LEVER `rayonDeLaForce` plutôt que de
+ * rendre un rayon plausible.
+ *
+ * ⚠ ELLE EST ICI ET NON DANS `sim/ruines.js`, ET C'EST UNE CONTRAINTE
+ * D'IMPORTS : `JOUEUR` et `OUVRAGE` vivent dans ce fichier, et `ruines.js`
+ * range le `vainqueur` « sans dépendre de `sim/territoire.js`, qui dépend de
+ * lui » — son en-tête le dit. Les deux lecteurs sont d'ailleurs ici.
+ */
+export const CAMP_D_ORIGINE_DE_LA_RUINE = Object.freeze({
+  base: OUVRAGE,
+  baseJoueur: JOUEUR,
+});
 
 /**
  * Le niveau d'une base du joueur, en niveaux ENTIERS.
@@ -241,7 +284,59 @@ export function forcesDeLOuvrage(etat, fenetre) {
  * @returns {bigint}
  */
 export function forceDUneBase(niveau, distance) {
-  return RAISON ** BigInt(niveau - distance + DECALAGE_DES_EXPOSANTS);
+  // ⚠ LES DEUX BORNES SE GARDENT ICI, ET ELLES LÈVENT. Hors d'elles, un des
+  // trois exposants devient négatif et `BigInt` lève de son côté — mais avec un
+  // message qui parle d'arithmétique, très loin de la grandeur en cause.
+  if (!Number.isInteger(niveau) || niveau < 0 || niveau > GEOGRAPHIE.niveauPlafond) {
+    throw new RangeError(
+      `territoire : niveau « ${niveau} » — entier de 0 à ${GEOGRAPHIE.niveauPlafond} attendu`,
+    );
+  }
+  if (!Number.isInteger(distance) || distance < 0 || distance > DECALAGE_DES_EXPOSANTS) {
+    throw new RangeError(
+      `territoire : distance « ${distance} » — entier de 0 à ${DECALAGE_DES_EXPOSANTS} attendu`,
+    );
+  }
+  const n = BigInt(niveau);
+  const d = BigInt(distance);
+  return (NIVEAU_NUM ** n) * (NIVEAU_DEN ** (NIVEAU_MAX - n))
+    * (RAISON ** (BigInt(DECALAGE_DES_EXPOSANTS) - d));
+}
+
+/**
+ * Le rayon d'influence d'une force — celui de son camp, ou celui de ce qu'une
+ * ruine ÉTAIT.
+ *
+ * ⚠⚠ UNE RUINE ÉMET AU RAYON DE LA BASE TOMBÉE, PAS À CELUI DU VAINQUEUR — lot
+ * TERRITOIRE-ET-ÉCHELLE, 10/09. Ethan : « si une base est isolée et qu'elle est
+ * rasée, c'est l'ensemble du territoire qu'elle émettait qui revient au
+ * vainqueur », et « on garde le rayon trois pour les bases Ouvrage ». Le brief de
+ * CONQUÊTE-24H l'avait déclaré réversible et chiffré : la ruine émettait au
+ * rayon du JOUEUR — 2, soit 21 cases —, elle émet au rayon de la base tombée.
+ *
+ * ⚠⚠ ET LA PORTÉE SE DÉDUIT DU `type`, JAMAIS DU `vainqueur`. `ruineFraiche` les
+ * range séparément et dit pourquoi : « le `type` et le `vainqueur` sont deux
+ * faits différents, et ils ne se déduisent pas l'un de l'autre ». Écrire
+ * `RAYONS[OUVRAGE]` en dur passerait AUJOURD'HUI — aucun chemin ne produit
+ * encore de ruine `baseJoueur`, `raserLaBase` redéployant la base du joueur au
+ * lieu de la retirer — et mentirait le jour où ce chemin arrivera.
+ *
+ * ⚠ UNE ÉCRITURE, DEUX LECTEURS : `campDeLaCase` et `territoireDeLaFenetre`
+ * doivent rendre la même case, et `C24 T1` les confronte.
+ *
+ * @param {{ruine?: boolean, type?: string}} force une base ou une ruine active
+ * @param {number} camp `JOUEUR` ou `OUVRAGE`, celui qui la compte
+ * @returns {number}
+ */
+export function rayonDeLaForce(force, camp) {
+  if (force.ruine !== true) return RAYONS[camp];
+  const origine = CAMP_D_ORIGINE_DE_LA_RUINE[force.type];
+  if (origine === undefined) {
+    throw new RangeError(
+      `territoire : ruine de type « ${force.type} » — camp d'origine inconnu`,
+    );
+  }
+  return RAYONS[origine];
 }
 
 /**
@@ -312,22 +407,31 @@ export function campDeLaCase(etat, rangee, colonne) {
   const sommes = { [JOUEUR]: undefined, [OUVRAGE]: undefined };
   let plancher = NEUTRE;
   const ajouter = (base, camp) => {
-    // ⚠⚠ UNE RUINE N'A PAS DE PLANCHER, ET C'EST UNE LECTURE — lot
-    // CONQUÊTE-24H. Le plancher dit « le territoire où la BASE se trouve ne
-    // change pas » ; une ruine n'est pas une base (§4 du brief), elle n'est
-    // qu'une contribution de plus dans la somme de son camp. Elle peut donc
-    // perdre sa propre case face à plus fort qu'elle — ce qui est exactement ce
-    // que dit le §5 : « sa frontière suit celle des autres, sans traitement
-    // particulier ». L'autre lecture — la ruine tient sa case coûte que coûte —
-    // tient au retrait de ces deux mots.
-    if (!base.ruine && base.rangee === rangee && base.colonne === colonne) {
+    // ⚠⚠ UNE RUINE A UN PLANCHER DEPUIS LE 10/09, ET LE BLOC QUI DISAIT LE
+    // CONTRAIRE EST PARTI AVEC LA LECTURE QU'IL PORTAIT. CONQUÊTE-24H écrivait
+    // « une ruine n'est pas une base, elle peut donc perdre sa propre case », et
+    // l'annonçait réversible : « l'autre lecture tient au retrait de ces deux
+    // mots ». Ethan a tranché — « quoi qu'il arrive la ruine conserve son carré
+    // original. Comme une base […] Juste le petit carré, même pas l'octogone. »
+    //
+    // ⚠⚠ ET LE DÉFAUT QU'IL A VU ÉTAIT DEUX VÉRITÉS SUR LA MÊME CASE.
+    // `lignesDeLaRuine` de `ui/monde.js` annonce « Terrain : Vous » en lisant le
+    // `vainqueur` de l'entrée, sans demander à qui la case appartient. Mesuré sur
+    // **1 630 rasages simulés** — dix graines, les rangées 120 à 290, chaque base
+    // de l'Ouvrage rasée tour à tour : sans plancher, la ruine PERDAIT sa propre
+    // case **826 fois sous l'ancien barème (50,7 %)** et en perdrait **885 sous
+    // celui du jour (54,3 %)**, pendant que le panneau annonçait « Vous »
+    // 1 630 fois sur 1 630.
+    if (base.rangee === rangee && base.colonne === colonne) {
       // ⚠ LE PLANCHER D'ETHAN : « le territoire où la base se trouve ne change
       // pas ». Le joueur l'emporte si les deux s'y trouvaient — cas impossible
       // aujourd'hui, `fondation.js` refusant de fonder sur un site de l'Ouvrage.
       if (plancher !== JOUEUR) plancher = camp;
     }
     const distance = distanceOctogonaleDInfluence(base.rangee - rangee, base.colonne - colonne);
-    if (distance > RAYONS[camp]) return;
+    // ⚠ LE RAYON SE DEMANDE — une ruine émet à celui de ce qu'elle ÉTAIT. Voir
+    // `rayonDeLaForce` ; `territoireDeLaFenetre` lit la même.
+    if (distance > rayonDeLaForce(base, camp)) return;
     const force = forceDUneBase(base.niveau, distance);
     sommes[camp] = sommes[camp] === undefined ? force : sommes[camp] + force;
   };
@@ -413,7 +517,9 @@ export function territoireDeLaFenetre(etat, fenetre) {
   const planchers = [];
 
   const peindre = (centre, camp) => {
-    const rayon = RAYONS[camp];
+    // ⚠ LE RAYON SE DEMANDE, ET C'EST LA MÊME FONCTION QUE `campDeLaCase` LIT.
+    // Une ruine émet à celui de ce qu'elle était — voir `rayonDeLaForce`.
+    const rayon = rayonDeLaForce(centre, camp);
     const somme = sommes[camp];
     for (let dr = -rayon; dr <= rayon; dr += 1) {
       const rangee = centre.rangee + dr;
@@ -441,10 +547,12 @@ export function territoireDeLaFenetre(etat, fenetre) {
     // `occupant` maintenant ne servirait à rien : la boucle de partage repasse
     // ensuite sur toutes les cases et l'écraserait.
     //
-    // ⚠ ET PAS POUR LES RUINES — même lecture qu'au-dessus, dans
-    // `campDeLaCase` : les deux fonctions doivent rendre la même case, donc le
-    // même refus. `C24 T1` les confronte.
-    if (!centre.ruine && centre.rangee >= r0 && centre.rangee <= r1
+    // ⚠⚠ ET IL VAUT POUR LES RUINES DEPUIS LE 10/09 — le `!centre.ruine` qui
+    // tenait ici est parti avec son jumeau de `campDeLaCase`, dans le même
+    // geste. Les deux fonctions doivent rendre la même case ; n'en corriger
+    // qu'une rouvrirait la divergence que le lot TERRITOIRE-LU a refermée, et
+    // `C24 T1` les confronte.
+    if (centre.rangee >= r0 && centre.rangee <= r1
       && centre.colonne >= c0 && centre.colonne <= c1) {
       planchers.push({ i: (centre.rangee - r0) * largeur + (centre.colonne - c0), camp });
     }

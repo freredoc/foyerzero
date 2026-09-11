@@ -551,20 +551,41 @@ export const GEOGRAPHIE = {
   rayonInfluenceEnnemie: 3, // fixe
   // ⚠⚠ LA RAISON DE LA PROGRESSION DE FORCE — ETHAN, 07/09, POINT 13. « Deux
   // bases 10 est moins fort qu'une base 20 » : la force d'une base sur une case
-  // vaut `raison ^ (niveau − distance)`, les bases d'un même camp s'ADDITIONNENT,
-  // et la case revient au camp dont la somme est la plus forte.
+  // vaut `raisonNiveau ^ niveau × raisonDeLaForce ^ (−distance)`, les bases d'un
+  // même camp s'ADDITIONNENT, et la case revient au camp dont la somme est la
+  // plus forte.
   //
-  // ⚠⚠ DEUX, ET C'EST CE NOMBRE-LÀ QUI FAIT TENIR LES DEUX MOITIÉS DE LA PHRASE.
-  // À la raison 2, deux bases de niveau 10 valent EXACTEMENT une base de niveau
-  // 11 — 2¹⁰ + 2¹⁰ = 2¹¹ —, donc l'essaimage rapporte ; et une base de niveau 20
-  // en vaut 1 024 de niveau 10, donc il ne rattrape jamais la montée en niveau.
-  // Une raison plus petite écraserait la seconde moitié, une plus grande la
-  // première.
+  // ⚠⚠ CELLE-CI NE GOUVERNE PLUS QUE LA DISTANCE — lot TERRITOIRE-ET-ÉCHELLE,
+  // 10/09, ET CE BLOC DISAIT LE CONTRAIRE. Il écrivait « DEUX, ET C'EST CE
+  // NOMBRE-LÀ QUI FAIT TENIR LES DEUX MOITIÉS DE LA PHRASE », puis « c'est le
+  // seul nombre à tourner si Ethan veut une progression plus douce » : la
+  // seconde phrase a envoyé chercher un réglage IMPOSSIBLE. La raison est un
+  // `BigInt`, donc 2 est déjà la plus petite qui soit — 3, 4, 5 sont toutes plus
+  // DURES, et il n'existe aucun entier plus doux.
   //
-  // ⚠ ELLE EST ICI PARCE QUE C'EST UNE VALEUR DE CALIBRAGE, et `sim/territoire.js`
-  // la LIT — il ne l'écrit pas. C'est le seul nombre à tourner si Ethan veut une
-  // progression plus douce ou plus dure.
+  // ⚠ UN SEUL EXPOSANT GOUVERNAIT LES DEUX GRANDEURS, ET C'EST CE QUI A DÛ ÊTRE
+  // SÉPARÉ. `niveau − distance` mêle la prime de niveau et la décroissance en
+  // distance ; Ethan ne demande à adoucir que la PREMIÈRE. Mesuré : adoucir les
+  // deux ensemble fait basculer **22 cases sur 420 VERS L'OUVRAGE** sur un champ
+  // contesté — une distance qui compte moins avantage le camp qui a le plus de
+  // bases. Les deux valeurs sont donc nommées séparément.
   raisonDeLaForce: 2,
+  // ⚠⚠ LA PRIME DE NIVEAU, EN FRACTION EXACTE — ETHAN, 10/09 : « quelques
+  // niveaux suffisent à totalement renverser l'équilibre, et ce n'est pas ce que
+  // je veux. Il faut que ce soit à peu près deux fois moins agressif. »
+  //
+  // ⚠⚠ UNE FRACTION, PARCE QU'UN ENTIER NE PEUT PAS DESCENDRE SOUS DEUX. 7/5
+  // vaut 1,4 : +1 niveau vaut 1,4 base au lieu de 2, +4 niveaux 3,8 au lieu de
+  // 16, et un niveau 20 vaut **29** niveau 10 au lieu de 1 024. Il faut **2,06**
+  // niveaux pour doubler la force, au lieu de 1,00 — « deux fois moins
+  // agressif », pris au mot.
+  //
+  // ⚠ DEUX ENTIERS, JAMAIS UN FLOTTANT, ET C'EST L'IDIOME DE `GRILLE.lateral`.
+  // Le champ de force est calculé en `BigInt` de bout en bout ; un `1.4` écrit
+  // ici y entrerait par la porte que ce module ferme depuis le lot
+  // TERRITOIRE-FORCE — « un flottant perdrait des unités exactement dans les cas
+  // serrés ». `sim/territoire.js` compose la fraction en entiers.
+  raisonDeNiveau: { numerateur: 7, denominateur: 5 },
   // ⚠⚠ LA ZONE N'EST NI UN CARRÉ NI UN DISQUE : C'EST UN OCTOGONE, ET
   // ETHAN L'A DESSINÉ CASE PAR CASE LE 03/09/2026. « le territoire doit avoir 8
   // cases de plus, dans les angles. un carré de 5x5 avec chaque coin rogné

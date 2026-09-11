@@ -145,12 +145,19 @@ test('C24 T1 — une base rasée émet le territoire du JOUEUR, sur son octogone
 
   retirerLeSite(etat, identite, JOUEUR);
 
-  // ⚠⚠ APRÈS : la case et son octogone reviennent au joueur — 21 cases, celles
-  // du rayon 2, PARCE QUE LA RUINE PREND LA PORTÉE DU CAMP POUR LEQUEL ELLE
-  // ÉMET. C'est la lecture retenue au §1 du brief, déclarée réversible : l'autre
-  // — la ruine garde la portée de ce qu'elle était — rendrait 37 ici.
+  // ⚠⚠ APRÈS : la case et son octogone reviennent au joueur — **37 cases**, et
+  // c'est la SECONDE lecture qui s'applique depuis le 10/09 : LA RUINE ÉMET AU
+  // RAYON DE CE QU'ELLE ÉTAIT, jamais à celui du camp qui la tient. Le §1 du lot
+  // CONQUÊTE-24H avait pris l'autre — « la ruine prend la portée du camp pour
+  // lequel elle émet », 21 cases — en la déclarant réversible et en annonçant
+  // qu'elle rendrait 37 dans l'autre sens. Elle est retournée : une base de
+  // l'Ouvrage rasée garde l'emprise d'une base de l'Ouvrage, ce que le joueur a
+  // sous les yeux au moment où il la rase.
+  // ⚠⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner
+  // au prochain arbitrage, et jamais à opposer à celui qui viendra. Ce nombre
+  // encode un réglage de territoire, pas une propriété du moteur.
   const apres = territoireDeLaFenetre(etat, fenetre);
-  assert.equal(compter(apres, JOUEUR), 21, 'la ruine n\'émet pas l\'octogone du joueur');
+  assert.equal(compter(apres, JOUEUR), 37, 'la ruine n\'émet pas l\'octogone de ce qu\'elle ÉTAIT');
   assert.equal(compter(apres, OUVRAGE), 0, 'la base rasée peint encore pour l\'Ouvrage');
   assert.equal(occupantDeLaCase(apres, BASE_20.rangee, BASE_20.colonne), JOUEUR);
 
@@ -165,25 +172,35 @@ test('C24 T1 — une base rasée émet le territoire du JOUEUR, sur son octogone
     );
   }
 
-  // ⚠⚠ ET LA RUINE N'A PAS DE PLANCHER — LECTURE DÉCLARÉE, RÉVERSIBLE, ET
-  // MESURÉE ICI POUR QU'ELLE NE SOIT PAS GARDÉE PAR RIEN. Le plancher d'Ethan
-  // dit « le territoire où la BASE se trouve ne change pas » ; une ruine n'est
-  // pas une base (§4 du brief) et le §5 veut que sa frontière « suive celle des
-  // autres, sans traitement particulier ». Elle peut donc perdre sa PROPRE case
-  // face à plus fort qu'elle : ruine du joueur à 20 sur sa case, 2²³ ; ruine de
-  // l'Ouvrage à 25 posée juste à côté, 2²⁷. Retourner la lecture — deux mots à
-  // retirer dans `campDeLaCase` et dans `peindre` — fait tomber ces deux
-  // assertions, et c'est exactement ce qu'on veut d'une lecture réversible.
+  // ⚠⚠ ET LA RUINE GARDE SA PROPRE CASE, COÛTE QUE COÛTE — ASSERTION RETOURNÉE
+  // LE 10/09, PAS RETIRÉE. Le lot CONQUÊTE-24H avait lu l'inverse : « une ruine
+  // n'est pas une base, donc pas de plancher », si bien qu'une ruine pouvait
+  // perdre le carré qu'elle occupe. Ethan, 10/09 : « quoi qu'il arrive la ruine
+  // conserve son carré original… juste le petit carré, même pas l'octogone ».
+  // Le plancher porte donc sur LA SEULE CASE de la ruine, et il s'arrête là :
+  // le reste de son octogone se dispute comme n'importe quel autre.
+  //
+  // ⚠ LE MONTAGE EST CELUI QUI FAISAIT PERDRE LA CASE, MOT POUR MOT, et c'est ce
+  // qui rend le retournement falsifiable : ruine du joueur à 20 sur sa case,
+  // ruine de l'Ouvrage à 25 posée juste à côté. Sans le plancher, la case revient
+  // à l'Ouvrage — c'est ce que ces deux assertions mesuraient hier.
   etat.basesRasees.push(ruineFraiche(
     BASE_20.rangee + 1, BASE_20.colonne, 'baseJoueur', OUVRAGE, 25, etat.horloge.nbTicks,
   ));
-  assert.equal(campDeLaCase(etat, BASE_20.rangee, BASE_20.colonne), OUVRAGE,
-    'la ruine garde sa case coûte que coûte : le plancher s\'applique aux ruines');
+  assert.equal(campDeLaCase(etat, BASE_20.rangee, BASE_20.colonne), JOUEUR,
+    'la ruine perd sa propre case : le plancher ne s\'applique plus aux ruines');
   assert.equal(
     occupantDeLaCase(territoireDeLaFenetre(etat, fenetre), BASE_20.rangee, BASE_20.colonne),
-    OUVRAGE,
-    'la carte donne un plancher à la ruine que la case lui refuse',
+    JOUEUR,
+    'la carte refuse à la ruine le plancher que la case lui donne',
   );
+
+  // ⚠⚠ ET LE PLANCHER S'ARRÊTE AU CARRÉ : LA CASE VOISINE, ELLE, SE PERD. Sans
+  // cette moitié, un plancher élargi à tout l'octogone passerait l'assertion
+  // ci-dessus sans qu'un seul test ne bronche — et il rendrait une ruine
+  // INDÉLOGEABLE sur trente-sept cases.
+  assert.equal(campDeLaCase(etat, BASE_20.rangee + 1, BASE_20.colonne), OUVRAGE,
+    'le plancher de la ruine déborde de son propre carré');
 });
 
 // ---------------------------------------------------------------------------
@@ -202,7 +219,7 @@ test('C24 T2 — la ruine émet au niveau de la base rasée, pas à un autre', (
   // ⚠⚠ ON LE CONSTRUIT AVEC UNE RUINE DE L'OUVRAGE, ET C'EST LÉGITIME : la règle
   // est symétrique (§1 du brief, `C24 T4`), une ruine est un émetteur de plein
   // droit, et son niveau se choisit puisqu'il est STOCKÉ. L'adversaire vaut donc
-  // 18 exactement, comme le brief le voulait.
+  // 18 exactement, comme le brief le voulait — 17 depuis le 10/09, voir ci-dessous.
   //
   // ⚠⚠ ET LE MONTAGE TOURNE DEUX FOIS, SUR DEUX BASES DE NIVEAUX DIFFÉRENTS.
   // C'est ce qui distingue « le niveau de la rasée » de n'importe quelle autre
@@ -210,13 +227,26 @@ test('C24 T2 — la ruine émet au niveau de la base rasée, pas à un autre', (
   // même géométrie, même adversaire, même vainqueur. Un code qui émettrait au
   // niveau du VAINQUEUR (le joueur est à 1), à un niveau fixe, ou au niveau de la
   // rangée LUE AILLEURS rendrait deux fois la même réponse.
+  //
+  // ⚠⚠ L'ADVERSAIRE PASSE DE 18 À 17 LE 10/09, ET C'EST LE MONTAGE QU'ON RÉPARE,
+  // JAMAIS L'ASSERTION. Le niveau de la rasée n'a pas bougé — c'est la FORCE
+  // qu'un niveau porte qui a changé : `raisonDeNiveau` vaut 7/5 et non plus 2,
+  // donc un niveau de plus ne DOUBLE plus, et une case d'écart continue de
+  // diviser par deux. Mesuré sur `forceDUneBase` : contre un 18, la ruine de 20
+  // perd comme celle de 17, et le test cesse alors de distinguer quoi que ce
+  // soit — c'est-à-dire qu'il passerait au vert sur un code qui émettrait au
+  // niveau du vainqueur. Contre **17**, il départage à nouveau, et il le fait
+  // par les deux bouts : trois niveaux d'avance battent une case de retard,
+  // l'égalité de niveau non.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
   const verdict = (cible) => {
     const { etat, identite } = uneSeuleBase(cible);
     const poste = { rangee: cible.rangee + 3, colonne: cible.colonne };
     const disputee = { rangee: cible.rangee + 2, colonne: cible.colonne };
     retirerLeSite(etat, identite, JOUEUR);
     etat.basesRasees.push(
-      ruineFraiche(poste.rangee, poste.colonne, 'baseJoueur', OUVRAGE, 18,
+      ruineFraiche(poste.rangee, poste.colonne, 'baseJoueur', OUVRAGE, 17,
         etat.horloge.nbTicks),
     );
     return {
@@ -227,11 +257,11 @@ test('C24 T2 — la ruine émet au niveau de la base rasée, pas à un autre', (
 
   const fort = verdict(BASE_20);
   assert.equal(fort.niveau, 20, 'la rangée 200 ne vaut plus le niveau 20');
-  assert.equal(fort.camp, JOUEUR, 'la ruine de niveau 20 ne l\'emporte pas sur un 18');
+  assert.equal(fort.camp, JOUEUR, 'la ruine de niveau 20 ne l\'emporte pas sur un 17');
 
   const faible = verdict(BASE_17);
   assert.equal(faible.niveau, 17, 'la rangée 215 ne vaut plus le niveau 17');
-  assert.equal(faible.camp, OUVRAGE, 'la ruine de niveau 17 l\'emporte sur un 18');
+  assert.equal(faible.camp, OUVRAGE, 'la ruine de niveau 17 l\'emporte sur un 17 plus proche');
 });
 
 // ---------------------------------------------------------------------------
@@ -316,8 +346,12 @@ test('C24 T4 — une base rasée par l\'OUVRAGE émet pour l\'Ouvrage', () => {
   assert.equal(compter(apres, JOUEUR), 0);
   assert.equal(occupantDeLaCase(apres, BASE_20.rangee, BASE_20.colonne), OUVRAGE);
 
-  // ⚠ ET LA PORTÉE EST CELLE DE L'OUVRAGE, PAS CELLE DU JOUEUR : 37 cases contre
-  // 21. C'est la même lecture qu'en `T1`, prise de l'autre côté.
+  // ⚠⚠ ET CE COMMENTAIRE A CHANGÉ DE SENS LE 10/09, IL N'A PAS ÉTÉ RETIRÉ. Il
+  // opposait « 37 cases contre 21 » à `T1`, au temps où une ruine prenait la
+  // portée du camp qui la TIENT ; elle prend désormais celle de ce qu'elle
+  // ÉTAIT, donc `T1` rend 37 lui aussi. Ce que ce test-ci garde encore, et qui
+  // est la moitié qui compte, c'est que les DEUX rayons existent et diffèrent :
+  // sans cela, `T1` et `T5` compteraient 37 pour une raison qui n'en est pas une.
   assert.equal(RAYONS[OUVRAGE], 3);
   assert.notEqual(RAYONS[JOUEUR], RAYONS[OUVRAGE]);
 
@@ -343,8 +377,15 @@ test('C24 T5 — à 24 h moins un tick, la ruine émet encore', () => {
   assert.deepEqual(baseCourante(etat).position, LOIN,
     'la base du joueur a bougé pendant le rattrapage : le montage mesure autre chose');
 
+  // ⚠⚠ CE TEST TOMBE SUR UN COMPTE DE CASES, JAMAIS SUR UN SEUIL D'HORLOGE —
+  // vérifié avant de toucher au montage. `TICKS_DE_RUINE` n'a pas bougé d'un
+  // tick, et `C24 T6` garde l'autre côté du seuil : ce qui change ici est le
+  // nombre de cases qu'une ruine peint, parce qu'elle émet désormais au rayon
+  // de ce qu'elle ÉTAIT — 21 hier, **37** aujourd'hui.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
   const carte = territoireDeLaFenetre(etat, autour(BASE_20, 6));
-  assert.equal(compter(carte, JOUEUR), 21, 'la ruine s\'est tue avant l\'heure');
+  assert.equal(compter(carte, JOUEUR), 37, 'la ruine s\'est tue avant l\'heure');
 });
 
 test('C24 T6 — à 24 h pile, la ruine ne dit plus rien', () => {
@@ -380,7 +421,14 @@ test('C24 T7 — vingt-cinq heures hors ligne, en UNE fois, et la ruine est mort
   retirerLeSite(etat, identite, JOUEUR);
 
   const fenetre = autour(BASE_20, 6);
-  assert.equal(compter(territoireDeLaFenetre(etat, fenetre), JOUEUR), 21,
+  // ⚠⚠ CE TEST TOMBE SUR UN COMPTE DE CASES, JAMAIS SUR UN SEUIL D'HORLOGE —
+  // vérifié avant de toucher au montage. `TICKS_DE_RUINE` n'a pas bougé d'un
+  // tick, et `C24 T6` garde l'autre côté du seuil : ce qui change ici est le
+  // nombre de cases qu'une ruine peint, parce qu'elle émet désormais au rayon
+  // de ce qu'elle ÉTAIT — 21 hier, **37** aujourd'hui.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
+  assert.equal(compter(territoireDeLaFenetre(etat, fenetre), JOUEUR), 37,
     'montage sans mordant : la ruine n\'émettait déjà rien');
 
   const json = serialiser(etat, T0);
@@ -393,7 +441,7 @@ test('C24 T7 — vingt-cinq heures hors ligne, en UNE fois, et la ruine est mort
   // ⚠ ET UNE NUIT PLUS COURTE NE LA TUE PAS. Sans ce second chargement, un code
   // qui expirerait TOUT au chargement passerait le premier.
   const tot = charger(json, T0 + 23 * 3600 * 1000);
-  assert.equal(compter(territoireDeLaFenetre(tot, fenetre), JOUEUR), 21,
+  assert.equal(compter(territoireDeLaFenetre(tot, fenetre), JOUEUR), 37,
     'la ruine a expiré au bout de vingt-trois heures');
 });
 
@@ -518,7 +566,14 @@ test('C24 T12 — une v27 se charge, et ses bases rasées n\'émettent rien', ()
   terrainNu(etat, bande(190, 210), [BASE_20]);
   retirerLeSite(etat, siteDeLaCase(etat, BASE_20.rangee, BASE_20.colonne), JOUEUR);
   const fenetre = autour(BASE_20, 6);
-  assert.equal(compter(territoireDeLaFenetre(etat, fenetre), JOUEUR), 21,
+  // ⚠⚠ CE TEST TOMBE SUR UN COMPTE DE CASES, JAMAIS SUR UN SEUIL D'HORLOGE —
+  // vérifié avant de toucher au montage. `TICKS_DE_RUINE` n'a pas bougé d'un
+  // tick, et `C24 T6` garde l'autre côté du seuil : ce qui change ici est le
+  // nombre de cases qu'une ruine peint, parce qu'elle émet désormais au rayon
+  // de ce qu'elle ÉTAIT — 21 hier, **37** aujourd'hui.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
+  assert.equal(compter(territoireDeLaFenetre(etat, fenetre), JOUEUR), 37,
     'montage sans mordant : la v28 n\'émettait déjà rien');
 
   // La même partie, telle qu'une v27 l'aurait écrite : des CASES, rien d'autre.

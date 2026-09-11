@@ -32,7 +32,7 @@ import { poserLaBaseSur } from '../src/sim/deplacement.js';
 import { niveauDesBatiments } from '../src/sim/niveau-de-base.js';
 import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { baseCourante } from '../src/sim/base-courante.js';
-import { caseRasee } from '../src/sim/ruines.js';
+import { caseRasee, ruineFraiche } from '../src/sim/ruines.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GRAINE = 31_082_026;
@@ -445,44 +445,81 @@ function compter(carte, camp) {
   return n;
 }
 
-test('TF T1 — deux bases de niveau 10 valent EXACTEMENT une base de niveau 11', () => {
-  // ⚠⚠ C'EST LA PREMIÈRE MOITIÉ DE L'ARBITRAGE, ET ELLE TIENT À LA RAISON 2.
-  // `2¹⁰ + 2¹⁰ = 2¹¹` : l'essaimage rapporte. L'égalité est STRICTE et en
-  // `BigInt` — un flottant la rendrait vraie ici et fausse au niveau 50, où la
-  // somme dépasse `Number.MAX_SAFE_INTEGER`.
-  assert.equal(forceDUneBase(10, 0) + forceDUneBase(10, 0), forceDUneBase(11, 0));
+test('TF T1 — deux bases de niveau 10 valent un peu PLUS qu\'une base de niveau 11', () => {
+  // ⚠⚠ UNE PROPRIÉTÉ ARBITRÉE DISPARAÎT ICI, ET CE TEST EST RETOURNÉ POUR LA
+  // DIRE PLUTÔT QUE POUR S'EFFACER. Jusqu'au 10/09, `2¹⁰ + 2¹⁰ = 2¹¹` : deux
+  // bases de niveau 10 valaient EXACTEMENT une base de niveau 11, et cette
+  // égalité tenait à la raison 2. Ethan : « quelques niveaux suffisent à
+  // totalement renverser l'équilibre, et ce n'est pas ce que je veux. Il faut
+  // que ce soit à peu près deux fois moins agressif. » La prime de niveau passe
+  // à **7/5**, et l'égalité devient une inégalité : un niveau de plus ne vaut
+  // plus que **1,4 base**, donc deux bases en valent une et demie. **Essaimer
+  // devient légèrement meilleur que monter** — c'est le prix de
+  // l'adoucissement, il a été annoncé à Ethan avant l'arbitrage, et il est
+  // écrit ici pour qu'un lot futur ne le prenne pas pour un défaut.
+  //
+  // ⚠ CE QUI NE CHANGE PAS : la force reste STRICTEMENT croissante en niveau, et
+  // elle reste en `BigInt` — un flottant la rendrait juste ici et fausse au
+  // niveau 50, où les sommes comparées dépassent `Number.MAX_SAFE_INTEGER`.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
+  assert.ok(forceDUneBase(10, 0) * 2n > forceDUneBase(11, 0),
+    'deux bases de niveau 10 ne dépassent pas une base de niveau 11');
+  assert.ok(forceDUneBase(10, 0) < forceDUneBase(11, 0),
+    'une base de niveau 10 vaut déjà une base de niveau 11 : le niveau ne rapporte plus rien');
   assert.equal(typeof forceDUneBase(10, 0), 'bigint');
 
-  // ⚠ ET ELLE TIENT À TOUS LES NIVEAUX, PAS SEULEMENT À DIX. Un montage à un
-  // seul palier passerait sur un formateur qui aurait codé ce cas-là en dur.
+  // ⚠ ET ÇA TIENT À TOUS LES NIVEAUX, PAS SEULEMENT À DIX. Un montage à un seul
+  // palier passerait sur un formateur qui aurait codé ce cas-là en dur.
   for (let n = 1; n < NIVEAU.plafond; n += 1) {
-    assert.equal(forceDUneBase(n, 0) + forceDUneBase(n, 0), forceDUneBase(n + 1, 0),
-      `deux bases de niveau ${n} ne valent pas une de niveau ${n + 1}`);
+    assert.ok(forceDUneBase(n, 0) * 2n > forceDUneBase(n + 1, 0),
+      `deux bases de niveau ${n} ne dépassent pas une de niveau ${n + 1}`);
+    assert.ok(forceDUneBase(n, 0) < forceDUneBase(n + 1, 0),
+      `le niveau ${n + 1} ne vaut pas plus que le niveau ${n}`);
   }
 
-  // ⚠ FALSIFIABLE : TROIS bases de niveau 10 ne valent PAS une de niveau 11.
-  // Sans cette ligne, une force constante passerait l'égalité ci-dessus.
-  assert.notEqual(forceDUneBase(10, 0) * 3n, forceDUneBase(11, 0));
+  // ⚠ FALSIFIABLE PAR LE HAUT : le rapport est 1,4 et non 2, donc une base de
+  // niveau 11 vaut MOINS d'une base et demie de niveau 10. Sans cette ligne, la
+  // raison 2 d'hier passerait l'inégalité ci-dessus sans un mot.
+  assert.ok(forceDUneBase(10, 0) * 3n > forceDUneBase(11, 0) * 2n,
+    'le niveau vaut encore 1,5 base ou plus : l\'adoucissement n\'a pas eu lieu');
 
-  // ⚠ ET LA RAISON SE LIT DANS `GEOGRAPHIE`, elle ne s'écrit pas ici : c'est le
-  // seul nombre à tourner si Ethan veut une progression plus douce.
+  // ⚠⚠ ET LES DEUX RAISONS SE LISENT DANS `GEOGRAPHIE`, elles ne s'écrivent pas
+  // ici. Il y en a DEUX depuis le 10/09 et c'est le point : `raisonDeLaForce`
+  // gouverne la DISTANCE et vaut toujours 2, `raisonDeNiveau` gouverne la prime
+  // de NIVEAU et vaut 7/5. Un seul nombre pour les deux — ce qu'était l'exposant
+  // `niveau − distance` — ne pouvait pas adoucir l'un sans l'autre.
   assert.equal(RAISON, BigInt(GEOGRAPHIE.raisonDeLaForce));
   assert.equal(GEOGRAPHIE.raisonDeLaForce, 2);
+  assert.equal(GEOGRAPHIE.raisonDeNiveau.numerateur, 7);
+  assert.equal(GEOGRAPHIE.raisonDeNiveau.denominateur, 5);
 });
 
-test('TF T2 — une base de niveau 20 en vaut 1 024 de niveau 10', () => {
+test('TF T2 — une base de niveau 20 en vaut 29 de niveau 10', () => {
   // ⚠⚠ C'EST LA SECONDE MOITIÉ, ET ELLE DIT LE CONTRAIRE DE LA PREMIÈRE SANS LA
   // CONTREDIRE : l'essaimage rapporte, et il ne rattrape JAMAIS la montée en
   // niveau. Un test à deux bases ne montrerait pas la domination.
+  //
+  // ⚠⚠ MAIS LA DOMINATION A ÉTÉ DIVISÉE PAR TRENTE-CINQ LE 10/09 : il en fallait
+  // **1 024**, il en faut **29**. C'est très exactement ce qu'Ethan a arbitré —
+  // « à peu près deux fois moins agressif » —, et la mesure le dit : il faut
+  // désormais **2,06 niveaux pour doubler la force** contre 1,00 hier. Ce qui
+  // survit de l'arbitrage d'origine est la seule chose qui comptait : dix bases
+  // de niveau 10 ne valent toujours pas une base de niveau 20.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
   const dix = forceDUneBase(10, 0);
   const vingt = forceDUneBase(20, 0);
-  assert.equal(vingt / dix, 1024n);
-  assert.equal(dix * 1024n, vingt);
 
-  // Mille bases de niveau 10 restent SOUS une base de niveau 20.
-  assert.ok(dix * 1000n < vingt, 'mille bases de niveau 10 dépassent une base de 20');
-  // Et mille vingt-cinq la dépassent — la borne est là, pas ailleurs.
-  assert.ok(dix * 1025n > vingt, 'la borne des 1 024 n\'est pas serrée');
+  // ⚠ LA BORNE EST SERRÉE DES DEUX CÔTÉS, ET C'EST CE QUI LA REND MESURÉE PLUTÔT
+  // QU'ÉCRITE : vingt-huit bases de niveau 10 restent SOUS une base de niveau
+  // 20, vingt-neuf la dépassent. Le rapport exact vaut (7/5)¹⁰ = 28,93.
+  assert.ok(dix * 28n < vingt, 'vingt-huit bases de niveau 10 dépassent déjà une base de 20');
+  assert.ok(dix * 29n > vingt, 'la borne des 29 n\'est pas serrée');
+
+  // ⚠ ET DIX BASES DE NIVEAU 10 NE FONT TOUJOURS PAS UNE BASE DE NIVEAU 20 —
+  // c'est la phrase d'Ethan du 07/09, et elle tient encore après l'adoucissement.
+  assert.ok(dix * 10n < vingt, 'dix bases de niveau 10 valent une base de niveau 20');
 });
 
 test('TF T3 — le niveau 15 rogne le territoire du niveau 13, à trois cases', () => {
@@ -520,18 +557,32 @@ test('TF T3 — le niveau 15 rogne le territoire du niveau 13, à trois cases', 
 
   // ⚠ CASE PAR CASE, PAS PAR COMPTE SEUL. Un total juste peut cacher deux cases
   // échangées ; c'est le test qui relie la formule à l'arbitrage.
+  //
+  // ⚠⚠ ET LE ROGNAGE A RÉTRÉCI LE 10/09 : LE 15 NE PREND PLUS QUE HUIT CASES AU
+  // 13, ET IL EN PERD TROIS DES SIENNES. Deux niveaux d'avance ne valent plus
+  // `2²` mais `(7/5)²`, soit **1,96 base au lieu de 4** : la colonne collée au
+  // 13 lui revient désormais, et le 15 n'y est plus qu'à deux cases. C'est
+  // l'adoucissement d'Ethan vu à l'endroit où il se voit le mieux — deux
+  // niveaux d'écart ne renversent plus une case de distance.
+  // ⚠ TÉMOIN DE CALIBRAGE, VALEUR ARBITRÉE PAR ETHAN LE 10/09 : à réaligner au
+  // prochain arbitrage, jamais à opposer à celui qui viendra.
   const qui = (dr, dc) => occupantDeLaCase(carte, ouvrage.rangee + dr, ouvrage.colonne + dc);
   assert.equal(qui(0, 0), OUVRAGE, 'le 13 a perdu sa propre case');
   assert.equal(qui(0, -3), JOUEUR, 'le 15 a perdu sa propre case');
-  assert.equal(qui(0, -1), JOUEUR, 'la case collée au 13, mais à deux du 15, ne va pas au 15');
-  assert.equal(qui(0, -2), JOUEUR);
+  assert.equal(qui(0, -2), JOUEUR, 'la case collée au 15 ne va pas au 15');
   assert.equal(qui(0, 1), OUVRAGE, 'une case que le 15 ne peint pas lui revient quand même');
-  assert.equal(qui(1, -1), JOUEUR);
-  assert.equal(qui(-1, -1), JOUEUR);
 
-  // ⚠ LE 15 GARDE SON OCTOGONE ENTIER — 21 cases — et le 13 tombe de 37 à 26.
-  assert.equal(compter(carte, JOUEUR), 21, 'le niveau 15 ne garde pas tout son octogone');
-  assert.equal(compter(carte, OUVRAGE), 26, 'le niveau 13 ne perd pas onze cases');
+  // ⚠ LES TROIS CASES QUI ONT BASCULÉ, NOMMÉES : la colonne à une case du 13 et
+  // à deux du 15. Elles allaient au 15 sous la raison 2 ; sous 7/5 la distance
+  // l'emporte sur les deux niveaux d'écart.
+  assert.equal(qui(0, -1), OUVRAGE, 'la case collée au 13, mais à deux du 15, va encore au 15');
+  assert.equal(qui(1, -1), OUVRAGE);
+  assert.equal(qui(-1, -1), OUVRAGE);
+
+  // ⚠ LE 15 NE GARDE PLUS TOUT SON OCTOGONE — 18 cases sur 21 — et le 13 tombe
+  // de 37 à 29 au lieu de 26.
+  assert.equal(compter(carte, JOUEUR), 18, 'le niveau 15 ne perd pas trois cases de son octogone');
+  assert.equal(compter(carte, OUVRAGE), 29, 'le niveau 13 ne perd pas huit cases');
 });
 
 test('TF T4 — une base garde SA case face à un niveau 20 collé à elle', () => {
@@ -959,15 +1010,25 @@ test('RC T2 — le PLANCHER est facturé : une base ennemie chez soi se paie che
   //
   // ⚠ LE JOUEUR EST PLUS FORT, ET C'EST LA MOITIÉ QUI DISCRIMINE. Sans le
   // plancher, la somme des forces donnerait la case au joueur : une base de
-  // niveau 8,6 à deux cases pèse `2 ^ (9 − 2)`, une base de l'Ouvrage de niveau 2
-  // sur sa propre case `2 ^ 2`. Un code qui lirait la force SANS le plancher
+  // niveau 8,6 à deux cases pèse `(7/5)⁹ × 2⁻²`, une base de l'Ouvrage de niveau
+  // 4 sur sa propre case `(7/5)⁴`. Un code qui lirait la force SANS le plancher
   // rendrait donc 12, et ce test le nomme.
+  //
+  // ⚠⚠ ET LE MONTAGE A PERDU SA PRÉMISSE LE 10/09 — C'EST LE MONTAGE QU'ON
+  // RÉPARE, JAMAIS L'ASSERTION. La cible se cherchait sous le niveau **5** ;
+  // depuis que la prime de niveau vaut 7/5, cinq niveaux d'écart ne suffisent
+  // plus à franchir deux cases — il en faut cinq PLEINS, mesuré sur
+  // `forceDUneBase` : à niveau 5 l'Ouvrage l'emporte, à niveau 4 le joueur.
+  // Sans ce réglage, l'assertion « le joueur n'est pas le plus fort sur cette
+  // case » tombe et le test cesse de mesurer le PLANCHER — il mesurerait la
+  // force, que `TF T4` garde déjà. La capture d'Ethan, elle, n'a pas bougé
+  // d'une ligne : la base du joueur reste au niveau 8,6.
   const etat = creerEtat(GRAINE);
   const laBase = baseCourante(etat);
   // ⚠ LA BASE SE POSE À DEUX CASES D'UNE BASE DE L'OUVRAGE DE BAS NIVEAU, et la
   // case se CHERCHE au lieu de s'écrire : un montage qui écrit une coordonnée ne
   // garde que lui-même, et le dépôt l'a payé six fois.
-  const ouvrage = trouverUneBaseFaible(etat.graine);
+  const ouvrage = trouverUneBaseFaible(etat.graine, 4);
   poserLaBaseSur(etat, ouvrage.rangee + 2, ouvrage.colonne, laBase);
   // Une base du joueur de niveau 8,6 : dix bâtiments, six au niveau 9.
   laBase.disposition.length = 0;
@@ -1004,4 +1065,126 @@ test('RC T2 — le PLANCHER est facturé : une base ennemie chez soi se paie che
   // ⚠ LA FALSIFICATION, NOMMÉE : lire la force sans le plancher rendrait 12.
   assert.notEqual(coutDUnRaid(etat, laBase, cible), fixe + 2 * parCaseAllie,
     'le prix lit encore l\'octogone du joueur : 12 points au lieu de 16');
+});
+
+// ---------------------------------------------------------------------------
+// RT T1 et RT T2 — le plancher de la ruine, et l'accord des deux lecteurs
+// ---------------------------------------------------------------------------
+
+/**
+ * Une ruine du joueur sous le feu : une base de l'Ouvrage rasée, entourée de
+ * quatre ruines de l'Ouvrage BIEN plus fortes, à une case.
+ *
+ * ⚠⚠ L'ENTOURAGE EST FAIT DE RUINES ET NON DE BASES, ET C'EST MESURABLE. Le
+ * niveau d'un site de l'Ouvrage est celui de sa RANGÉE, à `niveauParCase` = 0,2
+ * par case : quatre voisines à UNE case ne peuvent différer de la rasée que
+ * d'un cinquième de niveau, ce qui ne renverse rien. Le niveau d'une ruine, lui,
+ * est STOCKÉ — c'est le même montage que `C24 T2`, et il est légitime pour la
+ * même raison : une ruine est un émetteur de plein droit.
+ */
+function ruineSousLeFeu(niveauVoisines = 30) {
+  const etat = creerEtat(GRAINE);
+  const bande = {
+    premiereRangee: 198, derniereRangee: 202, premiereColonne: 8, derniereColonne: 24,
+  };
+  const ouvrage = basesDeLaFenetre(etat.graine, bande).find(
+    (b) => b.colonne >= 10 && b.colonne <= 22,
+  );
+  assert.ok(ouvrage !== undefined, 'la graine ne porte pas la base attendue');
+  const niveau = niveauDeLaRangee(ouvrage.rangee);
+  assert.equal(niveau, 20, 'la base retenue n\'est pas de niveau 20');
+
+  // La base du joueur est très loin : ce test ne mesure que des ruines.
+  joueurAu(etat, { rangee: 295, colonne: 3 }, 1);
+  seuleBaseOuvrage(etat, ouvrage, {
+    premiereRangee: ouvrage.rangee - 10, derniereRangee: ouvrage.rangee + 10,
+    premiereColonne: 1, derniereColonne: 31,
+  });
+
+  // La base tombe : le joueur la rase, et il en reste une ruine à son nom.
+  etat.basesRasees.push(ruineFraiche(
+    ouvrage.rangee, ouvrage.colonne, 'base', JOUEUR, niveau, etat.horloge.nbTicks,
+  ));
+  const voisines = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (const [dr, dc] of voisines) {
+    etat.basesRasees.push(ruineFraiche(
+      ouvrage.rangee + dr, ouvrage.colonne + dc, 'baseJoueur', OUVRAGE, niveauVoisines,
+      etat.horloge.nbTicks,
+    ));
+  }
+  return { etat, ouvrage, niveau, niveauVoisines, voisines };
+}
+
+test('RT T1 — une ruine garde SA case face à quatre ruines bien plus fortes', () => {
+  // ⚠⚠ C'EST LE DÉFAUT QU'ETHAN A VU, MONTÉ EXACTEMENT. 10/09 : « j'ai rasé des
+  // bases lointaines et le territoire ne m'est pas revendiqué. Pourtant quand je
+  // clique dessus, il est censé être à moi. » Le panneau de la ruine lit le
+  // `vainqueur` de l'entrée et annonce « Terrain : Vous » ; la carte, elle,
+  // partageait la case à la FORCE, sans plancher. Deux vérités sur la même case.
+  //
+  // ⚠⚠ ET LE MONTAGE A SON MORDANT AVANT D'AVOIR UNE ASSERTION : sans le
+  // plancher, la case REVIENT à l'Ouvrage. C'est de l'arithmétique sur la
+  // fonction de force elle-même, pas une croyance — quatre ruines de niveau 30 à
+  // une case pèsent bien plus qu'une ruine de niveau 20 chez elle.
+  const { etat, ouvrage, niveau, niveauVoisines } = ruineSousLeFeu();
+  assert.ok(
+    forceDUneBase(niveau, 0) < 4n * forceDUneBase(niveauVoisines, 1),
+    'le montage ne mesure rien : la ruine est déjà la plus forte sur sa propre case',
+  );
+
+  // ⚠ LES DEUX LECTEURS, ET LES DEUX ENSEMBLE : `campDeLaCase` répond d'UNE case,
+  // `territoireDeLaFenetre` peint la carte. Le défaut d'Ethan se voyait sur la
+  // carte ; n'en corriger qu'un rouvrirait la divergence que `RT T2` garde.
+  assert.equal(campDeLaCase(etat, ouvrage.rangee, ouvrage.colonne), JOUEUR,
+    'la ruine perd sa propre case sous le feu : le plancher ne s\'applique pas');
+  const carte = territoireDeLaFenetre(etat, autour(ouvrage, 6));
+  assert.equal(occupantDeLaCase(carte, ouvrage.rangee, ouvrage.colonne), JOUEUR,
+    'la carte peint la case de la ruine à l\'Ouvrage');
+
+  // ⚠⚠ ET LE PLANCHER S'ARRÊTE AU CARRÉ — Ethan, mot pour mot : « juste le petit
+  // carré, même pas l'octogone ». La case à DEUX de la ruine, que rien n'occupe,
+  // revient à l'Ouvrage : sans cette moitié, un plancher élargi à l'octogone
+  // passerait les deux assertions ci-dessus et rendrait la ruine indélogeable
+  // sur trente-sept cases.
+  assert.equal(campDeLaCase(etat, ouvrage.rangee, ouvrage.colonne + 2), OUVRAGE,
+    'le plancher de la ruine déborde de son propre carré');
+  assert.equal(occupantDeLaCase(carte, ouvrage.rangee, ouvrage.colonne + 2), OUVRAGE,
+    'la carte donne à la ruine plus que son carré');
+});
+
+test('RT T2 — la carte et la case répondent la même chose, case par case', () => {
+  // ⚠⚠ C'EST LE TEST QUI VAUT LE PLUS, ET IL NE GARDE AUCUNE VALEUR
+  // D'ÉQUILIBRAGE. `campDeLaCase` et `territoireDeLaFenetre` sont DEUX boucles
+  // distinctes sur le même état — deux planchers, deux rayons, deux sommes. Leur
+  // divergence est SILENCIEUSE : rien ne s'affiche, rien ne lève, et le joueur
+  // lit un panneau qui contredit la carte sous ses yeux. C'est exactement ce qui
+  // vient d'être corrigé, et rien ne l'aurait dit.
+  //
+  // ⚠ LA FENÊTRE PORTE UNE RUINE DOMINÉE, ET LE MONTAGE LE PROUVE AVANT DE
+  // COMPARER : sans cela, un balayage sur du neutre s'accorderait sur rien.
+  const { etat, ouvrage } = ruineSousLeFeu();
+  const fenetre = autour(ouvrage, 6);
+  const carte = territoireDeLaFenetre(etat, fenetre);
+  assert.equal(occupantDeLaCase(carte, ouvrage.rangee, ouvrage.colonne), JOUEUR,
+    'le montage ne porte pas de ruine dominée');
+  assert.equal(campDeLaCase(etat, ouvrage.rangee, ouvrage.colonne + 2), OUVRAGE,
+    'le montage ne porte aucune case que la ruine PERD');
+
+  let neutres = 0;
+  let tenues = 0;
+  for (let r = fenetre.premiereRangee; r <= fenetre.derniereRangee; r += 1) {
+    for (let c = fenetre.premiereColonne; c <= fenetre.derniereColonne; c += 1) {
+      const dessin = occupantDeLaCase(carte, r, c);
+      assert.equal(dessin, campDeLaCase(etat, r, c),
+        `la carte et la case divergent en (${r}, ${c})`);
+      if (dessin === NEUTRE) neutres += 1; else tenues += 1;
+    }
+  }
+
+  // ⚠ ET LES TROIS OCCUPANTS PARAISSENT, sans quoi le balayage comparerait deux
+  // fonctions qui rendent `NEUTRE` partout.
+  assert.ok(neutres > 0, 'le balayage ne porte aucune case neutre');
+  assert.ok(tenues > 0, 'le balayage ne porte aucune case tenue');
+  assert.ok(compter(carte, JOUEUR) > 0, 'aucune case au joueur dans la fenêtre');
+  assert.ok(compter(carte, OUVRAGE) > 0, 'aucune case à l\'Ouvrage dans la fenêtre');
 });

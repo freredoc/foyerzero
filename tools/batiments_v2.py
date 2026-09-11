@@ -66,7 +66,9 @@ sys.path.insert(0, os.path.join(RACINE, 'tools'))
 
 from PIL import Image  # noqa: E402
 from chemins import dossier_sprites  # noqa: E402
-from final128 import pal, recadrer, conditionner, ecrire, boite, PV, OUV  # noqa: E402
+from final128 import (  # noqa: E402
+    pal, recadrer, conditionner, ecrire, boite, boite_dencre, PV, OUV,
+)
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 GRILLES = (128, 64)
@@ -116,10 +118,20 @@ EMPRISE_DEFAUT = EMPRISE_QUATRE_VINGT_DOUZE
 # ⚠⚠ LES DEUX EXCEPTIONS, ET RIEN D'AUTRE. Y inscrire un bâtiment au défaut
 # ferait une ligne qui ne dit rien et qui survivrait à un changement de défaut.
 #
-# ⚠ LE CHANTIER ET LA SOUCHE SONT LE MÊME OBJET DES DEUX CÔTÉS, et c'est pour ça
-# qu'ils partagent le palier haut : ce sont les deux bâtiments dont la perte RASE
-# la base — `raseLeSite` de `src/data/sites.js` et de `src/data/base.js` le dit
-# de tous les deux. Le plus gros bâtiment du camp tient donc la plus grande place.
+# ⚠⚠ LE CHANTIER EST SEUL AU PALIER HAUT DEPUIS LE 11/09, ET LA SOUCHE EN EST
+# PARTIE PAR UNE LIGNE RETIRÉE. Les deux sont le même objet des deux côtés — leur
+# perte RASE la base, `raseLeSite` le dit de tous les deux — et ils partageaient
+# le palier haut pour cette raison. Le lot TERRITOIRE-ET-ÉCHELLE a mesuré ce que
+# ça coûtait une fois les quatre états mis à la MÊME échelle : à 98 % il reste
+# 103,2 % de place dans la case, et la Souche en demande 111,0 % — elle serait
+# rognée. Ethan a tranché : **elle passe à 92 %**, où il reste 110,3 %. Le
+# Chantier, lui, demande 102,2 % et tient : il RESTE à 98 %.
+#
+# ⚠ ET C'EST UNE LIGNE QUI PART, PAS UNE LIGNE QUI CHANGE. 92 % EST le défaut ;
+# réécrire `'souche': EMPRISE_QUATRE_VINGT_DOUZE` ferait très exactement la ligne
+# que le paragraphe ci-dessus interdit — une ligne qui ne dit rien et qui
+# survivrait à un changement de défaut. Même raison pour l'Étai, qui est à 92 %
+# depuis toujours SANS être dans la table.
 #
 # ⚠⚠ CASERNE, DÉPÔT ET AÉRODROME SONT AU PALIER DES « AUTRES », PAS À CELUI DE
 # L'ÉCONOMIE, et c'est un choix soumis à Ethan puis validé — « Emprise 3 palier
@@ -130,7 +142,6 @@ EMPRISE_DEFAUT = EMPRISE_QUATRE_VINGT_DOUZE
 # sous l'autre jeu de noms.
 EMPRISE_PAR_BATIMENT = {
     'chantier_de_construction': EMPRISE_QUATRE_VINGT_DIX_HUIT,
-    'souche': EMPRISE_QUATRE_VINGT_DIX_HUIT,
 
     'centrale': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
     'collecteur_quartz': EMPRISE_QUATRE_VINGT_CINQ_BATIMENT,
@@ -186,8 +197,31 @@ def emprise_du_batiment(cle):
 VIGNETTES = [('collecteur_mixte', 'collecteur_quartz')]
 
 
+def cote_de_letat_neuf(prefixe, cle):
+    """Le côté du contenu de l'état NEUF d'un bâtiment, en pixels source.
+
+    ⚠⚠ C'EST L'ÉCHELLE DES QUATRE ÉTATS, ET ELLE SE MESURE UNE FOIS PAR FAMILLE.
+    Ethan, 10/09 : « les bâtiments abîmés ont tous la même dimension, fumée et
+    destruction incluses. C'est pour ça qu'un bâtiment abîmé semble réduit. Les
+    sprites doivent être réduits de la même façon, pas sprite par sprite », puis,
+    sur question directe : « l'emprise est atteinte par l'état neuf, pas par
+    l'état abîmé ».
+
+    ⚠⚠ ET LE CÔTÉ NE SE RECALCULE PAS ICI : `boite_dencre` de `final128.py` EST
+    la mesure que `recadrer` emploie pour elle-même — même clé détectée, même
+    seuil d'encre, même `max(largeur, hauteur)`. En écrire une seconde version
+    donnerait deux définitions de la même boîte, dont une seule recevrait la
+    prochaine correction.
+    """
+    with Image.open(os.path.join(SRC, f'{prefixe}{cle}.png')) as im:
+        return boite_dencre(im)['cote']
+
+
 def taches():
-    """Rend (nom_sprite, fichier_source, emprise32, ouvrage) par sprite."""
+    """Rend (nom_sprite, fichier_source, emprise32, ouvrage, cote_ref, ancrage).
+
+    ⚠ `cote_ref` VAUT `None` POUR LA VIGNETTE, ET C'EST VOULU — voir plus bas.
+    """
     out = []
     for cle, emprunte in VIGNETTES:
         if emprunte not in PV:
@@ -198,7 +232,13 @@ def taches():
         source = os.path.join(SRC, nom + '.png')
         if not os.path.exists(source):
             raise AssertionError(f'{nom}.png : source absente de art/sources/')
-        out.append((nom, source, emprise_du_batiment(emprunte), False))
+        # ⚠⚠ LA VIGNETTE GARDE SA PROPRE RÉFÉRENCE ET SON PROPRE ANCRAGE, ET
+        # C'EST UN NON-CHANGEMENT DÉLIBÉRÉ. Elle n'a qu'UN état : elle n'est pas
+        # une famille, il n'y a rien à mettre à la même échelle. Lui prêter la
+        # référence du collecteur quartz déplacerait la vignette de la palette,
+        # qu'Ethan n'a pas visée — son emprise, elle, reste EMPRUNTÉE, ce qui est
+        # la seule chose que `ED T3` mesure.
+        out.append((nom, source, emprise_du_batiment(emprunte), False, None, 'centre'))
     for cle in BATIMENTS:
         # ⚠⚠ CETTE GARDE RESTE, ET SA RAISON A CHANGÉ AU LOT ART-90. Elle
         # gardait une emprise CALCULABLE ; l'emprise ne se calcule plus. Ce
@@ -212,12 +252,16 @@ def taches():
                 '`BATIMENTS` et `PV` ne décrivent plus le même roster')
         ouv = cle in OUV
         prefixe = 'bat_o_' if ouv else 'bat_j_'
+        # ⚠ LA RÉFÉRENCE SE PREND UNE FOIS, AVANT LA BOUCLE DES ÉTATS : la
+        # prendre dedans la ferait dépendre de l'état qu'on est en train de
+        # traiter, c'est-à-dire refaire le défaut qu'on corrige.
+        reference = cote_de_letat_neuf(prefixe, cle)
         for etat in ETATS:
             nom = f'{prefixe}{cle}{etat}'
             source = os.path.join(SRC, nom + '.png')
             if not os.path.exists(source):
                 raise AssertionError(f'{nom}.png : source absente de art/sources/')
-            out.append((nom, source, emprise_du_batiment(cle), ouv))
+            out.append((nom, source, emprise_du_batiment(cle), ouv, reference, 'bas'))
     return out
 
 
@@ -225,12 +269,22 @@ def main():
     argparse.ArgumentParser(description=__doc__).parse_args()
     n = 0
     print(f"{'sprite':<40}{'empr.':>6}   boîte en 32")
-    for nom, source, emprise, ouv in taches():
+    for nom, source, emprise, ouv, reference, ancrage in taches():
         P = pal(ouv)
         im = Image.open(source)
         trace = ''
         for N in GRILLES:
-            g, matiere = conditionner(recadrer(im, emprise * (N // 32), N), P, N)
+            # ⚠⚠ `cote_ref` EST L'ÉCHELLE, `ancrage` EST LA POSITION, ET LES DEUX
+            # VONT ENSEMBLE ICI. La référence commune fait DÉBORDER les trois
+            # états abîmés — c'est le point : le corps du bâtiment garde sa
+            # taille, la fumée et les gravats prennent la place qu'ils prennent.
+            # Centré, ce débordement serait rogné en haut ET EN BAS à parts
+            # égales, donc le bâtiment serait coupé à sa base ; ancré en bas, les
+            # quatre états reposent sur la même ligne de sol et le panache monte
+            # librement dans ce qui reste au-dessus.
+            g, matiere = conditionner(
+                recadrer(im, emprise * (N // 32), N, cote_ref=reference, ancrage=ancrage),
+                P, N)
             d = dossier_sprites('bâtiment', str(N))
             os.makedirs(d, exist_ok=True)
             ecrire(g, P, os.path.join(d, nom + '.png'), matiere)

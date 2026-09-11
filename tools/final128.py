@@ -40,6 +40,32 @@ def quant(flat,P):
         elif n.startswith('blanc'): d[~pb,i]=M
     return d.argmin(1)
 
+def boite_dencre(cell):
+    """La boîte d'encre d'une cellule, et la clé de fond qui l'entoure.
+
+    ⚠⚠ EXTRAITE DE `recadrer` LE 11/09, ET C'EST CE QUI GARDE UNE SEULE ÉCRITURE
+    DU CÔTÉ. Le lot TERRITOIRE-ET-ÉCHELLE demande à `tools/batiments_v2.py` de
+    passer un `cote_ref` COMMUN aux quatre états d'un bâtiment, égal au côté du
+    contenu de l'état NEUF : il lui faut donc mesurer ce côté AVANT d'appeler
+    `recadrer`. Le recalculer là-bas aurait mis au dépôt deux définitions de
+    « la boîte d'encre » — même seuil d'alpha, même clé, même `max` — dont une
+    seule aurait reçu la prochaine correction.
+
+    ⚠ LE SEUIL EST CELUI DE L'ENCRE, `alpha >= 128`, et la clé se DÉTECTE par
+    `cle_de_fond` : les sources de l'Ouvrage sont sur clé verte depuis le lot
+    OUVRAGE-CÂBLAGE, et un magenta écrit en dur y prendrait la planche entière
+    pour du sujet.
+
+    ⚠ `xs` ET `ys` SORTENT AVEC LE RESTE. `recadrer` en a besoin pour son
+    centrage et pour sa ligne de sol ; les recalculer chez elle rouvrirait la
+    seconde écriture qu'on vient de fermer.
+    """
+    a=np.array(cell.convert('RGBA')); rgb=a[...,:3]
+    m=(~est_fond_sujet(rgb))&(a[...,3]>=128)
+    ys,xs=np.where(m)
+    return {'cle':cle_de_fond(rgb),'xs':xs,'ys':ys,
+            'cote':int(max(xs.max()-xs.min(),ys.max()-ys.min())+1)}
+
 def recadrer(cell,cible,N,cote_ref=None,ancrage='centre'):
     """Pose le contenu d'une cellule dans une boîte carrée, à l'échelle voulue.
 
@@ -111,10 +137,9 @@ def recadrer(cell,cible,N,cote_ref=None,ancrage='centre'):
     # elles-mêmes. Sur une source magenta les deux rendent la même boîte, et ce
     # n'est pas une relecture qui le dit : `tools/verifier.py` rejoue les quinze
     # producteurs et les compare à l'octet.
-    a=np.array(cell.convert('RGBA')); rgb=a[...,:3]
-    cle=cle_de_fond(rgb); m=(~est_fond_sujet(rgb))&(a[...,3]>=128)
-    ys,xs=np.where(m)
-    cote=max(xs.max()-xs.min(),ys.max()-ys.min())+1
+    b=boite_dencre(cell)
+    cle=b['cle']; xs=b['xs']; ys=b['ys']
+    cote=b['cote']
     reference=cote if cote_ref is None else int(round(cote_ref))
     box=int(round(reference*N/cible))
     cx=(xs.min()+xs.max())//2; cy=(ys.min()+ys.max())//2
