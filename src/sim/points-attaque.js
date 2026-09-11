@@ -43,7 +43,7 @@
 // est écrit. Le jour du pluriel, cette fonction change, et rien d'autre ici.
 
 import { POINTS_ATTAQUE, GEOGRAPHIE } from '../data/sites.js';
-import { TICKS_PAR_HEURE } from './clock.js';
+import { TICKS_PAR_HEURE, TICKS_PAR_SECONDE } from './clock.js';
 import { niveauDeLArmee } from './niveau-de-base.js';
 
 /**
@@ -193,6 +193,60 @@ export function regenerer(pa, nbTicks) {
   pa.residu = numerateur - gain * DIVISEUR_REGENERATION;
   pa.points = Math.min(pa.plafond, pa.points + gain);
   if (pa.points === pa.plafond) pa.residu = 0;
+}
+
+/**
+ * Ce que la régénération rapporte en une heure, en MILLI-points.
+ *
+ * ⚠⚠ DÉRIVÉE DU DIVISEUR, PAS DU TAUX. Écrire `plafond × partDuPlafondPourCent
+ * / 100` rendrait le même nombre aujourd'hui et serait une SECONDE lecture de la
+ * règle : le jour où le diviseur bougerait pour une raison d'arrondi — c'est sa
+ * garde d'entier qui l'exige —, l'écran annoncerait un débit que `regenerer` ne
+ * verse pas. Le gain d'un tick est `plafond / DIVISEUR` ; une heure en fait
+ * `TICKS_PAR_HEURE`, et les milli évitent le flottant.
+ *
+ * ⚠ ET LE FACTEUR EST ENTIER, comme le diviseur : il vaut `10 ×
+ * partDuPlafondPourCent`, donc 200 à 20 %. Un plafond de 203 rend 40 600 milli,
+ * c'est-à-dire 40,6 points par heure — et `formaterDebit` de `ui/chantier.js`
+ * l'écrit « +40/h » comme il écrit les trois ressources.
+ *
+ * @param {number} plafond en points, entier ≥ 1
+ * @returns {number} milli-points par heure, entier
+ */
+export function regenerationParHeureMilli(plafond) {
+  if (!Number.isInteger(plafond) || plafond < 1) {
+    throw new RangeError(`regenerationParHeureMilli : plafond « ${plafond} » — entier ≥ 1 attendu`);
+  }
+  return (plafond * TICKS_PAR_HEURE * 1000) / DIVISEUR_REGENERATION;
+}
+
+/**
+ * Dans combien de secondes le stock touchera le plafond — 0 s'il y est déjà.
+ *
+ * ⚠⚠ ELLE COMPTE EN TICKS ET RÉSOUT L'INÉGALITÉ DE `regenerer`, elle ne divise
+ * pas un manque par un débit. Après `n` ticks, le gain vaut
+ * `floor((plafond × n + residu) / DIVISEUR)` : le plein est atteint au premier
+ * `n` tel que `plafond × n + residu ≥ manque × DIVISEUR`. Passer par un débit
+ * horaire ferait entrer un flottant et perdrait le RÉSIDU — donc jusqu'à un tick
+ * d'écart avec ce que le moteur fera vraiment.
+ *
+ * ⚠ ARRONDI VERS LE HAUT, DEUX FOIS, et pour la raison écrite à
+ * `delaiAvantAmelioration` : annoncer une seconde de moins que la vérité ferait
+ * lire « plein » à un joueur qui ne l'est pas encore.
+ *
+ * @param {{ points: number, plafond: number, residu: number }} pa
+ * @returns {number} secondes, entier ≥ 0
+ */
+export function secondesAvantLePlein(pa) {
+  if (pa === null || typeof pa !== 'object'
+    || !Number.isInteger(pa.points) || !Number.isInteger(pa.plafond)
+    || !Number.isInteger(pa.residu)) {
+    throw new TypeError('secondesAvantLePlein : { points, plafond, residu } entiers attendus');
+  }
+  if (pa.points >= pa.plafond) return 0;
+  const manque = pa.plafond - pa.points;
+  const ticks = Math.ceil((manque * DIVISEUR_REGENERATION - pa.residu) / pa.plafond);
+  return Math.ceil(ticks / TICKS_PAR_SECONDE);
 }
 
 /**

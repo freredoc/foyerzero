@@ -245,8 +245,16 @@ test('ASSAUT T3 — second toucher sur SA base : on entre dans la base', () => {
   // Le crochet existe, à côté de celui du raid, et la session le câble.
   assert.match(src, /crochets\.surEntreeBase/, 'le crochet n\'est pas déclaré');
   const session = decommentee('src/ui/session.js');
-  assert.match(session, /surEntreeBase: \(\) => \{ montrerEcran\('chantier'\); \}/,
-    'la session ne câble pas l\'entrée dans la base');
+  // ⚠⚠ ET LA BASCULE ARME L'AVALEUR DE CLIC DEPUIS LE 11/09. Le crochet n'est
+  // pas seulement « montre l'écran du Chantier » : c'est le trajet où Ethan a vu
+  // un `click` fantôme tomber sur une pièce de garnison, et l'option `depuisUnToucher`
+  // est ce qui l'avale. Elle fait partie du câblage, pas de la décoration — voir
+  // `creerAvaleurDeClic` et `TO T2`.
+  assert.match(
+    session,
+    /surEntreeBase: \(\) => \{ montrerEcran\('chantier', \{ depuisUnToucher: true \}\); \}/,
+    'la session ne câble pas l\'entrée dans la base, ou elle n\'arme plus l\'avaleur de clic',
+  );
 });
 
 test('ASSAUT T4 — second toucher ailleurs : on entre dans la CIBLE, inchangé', () => {

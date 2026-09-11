@@ -910,7 +910,15 @@ export function geometrieDuHalo(position, ox, oy, pas) {
   };
 }
 
-/** Son épaisseur, en cases : elle suit le cran, comme celle des frontières. */
+/**
+ * Son épaisseur, en cases : elle suit le cran, comme celle des frontières.
+ *
+ * ⚠⚠ ET LA FLÈCHE NE LA PARTAGE PLUS — 11/09. Elle l'a lue jusqu'à ce lot, et
+ * c'est ce partage qui a produit le défaut : 0,08 de case fait un CADRE lisible
+ * et un TRAIT trop gras, 16 px pour une pointe de 48 px de large à 200 px par
+ * case. `EPAISSEUR_FLECHE` porte désormais la sienne. Il reste DEUX lecteurs
+ * ici — le halo et le liseré des cases du déplacement, tous deux des cadres.
+ */
 export const EPAISSEUR_HALO = 0.08;
 
 /**
@@ -1150,15 +1158,122 @@ export function traitRogne(trait, largeur, hauteur) {
 }
 
 /**
- * ⚠⚠ `RETRAIT_FLECHE` A ÉTÉ RETIRÉE AU LOT CARTE-B (06/09), ET C'EST UNE
- * CONSTANTE EN MOINS QUI SE DÉCLARE.
+ * ⚠⚠ `RETRAIT_FLECHE` N'EXISTE TOUJOURS PAS, ET ELLE A FAILLI REVENIR LE 11/09.
  *
- * Elle valait `0,55` case et reculait les deux bouts de la flèche pour qu'elle
- * ne couvre pas les emblèmes. Ethan, 06/09 : « du centre de l'un au centre de
- * l'autre ». Un retrait à zéro serait un nom qui ment ; la remettre serait
- * défaire l'arbitrage. Elle n'avait aucun autre lecteur — vérifié avant le
- * retrait, `src/` comme `test/`.
+ * Elle valait `0,55` case au lot CARTE-A et reculait les deux bouts de la flèche
+ * pour qu'elle ne couvre pas les emblèmes. Ethan l'a fait retirer le 06/09 — « du
+ * centre de l'un au centre de l'autre » —, et ce bloc a porté depuis un
+ * avertissement : la remettre serait défaire l'arbitrage.
+ *
+ * ⚠⚠ ELLE A ÉTÉ REMISE, PUIS RETIRÉE LE MÊME JOUR, ET LA LEÇON EST DANS LE
+ * MALENTENDU. Trois flèches avaient été rendues à Ethan sur le vrai fond de
+ * carte ; il a répondu « flèche A », et la variante A reculait ses bouts EN PLUS
+ * de changer sa pointe. J'en ai conclu qu'il choisissait les deux. Il a corrigé :
+ * « flèches de centre à centre. Mon problème c'était le bout de la flèche qui
+ * était moche. » Un choix fait sur une image porte sur CE QUE L'IMAGE MONTRE, pas
+ * sur la liste des changements qui l'ont produite : quand une variante mêle deux
+ * modifications, il faut demander laquelle emporte l'adhésion, ou n'en montrer
+ * qu'une par image.
+ *
+ * ⚠ CE QUI RESTE DU LOT, DONC : la POINTE, et elle seule — `EPAISSEUR_FLECHE`,
+ * `AILE_FLECHE` et `OUVERTURE_FLECHE` ci-dessous. Les deux bouts sont aux centres
+ * des deux cases, comme le 06/09 l'a tranché, et `CARTE-B T3` le garde.
  */
+
+/**
+ * L'épaisseur de la hampe, en parts de case.
+ *
+ * ⚠⚠ 0,04, ET C'EST LE NOMBRE QU'ETHAN A CHOISI SUR PIÈCE — 11/09 : « trait
+ * légèrement + épais » que la variante A rendue à 0,03. Trois épaisseurs lui ont
+ * été rendues sur le même fond, 6, 8 et 10 pixels à 200 px par case ; il a pris
+ * celle du milieu.
+ *
+ * ⚠ ELLE N'EST PLUS `EPAISSEUR_HALO`. La flèche la partageait avec le halo et
+ * les cases du déplacement, soit 0,08 : à 200 px par case, une hampe de 16 px
+ * pour une pointe de 48 px de large — la pointe ne dépassait que de 14 px de
+ * chaque côté, et Ethan l'a dite « toujours moche » trois lots de suite. Un
+ * halo est un CADRE, une flèche est un TRAIT : rien n'exigeait qu'ils aient la
+ * même graisse, et les confondre a coûté trois allers-retours.
+ */
+export const EPAISSEUR_FLECHE = 0.04;
+
+/** L'aile de la pointe, en parts de case, et son demi-angle. */
+export const AILE_FLECHE = 0.34;
+export const OUVERTURE_FLECHE = Math.PI / 6;
+
+/**
+ * Tout ce qu'il faut peindre pour une flèche, en pixels de canevas — SANS DOM.
+ *
+ * ⚠⚠ ELLE EST PURE, ET C'EST LE SEUL MOYEN DE TENIR LES PROPORTIONS. Le dépôt
+ * n'a ni navigateur ni jsdom : une géométrie écrite dans la boucle de dessin ne
+ * se vérifie que sur appareil, c'est-à-dire à l'œil, c'est-à-dire pas. Ce qui se
+ * garde ici est le rapport entre la pointe et la hampe — le défaut d'hier était
+ * un rapport, pas une couleur.
+ *
+ * ⚠⚠ LES DEUX BOUTS SONT AUX CENTRES DES DEUX CASES, et c'est l'arbitrage du
+ * 06/09 qu'on ne touche pas : `traitDeLaFleche` rend le trait de centre à
+ * centre, cette fonction ne le raccourcit PAS. Elle ne fait que deux choses —
+ * l'épaisseur de la hampe, et la pointe.
+ *
+ * ⚠ LA HAMPE S'ARRÊTE À LA BASE DE LA POINTE, ce qui n'est pas un retrait mais un
+ * recouvrement évité : un trait qui irait jusqu'à la tête ressortirait par elle
+ * au premier angle obtus d'antialiasing. Elle peut donc être `null` sans que la
+ * pointe le soit, quand la pointe est plus longue que le trait — une pointe seule
+ * désigne encore ; un trait sans pointe ne désignerait rien, et c'est ce cas-là
+ * qui n'existe pas.
+ *
+ * @param {{x1:number,y1:number,x2:number,y2:number,angle:number}|null} trait de
+ *   centre à centre, tel que `traitDeLaFleche` le rend
+ * @param {number} pas pixels de canevas par case
+ * @returns {{hampe: {x1:number,y1:number,x2:number,y2:number}|null,
+ *   epaisseur: number, pointe: Array<{x:number,y:number}>,
+ *   bouton: {x:number,y:number,rayon:number}|null}|null}
+ */
+export function geometrieDeLaFleche(trait, pas) {
+  if (trait === null) return null;
+  if (!Number.isFinite(pas) || pas <= 0) {
+    throw new RangeError(`geometrieDeLaFleche : pas « ${pas} » — nombre > 0 attendu`);
+  }
+  const dx = trait.x2 - trait.x1;
+  const dy = trait.y2 - trait.y1;
+  const longueur = Math.hypot(dx, dy);
+  if (longueur === 0) return null;
+  const cos = dx / longueur;
+  const sin = dy / longueur;
+  const depart = { x: trait.x1, y: trait.y1 };
+  const bout = { x: trait.x2, y: trait.y2 };
+  const epaisseur = Math.max(1, Math.round(pas * EPAISSEUR_FLECHE));
+  const aile = Math.max(3, pas * AILE_FLECHE);
+  // La hampe s'arrête à la BASE de la pointe, pas à sa tête : sans ça, le trait
+  // ressortirait par la pointe au premier angle obtus d'antialiasing.
+  const restant = Math.hypot(bout.x - depart.x, bout.y - depart.y)
+    - aile * Math.cos(OUVERTURE_FLECHE);
+  const hampe = restant <= epaisseur ? null : {
+    x1: depart.x,
+    y1: depart.y,
+    x2: bout.x - aile * Math.cos(OUVERTURE_FLECHE) * cos,
+    y2: bout.y - aile * Math.cos(OUVERTURE_FLECHE) * sin,
+  };
+  return {
+    hampe,
+    epaisseur,
+    // ⚠ LE BOUT ARRONDI EST UN DISQUE, PAS UN `lineCap`. `ctx.lineCap` est un
+    // état du contexte : le poser ici obligerait à le rendre, et un contexte
+    // rendu à moitié est la faute que `dessinerEtiquette` a déjà payée.
+    bouton: hampe === null ? null : { x: depart.x, y: depart.y, rayon: epaisseur / 2 },
+    pointe: [
+      bout,
+      {
+        x: bout.x - aile * Math.cos(trait.angle - OUVERTURE_FLECHE),
+        y: bout.y - aile * Math.sin(trait.angle - OUVERTURE_FLECHE),
+      },
+      {
+        x: bout.x - aile * Math.cos(trait.angle + OUVERTURE_FLECHE),
+        y: bout.y - aile * Math.sin(trait.angle + OUVERTURE_FLECHE),
+      },
+    ],
+  };
+}
 
 /**
  * La couleur du trait de frontière de chaque camp.
@@ -1192,7 +1307,8 @@ export const TEINTES_TERRITOIRE = {
  * définition d'une fonction morte.
  *
  * ⚠ `TEINTES_TERRITOIRE` RESTE, ELLE. Le halo de la base attaquante et la flèche
- * du raid s'en servent toujours, et leur test aussi.
+ * du raid s'en servent toujours, et leur test aussi — c'est l'ÉPAISSEUR que la
+ * flèche a cessé de partager le 11/09, pas la teinte.
  */
 
 
@@ -1697,6 +1813,29 @@ export function empreinteDeLaCarte(etat) {
   return empreinte;
 }
 
+/**
+ * Sur quoi la carte cadre en s'ouvrant, et ce qu'il reste de la demande après.
+ *
+ * ⚠⚠ PUR, PARCE QUE LE « UNE SEULE FOIS » EST TOUT CE QU'IL Y A À GARDER. Le
+ * cadrage lui-même se voit à l'œil et ne se teste pas sans navigateur ; ce qui
+ * se casse en silence, c'est une demande qui survit à son ouverture — l'onglet
+ * Monde ramènerait alors le joueur sur une ruine, des heures après le raid, et
+ * rien ne relierait les deux.
+ *
+ * @param {{rangee: number, colonne: number}|null} demande
+ * @param {{rangee: number, colonne: number}} positionDeLaBase
+ * @returns {{position: {rangee: number, colonne: number}, demandeSuivante: null}}
+ */
+export function cadrageDeLOuverture(demande, positionDeLaBase) {
+  if (demande === null || demande === undefined) {
+    return { position: positionDeLaBase, demandeSuivante: null };
+  }
+  return {
+    position: { rangee: demande.rangee, colonne: demande.colonne },
+    demandeSuivante: null,
+  };
+}
+
 export function initialiserEcranMonde(doc, crochets = {}) {
   // ⚠ L'ÉCRAN DEMANDE, LA SESSION DÉCIDE — même découpage que `versEcran` de
   // l'écran Chantier. La carte sait QUELLE cible on a touchée deux fois ; seule
@@ -1763,6 +1902,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   let poisConnus = null;
   // ⚠ QUELLE CASE LE PANNEAU DÉCRIT — c'est ce à quoi le SECOND toucher se
   // compare. `null` quand le panneau est fermé.
+  // ⚠ LA CASE SUR LAQUELLE LA PROCHAINE OUVERTURE CADRERA, ou `null` pour la
+  // base du joueur. Posée par `viserAuProchainAffichage`, consommée par
+  // l'ouverture qui suit — voir `cadrageDeLOuverture`.
+  let cadrageDemande = null;
   let siteOuvert = null;
   // ⚠⚠ ET QUELLE RUINE, QUAND C'EN EST UNE. Deux variables et non une, parce que
   // ce sont deux chemins de toucher : `siteOuvert` porte le second toucher, la
@@ -2055,7 +2198,24 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    */
   function cadrerSurLaBase(etat) {
     echelle = ECHELLE_MAX;
-    centrerSur(baseCourante(etat).position);
+    const cadrage = cadrageDeLOuverture(cadrageDemande, baseCourante(etat).position);
+    cadrageDemande = cadrage.demandeSuivante;
+    centrerSur(cadrage.position);
+  }
+
+  /**
+   * La carte s'ouvrira sur CETTE case, une fois.
+   *
+   * ⚠ UNE FOIS, ET C'EST TOUT LE MÉCANISME. La demande est consommée par
+   * l'ouverture qui la suit ; la suivante recadre chez le joueur comme avant.
+   * Une demande qui resterait collée rendrait l'onglet Monde incapable de
+   * ramener le joueur chez lui, et personne ne ferait le lien avec un raid
+   * terminé une heure plus tôt.
+   *
+   * @param {{rangee: number, colonne: number}|null} position
+   */
+  function viserAuProchainAffichage(position) {
+    cadrageDemande = position ?? null;
   }
 
   /**
@@ -2626,32 +2786,42 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // ⚠ EN PIXELS DE BUFFER, PAS EN PIXELS CSS : `ctx` peint dans le référentiel
     // du canevas, et c'est celui-là que `moveTo` et `lineTo` emploient deux
     // lignes plus bas.
+    //
+    // ⚠⚠ ET LE RETRAIT PASSE AVANT LE ROGNAGE — lot du 11/09. `geometrieDeLaFleche`
+    // recule par rapport aux CASES, `traitRogne` coupe au bord du CANEVAS : dans
+    // l'autre ordre, une cible hors du cadre aurait fait reculer la pointe à
+    // l'intérieur de l'écran, et l'acquis de CARTE-C — « une flèche qui touche le
+    // bord dit c'est par là » — serait perdu.
     const trait = traitRogne(
       traitDeLaFleche(baseCourante(etatCourant).position, siteOuvert, ox, oy, pas),
       canvas.width, canvas.height,
     );
-    if (trait === null) return;
-    ctx.lineWidth = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+    // ⚠⚠ LA GÉOMÉTRIE EST CALCULÉE AILLEURS, ET CETTE FONCTION NE FAIT PLUS QUE
+    // PEINDRE. Les proportions de la flèche — le rapport de la pointe à la hampe,
+    // qui EST le défaut qu'Ethan a rapporté trois fois — ne se vérifiaient que sur
+    // appareil tant qu'elles vivaient dans cette boucle. Elles sont désormais dans
+    // une fonction pure, et un test les tient.
+    const fleche = geometrieDeLaFleche(trait, pas);
+    if (fleche === null) return;
     ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
     ctx.fillStyle = TEINTES_TERRITOIRE[JOUEUR];
+    if (fleche.hampe !== null) {
+      ctx.lineWidth = fleche.epaisseur;
+      ctx.beginPath();
+      ctx.moveTo(fleche.hampe.x1, fleche.hampe.y1);
+      ctx.lineTo(fleche.hampe.x2, fleche.hampe.y2);
+      ctx.stroke();
+      // Le bout de départ, arrondi : un disque, pas un `lineCap` — voir la
+      // géométrie, qui dit pourquoi le contexte ne prend pas d'état de plus.
+      ctx.beginPath();
+      ctx.arc(fleche.bouton.x, fleche.bouton.y, fleche.bouton.rayon, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // La pointe : un triangle plein, à la tête du trait.
     ctx.beginPath();
-    ctx.moveTo(trait.x1, trait.y1);
-    ctx.lineTo(trait.x2, trait.y2);
-    ctx.stroke();
-
-    // La pointe : deux côtés d'un triangle, à la pointe du trait.
-    const aile = Math.max(3, pas * 0.22);
-    const ouverture = Math.PI / 7;
-    ctx.beginPath();
-    ctx.moveTo(trait.x2, trait.y2);
-    ctx.lineTo(
-      trait.x2 - aile * Math.cos(trait.angle - ouverture),
-      trait.y2 - aile * Math.sin(trait.angle - ouverture),
-    );
-    ctx.lineTo(
-      trait.x2 - aile * Math.cos(trait.angle + ouverture),
-      trait.y2 - aile * Math.sin(trait.angle + ouverture),
-    );
+    ctx.moveTo(fleche.pointe[0].x, fleche.pointe[0].y);
+    ctx.lineTo(fleche.pointe[1].x, fleche.pointe[1].y);
+    ctx.lineTo(fleche.pointe[2].x, fleche.pointe[2].y);
     ctx.closePath();
     ctx.fill();
   }
@@ -3716,5 +3886,5 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     dessiner();
   }
 
-  return { peindre, rafraichir, masquer };
+  return { peindre, rafraichir, masquer, viserAuProchainAffichage };
 }

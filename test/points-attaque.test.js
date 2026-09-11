@@ -12,7 +12,7 @@ import {
   DIVISEUR_REGENERATION, plafondDuNiveau, plafondVise, creerPointsAttaque,
   releverPlafond, regenerer, avancerPointsAttaque, distanceTchebychev,
   dansLOctogoneDInfluence, coutDuRaid, manquePourPayer, payer,
-  basesDuJoueur,
+  basesDuJoueur, regenerationParHeureMilli, secondesAvantLePlein,
 } from '../src/sim/points-attaque.js';
 // ⚠⚠ `coutDUnRaid` A DÉMÉNAGÉ ET `estEnTerritoireAllie` A ÉTÉ RETIRÉE — lot
 // RÈGLES-DE-CARTE, 10/09/2026. Le prix lit désormais la CARTE, donc
@@ -24,7 +24,7 @@ import {
 import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
 import { creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION } from '../src/sim/state.js';
 import { POINTS_ATTAQUE, GEOGRAPHIE } from '../src/data/sites.js';
-import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
+import { TICKS_PAR_HEURE, TICKS_PAR_SECONDE } from '../src/sim/clock.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { campDeLaCase, JOUEUR, NEUTRE } from '../src/sim/territoire.js';
 import { readFileSync } from 'node:fs';
@@ -401,4 +401,49 @@ test('RC T3 — `prix-du-raid` se charge seul, et aucun cycle ne se referme', as
     assert.ok(!importesPar(lire(f)).includes('prix-du-raid.js'),
       `${f} importe prix-du-raid.js : le cycle se referme par le module qui l'évitait`);
   }
+});
+
+test('PE T1 — `secondesAvantLePlein` tombe sur le tick où `regenerer` fait le plein', () => {
+  // MONTAGE. Un plafond qui ne tombe PAS rond sur le diviseur, et un résidu non
+  // nul : c'est la seule forme qui sépare le calcul de ce module d'une division
+  // « manque / débit ». Avec un résidu à zéro et un plafond rond, les deux
+  // écritures rendent le même nombre et le test ne mesurerait rien.
+  const plafond = 203;
+  assert.notEqual((plafond * 3600) % DIVISEUR_REGENERATION, 0,
+    'le montage doit tomber sur une fraction, sinon il ne mesure pas le résidu');
+
+  const pa = { points: 17, plafond, residu: 123_456 };
+  assert.ok(pa.residu > 0 && pa.residu < DIVISEUR_REGENERATION,
+    'le résidu doit être une fraction de point non encore acquise');
+
+  const secondes = secondesAvantLePlein(pa);
+  assert.ok(secondes > 0);
+
+  // CE QUI EST MESURÉ : le moteur, exécuté. À la seconde annoncée, le stock est
+  // AU plafond ; une seconde plus tôt, il n'y est pas.
+  const au = { ...pa };
+  regenerer(au, secondes * TICKS_PAR_SECONDE);
+  assert.equal(au.points, plafond, 'à la seconde annoncée, le plein doit être fait');
+
+  const avant = { ...pa };
+  regenerer(avant, (secondes - 1) * TICKS_PAR_SECONDE);
+  assert.ok(avant.points < plafond,
+    'une seconde avant, le plein ne doit PAS être fait — sinon l\'annonce est trop tardive');
+
+  // FALSIFICATION. Le calcul qui ignore le résidu annonce une seconde de trop
+  // sur ce montage : l'écart se voit, et c'est lui que ce test garde.
+  const sansResidu = Math.ceil(
+    Math.ceil(((plafond - pa.points) * DIVISEUR_REGENERATION) / plafond) / TICKS_PAR_SECONDE,
+  );
+  assert.notEqual(secondes, sansResidu,
+    'le montage doit distinguer le calcul avec résidu de celui qui l\'oublie');
+
+  // ⚠ ET LE PLEIN ANNONCE ZÉRO, pas une seconde : l'écran n'affiche alors rien.
+  assert.equal(secondesAvantLePlein({ points: plafond, plafond, residu: 0 }), 0);
+
+  // ⚠ LE DÉBIT EST CELUI DU MOTEUR, ET SUR UNE HEURE PLEINE il ne dérive pas
+  // d'un milli : `TICKS_PAR_HEURE` ticks versent exactement ce qu'il annonce.
+  const heure = { points: 0, plafond, residu: 0 };
+  regenerer(heure, TICKS_PAR_HEURE);
+  assert.equal(heure.points, Math.floor(regenerationParHeureMilli(plafond) / 1000));
 });

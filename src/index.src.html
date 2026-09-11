@@ -307,9 +307,40 @@
     background: #1E2124; border-top: 2px solid #4E5742;
   }
   /* ⚠ « TOUT RÉPARER » EST AU-DESSUS DE LA RANGÉE, et caché tant que le mode
-     Réparer n'est pas armé — Ethan, 01/09. */
+     Réparer n'est pas armé — Ethan, 01/09.
+     ⚠⚠ ET IL SORT DU FLUX — Ethan, 11/09, point 5 : « il laisse un vide quand il
+     n'est pas là. Je suppose que c'est pour éviter de "pousser" le sprite mais
+     c'est moche. Ça doit partir et ne pas décaler le sprite. » Les deux moitiés
+     de la phrase sont vraies, et c'est ce qui rend le remède du 10/09
+     insuffisant : `visibility: hidden` ne pousse plus rien, mais il RÉSERVE la
+     place — relevé en Chromium à la géométrie du S25 FE, **27 px CSS** (23 de
+     bouton, 4 de marge) que `#raid-bas` porte en permanence et que le canevas
+     paie en permanence : 529 px de décor au lieu de 556.
+     ⚠ POSÉ À `bottom: 100%`, IL EST AU-DESSUS DE `#raid-bas`, donc SUR le bas du
+     canevas, exactement comme `#raid-bascule-bande` et `#raid-vitesses` s'y
+     posent déjà. Le décor ne bouge donc plus jamais : ni en armant, ni en
+     désarmant.
+     ⚠⚠ ET IL GARDE SES ÉVÉNEMENTS, à la différence des trois lignes d'avis. Un
+     avis se lit et ne se touche pas, d'où son `pointer-events: none` ; un BOUTON
+     doit recevoir le doigt. C'est la raison qui interdisait au repli d'être un
+     `display: none` — un bouton hors du flux ne recevait rien —, et elle tombe
+     ici parce que la SORTIE du flux n'est plus un retrait mais un décalage : le
+     bouton est toujours peint, toujours touchable, simplement au-dessus de la
+     barre plutôt que dedans. Le prix est déclaré : les 23 px du bas du canevas
+     sont couverts TANT QUE le mode Réparer est armé, et rendus dès qu'il est
+     désarmé.
+     ⚠ `z-index: 2` LE MET SOUS LES DEUX PANNEAUX DE RÉSULTAT (5) et au niveau de
+     la bascule de bande, qu'il ne recouvre pas : elle vit à droite, à 6 px du
+     bas du canevas, lui est collé au bord de la barre.
+     ⚠⚠ ET LES 2 px DE MARGE BASSE SONT LA BORDURE DE `#raid-bas`, PAS UN
+     RÉGLAGE À L'ŒIL. Le bloc englobant d'un absolu est la boîte de REMPLISSAGE
+     de son ancêtre : `bottom: 100%` pose donc le bouton sur les 2 px de
+     `border-top`, mesuré — bas du bouton à 668 px pour un canevas qui finit à
+     666. La marge les rend, et le bouton s'aligne exactement sur le bord bas du
+     canevas. Si la bordure de la barre change, ce nombre change avec elle. */
   #raid-tout-reparer {
-    display: block; width: calc(100% - 12px); margin: 4px 6px 0; padding: 4px;
+    position: absolute; left: 6px; right: 6px; bottom: 100%; z-index: 2;
+    display: block; margin: 0 0 2px; padding: 4px;
     font-size: 11px; background: #343A2C; color: #F5F3E8; border: 1px solid #4E5742;
   }
   /* ⚠⚠ DEUX BLOCS, PAS SIX PARTS ÉGALES. Les cinq gestes de navigation et de
@@ -886,6 +917,22 @@
      `data-ecran` sur `#ressources` dans la même fonction qui masque déjà ;
      `CHROME_MASQUE_PAR` reste ce qu'il est. */
   #ressources[data-ecran="monde"] .ressource:not(.attaque) { display: none; }
+  /* ⚠⚠ LE DÉBIT ET « PLEIN DANS … » NE PARAISSENT QUE LÀ, ET C'EST UNE MESURE,
+     PAS UN GOÛT — Ethan, 11/09. La tuile d'attaque fait **348 px** sur la carte,
+     où la règle du dessus la laisse SEULE, et **66,6 px** sur la Base, où elles
+     sont CINQ. Relevé dans Chromium à la géométrie du S25 FE : la ligne du bas
+     de cette tuile demande **90 px de contenu pour un cadre de 67** dès qu'on y
+     ajoute « +20/h » — 23 px de débordement, que l'`overflow` de la tuile aurait
+     rognés en silence. Le premier jet de ce lot ne gardait la carte que pour le
+     PLEIN, sur une estimation de 85 px faite de tête ; la mesure l'a démenti, et
+     c'est la mesure qui décide.
+     ⚠ RIEN NE BOUGE DONC SUR LA BASE : la tuile y reste EXACTEMENT celle du
+     10/09, « 203 / 203 » et le mot, au pixel.
+     ⚠ ET LE DISCRIMINANT EST CELUI D'AU-DESSUS — `data-ecran`, écrit par
+     `session.js` dans la fonction qui masque déjà. Aucune seconde source. */
+  #ressources:not([data-ecran="monde"]) .ressource.attaque .debit,
+  #ressources:not([data-ecran="monde"]) .ressource.attaque .plein { display: none; }
+  .ressource.attaque .plein { font-size: 9px; color: #8C9A72; white-space: nowrap; }
   /* Un stock saturé est GELÉ, jamais amputé (arbitré le 26/08) : il faut donc
      que le joueur voie qu'il plafonne, sinon il croit à un compteur cassé.
      Après les règles par ressource, pour l'emporter sur elles. */
@@ -1731,7 +1778,16 @@
      ⚠ UNE RÈGLE, DEUX SÉLECTEURS : les deux barres font la même chose sur deux
      écrans, et une seconde déclaration se serait tue au premier réglage. C'est le
      motif du pointillé des emplacements, qu'`ÉD T12` garde déjà. */
-  #chantier-reparation.repliee, #raid-tout-reparer.repliee { visibility: hidden; }
+  /* ⚠⚠ LA RÈGLE S'EST DÉDOUBLÉE LE 11/09, ET LES DEUX BARRES NE FONT PLUS LA
+     MÊME CHOSE. Celle du Chantier est DANS le flux et le reste : elle porte deux
+     enfants, dont la réserve des bâtiments, et se poser sur la grille lui
+     demanderait la place que `#chantier-avis` et `#chantier-garnison` occupent
+     déjà en haut et en bas. Elle réserve donc ses 27 px, comme avant.
+     ⚠ CELLE DU RAID, ELLE, A QUITTÉ LE FLUX — voir sa règle plus haut —, et son
+     repli redevient donc un `display: none` : il n'y a plus de place à rendre,
+     puisqu'elle n'en prenait plus. */
+  #chantier-reparation.repliee { visibility: hidden; }
+  #raid-tout-reparer.repliee { display: none; }
   #chantier-reserve { font-size: 9px; color: #F5F3E8; min-width: 0; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
   #chantier-tout-reparer {

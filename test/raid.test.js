@@ -917,16 +917,41 @@ test('RAID-A T5 — les six boutons, et « tout réparer » sous condition', () 
     '« tout réparer » n\'apparaît plus avec le mode Réparer');
   assert.match(source, /tout\.classList\.add\('repliee'\)/,
     '« tout réparer » ne se replie plus au désarmement');
-  // ⚠ ET LA FEUILLE LE REPLIE SANS LUI PRENDRE SA PLACE — la moitié que la
-  // source seule ne dit pas : une classe qui poserait `display: none` laisserait
-  // les trois lignes ci-dessus vertes et le défaut d'Ethan entier.
-  const regle = html.replace(/\/\*[\s\S]*?\*\//g, '')
-    .match(/#chantier-reparation\.repliee, #raid-tout-reparer\.repliee\s*\{([^}]*)\}/);
-  assert.ok(regle, 'les deux barres à bouton ne partagent plus une règle de repli');
-  assert.match(regle[1], /visibility:\s*hidden/,
-    'le repli ne passe plus par `visibility` : la hauteur redeviendrait variable');
-  assert.doesNotMatch(regle[1], /display:\s*none/,
-    'le repli passe par `display: none` : la place n\'est plus réservée');
+  // ⚠⚠ ET LA FEUILLE LE REPLIE SANS LAISSER DE VIDE — ET C'EST LA TROISIÈME
+  // FORME DE CE MÊME FAIT, DONC LA TROISIÈME FORME DE CETTE GARDE. Le 01/09 il
+  // basculait sur `hidden`, et paraître volait sa hauteur au canevas ; le 10/09
+  // il est passé à `visibility: hidden`, qui ne vole plus rien mais RÉSERVE sa
+  // place — relevé le 11/09 à 27 px CSS, et Ethan : « il laisse un vide quand il
+  // n'est pas là […] c'est moche. Ça doit partir et ne pas décaler le sprite. »
+  // Les deux moitiés de sa phrase sont incompatibles avec le flux : ce lot le
+  // pose donc à `bottom: 100%`, au-dessus de `#raid-bas`, sur le bas du canevas.
+  //
+  // ⚠ IL NE PARTAGE PLUS LA RÈGLE DE `#chantier-reparation`, et c'est la raison
+  // qui a changé, pas le confort : la barre du Chantier porte DEUX enfants, dont
+  // la réserve des bâtiments, et le haut et le bas de sa grille sont déjà pris
+  // par `#chantier-garnison` et `#chantier-avis`. Elle reste dans le flux ;
+  // Ethan n'a parlé que du raid.
+  const sansCommentaire = html.replace(/\/\*[\s\S]*?\*\//g, '');
+  const regle = sansCommentaire.match(/#raid-tout-reparer\.repliee\s*\{([^}]*)\}/);
+  assert.ok(regle, '« tout réparer » n\'a plus de règle de repli');
+  assert.match(regle[1], /display:\s*none/,
+    'le repli garde la place du bouton : le vide de 27 px revient');
+  const pose = sansCommentaire.match(/#raid-tout-reparer\s*\{([^}]*)\}/);
+  assert.ok(pose, '« tout réparer » n\'a plus de règle du tout');
+  assert.match(pose[1], /position:\s*absolute/,
+    '« tout réparer » est revenu dans le flux : paraître recadre le décor');
+  assert.match(pose[1], /bottom:\s*100%/,
+    '« tout réparer » n\'est plus posé au-dessus de la barre');
+  // ⚠⚠ ET IL GARDE SES ÉVÉNEMENTS. C'est ce qui le distingue des trois lignes
+  // d'avis, qui portent `pointer-events: none` parce qu'elles couvrent des cases
+  // sans rien avoir à en recevoir. Un BOUTON sans toucher est un bouton mort, et
+  // c'était l'argument même qui interdisait à ce repli d'être un `display: none`.
+  assert.doesNotMatch(pose[1], /pointer-events:\s*none/,
+    '« tout réparer » n\'accepte plus le doigt : le bouton est mort');
+  // ⚠ ET SON PARENT EST POSITIONNÉ, sinon il se cale sur `#ecrans` et se peint au
+  // milieu de la page. `#raid-bas` l'est depuis la ligne d'avis du 10/09.
+  assert.match(sansCommentaire.match(/#raid-bas\s*\{([^}]*)\}/)[1], /position:\s*relative/,
+    '`#raid-bas` n\'est plus un ancêtre positionné');
   // ⚠ AUCUNE EXCEPTION NE REMONTE : on demande, puis on agit. Jamais de `try`
   // autour d'un appel de `sim/`.
   assert.doesNotMatch(source, /try\s*\{/, 'l\'écran de raid rattrape une levée de la simulation');

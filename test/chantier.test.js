@@ -1023,20 +1023,40 @@ test('EC T3 — armer un mode ne recadre plus le décor, sur les trois écrans',
       `#${id} n'est plus un ancêtre positionné : l'avis se cale sur toute la page`);
   }
 
-  // ⚠⚠ LES DEUX BARRES QUI PORTENT UN BOUTON NE PEUVENT PAS, ELLES, QUITTER LE
-  // FLUX : un bouton doit RECEVOIR le toucher. Elles réservent donc leur place —
-  // `visibility: hidden` garde la hauteur, `display: none` la rend — et c'est le
-  // seul remède qui ne coûte rien quand le mode est désarmé.
-  const repliee = feuille.match(/([^{}]*\.repliee[^{}]*)\{([^}]*)\}/);
-  assert.ok(repliee, 'la règle du repli a disparu');
-  assert.match(repliee[2], /visibility:\s*hidden/, 'le repli ne passe plus par `visibility`');
-  assert.ok(!/display:\s*none/.test(repliee[2]),
-    'le repli est redevenu un `display: none` : la barre rend sa place et recadre le décor');
+  // ⚠⚠ LES DEUX BARRES QUI PORTENT UN BOUTON ONT CESSÉ DE FAIRE LA MÊME CHOSE LE
+  // 11/09, ET C'EST L'ARGUMENT QUI A CÉDÉ, PAS LE FAIT. Ce bloc disait : « un
+  // bouton doit RECEVOIR le toucher, donc il ne peut pas quitter le flux ».
+  // C'était un raccourci : ce qui interdit de recevoir le doigt, c'est
+  // `pointer-events: none`, pas `position: absolute`. Ethan, 11/09, point 5 :
+  // « il laisse un vide quand il n'est pas là […] c'est moche. Ça doit partir et
+  // ne pas décaler le sprite. » Le vide était de 27 px CSS, mesuré, payés en
+  // permanence par le canevas du raid.
+  //
+  // ⚠ CELLE DU RAID SORT DONC DU FLUX, celle du Chantier y reste : elle porte
+  // DEUX enfants, dont la réserve des bâtiments, et le haut et le bas de sa
+  // grille sont déjà pris par `#chantier-garnison` et `#chantier-avis`. Deux
+  // écrans, deux réponses, et chacune écrite là où elle s'applique.
+  const regleDe = (selecteur) => {
+    const m = feuille.match(new RegExp(`${selecteur}\\s*\\{([^}]*)\\}`));
+    assert.ok(m, `la règle « ${selecteur} » a disparu de la feuille`);
+    return m[1];
+  };
+  assert.match(regleDe('#chantier-reparation\\.repliee'), /visibility:\s*hidden/,
+    'la barre du Chantier rend sa place : la grille se recadre sous elle');
+  assert.doesNotMatch(regleDe('#chantier-reparation\\.repliee'), /display:\s*none/,
+    'le repli du Chantier est redevenu un `display: none`');
+  assert.match(regleDe('#raid-tout-reparer\\.repliee'), /display:\s*none/,
+    '« tout réparer » réserve encore sa place : le vide de 27 px revient');
+  const poseDuRaid = regleDe('#raid-tout-reparer');
+  assert.match(poseDuRaid, /position:\s*absolute/,
+    '« tout réparer » est revenu dans le flux');
+  assert.doesNotMatch(poseDuRaid, /pointer-events:\s*none/,
+    '« tout réparer » n\'accepte plus le doigt : c\'est un bouton, pas un avis');
   for (const id of ['chantier-reparation', 'raid-tout-reparer']) {
-    assert.ok(repliee[1].includes(`#${id}`), `#${id} n'est plus dans la règle du repli`);
-    // ⚠⚠ ET L'ATTRIBUT `hidden` NE DOIT PAS REVENIR. La tête de feuille porte
-    // `[hidden] { display: none !important }` : un `hidden` laissé dans le
-    // balisage l'emporterait sur la classe, et le repli redeviendrait un retrait.
+    // ⚠⚠ ET L'ATTRIBUT `hidden` NE DOIT REVENIR NI SUR L'UNE NI SUR L'AUTRE. La
+    // tête de feuille porte `[hidden] { display: none !important }` : laissé dans
+    // le balisage, il l'emporterait sur la classe, et le commutateur du mode
+    // Réparer ne pourrait plus rien rouvrir.
     assert.doesNotMatch(feuille, new RegExp(`id="${id}"[^>]*\\shidden`),
       `#${id} porte encore l'attribut hidden : le !important de la tête de feuille l'emporte`);
     assert.match(feuille, new RegExp(`id="${id}"[^>]*class="[^"]*repliee`),
@@ -7211,4 +7231,63 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   const lignesData = produit.split('\n').filter((l) => l.includes('data:')).length;
   assert.equal(lignesData, 307,
     `le livrable porte ${lignesData} lignes « data: » au lieu de 307`);
+});
+
+test('PE T2 — refusé faute de ressources, le bouton dit QUAND et ne compte plus le manque', () => {
+  // ⚠ ETHAN, 11/09 : « bouton améliorer quand il manque des ressources, au lieu
+  // de te dire il manque tant de ressources, juste mettre le compteur, le
+  // minuteur. Sauf si c'est hors stockage. » Les deux moitiés sont mesurées ici,
+  // sur les MÊMES montages que le test du chronomètre : c'est le même refus, lu
+  // par le joueur au lieu d'être lu par le moteur.
+
+  // --- 1. l'attente : le minuteur SEUL -------------------------------------
+  const etat = creerEtat(4242);
+  moteurEtat.ameliorer(etat, 0);
+  const champ = baseCourante(etat).champs.cases.find((c) => c.ressource === 'quartz');
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
+  baseCourante(etat).economie.ressources.quartz = 0;
+
+  const apercu = apercuDuBatiment(etat, 0);
+  // Le montage doit MESURER quelque chose : un manque réel, et lui seul.
+  assert.equal(apercu.delai.cause, 'attente');
+  assert.ok(apercu.problemes.length > 0);
+  assert.ok(apercu.problemes.every((p) => p.code.startsWith('manque:')),
+    'ce montage ne doit porter QUE des manques, sinon la clause 3 est mesurée ici');
+  assert.match(apercu.problemes[0].message, /il manque/,
+    'le moteur doit bien écrire le manque : c\'est ce que l\'écran cesse de reprendre');
+
+  const note = noteDuRefus(apercu);
+  assert.match(note, /^dans /, 'le refus d\'attente commence par le délai, et ne dit que lui');
+  assert.doesNotMatch(note, /il manque/, 'le manque ne doit plus être repris');
+  assert.equal(note, `dans ${formaterDelai(apercu.delai.secondes)}`);
+
+  // --- 2. hors stockage : le manque RESTE, et la raison avec ---------------
+  const mur = creerEtat(4242);
+  baseCourante(mur).disposition[0].niveau = 12;
+  baseCourante(mur).economie.ressources.quartz = 0;
+  const apercuMur = apercuDuBatiment(mur, 0);
+  assert.equal(apercuMur.delai.cause, 'capacite');
+  const noteMur = noteDuRefus(apercuMur);
+  assert.match(noteMur, /il manque/, 'sur un mur, le joueur doit savoir combien il manque');
+  assert.match(noteMur, /stockage/);
+  assert.doesNotMatch(noteMur, /dans /, 'un mur n\'a pas de délai à annoncer');
+
+  // --- 3. un refus QUE L'ATTENTE NE LÈVERA PAS survit au filtre ------------
+  // ⚠ L'APERÇU EST FABRIQUÉ ICI, ET C'EST DÉLIBÉRÉ : il faut un état où un
+  // manque et un refus de PALIER coexistent, et `problemesDeLAmelioration` ne
+  // les rend ensemble que dans un montage à cinq bâtiments qui mesurerait
+  // surtout le montage. Les deux codes, eux, sont ceux du moteur —
+  // `plafond-commandement` et `manque:quartz` sont écrits en clair dans
+  // `sim/state.js`, et une garde plus bas dans ce fichier le vérifie.
+  const melange = noteDuRefus({
+    problemes: [
+      { code: 'plafond-commandement', message: 'le Centre de commandement est au niveau 3' },
+      { code: 'manque:quartz', message: 'il manque 1 200 quartz' },
+    ],
+    delai: { cause: 'attente', ressource: null, secondes: 90 },
+  });
+  assert.match(melange, /Centre de commandement/,
+    'un refus que l\'attente ne lève pas doit rester écrit');
+  assert.doesNotMatch(melange, /il manque/);
+  assert.match(melange, /dans 1 min 30 s$/);
 });

@@ -676,6 +676,20 @@ export const MODES_RAID = {
 export function initialiserEcranRaid(doc, crochets = {}) {
   const $ = (id) => doc.getElementById(id);
   const versEcran = crochets.versEcran ?? (() => {});
+  // ⚠⚠ LE RETOUR À LA CARTE DIT SUR QUOI IL REVIENT — Ethan, 11/09 : « quand on
+  // fait un retour monde après un raid il faudrait qu'on soit sur la cible qu'on
+  // vient de détruire ». La carte recadre sur la base du joueur à CHAQUE
+  // ouverture depuis le 06/09, et c'est voulu : ouvrir la carte par l'onglet doit
+  // montrer chez soi. Mais revenir d'un raid n'est pas ouvrir la carte — on en
+  // vient, et on la rouvre sur l'endroit qu'on regardait, qui porte désormais une
+  // ruine. Sans ça, le joueur est renvoyé chez lui et doit retrouver à la main
+  // une case qu'il vient de passer dix minutes à viser.
+  //
+  // ⚠ L'ÉCRAN DE RAID NE CADRE RIEN LUI-MÊME : il ANNONCE d'où il sort, et la
+  // session fait suivre à la carte. Le faire d'ici demanderait à cet écran de
+  // connaître l'échelle et le centrage d'un autre, ce que `versEcran` existe
+  // précisément pour éviter.
+  const surRetourALaCarte = crochets.surRetourALaCarte ?? (() => versEcran('monde'));
   const apresGeste = crochets.apresGeste ?? (() => {});
   // ⚠ L'ÉCRAN NOMME UN GESTE, JAMAIS UN SON — même frontière que `sonDeRefus`
   // du lot SON-MOTEUR, et la garde `SON T14` refuse de toute façon un appel de
@@ -1328,7 +1342,8 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       const bouton = $(m.bouton);
       if (bouton !== null) bouton.classList.remove('arme');
     }
-    // ⚠ ELLE SE REPLIE, ELLE NE DISPARAÎT PLUS — point 5, 10/09. Voir `armer`.
+    // ⚠ ELLE SE REPLIE, ET LE REPLI LA RETIRE POUR DE BON — point 5, 11/09 :
+    // hors du flux, il n'y a plus de place à réserver. Voir `armer`.
     const tout = $('raid-tout-reparer');
     if (tout !== null) tout.classList.add('repliee');
     avis('');
@@ -1343,15 +1358,14 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ⚠ « TOUT RÉPARER » N'APPARAÎT QUE LE MODE RÉPARER ARMÉ, et AU-DESSUS de la
     // rangée — Ethan, 01/09.
     //
-    // ⚠⚠ MAIS IL GARDE SA PLACE QUAND IL N'APPARAÎT PAS — Ethan, 10/09, point 5 :
-    // « idem en préparation raid ». Il basculait sur `hidden`, donc sur
-    // `display: none` : paraître ajoutait sa hauteur à `#raid-bas`, et le CANEVAS
-    // au-dessus perdait d'autant — le décor de la cible se recadrait et les
-    // unités bougeaient sous le doigt, ce qu'Ethan décrit mot pour mot. C'est une
-    // CLASSE désormais, `visibility: hidden` dans la feuille : il ne se dessine
-    // pas, ne reçoit rien, et sa hauteur ne varie jamais.
-    // ⚠ ET L'ATTRIBUT `hidden` NE PEUT PAS SERVIR : son `!important` de tête de
-    // feuille l'emporterait sur `visibility`, et le bouton ne reparaîtrait jamais.
+    // ⚠⚠ ET IL NE DÉCALE PLUS RIEN, PARCE QU'IL N'EST PLUS DANS LE FLUX — Ethan,
+    // 11/09, point 5. Il a connu les trois états : `hidden` le 01/09, donc
+    // `display: none`, et paraître volait sa hauteur au canevas ; `visibility:
+    // hidden` le 10/09, qui ne vole plus rien mais RÉSERVE 27 px de vide en
+    // permanence — « c'est moche » ; posé à `bottom: 100%` depuis ce lot-ci, où
+    // il n'a plus de place à prendre ni à réserver. La classe reste le
+    // commutateur, et l'attribut `hidden` reste interdit : le `!important` de
+    // tête de feuille l'emporterait sur la règle de repli.
     if (nom === 'reparer') $('raid-tout-reparer').classList.remove('repliee');
     avis(m.invite);
   }
@@ -1841,7 +1855,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     });
   }
 
-  brancher('raid-retour-carte', () => { fermerPanneaux(); versEcran('monde'); });
+  brancher('raid-retour-carte', () => { fermerPanneaux(); surRetourALaCarte(cibleCourante); });
   brancher('raid-retour-offense', () => { fermerPanneaux(); versEcran('offense'); });
 
   function fermerPanneaux() {
@@ -1930,7 +1944,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   });
 
   brancher('raid-sim-fermer', () => { $('raid-sim').hidden = true; });
-  brancher('raid-fin-carte', () => { fermerPanneaux(); versEcran('monde'); });
+  // ⚠ LES DEUX PORTES DU RETOUR PASSENT PAR LE MÊME CROCHET : celle d'abandon
+  // (« Carte », avant le combat) et celle du rapport (« Carte », après). Ethan a
+  // parlé de la seconde ; laisser la première recadrer chez soi aurait fait deux
+  // comportements pour un même bouton portant le même mot.
+  brancher('raid-fin-carte', () => { fermerPanneaux(); surRetourALaCarte(cibleCourante); });
   brancher('raid-fin-base', () => { fermerPanneaux(); versEcran('offense'); });
 
   // Les vitesses du simulateur, et le pas-à-pas.

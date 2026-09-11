@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **11/09/2026**, version 0.99.46 · build 148.
+Dernière révision : **11/09/2026**, version 0.99.48 · build 150.
 
 ---
 
@@ -41,6 +41,95 @@ Dernière révision : **11/09/2026**, version 0.99.46 · build 148.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 11/09/2026 (après le lot PENDULE-ET-TOUCHER), à confronter :**
+⚠⚠ **CINQ RETOURS D'ETHAN DU 11/09, ET LE DÉFAUT DU CLIC N'ÉTAIT PAS DANS LE
+JEU.** Points 1, 2, 3, 5 et 6 de sa liste, plus le retour de raid et la
+correction de la flèche rendus le même jour. `npm test` rend **1577 pass / 0 fail**
+au sens de la garde de `documentation.test.js` — c'est le NOMBRE de tests
+déclarés ; le verdict mesuré est **1576 pass · 0 fail · 1 skipped** (`LIMITE T8`,
+suspendu par Ethan le 08/09), et `npm run check` sort en 0. `npm run build` →
+`dist/index.html`, **9 369 329 octets**, 0 référence externe. Coût **+2 634
+octets, SANS UN OCTET D'IMAGE NI DE SON**, mesuré poste par poste contre le
+livrable rebâti dans un `git worktree` sur l'arbre pristine de `main` =
+`bb196e9` (**9 366 695**) : **JavaScript +2 326 · feuille +308 · balisage +0 ·
+images +0 · audio +0**, la somme des postes tombant EXACTEMENT sur le total des
+DEUX côtés, et **307 lignes `data:` / 307 URI de part et d'autre**. Borne T10
+**inchangée à 9 600 000**, marge **230 671 octets, 2,40 %**. Version et build
+passent à **0.99.48 · build 150**, le suivant disponible. Le lot touche
+`src/index.src.html`, `src/sim/points-attaque.js`, `src/ui/chantier.js`,
+`src/ui/monde.js`, `src/ui/raid.js`, `src/ui/session.js`, `package.json`, cinq
+fichiers de `test/`, et fait entrer `RAPPORT-lotPENDULE-ET-TOUCHER.md`. **Pas une
+ligne de `src/data/`, `src/sim/` hors `points-attaque.js`, `src/son/`, `tools/`
+ni `art/`** — vérifié au diff. **Aucun fichier ne sort du dépôt, aucun ne
+naît dans `src/`.**
+⚠⚠ **LE CLIC FANTÔME EST UN COMPORTEMENT DU NAVIGATEUR, ET IL A ÉTÉ REPRODUIT
+AVANT D'ÊTRE CORRIGÉ.** Ethan : « quand on double clic sur notre base depuis le
+monde on fait un clic sur les unités de défense ». `ui/monde.js` écoute
+`pointerup` ; la bascule cache son canevas — `[hidden]` porte un `display: none`
+en `!important` — et Chrome **re-teste le point** avant de dispatcher le `click`,
+qui tombe donc sur ce qui vient d'apparaître SOUS le doigt. Relevé en Chromium à
+la géométrie du S25 FE : un `click` sur `.case.defense`, **rangée 10,
+colonne 5**. Aucun écran ne peut s'en protéger seul — le clic n'appartient ni à
+celui qui part ni à celui qui arrive, mais au GESTE. D'où `creerAvaleurDeClic` de
+`ui/session.js`, armé par les **deux** trajets que la carte déclenche au doigt
+(l'entrée dans la base ET l'entrée dans le raid, qui portait le même fantôme sans
+que personne l'ait signalé), et **désarmé au prochain `pointerdown`, jamais par
+un délai** : un fantôme arrive dans la foulée de son `pointerup`, un clic voulu
+commence forcément un geste neuf. Vérifié aux deux bouts sur le livrable :
+**aucune case reçue** après le double toucher, et la case **6,1 reçue** au
+toucher suivant.
+⚠⚠ **« TOUT RÉPARER » A QUITTÉ LE FLUX, ET C'EST LA TROISIÈME FORME DU MÊME
+FAIT.** `hidden` le 01/09 — paraître volait sa hauteur au canevas ;
+`visibility: hidden` le 10/09 — ne vole plus rien mais RÉSERVE **27 px CSS**
+(23 de bouton, 4 de marge), qu'Ethan a vus : « il laisse un vide quand il n'est
+pas là […] c'est moche. Ça doit partir et ne pas décaler le sprite. » Posé à
+`bottom: 100%` depuis ce lot, il n'a plus de place ni à prendre ni à réserver :
+mesuré armé et désarmé, **`#raid-bas` reste à 68 px et le canevas à 556 dans les
+deux états** — 0 px de décalage —, et `elementFromPoint` rend le bouton lui-même,
+donc il reçoit toujours le doigt. L'argument qui interdisait ce remède
+(« un bouton doit recevoir le toucher ») était un raccourci : ce qui empêche de
+recevoir est `pointer-events: none`, pas `position: absolute`. **La barre du
+Chantier reste dans le flux** — elle porte deux enfants et les deux bords de sa
+grille sont déjà pris.
+⚠⚠ **LA FLÈCHE : LE DÉFAUT ÉTAIT UN RAPPORT, PAS UNE COULEUR.** Troisième
+« toujours moche » après CARTE-A et CARTE-C. À 200 px par case, la hampe valait
+16 px et la pointe 48 px de large : elle ne dépassait que de 14 px de chaque
+côté. La hampe partageait `EPAISSEUR_HALO` (0,08) avec le halo et le liseré du
+déplacement — un halo est un CADRE, une flèche est un TRAIT, et les confondre a
+coûté trois allers-retours. Trois variantes ont été rendues **sur le vrai fond de
+carte, à l'échelle relevée**, puis trois épaisseurs : Ethan a répondu « flèche A,
+trait légèrement + épais ». D'où `EPAISSEUR_FLECHE = 0,04`, `AILE_FLECHE = 0,34`,
+`OUVERTURE_FLECHE = π/6`. ⚠ **ET `RETRAIT_FLECHE` REVIENT, CE QUI DÉFAIT
+L'ARBITRAGE DU 06/09** (« du centre de l'un au centre de l'autre ») : la variante
+A recule ses deux bouts, et c'est elle qu'il a choisie sur pièce. Le recul est
+une opération de DESSIN — `traitDeLaFleche` rend toujours le trait de centre à
+centre, et `CARTE-B T3` le mesure toujours — proportionnel à 0,30 de la longueur
+pour les cases voisines, sans quoi deux retraits de 0,55 case mangeraient plus
+que le trait n'est long.
+⚠ **LE RETRAIT PASSE AVANT LE ROGNAGE**, et l'ordre porte : reculer, c'est
+reculer par rapport aux CASES ; rogner, c'est couper au bord du CANEVAS. Dans
+l'autre sens, une cible hors du cadre aurait laissé 37 px CSS de vide au bord,
+là où l'acquis de CARTE-C est qu'une flèche qui touche le bord dit « c'est par
+là ».
+⚠⚠ **UNE ESTIMATION DE TÊTE A ÉTÉ DÉMENTIE PAR LA MESURE, ET C'EST LA LEÇON DU
+LOT.** Le premier jet réservait à la carte le seul « plein dans … », en estimant
+la tuile d'attaque à 85 px sur l'écran Base. Relevé : **66,6 px** — les tuiles y
+sont CINQ, pas quatre — et la ligne du bas demandait **90 px de contenu pour un
+cadre de 67** dès qu'on y ajoutait « +20/h », soit 23 px rognés en silence par
+l'`overflow`. Le débit ET le plein sont donc réservés au bandeau du Monde, où la
+tuile fait **348 px** parce qu'elle y est seule. **Rien ne bouge sur l'écran
+Base**, au pixel.
+⚠ **LES DEUX NOMBRES DE LA TUILE SONT DÉRIVÉS DU DIVISEUR DE LA RÉGÉNÉRATION,
+JAMAIS D'UN TAUX RÉÉCRIT** — `regenerationParHeureMilli` et
+`secondesAvantLePlein` de `sim/points-attaque.js`. Confronté au moteur exécuté :
+plafond 203 et caisse vide → **18 000 s, soit 5 h pile**, et un tick plus tôt le
+stock est à 202. `PE T1` tombe si l'on oublie le résidu.
+⚠ **LE BOUTON AMÉLIORER DIT QUAND, PLUS COMBIEN IL MANQUE** — Ethan : « juste
+mettre le compteur, le minuteur. Sauf si c'est hors stockage. » Le filtre porte
+sur le code **`manque:<ressource>`**, pas sur la liste des refus : un
+`plafond-commandement` survit au filtre, sinon le joueur regarderait tourner un
+compteur en attendant un bâtiment qu'il n'a pas. Hors stockage, le manque RESTE.
 
 **Référence au 11/09/2026 (après le lot APPROCHE), à confronter :**
 ⚠⚠ **LES VAGUES ARRIVENT PAR LE BAS, POUR DE BON, ET LA RAMPE DÉCORATIVE

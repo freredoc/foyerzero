@@ -159,6 +159,53 @@ export const SEUIL_RATTRAPAGE_TICKS = 600;
 export const DUREE_APPUI_DEBUG_MS = 1500;
 
 /**
+ * L'avaleur de clic fantôme — la machine, sans DOM.
+ *
+ * ⚠⚠ LE DÉFAUT N'EST PAS DANS LE JEU, IL EST DANS LE NAVIGATEUR, ET IL EST
+ * MESURÉ. Ethan, 11/09 : « quand on double clic sur notre base depuis le monde
+ * on fait un clic sur les unités de défense ». `ui/monde.js` écoute `pointerup`
+ * sur son canevas ; le second toucher change d'écran, le canevas passe en
+ * `display: none` — c'est le `!important` de `[hidden]` en tête de feuille —, et
+ * Chrome RE-TESTE le point avant de dispatcher le `click` qui suit. Le clic
+ * tombe donc sur ce qui vient d'apparaître SOUS le doigt : relevé en Chromium à
+ * la géométrie du S25 FE, un `click` sur `.case.defense`, **rangée 10,
+ * colonne 5**, c'est-à-dire une pièce de garnison de la bande Défense.
+ *
+ * ⚠ AUCUN ÉCRAN NE PEUT S'EN PROTÉGER SEUL. Le clic n'appartient ni à celui qui
+ * part — il a déjà rendu la main — ni à celui qui arrive, qui n'a rien demandé.
+ * Il appartient au GESTE, donc au seul endroit qui sait qu'un geste vient de
+ * changer d'écran.
+ *
+ * ⚠⚠ ET IL SE DÉSARME AU PROCHAIN `pointerdown`, CE QUI N'EST PAS UN DÉTAIL DE
+ * PRUDENCE MAIS LA CONDITION POUR QUE RIEN DE LÉGITIME NE SOIT AVALÉ. Un clic
+ * fantôme arrive dans la foulée du `pointerup` qui l'a créé, sans nouveau
+ * `pointerdown` ; un clic VOULU commence forcément par un `pointerdown`. La
+ * machine ne distingue donc pas les deux par une durée — un délai aurait été un
+ * nombre à régler, et faux sur un appareil plus lent — mais par l'ordre des
+ * événements, qui est le même partout.
+ *
+ * ⚠ ELLE N'AVALE QU'UNE FOIS : le second clic passe, armé ou non. Un avaleur qui
+ * resterait armé mangerait le premier geste réel du joueur sur l'écran d'arrivée.
+ *
+ * @returns {{armer: () => void, surClic: () => boolean, surPointerdown: () => void,
+ *   estArme: () => boolean}}
+ */
+export function creerAvaleurDeClic() {
+  let arme = false;
+  return {
+    armer() { arme = true; },
+    /** Vrai si CE clic doit être avalé — et il ne l'est qu'une fois. */
+    surClic() {
+      if (!arme) return false;
+      arme = false;
+      return true;
+    },
+    surPointerdown() { arme = false; },
+    estArme() { return arme; },
+  };
+}
+
+/**
  * Un chronomètre de temps RÉEL, à source injectée.
  *
  * ⚠ POURQUOI IL EXISTE, ET C'EST LE DÉFAUT LE PLUS COÛTEUX DE CET ÉCRAN.
@@ -944,7 +991,28 @@ export function initialiserSession(doc) {
     $('ressources').dataset.ecran = ecranCourant;
   }
 
-  function montrerEcran(nom) {
+  // ⚠⚠ L'AVALEUR VIT ICI, ET SON CÂBLAGE EST DE TROIS LIGNES. `document` en
+  // CAPTURE : le clic fantôme doit être intercepté avant d'atteindre la grille du
+  // Chantier, qui écoute en phase de bulle sur `#chantier-grille`. Un écouteur
+  // posé sur l'écran d'arrivée ne prendrait que lui, et le défaut existe pour
+  // tous les écrans où l'on entre depuis un doigt sur la carte.
+  const avaleur = creerAvaleurDeClic();
+  doc.addEventListener('pointerdown', () => avaleur.surPointerdown(), { capture: true });
+  doc.addEventListener('click', (evenement) => {
+    if (!avaleur.surClic()) return;
+    evenement.stopPropagation();
+    evenement.preventDefault();
+  }, { capture: true });
+
+  /**
+   * @param {string} nom
+   * @param {{depuisUnToucher?: boolean}} [options] `depuisUnToucher` quand la
+   *   bascule est déclenchée par un doigt SUR UN CANEVAS, donc par un
+   *   `pointerup` dont le `click` n'est pas encore parti. Voir
+   *   `creerAvaleurDeClic`.
+   */
+  function montrerEcran(nom, { depuisUnToucher = false } = {}) {
+    if (depuisUnToucher) avaleur.armer();
     ecranCourant = nom;
     for (const autre of ECRANS) $(`ecran-${autre}`).hidden = autre !== nom;
     // ⚠ LE CHROME COMMUN S'ÉCRIT ICI, ET NULLE PART AILLEURS — mais il dépend
@@ -1391,6 +1459,19 @@ export function initialiserSession(doc) {
   // exactement ce que `apresPose` évite déjà pour la pose.
   ecranRaid = initialiserEcranRaid(doc, {
     versEcran: (nom) => montrerEcran(nom),
+    // ⚠⚠ ON REVIENT SUR LA CIBLE, PAS CHEZ SOI — Ethan, 11/09 : « quand on fait
+    // un retour monde après un raid il faudrait qu'on soit sur la cible qu'on
+    // vient de détruire ». La carte recadre sur la base à chaque ouverture depuis
+    // le 06/09 et ça ne change pas : c'est une DEMANDE à usage unique que la
+    // session pose avant la bascule, et que l'ouverture consomme.
+    //
+    // ⚠ L'ORDRE PORTE : viser AVANT `montrerEcran`, puisque c'est `peindre` —
+    // appelé par la bascule — qui lit la demande. Après, la carte serait déjà
+    // cadrée chez le joueur et la demande attendrait l'ouverture SUIVANTE.
+    surRetourALaCarte: (cible) => {
+      if (ecranMonde !== null && cible !== null) ecranMonde.viserAuProchainAffichage(cible);
+      montrerEcran('monde');
+    },
     apresGeste: () => sauvegarder(),
     // ⚠⚠ « QUAND ON LANCE UN RAID, TOUTES LES BARRES DISPARAISSENT » — Ethan,
     // 04/09. L'écran de raid ANNONCE le déroulé, la session ÉCRIT le chrome :
@@ -1422,7 +1503,10 @@ export function initialiserSession(doc) {
     surEntreeRaid: (cible) => {
       if (etat === null || ecranRaid === null) return;
       ecranRaid.ouvrir(etat, cible, atlasDeLaScene(doc));
-      montrerEcran('raid');
+      // ⚠ DEPUIS UN DOIGT SUR LA CARTE, DONC L'AVALEUR EST ARMÉ. L'écran de raid
+      // porte lui aussi des cases qui écoutent le clic — les emplacements des
+      // vagues —, et le fantôme y tomberait comme il tombait sur la garnison.
+      montrerEcran('raid', { depuisUnToucher: true });
     },
     // ⚠⚠ ET LE SECOND TOUCHER SUR SA PROPRE BASE Y ENTRE — Ethan, 04/09 : « il
     // faut que le double clic, on rentre sur la base ». Avant le lot ASSAUT il
@@ -1432,7 +1516,11 @@ export function initialiserSession(doc) {
     // `etat.baseCourante` par `ouvrirPanneau`, et `apresBascule` a déjà
     // sauvegardé et rafraîchi. Une seconde écriture de la même grandeur sur le
     // même trajet divergerait à la première inattention.
-    surEntreeBase: () => { montrerEcran('chantier'); },
+    // ⚠ ET C'EST LE TRAJET OÙ ETHAN A VU LE CLIC FANTÔME, le 11/09 : le second
+    // toucher entrait bien dans la base, et le `click` qui suivait le
+    // `pointerup` tombait sur une pièce de la bande Défense. Voir
+    // `creerAvaleurDeClic`.
+    surEntreeBase: () => { montrerEcran('chantier', { depuisUnToucher: true }); },
     // ⚠⚠ UN DÉPLACEMENT SE SAUVEGARDE TOUT DE SUITE, comme une pose. C'est une
     // action irréversible du joueur ; la perdre parce que l'application a été
     // tuée avant l'enregistrement périodique serait la pire façon de perdre sa

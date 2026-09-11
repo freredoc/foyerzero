@@ -110,6 +110,7 @@ import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
 import { facteurMilli } from '../sim/combat.js';
 import { rosterDefensif } from '../data/couts-militaires.js';
 import { baseCourante } from '../sim/base-courante.js';
+import { regenerationParHeureMilli, secondesAvantLePlein } from '../sim/points-attaque.js';
 
 // ---------------------------------------------------------------------------
 // Formatage — la seule couche qui a le droit de quitter les entiers du moteur
@@ -1537,7 +1538,27 @@ export function noteDuRefus(apercu) {
   const manque = apercu.problemes.map((p) => p.message).join(' ; ');
   const delai = apercu.delai;
   if (delai === null) return manque;
-  if (delai.cause === 'attente') return `${manque} · dans ${formaterDelai(delai.secondes)}`;
+  if (delai.cause === 'attente') {
+    // ⚠⚠ LE MINUTEUR SEUL — Ethan, 11/09 : « bouton améliorer quand il manque
+    // des ressources, au lieu de te dire il manque tant de ressources, juste
+    // mettre le compteur, le minuteur. Sauf si c'est hors stockage. » Le manque
+    // est déjà lisible : le coût complet est écrit juste au-dessus par
+    // `noteDuBouton`, et les trois stocks sont dans le bandeau du haut. La
+    // soustraction n'apprenait rien que le joueur ne pût faire, et elle poussait
+    // la seule chose qu'il cherche — quand — au bout d'une phrase de trois
+    // membres.
+    //
+    // ⚠⚠ ON FILTRE SUR LE CODE `manque:<ressource>`, ON NE JETTE PAS LA LISTE.
+    // `problemesDeLAmelioration` rend aussi `plafond`, `sans-batiment` et
+    // `plafond-commandement` : remplacer TOUS les messages par un délai
+    // effacerait un refus que l'attente ne lèvera jamais, et le joueur
+    // regarderait tourner un compteur en attendant un bâtiment qu'il n'a pas.
+    const autres = apercu.problemes
+      .filter((p) => !p.code.startsWith('manque:'))
+      .map((p) => p.message);
+    const quand = `dans ${formaterDelai(delai.secondes)}`;
+    return autres.length === 0 ? quand : `${autres.join(' ; ')} · ${quand}`;
+  }
   if (delai.cause === 'capacite') {
     // ⚠ CE CAS-LÀ N'EST PAS UNE ATTENTE, C'EST UN MUR — et c'est exactement la
     // condition qu'Ethan a posée. Le joueur doit agrandir son stockage, pas
@@ -3767,12 +3788,31 @@ export function initialiserEcranChantier(doc, {
   const attaqueNom = doc.createElement('span');
   attaqueNom.className = 'nom';
   attaqueNom.textContent = 'Attaque';
+  // ⚠⚠ LE DÉBIT ET LE PLEIN — Ethan, 11/09 : « il faudrait qu'il y ait un truc
+  // qui affiche combien on en prend par heure. Et stock maximal dans x temps. »
+  // Les deux nombres viennent de `sim/points-attaque.js`, dérivés du DIVISEUR de
+  // la régénération : aucun taux n'est réécrit ici.
+  //
+  // ⚠ LE DÉBIT REPREND `formaterDebit`, celui des trois ressources. Un second
+  // format pour la même grandeur — des unités par heure — se serait mis à dire
+  // autre chose au premier réglage.
+  const attaqueDebit = doc.createElement('span');
+  attaqueDebit.className = 'debit';
+  // ⚠⚠ LE PLEIN NE PARAÎT QUE SUR LA CARTE, ET LA PLACE L'EXIGE — MESURÉ. La
+  // tuile fait 348 px sur l'écran Monde, où elle est SEULE (la feuille y cache
+  // `.ressource:not(.attaque)`), et 85 px sur la Base, où elles sont quatre :
+  // « plein dans 2 h 30 » n'y tient pas, et un texte rogné en silence est pire
+  // qu'un texte absent. Le discriminant est `#ressources[data-ecran]`, qui
+  // existe depuis le lot CARTE-A et qui décide DÉJÀ de ce que ce bandeau montre :
+  // une règle de plus dans la feuille, aucune seconde source.
+  const attaquePlein = doc.createElement('span');
+  attaquePlein.className = 'plein';
   const hautAttaque = doc.createElement('div');
   hautAttaque.className = 'ligne';
-  hautAttaque.append(attaquePoints, attaquePlafond);
+  hautAttaque.append(attaquePoints, attaquePlafond, attaquePlein);
   const basAttaque = doc.createElement('div');
   basAttaque.className = 'ligne';
-  basAttaque.append(creerPictogramme(doc, PICTOGRAMMES.pointsAttaque), attaqueNom);
+  basAttaque.append(creerPictogramme(doc, PICTOGRAMMES.pointsAttaque), attaqueNom, attaqueDebit);
   blocAttaque.append(hautAttaque, basAttaque);
   bandeauRessources.appendChild(blocAttaque);
 
@@ -5643,6 +5683,14 @@ export function initialiserEcranChantier(doc, {
     // recalcul le ferait redescendre.
     attaquePoints.textContent = formaterEntier(etat.attaque.points);
     attaquePlafond.textContent = `/ ${formaterEntier(etat.attaque.plafond)}`;
+    // ⚠ LE DÉBIT NE DÉPEND QUE DU PLAFOND, et il ne s'éteint jamais : la
+    // régénération tourne « quoi qu'il arrive », c'est l'arbitrage du 29/08.
+    attaqueDebit.textContent = formaterDebit(regenerationParHeureMilli(etat.attaque.plafond));
+    // ⚠ AU PLEIN, LA PHRASE DISPARAÎT — elle ne dit pas « plein dans 0 s ». Un
+    // compteur à zéro se lit comme un compteur cassé ; l'absence de délai EST le
+    // plein, et le couple « 203 / 203 » juste à gauche le dit déjà.
+    const secondes = secondesAvantLePlein(etat.attaque);
+    attaquePlein.textContent = secondes === 0 ? '' : `plein dans ${formaterDelai(secondes)}`;
 
     for (const r of resume.ressources) {
       const champs = champsRessource.get(r.cle);

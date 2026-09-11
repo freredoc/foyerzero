@@ -23,6 +23,8 @@ import {
   teinteDAttente, phraseDesAttaquantes,
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
   traitDeLaFleche, traitRogne, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
+  geometrieDeLaFleche, EPAISSEUR_FLECHE, AILE_FLECHE, OUVERTURE_FLECHE,
+  cadrageDeLOuverture,
   ciblageDuSite,
   RAYON_DU_BILAN, fenetreDuBilan, bilanDuTerritoire, lignesDuBilan, lignesDeLAttente,
   clesDesPoisAcquis, phraseDesPoisAcquis, vueDesPois,
@@ -68,7 +70,7 @@ import {
 } from '../src/sim/deplacement.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
-import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss } from '../src/ui/session.js';
+import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss, creerAvaleurDeClic } from '../src/ui/session.js';
 import { tousLesFonds } from '../src/render/fond.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
 import { baseCourante } from '../src/sim/base-courante.js';
@@ -2643,6 +2645,15 @@ test('CARTE-B T3 — la flèche part et finit aux CENTRES des deux cases', () =>
 
   // ⚠ ET LA CONSTANTE EST PARTIE POUR DE BON — un `RETRAIT_FLECHE` remis à zéro
   // serait un nom qui ment, et le prochain lecteur le croirait vivant.
+  //
+  // ⚠⚠ CETTE ASSERTION A ÉTÉ RETIRÉE PUIS REMISE LE 11/09, DANS LA MÊME JOURNÉE,
+  // ET C'EST ELLE QUI A ATTRAPÉ LE MALENTENDU. Trois flèches avaient été rendues
+  // à Ethan sur le vrai fond de carte ; il a répondu « flèche A », et la
+  // variante A reculait ses bouts EN PLUS de changer sa pointe. Le lot a conclu
+  // qu'il choisissait les deux, et a réécrit cette garde pour laisser passer le
+  // retrait. Ethan : « flèches de centre à centre. Mon problème c'était le bout
+  // de la flèche qui était moche. » La garde reprend donc sa forme d'origine :
+  // le retrait n'est ni dans le trait, ni dans le dessin, ni nulle part.
   const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
   assert.doesNotMatch(source, /RETRAIT_FLECHE/,
     'le retrait de la flèche est encore nommé dans l\'écran');
@@ -2786,7 +2797,14 @@ test('CARTE-C T7 — l\'épaisseur du trait suit toujours le zoom', () => {
   // « on fait croître avec le zoom ». Une proposition de borner l'épaisseur en
   // pixels d'écran a été faite et REFUSÉE ; sans cette garde, un lot futur la
   // plafonnerait sans que rien ne le dise.
-  const largeur = (pas) => Math.max(1, Math.round(pas * EPAISSEUR_HALO));
+  //
+  // ⚠⚠ ET LA GRANDEUR A CHANGÉ DE NOM LE 11/09, PAS DE RÈGLE. La flèche lisait
+  // `EPAISSEUR_HALO`, 0,08 de case, partagée avec le halo et le liseré du
+  // déplacement ; Ethan l'a dite « toujours moche » — 16 px de hampe pour une
+  // pointe de 48 px de large à 200 px par case — et a choisi 0,04 sur pièce.
+  // Elle a donc `EPAISSEUR_FLECHE` à elle. L'arbitrage du 06/09 que ce test
+  // FIGE est intact : elle croît avec le zoom, et rien ne la plafonne.
+  const largeur = (pas) => Math.max(1, Math.round(pas * EPAISSEUR_FLECHE));
   const petit = CRANS[0];
   const grand = ECHELLE_MAX;
   assert.ok(grand > petit, 'la table de zoom ne monte plus : le montage ne mesure rien');
@@ -2798,8 +2816,8 @@ test('CARTE-C T7 — l\'épaisseur du trait suit toujours le zoom', () => {
   // asserter est que chaque épaisseur est celle de son pas à un demi-pixel près.
   for (const cran of CRANS) {
     assert.ok(
-      Math.abs(largeur(cran) - cran * EPAISSEUR_HALO) <= 0.5,
-      `au cran ${cran} l'épaisseur vaut ${largeur(cran)} pour ${cran * EPAISSEUR_HALO} attendus`,
+      Math.abs(largeur(cran) - cran * EPAISSEUR_FLECHE) <= 0.5,
+      `au cran ${cran} l'épaisseur vaut ${largeur(cran)} pour ${cran * EPAISSEUR_FLECHE} attendus`,
     );
   }
   assert.ok(largeur(grand) > largeur(petit), 'l\'épaisseur a été plafonnée');
@@ -2811,10 +2829,23 @@ test('CARTE-C T7 — l\'épaisseur du trait suit toujours le zoom', () => {
   }
 
   // ⚠ ET L'ÉCRAN EMPLOIE BIEN CETTE FORMULE-LÀ, sans plafond glissé au passage.
-  const dessin = extraireFonction(sansCommentaires(lire('src', 'ui', 'monde.js')), 'dessinerFleche');
-  assert.match(dessin, /lineWidth = Math\.max\(1, Math\.round\(pas \* EPAISSEUR_HALO\)\)/,
-    'l\'épaisseur de la flèche ne se dérive plus de `pas` et d\'`EPAISSEUR_HALO`');
-  assert.doesNotMatch(dessin, /Math\.min\(/, 'un plafond a été posé sur l\'épaisseur de la flèche');
+  // Elle a déménagé de `dessinerFleche` vers `geometrieDeLaFleche` le 11/09 :
+  // c'est la fonction PURE qui décide, la boucle de dessin ne fait plus que
+  // peindre. La garde suit la formule là où elle vit.
+  const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
+  const geometrie = extraireFonction(source, 'geometrieDeLaFleche');
+  const ligne = geometrie.split('\n').find((l) => l.includes('epaisseur ='));
+  assert.ok(ligne !== undefined, 'la géométrie ne nomme plus d\'épaisseur');
+  assert.match(ligne, /Math\.max\(1, Math\.round\(pas \* EPAISSEUR_FLECHE\)\)/,
+    'l\'épaisseur de la flèche ne se dérive plus de `pas` et d\'`EPAISSEUR_FLECHE`');
+  // ⚠ LE PLAFOND SE CHERCHE SUR CETTE LIGNE, PAS DANS LA FONCTION. Le RETRAIT y
+  // emploie légitimement `Math.min` — il est proportionnel pour les cases
+  // voisines —, et un refus global rendrait ce test faux au lieu de strict.
+  assert.doesNotMatch(ligne, /Math\.min\(/, 'un plafond a été posé sur l\'épaisseur de la flèche');
+  // ⚠ ET LE DESSIN NE RECALCULE RIEN : il pose ce que la géométrie lui donne.
+  const dessin = extraireFonction(source, 'dessinerFleche');
+  assert.match(dessin, /lineWidth = fleche\.epaisseur/,
+    'le dessin refait son épaisseur au lieu de lire celle de la géométrie');
 });
 
 test('CARTE-C T8 — la fiche dit d\'où vient le niveau, et les deux types diffèrent', () => {
@@ -4440,4 +4471,193 @@ test('AC T6 — la mini-carte pose ses cases et ses marqueurs dans le cadre', ()
   assert.equal(bascule.selonLesTons, bascule.selonLeSol,
     `la mini-carte bascule à la bande ${bascule.selonLesTons}, le sol à la ${bascule.selonLeSol}`);
   assert.equal(bascule.selonLesTons, 6, 'la bascule a changé de bande sans qu\'on le dise');
+});
+
+test('TO T1 — la pointe de la flèche dépasse la hampe, et les deux bouts reculent', () => {
+  // ⚠⚠ ETHAN, 11/09 : « la flèche est toujours moche » — la TROISIÈME fois, après
+  // le lot CARTE-A et le lot CARTE-C. Le défaut se chiffre, et c'est un RAPPORT :
+  // à 200 px par case, la hampe faisait 16 px et la pointe 48 px de large, donc
+  // elle ne dépassait que de 14 px de chaque côté. Une flèche dont la tête a la
+  // graisse de son trait est une barre à bout mou. C'est ce rapport que ce test
+  // garde ; il ne garde aucune jolie valeur.
+  const pas = 200;
+  const loin = geometrieDeLaFleche(
+    { x1: 100, y1: 100, x2: 1300, y2: 100, angle: 0 }, pas,
+  );
+
+  // La largeur de la pointe, mesurée sur ses deux ailerons.
+  const largeurDeLaPointe = (g) => Math.hypot(
+    g.pointe[1].x - g.pointe[2].x, g.pointe[1].y - g.pointe[2].y,
+  );
+  assert.ok(largeurDeLaPointe(loin) >= 3 * loin.epaisseur,
+    `pointe de ${largeurDeLaPointe(loin)} px pour une hampe de ${loin.epaisseur} :`
+      + ' une tête qui ne dépasse pas de trois graisses ne se lit pas comme une flèche');
+  // ⚠ ET LE MONTAGE D'HIER ÉCHOUERAIT : 0,08 de hampe et 0,22 d'aile à π/7
+  // donnent 48 px pour 16, soit exactement 3,0 — la borne est donc posée au-delà
+  // de ce que l'ancien dessin atteignait, sinon elle ne mesurerait rien.
+  const largeurAncienne = 2 * pas * 0.22 * Math.sin(Math.PI / 7);
+  const epaisseurAncienne = Math.round(pas * EPAISSEUR_HALO);
+  assert.ok(largeurDeLaPointe(loin) / loin.epaisseur
+    > largeurAncienne / epaisseurAncienne,
+  'le nouveau rapport n\'est pas meilleur que celui d\'avant : ce test ne mesure rien');
+
+  // ⚠⚠ ET LES DEUX BOUTS RESTENT AUX CENTRES DES DEUX CASES — Ethan, 11/09 :
+  // « flèches de centre à centre. Mon problème c'était le bout de la flèche qui
+  // était moche. » Ce lot ne touche QUE la pointe ; l'arbitrage du 06/09 tient,
+  // et cette assertion est ce qui empêche un futur lot de raccourcir le trait en
+  // croyant bien faire. `CARTE-B T3` garde la même chose en amont, sur le trait ;
+  // ici, c'est le DESSIN qui est mesuré.
+  assert.equal(loin.pointe[0].x, 1300, 'la pointe ne tombe plus sur le centre de la cible');
+  assert.equal(loin.hampe.x1, 100, 'la hampe ne part plus du centre de la base');
+  assert.equal(loin.bouton.rayon, loin.epaisseur / 2);
+
+  // ⚠ ET À UNE CASE DE DISTANCE, LA FLÈCHE EXISTE ENCORE. Ce n'est pas un cas
+  // limite : c'est le raid le moins cher du jeu. La pointe y est plus longue que
+  // la moitié du trait, et c'est la HAMPE qui cède, jamais la pointe.
+  const voisine = geometrieDeLaFleche(
+    { x1: 0, y1: 0, x2: pas, y2: 0, angle: 0 }, pas,
+  );
+  assert.ok(voisine !== null, 'à une case, la flèche a disparu');
+  assert.equal(voisine.pointe[0].x, pas, 'la pointe d\'une case voisine a reculé');
+  assert.ok(largeurDeLaPointe(voisine) >= 3 * voisine.epaisseur,
+    'la pointe d\'une case voisine ne se lit pas');
+
+  // ⚠ ET LA DIRECTION VIENT DE L'ANGLE DU TRAIT, jamais du segment reculé : sur
+  // un trait rogné au bord du canevas, les deux diffèrent, et c'est l'angle qui
+  // porte la direction de la CIBLE — l'acquis de `CARTE-C T2`.
+  const oblique = { x1: 0, y1: 0, x2: 600, y2: 800, angle: Math.atan2(8, 6) };
+  const g = geometrieDeLaFleche(oblique, pas);
+  const axe = Math.atan2(
+    g.pointe[0].y - (g.pointe[1].y + g.pointe[2].y) / 2,
+    g.pointe[0].x - (g.pointe[1].x + g.pointe[2].x) / 2,
+  );
+  assert.ok(Math.abs(axe - oblique.angle) < 1e-9,
+    'la pointe ne regarde pas dans la direction du trait');
+
+  // ⚠ RIEN À PEINDRE QUAND IL N'Y A PAS DE TRAIT — `traitDeLaFleche` rend `null`
+  // sur deux cases identiques, et la géométrie ne doit pas fabriquer une pointe
+  // posée sur un point qui ne désigne rien.
+  assert.equal(geometrieDeLaFleche(null, pas), null);
+  assert.equal(geometrieDeLaFleche({ x1: 5, y1: 5, x2: 5, y2: 5, angle: 0 }, pas), null);
+  assert.throws(() => geometrieDeLaFleche(oblique, 0), /pas/);
+  assert.equal(OUVERTURE_FLECHE > 0 && AILE_FLECHE > 0, true);
+});
+
+test('TO T2 — le clic fantôme est avalé une fois, et jamais un clic voulu', () => {
+  // ⚠⚠ LE DÉFAUT EST DANS LE NAVIGATEUR, ET IL A ÉTÉ REPRODUIT AVANT D'ÊTRE
+  // CORRIGÉ. Ethan, 11/09 : « quand on double clic sur notre base depuis le
+  // monde on fait un clic sur les unités de défense ». L'écran Monde écoute
+  // `pointerup` ; la bascule cache son canevas ; Chrome re-teste le point et
+  // dispatche le `click` sur ce qui vient d'apparaître sous le doigt. Relevé en
+  // Chromium à la géométrie du S25 FE : un `click` sur `.case.defense`, rangée
+  // 10, colonne 5.
+  //
+  // ⚠ CE TEST NE PROUVE PAS LE DISPATCH — rien ici ne peut le faire, le dépôt
+  // n'a pas de navigateur. Il prouve la MACHINE, et une garde de source prouve
+  // qu'elle est branchée aux trois événements qui la font marcher.
+  const a = creerAvaleurDeClic();
+  assert.equal(a.estArme(), false);
+  assert.equal(a.surClic(), false, 'au repos, aucun clic ne doit être avalé');
+
+  a.armer();
+  assert.equal(a.estArme(), true);
+  assert.equal(a.surClic(), true, 'le fantôme n\'est pas avalé');
+  // ⚠ UNE SEULE FOIS : armé et jamais désarmé, il mangerait le PREMIER geste
+  // réel du joueur sur l'écran d'arrivée.
+  assert.equal(a.surClic(), false, 'l\'avaleur est resté armé après avoir mangé');
+
+  // ⚠⚠ ET LE DÉSARMEMENT SE FAIT SUR UN `pointerdown`, PAS SUR UNE DURÉE. Un
+  // fantôme arrive dans la foulée du `pointerup` qui l'a créé, sans nouveau
+  // `pointerdown` ; un clic VOULU en commence forcément un. Un délai aurait été
+  // un nombre à régler, et faux sur un appareil plus lent.
+  const b = creerAvaleurDeClic();
+  b.armer();
+  b.surPointerdown();
+  assert.equal(b.estArme(), false, 'un nouveau geste n\'a pas désarmé l\'avaleur');
+  assert.equal(b.surClic(), false, 'le clic d\'un geste NEUF a été avalé');
+
+  // --- le câblage -----------------------------------------------------------
+  const session = sansCommentaires(lire('src', 'ui', 'session.js'));
+  assert.match(session, /addEventListener\('pointerdown', \(\) => avaleur\.surPointerdown\(\)/,
+    'rien ne désarme l\'avaleur : le prochain clic voulu sera avalé');
+  assert.match(session, /addEventListener\('click',[\s\S]{0,400}?avaleur\.surClic\(\)/,
+    'l\'avaleur n\'est pas branché au clic');
+  // ⚠ EN CAPTURE, ET C'EST LA MOITIÉ QUI COMPTE. La grille du Chantier écoute en
+  // phase de BULLE sur son conteneur : un écouteur en bulle sur `document`
+  // passerait après elle, donc après le mal.
+  const surLeClic = session.slice(session.indexOf('addEventListener(\'click\''));
+  assert.match(surLeClic.slice(0, 400), /capture: true/,
+    'l\'avaleur n\'est pas en capture : la grille reçoit le fantôme avant lui');
+  assert.match(surLeClic.slice(0, 400), /stopPropagation\(\)[\s\S]{0,80}preventDefault\(\)/,
+    'le clic avalé continue sa route');
+
+  // ⚠⚠ ET IL N'EST ARMÉ QUE PAR CE QUI VIENT D'UN DOIGT SUR UN CANEVAS : les
+  // DEUX trajets que la carte déclenche, l'entrée dans la base et l'entrée dans
+  // le raid. Le second n'avait jamais été rapporté, et il portait le même
+  // fantôme — l'écran de raid a lui aussi des cases qui écoutent le clic.
+  for (const trajet of [/montrerEcran\('chantier', \{ depuisUnToucher: true \}\)/,
+    /montrerEcran\('raid', \{ depuisUnToucher: true \}\)/]) {
+    assert.match(session, trajet, `un trajet de la carte n'arme plus l'avaleur : ${trajet}`);
+  }
+  // ⚠ ET LES ONGLETS NE L'ARMENT PAS. Un bouton de la barre n'est pas un canevas
+  // qui disparaît sous le doigt : son clic est parti avant la bascule, et armer
+  // là serait armer sans fantôme à avaler.
+  const brancheDUnOnglet = /\$\('onglet-[a-z]+'\)\.addEventListener\('click', \(\) => montrerEcran\('[a-z]+'\)\);/g;
+  const onglets = session.match(brancheDUnOnglet) ?? [];
+  assert.equal(onglets.length, 5, `cinq onglets attendus dans la barre, ${onglets.length} trouvés`);
+  for (const ligne of onglets) {
+    assert.doesNotMatch(ligne, /depuisUnToucher/,
+      `${ligne} arme l'avaleur : un onglet n'a pas de fantôme à avaler`);
+  }
+});
+
+test('RP T1 — la carte se rouvre sur la cible du raid, une fois et une seule', () => {
+  // ⚠⚠ ETHAN, 11/09 : « quand on fait un retour monde après un raid il faudrait
+  // qu'on soit sur la cible qu'on vient de détruire ». Le recadrage sur la base
+  // à chaque ouverture est un acquis du 06/09 et il ne bouge pas : ce lot ajoute
+  // une DEMANDE à usage unique, et c'est l'usage unique qui se garde ici. Le
+  // cadrage lui-même se voit à l'œil et ne se mesure pas sans navigateur.
+  const base = { rangee: 150, colonne: 12 };
+  const cible = { rangee: 258, colonne: 20 };
+
+  // Sans demande, rien ne change : on ouvre chez soi.
+  const chezSoi = cadrageDeLOuverture(null, base);
+  assert.deepEqual(chezSoi.position, base);
+  assert.equal(chezSoi.demandeSuivante, null);
+  assert.deepEqual(cadrageDeLOuverture(undefined, base).position, base);
+
+  // Avec demande, elle l'emporte — et elle est CONSOMMÉE.
+  const surLaCible = cadrageDeLOuverture(cible, base);
+  assert.deepEqual(surLaCible.position, { rangee: 258, colonne: 20 });
+  assert.equal(surLaCible.demandeSuivante, null,
+    'la demande survit à son ouverture : l\'onglet Monde ramènerait sur une ruine');
+  // ⚠ ET L'OUVERTURE D'APRÈS REVIENT CHEZ LE JOUEUR — c'est la conséquence de la
+  // ligne du dessus, mesurée plutôt que déduite.
+  assert.deepEqual(cadrageDeLOuverture(surLaCible.demandeSuivante, base).position, base);
+
+  // ⚠ LA POSITION EST RECOPIÉE, PAS PARTAGÉE : la cible du raid est un objet de
+  // l'état, et rendre la même référence laisserait le cadrage l'écrire.
+  assert.notEqual(surLaCible.position, cible);
+
+  // --- le câblage -----------------------------------------------------------
+  // ⚠ LES DEUX PORTES DU RETOUR passent par le crochet, pas par `versEcran` : le
+  // bouton d'abandon et celui du rapport portent le même mot, « Carte ».
+  const raid = sansCommentaires(lire('src', 'ui', 'raid.js'));
+  for (const bouton of ['raid-retour-carte', 'raid-fin-carte']) {
+    const ligne = raid.split('\n').find((l) => l.includes(`'${bouton}'`));
+    assert.ok(ligne !== undefined, `${bouton} n'est plus branché`);
+    assert.match(ligne, /surRetourALaCarte\(cibleCourante\)/,
+      `${bouton} revient à la carte sans dire d'où il vient`);
+  }
+  // ⚠⚠ ET LA SESSION VISE AVANT DE BASCULER. C'est `peindre`, appelé par la
+  // bascule, qui consomme la demande : posée après, elle attendrait l'ouverture
+  // SUIVANTE, et le joueur serait ramené sur la ruine au mauvais moment.
+  const session = sansCommentaires(lire('src', 'ui', 'session.js'));
+  const crochet = session.slice(session.indexOf('surRetourALaCarte:'));
+  const corps = crochet.slice(0, crochet.indexOf('},'));
+  assert.match(corps, /viserAuProchainAffichage/, 'la session ne vise pas la cible');
+  assert.ok(
+    corps.indexOf('viserAuProchainAffichage') < corps.indexOf("montrerEcran('monde')"),
+    'la session bascule avant de viser : la demande serait consommée une ouverture trop tard',
+  );
 });
