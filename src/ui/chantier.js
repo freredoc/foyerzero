@@ -36,7 +36,10 @@ import {
   VIGNETTES_MIXTES, batimentDeLaVignette, batimentDeReference,
 } from '../data/base.js';
 import { ressourceDeLaCase } from '../sim/champs.js';
-import { RESSOURCES, capacitesMilli, debitsMilliParHeure } from '../sim/economie-base.js';
+import {
+  RESSOURCES, capacitesMilli, debitsMilliParHeure, ticksAvantLaSaturation,
+} from '../sim/economie-base.js';
+import { TICKS_PAR_SECONDE } from '../sim/clock.js';
 import { compacter } from '../render/nombre.js';
 // ⚠⚠ LES PICTOGRAMMES NE SONT PAS NOMMÉS ICI, ILS SONT DEMANDÉS — lot
 // CÂBLAGE, 07/09. `src/ui/pictogramme.js` traduit une clé de DONNÉE en nom de
@@ -713,6 +716,24 @@ export function resumeDeLaBase(etat) {
       stockMilli: laBase.economie.ressources[cle],
       capaciteMilli: capacites[cle],
       debitMilli: total[cle],
+      // ⚠⚠ LE DÉLAI VIENT DU MOTEUR, PAS D'UNE DIVISION — Ethan, 11/09 : « quand
+      // on touche une ressource, par exemple l'électricité, je veux savoir dans
+      // combien de temps le stock est plein ». `ticksAvantLaSaturation` refait
+      // l'arithmétique du tick, résidu par bâtiment ; un `manque / débitTotal`
+      // écrit ici serait un second modèle de l'économie dans l'écran.
+      // ⚠ ET LA CONVERSION EN SECONDES EST ICI, PAS DANS `sim/` : les ticks sont
+      // l'unité du moteur, les secondes celle de l'écran. Arrondi VERS LE HAUT,
+      // comme `delaiAvantAmelioration` : annoncer une seconde de moins que la
+      // vérité ferait lire « plein » à un stock qui ne l'est pas.
+      // ⚠ `null` VEUT DIRE « JAMAIS À CE RYTHME », et l'écran le dit en un mot.
+      secondesAvantSaturation: (() => {
+        const ticks = ticksAvantLaSaturation(
+          laBase.disposition.map((_, i) => laBase.economie.residus[i][cle] ?? 0),
+          debits.map((parBatiment) => parBatiment[cle] ?? 0),
+          laBase.economie.ressources[cle], capacites[cle],
+        );
+        return ticks === null ? null : Math.ceil(ticks / TICKS_PAR_SECONDE);
+      })(),
     })),
     emplacements: {
       poses: laBase.disposition.length,
@@ -1158,6 +1179,28 @@ export function formaterDelai(secondes) {
   if (s < 3600) return `${Math.floor(s / 60)} min ${deuxChiffres(s % 60)} s`;
   if (s < 86_400) return `${Math.floor(s / 3600)} h ${deuxChiffres(Math.floor((s % 3600) / 60))}`;
   return `${Math.floor(s / 86_400)} j ${deuxChiffres(Math.floor((s % 86_400) / 3600))} h`;
+}
+
+/**
+ * Ce que la tuile écrit quand le bandeau est basculé en « plein dans ».
+ *
+ * ⚠ TROIS RÉPONSES, ET LES DEUX BORNES NE SONT PAS DES DURÉES. `null` veut dire
+ * que rien ne produit cette ressource — « jamais » à ce rythme, et une base
+ * neuve est dans ce cas pour les trois. `0` veut dire que le stock est AU
+ * plafond : « plein », parce que « 0 s » se lit comme un compteur cassé.
+ *
+ * ⚠ ET ELLE NE MET PAS LE MOT « plein » DEVANT LA DURÉE, pour une raison
+ * mesurée : une tuile fait 66,58 px au S25 FE et « plein 12 min 34 s » en
+ * demande 69,31. C'est la bascule de tout le bandeau qui dit ce que la ligne
+ * annonce, pas un mot répété cinq fois.
+ *
+ * @param {number|null} secondes
+ * @returns {string}
+ */
+export function delaiDuPlein(secondes) {
+  if (secondes === null || secondes === undefined) return 'jamais';
+  if (secondes === 0) return 'plein';
+  return formaterDelai(secondes);
 }
 
 /**
@@ -1905,6 +1948,19 @@ export function peindreVueDuPanneau(doc, elements, vue) {
   for (const section of vue.sections) {
     const bloc = doc.createElement('div');
     bloc.className = 'section';
+    // ⚠⚠ UNE SECTION PEUT PORTER UNE CLÉ DEPUIS LE 11/09, ET LE RENDU N'EN SAIT
+    // RIEN DE PLUS. Le journal des raids déplie un rapport au toucher ; c'est la
+    // session qui écoute et qui décide, ce rendu-ci ne fait que POSER de quoi
+    // retrouver la section touchée. Les trois autres lecteurs — les deux fiches
+    // du joueur et celle d'une cible ennemie — ne posent pas de clé, et rien ne
+    // change pour eux : pas d'attribut, pas de classe, pas un octet.
+    // ⚠ LE NOM EST GÉNÉRIQUE À DESSEIN : `data-cle`, pas `data-rapport`. Ce
+    // fichier ne connaît pas les raids, et le jour où une autre fiche voudra un
+    // dépliant, elle n'aura rien à renommer.
+    if (section.cle !== undefined && section.cle !== null) {
+      bloc.dataset.cle = String(section.cle);
+      bloc.classList.add('depliable');
+    }
     const titre = doc.createElement('h3');
     titre.textContent = section.titre;
     bloc.appendChild(titre);
@@ -2023,162 +2079,13 @@ export const LIBELLE_VERDICT = {
 };
 
 /** Ce qui s'affiche quand le journal est vide — une phrase, jamais un blanc. */
-export const JOURNAL_VIDE = 'Aucun raid mené ni subi pour l\'instant.';
-
-/** Le titre du panneau, écrit une fois pour les deux écrans. */
-export const TITRE_JOURNAL = 'Journal des raids';
-
-/**
- * Ce que chaque SENS de rapport met dans sa section — et il n'y a que ça.
- *
- * ⚠⚠ UNE TABLE, JAMAIS UN `=== 'defense'`. C'est la règle du dépôt prise à la
- * lettre : un cas particulier nommé à la main est le premier à diverger, et
- * `ui/chantier.js` porte déjà une garde qui refuse ce littéral pour la table des
- * terrains. Le sens du rapport a exactement la même forme de problème — deux
- * moitiés du moteur qui écrivent deux mots — donc il se lit de la même façon.
- *
- * ⚠ ET UN SENS INCONNU LÈVE. Les deux moitiés du moteur écrivent `sens` depuis
- * le lot RAID-B ; un rapport qui en porterait un troisième est un fait de
- * PROGRAMME, pas de jeu, et l'afficher en silence ferait lire une histoire
- * fausse.
- */
-const SENS_DU_RAPPORT = {
-  offense: {
-    titre: 'Raid mené',
-    libelleAdversaire: 'Cible',
-    champAdversaire: 'cible',
-    ligneDuBilan: ligneDuButin,
-  },
-  defense: {
-    titre: 'Raid subi',
-    libelleAdversaire: 'Assaillant',
-    champAdversaire: 'attaquant',
-    ligneDuBilan: ligneDesPertes,
-  },
-};
-
-/**
- * Une entrée du journal : un rapport de combat, en paires.
- *
- * ⚠⚠ RIEN N'EST RECALCULÉ, ET C'EST TOUTE LA RÈGLE DU LOT. Un rapport est le
- * résultat FIGÉ d'un combat déjà résolu ; recalculer un butin ou une issue
- * depuis l'état d'aujourd'hui donnerait un chiffre différent de celui qu'Ethan a
- * vu au moment du raid, et il aurait raison de le croire faux. Cette fonction ne
- * lit QUE le rapport — et `tickCourant`, pour dire depuis quand.
- *
- * @param {object} rapport une entrée d'`etat.rapports`
- * @param {number} tickCourant `etat.horloge.nbTicks`
- * @returns {{titre: string, lignes: Array<object>}}
- */
-function sectionDuRapport(rapport, tickCourant) {
-  const forme = SENS_DU_RAPPORT[rapport.sens];
-  if (forme === undefined) {
-    throw new RangeError(`journal : sens « ${rapport.sens} » inconnu`);
-  }
-  const qui = rapport[forme.champAdversaire];
-  const nom = EMBLEMES_CARTE[qui?.type]?.nom ?? qui?.type ?? '—';
-  // ⚠ L'ÂGE S'ARRONDIT VERS LE BAS. Un raid d'il y a 59 secondes s'annonce
-  // « 59 s », jamais « 1 min » : c'est du temps ÉCOULÉ, donc un stock, et
-  // `direLaDuree` prend son arrondi en argument pour cette raison exacte.
-  const age = direLaDuree(Math.max(0, tickCourant - rapport.tick), Math.floor);
-  const lignes = [
-    {
-      libelle: forme.libelleAdversaire,
-      avant: `${nom} · niv. ${formaterEntier(qui?.niveau ?? 0)}`,
-      apres: null,
-    },
-    {
-      libelle: 'Position',
-      avant: `r ${formaterEntier(qui?.rangee ?? 0)} · c ${formaterEntier(qui?.colonne ?? 0)}`,
-      apres: null,
-      mineur: true,
-    },
-    {
-      libelle: 'Issue',
-      picto: PICTOGRAMMES.temps,
-      avant: LIBELLE_VERDICT[rapport.verdict] ?? rapport.verdict,
-      apres: null,
-    },
-    forme.ligneDuBilan(rapport),
-  ];
-  return { titre: `${forme.titre} · il y a ${age}`, lignes };
-}
-
-/** Ce que le raid a rapporté — la même paire que le panneau de fin. */
-function ligneDuButin(rapport) {
-  const butin = rapport.butin ?? {};
-  const quartz = butin.quartz ?? 0;
-  const scorie = butin.scorie ?? 0;
-  return {
-    libelle: 'Butin',
-    picto: PICTOGRAMMES.butin,
-    avant: quartz === 0 && scorie === 0
-      ? '—'
-      : `${formaterEntier(quartz)} q · ${formaterEntier(scorie)} s`,
-    apres: null,
-  };
-}
-
-/**
- * Ce que le rasage a détruit — rien tant que la base tient.
- *
- * ⚠⚠ LE BUTIN N'A PAS DE MIROIR EXACT CÔTÉ DÉFENSE, ET C'EST DÉCLARÉ. Un raid
- * SUBI ne rapporte rien : ce qu'il peut COÛTER est `sanction.perdu`, les
- * ressources stockées qu'un RASAGE détruit — et cette sanction vaut `null` tant
- * que la base tient. Une attaque repoussée n'a donc aucun chiffre de perte à
- * annoncer, et « — » est la seule réponse honnête : composer un total depuis
- * l'état d'aujourd'hui serait le recalcul que ce lot refuse.
- */
-function ligneDesPertes(rapport) {
-  const perdu = rapport.sanction?.perdu ?? null;
-  const quartz = perdu?.quartz ?? 0;
-  const scorie = perdu?.scorie ?? 0;
-  return {
-    libelle: 'Perdu au rasage',
-    picto: PICTOGRAMMES.butin,
-    avant: perdu === null || (quartz === 0 && scorie === 0)
-      ? '—'
-      : `${formaterEntier(quartz)} q · ${formaterEntier(scorie)} s`,
-    apres: null,
-  };
-}
-
-/**
- * La vue du journal — les dix derniers raids, du plus RÉCENT au plus ancien.
- *
- * ⚠⚠ UNE SEULE VUE POUR LES DEUX ÉCRANS, ET C'EST LA DEMANDE D'ETHAN PRISE À LA
- * LETTRE : « Défense et offense : rajouter un bouton rapport, qui permet de voir
- * les 10 dernières attaques et raids subis. » Deux vues auraient divergé à la
- * première retouche, et le joueur aurait lu deux histoires de la même partie.
- *
- * ⚠⚠ LA FILE SE LIT À L'ENDROIT, LA VUE S'AFFICHE À L'ENVERS — ET LE RETOURNEMENT
- * SE FAIT SUR UNE COPIE. `garderLeRapport` pousse en queue et jette la tête :
- * c'est une FILE, et un `reverse()` en place casserait à la fois le rangement et
- * la borne. `[...rapports]` copie d'abord ; `JRN T6` mesure que l'état n'a pas
- * bougé après affichage.
- *
- * ⚠ ET LA BORNE N'EST PAS RÉÉCRITE ICI. Le journal ne porte JAMAIS plus de
- * `APRES_RAID.rapportsGardes` entrées — `garderLeRapport` s'en charge à
- * l'écriture, et `verifierEtat` le garde au chargement. Rogner une seconde fois
- * à l'affichage mettrait un second dix dans le dépôt, ce que le commentaire de
- * `src/data/sites.js` redoute nommément.
- *
- * @param {Array<object>} rapports `etat.rapports`, jamais modifié
- * @param {number} tickCourant `etat.horloge.nbTicks`
- * @returns {{titre: string, sections: Array<object>}}
- */
-export function vueDuJournal(rapports, tickCourant) {
-  const liste = Array.isArray(rapports) ? rapports : [];
-  // ⚠ UN JOURNAL VIDE SE DIT. Zéro rapport n'est pas une erreur : c'est une
-  // partie qui commence. Une vue sans section rendrait un panneau blanc, et le
-  // joueur croirait le bouton cassé.
-  const sections = liste.length === 0
-    ? [{ titre: JOURNAL_VIDE, lignes: [] }]
-    : [...liste].reverse().map((r) => sectionDuRapport(r, tickCourant));
-  // ⚠ SANS `picto` DEPUIS LE POINT 7 : le journal partage le rendu, donc le
-  // blason du titre part ici aussi. Ses lignes, elles, gardent les leurs.
-  return { titre: TITRE_JOURNAL, sections };
-}
+/* ⚠⚠ LE JOURNAL A DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09, ET C'EST UN CYCLE
+   D'IMPORTS QUI L'A DÉCIDÉ. Ethan voulait ouvrir un rapport pour voir ce qui
+   s'est passé ; les quinze lignes d'un rapport d'attaque sont déjà écrites par
+   `lignesDuResultat`, qui vivait dans `ui/raid.js` — lequel importe CE
+   fichier-ci. Faire lire l'une par l'autre fermait la boucle. Ce qui reste ici :
+   `LIBELLE_VERDICT`, que trois fichiers lisent, et le rendu partagé
+   `peindreVueDuPanneau`, qui ne connaît ni raid ni journal. */
 
 /**
  * Les bâtiments que le joueur pourrait poser — ceux qui ne sont pas uniques, et
@@ -3760,8 +3667,33 @@ export function initialiserEcranChantier(doc, {
     bas.append(creerPictogramme(doc, PICTOGRAMME_DE_LA_RESSOURCE[cleRessource]), nom, debit);
     bloc.append(haut, bas);
     bandeauRessources.appendChild(bloc);
-    champsRessource.set(cleRessource, { stock, capacite, debit });
+    champsRessource.set(cleRessource, { bloc, stock, capacite, debit });
   }
+
+  // ⚠⚠ LE BANDEAU BASCULE EN « PLEIN DANS » AU TOUCHER — Ethan, 11/09 : « quand
+  // on clique ou quand on touche une ressource, par exemple l'électricité, je
+  // veux savoir dans combien de temps le stock est plein ». C'est une BASCULE de
+  // tout le bandeau, pas une info par tuile, et la raison est une mesure : une
+  // tuile fait **66,58 px** au S25 FE — elles sont cinq — et « plein 12 min 34 s »
+  // en demande **69,31**. La durée ne peut donc PAS s'ajouter à la ligne du bas,
+  // elle doit la REMPLACER ; et si une tuile la remplace, les cinq doivent le
+  // faire, sinon le joueur compare des lignes qui ne disent pas la même chose.
+  //
+  // ⚠ MÊME LE PICTOGRAMME PART, ET C'EST LA MÊME MESURE QUI LE DIT : picto
+  // 16,09 + écart 3 + la durée la plus large (« 59 min 59 s », 47,25) = 66,34 px
+  // pour un cadre de 66,58. Zéro virgule vingt-quatre pixel de mou n'est pas une
+  // marge, c'est une coïncidence. La durée seule en laisse 19,33.
+  //
+  // ⚠ UN TOUCHER SUR N'IMPORTE QUELLE TUILE BASCULE, et un second rend le
+  // bandeau. Pas de minuterie : une info qui s'évanouit toute seule oblige à
+  // relire vite, et Ethan lit sur un téléphone, d'une main.
+  let bandeauEnPlein = false;
+  bandeauRessources.addEventListener('click', () => {
+    bandeauEnPlein = !bandeauEnPlein;
+    // ⚠ ON NE PEINT PAS ICI. `rafraichir` repasse dix fois par seconde et écrit
+    // les deux formes ; peindre depuis l'écouteur ferait un second site
+    // d'écriture pour les mêmes nœuds, donc deux vérités à tenir d'accord.
+  });
 
   // --- les points d'attaque ---------------------------------------------------
   //
@@ -5691,6 +5623,13 @@ export function initialiserEcranChantier(doc, {
     // plein, et le couple « 203 / 203 » juste à gauche le dit déjà.
     const secondes = secondesAvantLePlein(etat.attaque);
     attaquePlein.textContent = secondes === 0 ? '' : `plein dans ${formaterDelai(secondes)}`;
+    // ⚠ LA TUILE D'ATTAQUE SUIT LA BASCULE DU BANDEAU, elle aussi : elle porte un
+    // stock, un plafond et un débit comme les trois ressources, et la laisser
+    // afficher son débit pendant que les trois autres annoncent un délai ferait
+    // lire « +40/h » comme un délai. Sa régénération ne s'arrête jamais, donc
+    // elle ne peut pas rendre « jamais ».
+    if (bandeauEnPlein) attaqueDebit.textContent = delaiDuPlein(secondes);
+    blocAttaque.classList.toggle('en-plein', bandeauEnPlein);
 
     for (const r of resume.ressources) {
       const champs = champsRessource.get(r.cle);
@@ -5710,7 +5649,19 @@ export function initialiserEcranChantier(doc, {
       champs.capacite.textContent = sature
         ? `/ ${formaterUnites(r.capaciteMilli)} ${MENTION_SATURE}`
         : `/ ${formaterUnites(r.capaciteMilli)}`;
-      champs.debit.textContent = formaterDebit(r.debitMilli);
+      // ⚠⚠ DEUX FORMES POUR LA MÊME LIGNE, ET UN SEUL SITE D'ÉCRITURE. Le débit
+      // par heure, ou le temps qui reste avant le plein — voir la bascule posée
+      // avec les tuiles. Écrire la seconde depuis l'écouteur du toucher aurait
+      // fait deux endroits où la même ligne se décide.
+      // ⚠ « jamais » N'EST PAS UNE DURÉE IMMENSE : c'est ce que rend le moteur
+      // quand rien ne produit cette ressource, et une base neuve est dans ce cas
+      // pour les trois. Afficher « 999 h » serait faux.
+      // ⚠ ET AU PLAFOND, C'EST « plein » — pas « 0 s », qui se lit comme un
+      // compteur cassé. La ligne du haut porte déjà la mention de saturation.
+      champs.debit.textContent = bandeauEnPlein
+        ? delaiDuPlein(r.secondesAvantSaturation)
+        : formaterDebit(r.debitMilli);
+      champs.bloc.classList.toggle('en-plein', bandeauEnPlein);
       champs.stock.classList.toggle('sature', sature);
       champs.capacite.classList.toggle('sature', sature);
     }

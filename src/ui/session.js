@@ -38,8 +38,12 @@ import {
 } from '../sim/state.js';
 import { accumuler } from '../sim/clock.js';
 import {
-  initialiserEcranChantier, vueDuJournal, peindreVueDuPanneau,
+  initialiserEcranChantier, peindreVueDuPanneau,
 } from './chantier.js';
+// ⚠ LE JOURNAL VIENT DE `ui/rapport.js` DEPUIS LE 11/09 : il déplie maintenant
+// les lignes du panneau de fin de raid, et celles-là ne pouvaient pas être lues
+// depuis `ui/chantier.js` sans fermer un cycle d'imports.
+import { vueDuJournal } from './rapport.js';
 import { tousLesFonds, nomCssDuFond } from '../render/fond.js';
 import { initialiserPanneauDeTransfert } from './transfert.js';
 import { initialiserEcranOffense } from './offense.js';
@@ -1113,13 +1117,37 @@ export function initialiserSession(doc) {
   // le panneau ne reste pas seul par-dessus un combat dont tout le chrome venait
   // d'être masqué ; un déroulé ne peut se produire QUE sur l'écran de raid, donc
   // la question ne se pose plus.
+  // ⚠⚠ QUEL RAPPORT EST DÉPLIÉ — Ethan, 11/09 : « je veux, quand je clique sur un
+  // des rapports, voir ce qui s'est passé ». C'est une CLÉ, pas un indice : le
+  // journal est une file de dix, et l'arrivée d'un onzième rapport fait glisser
+  // tous les indices d'un cran. Voir `cleDuRapport`.
+  // ⚠ ET UN SEUL À LA FOIS. Deux dépliants ouverts sur un écran de 360 px
+  // demanderaient de faire défiler pour comparer, ce que l'accordéon existe
+  // justement pour éviter.
+  let rapportDeplie = null;
+
   function peindreLeJournal() {
     if (etat === null) return;
     peindreVueDuPanneau(
       doc, elementsJournal,
-      vueDuJournal(etat.rapports, etat.horloge.nbTicks),
+      vueDuJournal(etat.rapports, etat.horloge.nbTicks, rapportDeplie),
     );
   }
+
+  // ⚠⚠ LE TOUCHER EST DÉLÉGUÉ SUR LE CORPS, PAS POSÉ SUR CHAQUE SECTION. Le
+  // journal se repeint entièrement à chaque ouverture et à chaque toucher : des
+  // écouteurs posés sur les sections seraient recréés à chaque fois, et les
+  // anciens vivraient sur des nœuds jetés.
+  // ⚠ TOUTE LA SECTION EST LA CIBLE, pas seulement son titre — c'est quarante
+  // pixels de haut au lieu de neuf, sur un écran qu'on touche du pouce.
+  // ⚠ ET LE MÊME TOUCHER REFERME : un dépliant qui ne se referme pas oblige à en
+  // ouvrir un autre pour fermer celui-là.
+  $('journal-corps').addEventListener('click', (evenement) => {
+    const section = evenement.target.closest('[data-cle]');
+    if (section === null) return;
+    rapportDeplie = section.dataset.cle === rapportDeplie ? null : section.dataset.cle;
+    peindreLeJournal();
+  });
 
   // --- le banc d'essai, derrière un appui long -------------------------------
   //

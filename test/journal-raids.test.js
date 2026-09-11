@@ -31,7 +31,16 @@ import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
 import { poserEffectif } from '../src/sim/state.js';
 import { crediterLesReserves, plafondDeLaReserve } from '../src/sim/reparation.js';
 import { APRES_RAID } from '../src/data/sites.js';
-import { vueDuJournal, JOURNAL_VIDE, TITRE_JOURNAL, LIBELLE_VERDICT } from '../src/ui/chantier.js';
+// ⚠ LE JOURNAL A DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09 : le dépliant d'un
+// rapport rend les MÊMES lignes que le panneau de fin de raid, et celles-là
+// vivaient dans `ui/raid.js`, qui importe `ui/chantier.js`. Un troisième fichier
+// était la seule sortie sans recopie. `LIBELLE_VERDICT`, lui, est resté là où
+// trois fichiers le lisent.
+import {
+  vueDuJournal, JOURNAL_VIDE, TITRE_JOURNAL, cleDuRapport,
+  lignesDeLaDefense, lignesDetailleesDuRapport, LIBELLE_CAUSE,
+} from '../src/ui/rapport.js';
+import { LIBELLE_VERDICT } from '../src/ui/chantier.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const lire = (f) => readFileSync(join(RACINE, f), 'utf8');
@@ -252,7 +261,12 @@ test('JRN T5 — la vue va du plus récent au plus ancien, et l\'âge le dit', (
   // ⚠ ET L'ÂGE SUIT : « il y a 0 s » pour celui de maintenant, davantage pour
   // les autres. C'est ce qui prouve que la vue lit le tick et ne se contente pas
   // de retourner une liste.
-  assert.ok(vue.sections[0].titre.endsWith('il y a 0 s'), vue.sections[0].titre);
+  // ⚠ LE TITRE FINIT MAINTENANT PAR UN MARQUEUR DE DÉPLIANT — « ▾ » replié,
+  // « ▴ » déplié, lot du 11/09. On mesure donc l'âge par `includes` et le
+  // marqueur à part : sans lui, rien n'apprendrait au joueur qu'un rapport
+  // s'ouvre.
+  assert.ok(vue.sections[0].titre.includes('il y a 0 s'), vue.sections[0].titre);
+  assert.ok(vue.sections[0].titre.endsWith('▾'), vue.sections[0].titre);
 
   // ⚠⚠ ET L'ARRONDI DE L'ÂGE SE MESURE, PARCE QUE LA FALSIFICATION NE MORDAIT
   // PAS. Les trois âges du montage tombent RONDS — 0 s, 1 h, 2 h — donc
@@ -265,13 +279,15 @@ test('JRN T5 — la vue va du plus récent au plus ancien, et l\'âge le dit', (
   demi.horloge.nbTicks = 0;
   garderLeRapport(demi, rapportMene(1));
   const titreDemi = vueDuJournal(demi.rapports, 595).sections[0].titre;
-  assert.ok(titreDemi.endsWith('il y a 59 s'), titreDemi);
+  assert.ok(titreDemi.includes('il y a 59 s'), titreDemi);
   // ⚠ LE POINT DÉCIMAL EST CELUI DE `direLaDuree`, ET IL N'EST PAS CORRIGÉ ICI.
   // Elle est PARTAGÉE avec la réserve de réparation, et le lot FICHE-JUSTE a
   // déjà déclaré ce point-là : le corriger dans le journal seul ferait diverger
   // deux affichages de la même grandeur. Relevé, non corrigé.
-  assert.ok(/il y a 1\.0 h$/.test(vue.sections[1].titre), vue.sections[1].titre);
-  assert.ok(/il y a 2\.0 h$/.test(vue.sections[2].titre), vue.sections[2].titre);
+  // ⚠ ET LE MARQUEUR DU DÉPLIANT SUIT L'ÂGE depuis le 11/09 : l'ancre de fin de
+  // chaîne devient l'ancre du marqueur.
+  assert.ok(/il y a 1\.0 h {2}▾$/.test(vue.sections[1].titre), vue.sections[1].titre);
+  assert.ok(/il y a 2\.0 h {2}▾$/.test(vue.sections[2].titre), vue.sections[2].titre);
 });
 
 // ---------------------------------------------------------------------------
@@ -329,8 +345,10 @@ test('JRN T7 — un journal vide rend une PHRASE, jamais une vue blanche', () =>
 // ---------------------------------------------------------------------------
 
 test('JRN T8 — UNE vue, UN lecteur, UN écran : le journal a quitté les panneaux', () => {
+  const rapport = sansCommentaires(lire('src/ui/rapport.js'));
   const chantier = sansCommentaires(lire('src/ui/chantier.js'));
   const offense = sansCommentaires(lire('src/ui/offense.js'));
+  const raid = sansCommentaires(lire('src/ui/raid.js'));
   const session = sansCommentaires(lire('src/ui/session.js'));
 
   // ⚠⚠ CE TEST A CHANGÉ DE CIBLE LE 10/09, ET IL SE RESSERRE — point 4 d'Ethan,
@@ -346,13 +364,25 @@ test('JRN T8 — UNE vue, UN lecteur, UN écran : le journal a quitté les panne
   // vivent tous trois dans `ui/chantier.js` : la déplacer dans `ui/session.js`
   // aurait fait importer l'écran par la session, donc un cycle. Elle reste écrite
   // là où sont ses briques, et elle s'EXPORTE.
-  assert.equal((chantier.match(/export function vueDuJournal\(/g) ?? []).length, 1);
-  for (const [ou, code] of [['l\'Offense', offense], ['la session', session]]) {
+  // ⚠⚠ LA VUE A DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09, ET C'EST UN CYCLE
+  // D'IMPORTS QUI L'A DÉCIDÉ, pas un goût de rangement. Ethan voulait ouvrir un
+  // rapport pour voir ce qui s'est passé ; les quinze lignes d'un rapport
+  // d'attaque sont déjà écrites par `lignesDuResultat`, qui vivait dans
+  // `ui/raid.js` — lequel IMPORTE `ui/chantier.js`, où la vue vivait. Un
+  // troisième fichier était la seule sortie sans recopie. L'arborescence est
+  // donc `chantier.js` ← `rapport.js` ← `raid.js`, et aucune flèche ne remonte.
+  assert.equal((rapport.match(/export function vueDuJournal\(/g) ?? []).length, 1);
+  for (const [ou, code] of [['le Chantier', chantier], ['l\'Offense', offense],
+    ['l\'écran de raid', raid], ['la session', session]]) {
     assert.ok(!/function vueDuJournal\(/.test(code), `${ou} a recopié la vue`);
   }
-  const bloc = session.match(/import \{([^}]*)\} from '\.\/chantier\.js';/);
+  const bloc = session.match(/import \{([^}]*)\} from '\.\/rapport\.js';/);
   assert.ok(bloc !== null && bloc[1].split(',').map((n) => n.trim()).includes('vueDuJournal'),
     'la session n\'importe pas la vue');
+  // ⚠ ET AUCUNE FLÈCHE NE REMONTE : `ui/rapport.js` ne lit ni le raid ni la
+  // session. Le jour où il le ferait, le cycle qu'on vient d'éviter reviendrait.
+  assert.ok(!/from '\.\/raid\.js'/.test(rapport), '`ui/rapport.js` importe l\'écran de raid');
+  assert.ok(!/from '\.\/session\.js'/.test(rapport), '`ui/rapport.js` importe la session');
 
   // ⚠ IMPORTER N'EST PAS APPELER — la leçon d'`ERGO T7 ter`. On compte les
   // APPELS, déclaration et imports retirés.
@@ -360,6 +390,7 @@ test('JRN T8 — UNE vue, UN lecteur, UN écran : le journal a quitté les panne
     .replace(/import \{[^}]*\} from '[^']*';/g, '')
     .match(/vueDuJournal\(/g) ?? []).length;
   assert.equal(appels(session), 1, 'la session n\'appelle pas la vue exactement une fois');
+  assert.equal(appels(raid), 0, 'l\'écran de raid appelle le journal');
   // ⚠⚠ ET LES DEUX ÉCRANS NE L'APPELLENT PLUS DU TOUT. C'est la moitié qui
   // mesure le DÉPLACEMENT : un câblage laissé en place aurait rendu deux boutons
   // pour un panneau, et le bouton orphelin aurait levé au premier toucher.
@@ -524,8 +555,9 @@ test('JRN T11 — la borne vient de `src/data/`, et la changer change ce qui est
 
   // ⚠ ET AUCUN SECOND DIX N'EST ÉCRIT AILLEURS : ni l'écran, ni la vue ne
   // rognent une seconde fois.
-  const chantier = sansCommentaires(lire('src/ui/chantier.js'));
-  const vue = chantier.match(/export function vueDuJournal\([\s\S]*?\n\}/);
+  // ⚠ LA VUE VIT DANS `ui/rapport.js` DEPUIS LE 11/09.
+  const rapport = sansCommentaires(lire('src/ui/rapport.js'));
+  const vue = rapport.match(/export function vueDuJournal\([\s\S]*?\n\}/);
   assert.ok(vue !== null, 'la vue a disparu');
   assert.ok(!/\bslice\(/.test(vue[0]) && !/\b10\b/.test(vue[0]),
     'la vue rogne le journal une seconde fois');
@@ -533,4 +565,93 @@ test('JRN T11 — la borne vient de `src/data/`, et la changer change ce qui est
   // ⚠ ET LE VOCABULAIRE DES VERDICTS EST CELUI DU MOTEUR, à la clé près.
   assert.deepEqual(Object.keys(LIBELLE_VERDICT).sort(),
     ['defaite', 'defaite-totale', 'victoire', 'victoire-totale']);
+});
+
+// ---------------------------------------------------------------------------
+// JD T1 — le dépliant : un rapport s'ouvre, et il dit ce qui s'est passé
+// ---------------------------------------------------------------------------
+
+test('JD T1 — un rapport déplié montre son détail, et lui seul', () => {
+  // ⚠⚠ ETHAN, 11/09 : « je veux, quand je clique sur un des rapports, voir ce
+  // qui s'est passé — là je vois juste "je me suis fait attaquer", c'est écrit,
+  // et je vois pas ce qui s'est passé ». Le journal montrait QUATRE lignes par
+  // rapport ; un rapport de défense en porte TREIZE. Rien ne manquait dans la
+  // sauvegarde, et ce test le prouve en dépliant ce qui y était déjà.
+  const etat = creerEtat(11);
+  garderLeRapport(etat, rapportMene(3));
+  etat.horloge.nbTicks = 600;
+  garderLeRapport(etat, rapportSubi(8));
+  const [mene, subi] = etat.rapports;
+
+  // Replié : les quatre lignes du résumé, et rien de plus, sur les DEUX.
+  const ferme = vueDuJournal(etat.rapports, 600);
+  assert.deepEqual(ferme.sections.map((s) => s.lignes.length), [4, 4]);
+  for (const s of ferme.sections) assert.ok(s.titre.endsWith('▾'), s.titre);
+
+  // Déplié : le détail s'AJOUTE, il ne remplace pas — replier ne doit pas
+  // effacer ce qu'on lisait, déplier ne doit pas faire relire autre chose.
+  const ouvert = vueDuJournal(etat.rapports, 600, cleDuRapport(subi));
+  const [sectionSubi, sectionMene] = ouvert.sections;
+  assert.ok(sectionSubi.titre.endsWith('▴'), sectionSubi.titre);
+  assert.ok(sectionMene.titre.endsWith('▾'), sectionMene.titre);
+  assert.deepEqual(sectionSubi.lignes.slice(0, 4), ferme.sections[0].lignes,
+    'déplier a réécrit le résumé au lieu de lui ajouter le détail');
+  assert.ok(sectionSubi.lignes.length > 4, 'le dépliant n\'ajoute rien');
+  // ⚠ ET UN SEUL À LA FOIS : l'autre reste replié. Deux dépliants ouverts sur un
+  // écran de 360 px demanderaient de faire défiler pour comparer.
+  assert.equal(sectionMene.lignes.length, 4);
+
+  // ⚠⚠ LA CLÉ N'EST PAS L'INDICE, ET C'EST LE PIÈGE QUE CE MONTAGE MESURE. Le
+  // journal est une FILE de dix : à l'arrivée du onzième rapport, le plus ancien
+  // sort et tous les indices glissent. Une clé d'indice ouvrirait alors un autre
+  // raid pendant que le joueur le regarde ; le tick et le sens, eux, ne bougent
+  // pas. On sature la file et on vérifie que le dépliant suit SON rapport.
+  const cle = cleDuRapport(subi);
+  for (let n = 0; n < APRES_RAID.rapportsGardes; n += 1) {
+    etat.horloge.nbTicks = 1000 + n;
+    garderLeRapport(etat, rapportMene(n + 1));
+  }
+  assert.ok(!etat.rapports.includes(subi), 'le montage n\'a pas fait glisser la file');
+  const apres = vueDuJournal(etat.rapports, 5000, cle);
+  assert.deepEqual(apres.sections.map((s) => s.lignes.length),
+    apres.sections.map(() => 4),
+    'une clé d\'indice a rouvert un autre rapport après le glissement de la file');
+
+  // ⚠ LE DÉTAIL D'UN RAID SUBI NOMME CE QUE LE RAPPORT PORTE, et il n'invente
+  // rien : chaque libellé se lit sur un champ de l'entrée rangée par le moteur.
+  const detail = new Map(lignesDeLaDefense({
+    ...subi, restantDefense: 41, restantBatiments: 88, reserveVidee: true,
+    autoReparationMilli: 4200, garnisonAuPlancher: 2, batimentsAuPlancher: 0,
+  }).map((l) => [l.libelle, l.avant]));
+  assert.equal(detail.get('Fin du combat'), LIBELLE_CAUSE.attaquants);
+  assert.equal(detail.get('Défense restante'), '41 %');
+  assert.equal(detail.get('Bâtiments restants'), '88 %');
+  assert.equal(detail.get('Réserve de réparation'), 'vidée');
+  assert.match(detail.get('Auto-réparation'), /4 PV/);
+  // ⚠ ET « AU PLANCHER » N'EST PAS « DÉTRUIT » : une pièce au plancher se répare.
+  assert.match(detail.get('Garnison au plancher'), /^2 /);
+
+  // ⚠ L'AUTO-RÉPARATION NE SE DIT QUE QUAND ELLE A AGI : à zéro, la ligne
+  // apprendrait qu'un module existe sans dire qu'il n'est pas acquis.
+  const sansModule = lignesDeLaDefense({ ...subi, autoReparationMilli: 0 })
+    .map((l) => l.libelle);
+  assert.ok(!sansModule.includes('Auto-réparation'));
+
+  // ⚠⚠ ET LES QUATRE CAUSES SONT CELLES DU MOTEUR, CONFRONTÉES À LA SOURCE. Une
+  // cinquième posée par `terminer(etat, …)` dans `sim/combat.js` ferait afficher
+  // « undefined » à un journal qui recopierait la liste de mémoire.
+  const combat = lire('src/sim/combat.js');
+  const causes = [...combat.matchAll(/terminer\(etat, '([a-z-]+)'\)/g)].map((m) => m[1]);
+  assert.ok(causes.length >= 4, `montage : ${causes.length} appels trouvés`);
+  assert.deepEqual([...new Set(causes)].sort(), Object.keys(LIBELLE_CAUSE).sort(),
+    'les causes du moteur et les libellés du journal ont divergé');
+
+  // ⚠ UN RAID MENÉ, LUI, RÉEMPLOIE LA VUE DU PANNEAU DE FIN — pas une seconde
+  // écriture. On mesure que le dépliant rend bien SES lignes.
+  const detailMene = lignesDetailleesDuRapport({
+    ...mene, restantDefense: 0, restantBatiments: 0, restantSouche: 0, restantEtai: 0,
+    reparationInduite: {},
+  }).map((l) => l.libelle);
+  assert.ok(detailMene.includes('Verdict') && detailMene.includes('Butin'),
+    `le détail d'un raid mené ne vient pas du panneau de fin : ${detailMene.join(', ')}`);
 });

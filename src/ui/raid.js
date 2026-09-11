@@ -95,6 +95,9 @@ import { caseDepuisPixels } from '../render/projection.js';
 import { MUR_CASES, fondDeLaBase } from '../render/fond.js';
 import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
+// ⚠ LES QUATRE VIENNENT DE `ui/rapport.js` DEPUIS LE 11/09 — voir la note à
+// l'endroit où elles étaient écrites, quelques lignes plus bas.
+import { lignesDuResultat, formaterDuree } from './rapport.js';
 import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // ⚠⚠ LE PLAFOND DU ZOOM ET LA POSE D'UN SPRITE SE PRENNENT LÀ OÙ ILS SONT DÉJÀ.
 // `COTE_CASE_MAX` est le plafond de la base — « le raid prend le même » —, et
@@ -139,100 +142,11 @@ if (!BANDES_NAVIGABLES.includes(BANDE_A_L_OUVERTURE)) {
 }
 
 /** Le libellé d'un châssis, pour la ligne de réparation induite. */
-const LIBELLE_CHASSIS = {
-  escouade: 'Infanterie',
-  blinde: 'Véhicules',
-  aeronef: 'Aviation',
-};
-
-/**
- * Une durée en secondes, dite comme une phrase et non comme un nombre brut.
- *
- * @param {number} secondes
- * @returns {string}
- */
-export function formaterDuree(secondes) {
-  const s = Math.max(0, Math.round(secondes));
-  if (s < 60) return `${s} s`;
-  const minutes = Math.floor(s / 60);
-  if (minutes < 60) return s % 60 === 0 ? `${minutes} min` : `${minutes} min ${s % 60} s`;
-  const heures = Math.floor(minutes / 60);
-  return minutes % 60 === 0 ? `${heures} h` : `${heures} h ${minutes % 60} min`;
-}
-
-/** Un pourcentage, ou un tiret quand la grandeur n'existe pas. */
-function pct(valeur) {
-  return valeur === null || valeur === undefined ? '—' : `${valeur} %`;
-}
-
-/**
- * Les lignes du panneau de résultat — LES MÊMES pour les deux panneaux.
- *
- * ⚠⚠ C'EST ICI QUE SE JOUE « LE SIMULATEUR ET LE VRAI RAID DISENT LA MÊME
- * CHOSE ». Les deux panneaux appellent cette fonction sur un rapport de même
- * forme, et aucun des deux ne calcule quoi que ce soit : l'égalité est
- * structurelle, pas surveillée. Le jour où l'un des deux voudrait « juste un
- * chiffre de plus », il passera par ici.
- *
- * ⚠ LES NOMS DE BÂTIMENTS VIENNENT DE LA TABLE, ET CE SONT CEUX DE L'OUVRAGE —
- * `BATIMENTS.souche.nom` vaut « Souche », `.ta` vaut « Chantier de
- * construction ». On regarde une base de l'Ouvrage : c'est son vocabulaire qui
- * s'affiche. Les CLÉS du rapport, elles, ne changent jamais de nom.
- *
- * @param {object} rapport rendu par `executerRaid` ou `simulerRaid`
- * @returns {Array<{quoi: string, valeur: string}>}
- */
-export function lignesDuResultat(rapport) {
-  const lignes = [
-    { quoi: 'Verdict', valeur: LIBELLE_VERDICT[rapport.verdict] ?? rapport.verdict },
-    {
-      quoi: 'Butin',
-      // ⚠ LE COFFRE EST LE SEUL PICTOGRAMME DE CE PANNEAU QUI DISE UN GAIN. Les
-      // quatre lignes de pourcentage disent ce qui RESTE debout chez la cible ;
-      // celle-ci dit ce qu'on rapporte.
-      picto: PICTOGRAMMES.butin,
-      valeur: `${rapport.butin.quartz ?? 0} quartz · ${rapport.butin.scorie ?? 0} scorie`,
-    },
-    { quoi: 'Défense restante', valeur: pct(rapport.restantDefense) },
-    { quoi: 'Bâtiments restants', valeur: pct(rapport.restantBatiments) },
-    { quoi: BATIMENTS.souche.nom, valeur: pct(rapport.restantSouche) },
-    { quoi: BATIMENTS.etai.nom, valeur: pct(rapport.restantEtai) },
-  ];
-
-  // ⚠ LA RÉPARATION INDUITE, CHÂSSIS PAR CHÂSSIS, EN TEMPS **ET** EN POURCENT.
-  // ⚠⚠ ET « SANS BÂTIMENT » SE DIT, parce que zéro veut dire deux choses : un
-  // châssis intact et un châssis qu'on ne PEUT PAS réparer rendent tous deux
-  // `0 s`. Annoncer « aucune réparation » à un joueur dont l'infanterie est en
-  // miettes et sans Caserne serait un mensonge par omission.
-  for (const [chassis, r] of Object.entries(rapport.reparationInduite ?? {})) {
-    // ⚠⚠ LE CHÂSSIS DONNE LE PICTOGRAMME, ET LES TROIS BRANCHES LE PARTAGENT.
-    // Une ligne de réparation parle d'infanterie, de véhicule ou d'avion quel
-    // que soit son verdict — « sans bâtiment », « intacte » ou une durée — et
-    // c'est le SUJET qui porte l'image, pas l'issue.
-    const picto = PICTOGRAMME_DU_CHASSIS[chassis];
-    const quoi = LIBELLE_CHASSIS[chassis] ?? chassis;
-    if (r.sansBatiment) {
-      lignes.push({ quoi, picto, valeur: 'sans bâtiment' });
-    } else if (r.ticks === 0) {
-      lignes.push({ quoi, picto, valeur: 'intacte' });
-    } else {
-      lignes.push({
-        quoi,
-        picto,
-        valeur: `${formaterDuree(r.secondes)} · ${pct(r.pctReserve)} de la réserve`,
-      });
-    }
-  }
-
-  // ⚠ LE TEMPS DE RAID EST `ticks × TICK_MS`, et `TICK_MS` vient de l'horloge,
-  // jamais recopié : écrire 0,1 ici ferait un second pas de temps.
-  lignes.push({
-    quoi: 'Durée du combat',
-    picto: PICTOGRAMMES.temps,
-    valeur: formaterDuree((rapport.ticks * TICK_MS) / 1000),
-  });
-  return lignes;
-}
+/* ⚠⚠ `lignesDuResultat`, `formaterDuree`, `pct` ET `LIBELLE_CHASSIS` ONT
+   DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09. Elles n'ont pas été recopiées : le
+   journal des raids déplie maintenant un rapport avec les MÊMES lignes que le
+   panneau de fin, et le journal ne pouvait pas les lire ici — ce fichier importe
+   `ui/chantier.js`, où le journal vivait. Trois lecteurs, une écriture. */
 
 /** Ce qu'une vignette dit d'une pièce : son identité et sa santé. */
 function vignetteDeLaPiece(piece, index) {

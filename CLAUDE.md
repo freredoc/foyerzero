@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **11/09/2026**, version 0.99.49 · build 151.
+Dernière révision : **11/09/2026**, version 0.99.50 · build 152.
 
 ---
 
@@ -41,6 +41,65 @@ Dernière révision : **11/09/2026**, version 0.99.49 · build 151.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 11/09/2026 (après le lot RAPPORTS-ET-PLEIN), à confronter :**
+⚠⚠ **DEUX DEMANDES D'ETHAN : OUVRIR UN RAPPORT DU JOURNAL, ET SAVOIR QUAND UN
+STOCK SERA PLEIN.** `npm test` rend **1579 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1578 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 372 186 octets**, 0 référence externe. Version et build passent à
+**0.99.50 · build 152**.
+⚠⚠ **RIEN NE MANQUAIT DANS LA SAUVEGARDE, ET C'EST LE CONSTAT QUI A ÉVITÉ UN
+`SAVE_VERSION`.** Un rapport d'attaque porte QUINZE champs, un rapport de défense
+TREIZE ; le journal en montrait QUATRE. Le détail ne se rejoue pas et ne se
+recalcule pas : il se LIT dans l'entrée rangée au moment du raid — `JRN T9` garde
+toujours qu'aucun chiffre n'est recomposé depuis l'état d'aujourd'hui.
+⚠⚠ **`src/ui/rapport.js` EST NÉ D'UN CYCLE D'IMPORTS, PAS D'UN GOÛT DE
+RANGEMENT.** Les quinze lignes d'un rapport d'attaque étaient déjà écrites par
+`lignesDuResultat`, dans `ui/raid.js` — qui IMPORTE `ui/chantier.js`, où le
+journal vivait. Faire lire l'une par l'autre fermait la boucle ; recopier aurait
+fait deux vues du même rapport, ce que `JRN T8` refuse depuis le lot JOURNAL.
+L'arborescence est donc `chantier.js` ← `rapport.js` ← `raid.js`, `session.js`
+lit `rapport.js`, et **aucune flèche ne remonte** — `JRN T8`, réécrit, le
+mesure des deux côtés. `lignesDuResultat` a **déménagé, pas été dupliquée**.
+⚠ **LE CÔTÉ DÉFENSE N'AVAIT AUCUNE VUE À RÉEMPLOYER**, et c'est la moitié du
+journal qui était aveugle : un raid MENÉ finit sur un panneau qui rend ses
+quinze lignes, un raid SUBI se produit pendant que le joueur fait autre chose et
+n'a jamais eu d'écran. D'où `lignesDeLaDefense` : fin du combat, durée, défense
+et bâtiments restants, garnison et bâtiments **au plancher** — pas « détruits »,
+une pièce au plancher se répare —, réserve de réparation vidée ou intacte,
+auto-réparation quand elle a agi, et le recul en cases quand la base est rasée.
+⚠ **LES QUATRE CAUSES DE FIN DE COMBAT SONT CONFRONTÉES À LA SOURCE** : `JD T1`
+grep les `terminer(etat, '…')` de `sim/combat.js` et les compare aux clés de
+`LIBELLE_CAUSE`. Une cinquième cause ajoutée au moteur ferait afficher
+« undefined » à un journal qui recopierait la liste de mémoire.
+⚠⚠ **LE DÉLAI DE SATURATION VIENT DU MOTEUR : `ticksAvantLaSaturation` REFAIT
+L'ARITHMÉTIQUE DU TICK**, résidu par bâtiment, et `PL T1` confronte son résultat
+au moteur **exécuté tick par tick** — au tick annoncé le stock est au plafond, un
+tick plus tôt il n'y est pas. `null` veut dire « jamais à ce rythme », et une
+base neuve est dans ce cas pour les trois ressources.
+⚠⚠ **ET DEUX CLAUSES DE FALSIFICATION DE `PL T1` N'ONT RIEN MESURÉ AVANT D'ÊTRE
+RÉÉCRITES — C'EST LA LEÇON DU LOT.** Je voulais prouver que la forme exacte
+diffère d'un `manque / débitTotal`. **Mesuré : sur les nombres de ce jeu, elle
+n'en diffère d'aucun tick.** Un collecteur verse 8,67 milli par tick, trois
+producteurs 26, et l'écart que les résidus peuvent créer vaut quelques milli —
+donc moins que le gain d'un seul tick. La division naïve n'est pas fausse sur ce
+jeu, elle est fausse EN GÉNÉRAL. Le lock de l'implantation est donc **synthétique
+et déclaré tel** : deux producteurs hors plage du jeu, 9 999 contre 10 000.
+⚠⚠ **LA BASCULE DU BANDEAU EST UNE MESURE, PAS UN GOÛT.** Une tuile fait
+**66,58 px** au S25 FE — elles sont cinq — et « plein 12 min 34 s » en demande
+**69,31** : la durée ne peut pas s'AJOUTER à la ligne, elle doit la REMPLACER, et
+si une tuile la remplace les cinq doivent le faire. Le pictogramme part aussi :
+16,09 + 3 d'écart + 47,25 pour la durée la plus large = **66,34 px** pour un
+cadre de 66,58, soit **0,24 px** de mou — une coïncidence, pas une marge. La
+durée seule en laisse 19,33.
+⚠ **UNE SONDE M'A MENTI, ET J'AI FAILLI ÉCRIRE UN TROISIÈME FORMATEUR DE DURÉE
+POUR RIEN.** J'ai cru voir « 59 min 59 s » passer à la ligne : c'était un
+`::after` de sonde, qui s'AJOUTE au texte existant, et `visibility: hidden` sur
+le parent n'enlève pas sa boîte. **Mesuré en écrivant la chaîne dans le vrai
+nœud : 47,25 px, une seule ligne, aucun débordement.** `formaterDelai` reste
+seul. Règle à garder : une mesure de largeur s'écrit DANS le nœud réel.
 
 **Référence au 11/09/2026 (après le lot JOURNAL-ÉCRAN), à confronter :**
 ⚠⚠ **LE JOURNAL EST UN ÉCRAN, ET IL A EU TROIS FORMES EN DEUX JOURS.** Ethan,
@@ -10876,13 +10935,14 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 15 fi
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les sept écrans, leurs éditeurs et les pictogrammes — 13 fichiers
+src/ui/                 les huit écrans, leurs éditeurs et les pictogrammes — 14 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
   mission.js            l'écran du tutoriel — il coche, il ne décide rien
   monde.js              l'écran de la carte : canevas, zoom continu, défilement au doigt
   raid.js               l'écran de raid : la cible, l'armée, le combat rejoué
+  rapport.js            le rapport d'un raid, vu de l'écran : le journal et le dépliant
   recherche.js          l'arbre du joueur : trois panneaux sur un rail, achat en deux touchers
   transfert.js          le panneau de transfert : il annonce le REÇU, il ne décide de rien
   banc.js               le banc d'essai, désormais derrière un geste de debug
@@ -10890,6 +10950,13 @@ src/ui/                 les sept écrans, leurs éditeurs et les pictogrammes �
   defense.js            éditeur de garnison — module PUR
   son.js                l'adaptateur audio : il joue, il ne décide de rien
   pictogramme.js        les 46 pictogrammes : une table par famille, un poseur
+  ⤷ ⚠⚠ IL EXISTE PARCE QU'UN CYCLE D'IMPORTS L'A EXIGÉ, le 11/09. Ethan voulait
+    ouvrir un rapport du journal pour voir ce qui s'est passé ; les quinze lignes
+    d'un rapport d'attaque étaient déjà écrites par `lignesDuResultat`, dans
+    `raid.js` — qui importe `chantier.js`, où le journal vivait. Faire lire l'une
+    par l'autre fermait la boucle, et recopier aurait fait deux vues du même
+    rapport. L'arborescence est donc `chantier.js` ← `rapport.js` ← `raid.js`, et
+    `session.js` lit `rapport.js`. AUCUNE FLÈCHE NE REMONTE, et `JRN T8` le garde.
   ⤷ ⚠⚠ IL DÉCODE PARESSEUSEMENT DEPUIS LE LOT SON-CATALOGUE, ET C'EST LE POINT
     DUR DU CATALOGUE. Un son décodé pèse `durée × 48 000 × 4` : les 263 feraient
     **64,7 Mo** contre 890 417 octets de fichiers. Rien n'est décodé au

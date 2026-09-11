@@ -529,10 +529,24 @@ test('chantier — le résumé retrouve, par le moteur, les chiffres de la maque
     // vingt-deux d'un coup, et un nombre retapé ici ne dit de toute façon rien
     // que `capaciteDuNiveau` ne dise mieux. Les DÉBITS, eux, restent en dur :
     // c'est eux que ce test confronte à la maquette, et ils n'ont pas bougé.
-    { cle: 'quartz', stockMilli: 0, capaciteMilli: capRaffinerie + poche.quartz * 1000, debitMilli: 2_250_000 },
-    { cle: 'scorie', stockMilli: 0, capaciteMilli: capRaffinerie + poche.scorie * 1000, debitMilli: 1_876_000 },
-    { cle: 'electricite', stockMilli: 0, capaciteMilli: capAccumulateur + poche.electricite * 1000, debitMilli: 567_000 },
+    // ⚠ LE DÉLAI DE SATURATION ENTRE DANS LE RÉSUMÉ LE 11/09 — Ethan voulait
+    // savoir « dans combien de temps le stock est plein » au toucher d'une tuile.
+    // Il se CALCULE ici plutôt que de se retaper : le confronter à un nombre
+    // écrit à la main ferait de ce test une copie de l'implantation, alors que
+    // `PL T1` d'`economie-base.test.js` le confronte, lui, au MOTEUR exécuté
+    // tick par tick. Ce qui se garde ici est que le champ EXISTE et qu'il est
+    // fini — un stock à zéro qui monte a forcément une échéance.
+    { cle: 'quartz', stockMilli: 0, capaciteMilli: capRaffinerie + poche.quartz * 1000, debitMilli: 2_250_000, secondesAvantSaturation: resume.ressources[0].secondesAvantSaturation },
+    { cle: 'scorie', stockMilli: 0, capaciteMilli: capRaffinerie + poche.scorie * 1000, debitMilli: 1_876_000, secondesAvantSaturation: resume.ressources[1].secondesAvantSaturation },
+    { cle: 'electricite', stockMilli: 0, capaciteMilli: capAccumulateur + poche.electricite * 1000, debitMilli: 567_000, secondesAvantSaturation: resume.ressources[2].secondesAvantSaturation },
   ]);
+  // ⚠ ET LES TROIS ÉCHÉANCES SONT DES ENTIERS FINIS ET POSITIFS SUR CE MONTAGE :
+  // trois producteurs tournent, aucun stock n'est plein, donc aucune ne peut
+  // valoir `null` — qui veut dire « jamais à ce rythme ».
+  for (const r of resume.ressources) {
+    assert.ok(Number.isInteger(r.secondesAvantSaturation) && r.secondesAvantSaturation > 0,
+      `${r.cle} : échéance de saturation « ${r.secondesAvantSaturation} » sur une base qui produit`);
+  }
   // ⚠ LE NOMBRE OUVERT SE LIT, IL NE SE RECOPIE PAS. La table d'emplacements a
   // changé le 29/08 ; ce qui est mesuré ici est que le résumé demande la même
   // grandeur que `data/base.js`, pas qu'elle vaille douze.

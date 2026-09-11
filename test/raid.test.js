@@ -14,7 +14,10 @@ import {
   creerRecherche, rechercheMilli, montageDuRaid,
 } from '../src/sim/raid.js';
 import { ciblageDuSite, lignesDuSite } from '../src/ui/monde.js';
-import { lignesDuResultat } from '../src/ui/raid.js';
+// ⚠ ELLE A DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09, pour que le journal puisse la
+// lire sans fermer un cycle d'imports. Elle n'a pas été recopiée : `ui/raid.js`
+// la lit de là pour ses deux panneaux.
+import { lignesDuResultat } from '../src/ui/rapport.js';
 // ⚠ `LIBELLE_VERDICT` A DÉMÉNAGÉ DANS `ui/chantier.js` AU LOT JOURNAL — deux
 // écrans le lisent désormais, et ils ne peuvent pas importer `ui/raid.js`.
 import { LIBELLE_VERDICT } from '../src/ui/chantier.js';
@@ -1018,9 +1021,21 @@ test('RAID-A T7 — les deux panneaux affichent les MÊMES nombres', () => {
   // ⚠⚠ ET C'EST STRUCTUREL, PAS SURVEILLÉ : les deux panneaux rendent la MÊME
   // fonction pure sur le même rapport, donc ils ne peuvent pas diverger.
   assert.deepEqual(lignesDuResultat(simule), lignesDuResultat(reel));
-  const source = sansCommentairesRaidA(lireSource('src', 'ui', 'raid.js'));
-  assert.equal((source.match(/lignesDuResultat\(/g) ?? []).length, 2,
+  // ⚠ ELLE A DÉMÉNAGÉ LE 11/09 : le compte des APPELS reste de deux — un par
+  // panneau — mais l'IMPORT s'ajoute désormais au fichier, et il ne compte pas.
+  // C'est la leçon d'`ERGO T7 ter` : importer n'est pas appeler.
+  const source = sansCommentairesRaidA(lireSource('src', 'ui', 'raid.js'))
+    .replace(/import \{[^}]*\} from '[^']*';/g, '');
+  // ⚠⚠ UN SEUL APPEL, ET C'ÉTAIT DÉJÀ VRAI AVANT LE DÉMÉNAGEMENT : le compte de
+  // DEUX comptait la DÉCLARATION plus l'appel, pas deux appels. Les deux panneaux
+  // passent par `remplirLignes`, qui appelle la vue une fois — c'est ce partage
+  // que le `deepEqual` ci-dessus mesure, pas ce compte-ci. La déclaration étant
+  // partie dans `ui/rapport.js`, il ne reste que l'appel.
+  assert.equal((source.match(/lignesDuResultat\(/g) ?? []).length, 1,
     'les deux panneaux ne partagent plus une seule fonction de rendu');
+  // ⚠ ET ELLE N'EST PAS RECOPIÉE ICI : une seule écriture, dans `ui/rapport.js`.
+  assert.ok(!/function lignesDuResultat\(/.test(source),
+    'l\'écran de raid a récupéré une copie de la vue du rapport');
   // ⚠⚠ AUCUN DES QUATRE POURCENTAGES DU RAPPORT N'EST CALCULÉ DANS L'ÉCRAN : ils
   // ne s'y LISENT que sur `rapport`. C'est ce qui les rend exacts dans le
   // simulateur par construction. (La barre de vie d'une vignette, elle, est bien

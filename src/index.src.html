@@ -933,9 +933,41 @@
      10/09, « 203 / 203 » et le mot, au pixel.
      ⚠ ET LE DISCRIMINANT EST CELUI D'AU-DESSUS — `data-ecran`, écrit par
      `session.js` dans la fonction qui masque déjà. Aucune seconde source. */
+  /* ⚠⚠ LE BANDEAU BASCULÉ EN « PLEIN DANS » : LA DURÉE SEULE — Ethan, 11/09.
+     Le pictogramme et le nom s'effacent le temps de la bascule, et c'est une
+     MESURE qui l'impose. Relevé au S25 FE, dans la police réelle de la ligne
+     (8 px) : la tuile fait **66,58 px**, la durée la plus large que
+     `formaterDelai` puisse rendre — « 59 min 59 s » — en demande **47,25**, le
+     pictogramme **16,09** et l'écart **3**. Garder le pictogramme laisserait donc
+     **0,24 px** de mou : ce n'est pas une marge, c'est une coïncidence, et le
+     premier arrondi de police la mange. La durée seule tient avec **19,33 px**.
+     ⚠ ET LE NOM NE POUVAIT PAS RESTER : « Quartz » fait 38,73 px à lui seul, la
+     ligne en déborderait de vingt et un.
+     ⚠ MESURÉ EN ÉCRIVANT LA CHAÎNE DANS LE VRAI NŒUD, pas avec un `::after` de
+     sonde — un `::after` s'AJOUTE au texte existant, et `visibility: hidden` sur
+     le parent n'enlève pas sa boîte : la première mesure a ainsi fait croire à un
+     retour à la ligne qui n'existe pas.
+     ⚠ ELLE PASSE EN OS PLUTÔT QU'EN OLIVE, et c'est le seul signe visuel de la
+     bascule : ce que la ligne dit a changé de nature, d'un débit à une échéance.
+     ⚠ LA TUILE DES EMPLACEMENTS NE BASCULE PAS — elle n'a ni débit ni plafond
+     qui se remplisse, et lui faire dire « jamais » serait répondre à une question
+     qu'elle ne pose pas. */
+  .ressource.en-plein .ligne:last-child .picto,
+  .ressource.en-plein .ligne:last-child .nom { display: none; }
+  .ressource.en-plein .debit { color: #F5F3E8; }
   #ressources:not([data-ecran="monde"]) .ressource.attaque .debit,
   #ressources:not([data-ecran="monde"]) .ressource.attaque .plein { display: none; }
   .ressource.attaque .plein { font-size: 9px; color: #8C9A72; white-space: nowrap; }
+  /* ⚠⚠ SAUF QUAND LE BANDEAU EST BASCULÉ : LÀ, LA TUILE D'ATTAQUE PARLE AUSSI.
+     La règle du dessus cache son débit hors de la carte parce qu'il ne tenait
+     pas À CÔTÉ du pictogramme et du mot ; basculée, la ligne ne porte plus que
+     la durée, donc la place est là. La laisser muette aurait fait une tuile sur
+     quatre sans réponse, et le joueur aurait cru son attaque sans échéance.
+     ⚠ LES DEUX SÉLECTEURS ONT LA MÊME SPÉCIFICITÉ — un identifiant et quatre
+     classes ou attributs de chaque côté. C'est donc L'ORDRE qui tranche, et
+     celui-ci doit rester APRÈS. Le déplacer plus haut dans la feuille le rendrait
+     inopérant sans qu'aucun test de présence ne s'en aperçoive. */
+  #ressources .ressource.attaque.en-plein .debit { display: inline; }
   /* Un stock saturé est GELÉ, jamais amputé (arbitré le 26/08) : il faut donc
      que le joueur voie qu'il plafonne, sinon il croit à un compteur cassé.
      Après les règles par ressource, pour l'emporter sur elles. */
@@ -1432,6 +1464,17 @@
   #ecran-journal { position: static; max-height: none; border-top: 0; }
   .panneau-detail .corps { padding: 4px 8px 8px; }
   .panneau-detail .section { margin-top: 6px; }
+  /* ⚠⚠ UNE SECTION QUI S'OUVRE LE DIT PAR SON TITRE — lot du 11/09, le dépliant
+     du journal. Le chevron vit dans la VUE, qui est pure et testée ; ce qui se
+     joue ici est la teinte du titre, seconde marque de ce qu'on peut toucher.
+     Les titres des trois autres fiches restent en gris d'ardoise : elles ne
+     dépliant rien, et une couleur d'affordance sur un titre inerte apprendrait un
+     geste qui n'existe pas.
+     ⚠ ET LA RÈGLE EST OBLIGATOIRE, PAS DÉCORATIVE : une garde de `chantier.test.js`
+     refuse toute classe que le code bascule sans qu'aucune règle ne la porte —
+     « une classe sans style se réécrit sans qu'on s'aperçoive qu'elle ne fait
+     rien ». Elle a attrapé celle-ci à la première écriture du lot. */
+  .panneau-detail .section.depliable h3 { color: #8C9A72; }
   .panneau-detail h3 {
     margin: 0 0 2px; font-size: 8px; font-weight: 400;
     letter-spacing: 0.12em; text-transform: uppercase; color: #68727E;

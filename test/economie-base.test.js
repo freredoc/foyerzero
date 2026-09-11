@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 
 import {
   RESSOURCES, DEBIT_MILLI_PAR_HEURE_MAX, capacitesMilli, debitsMilliParHeure,
-  creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase,
+  creerEtatEconomie, tickEconomieBase, rattrapageEconomieBase, ticksAvantLaSaturation,
 } from '../src/sim/economie-base.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
@@ -649,4 +649,90 @@ test('economie-base — tick et rattrapage restent identiques SUR DES STOCKS HÉ
   // MESURÉ : environ 120 bases valides, plus d'une centaine de stocks gelés.
   assert.ok(cas > 80, `${cas} bases valides tirées, plus de 80 attendues`);
   assert.ok(gelesTires > 50, `${gelesTires} stocks gelés tirés, plus de 50 attendus`);
+});
+
+// ---------------------------------------------------------------------------
+// Saturation — dans combien de ticks le stock touche le plafond
+// ---------------------------------------------------------------------------
+
+test('PL T1 — `ticksAvantLaSaturation` tombe sur le tick où le moteur sature', () => {
+  // ⚠⚠ LE MONTAGE DOIT SÉPARER LE CALCUL EXACT D'UN `manque / débitTotal`, sinon
+  // il ne mesure rien. Trois producteurs de quartz dont les débits ne sont PAS
+  // des multiples du nombre de ticks par heure : chacun garde un résidu, et les
+  // restes ne s'additionnent pas. C'est la faute que ce test garde.
+  const dispo = base();
+  const etat = creerEtatEconomie(dispo);
+  const debits = debitsMilliParHeure(dispo, TERRAIN);
+  const debitsQuartz = dispo.map((_, i) => debits[i].quartz ?? 0);
+  const total = debitsQuartz.reduce((s, d) => s + d, 0);
+  assert.ok(debitsQuartz.filter((d) => d > 0).length >= 2,
+    'le montage doit compter au moins deux producteurs, sinon les résidus ne se mêlent pas');
+  assert.notEqual(total % TICKS_PAR_HEURE, 0,
+    'le montage doit tomber sur une fraction, sinon exact et naïf rendent le même nombre');
+
+  const cap = capacitesMilli(dispo).quartz;
+
+  // ⚠⚠ ON PART D'UNE PARTIE EN COURS, PAS D'UN ÉTAT NEUF, ET C'EST LA CONDITION
+  // POUR QUE LE TEST MESURE QUELQUE CHOSE. Sur un état neuf tous les résidus
+  // valent zéro : le calcul par résidus et la division naïve rendent alors le
+  // MÊME nombre, et la falsification ci-dessous tombait à plat — elle l'a fait,
+  // à la première écriture de ce test. Mille deux cent trente-quatre ticks
+  // suffisent à donner à chaque producteur un reste qui lui est propre.
+  for (let t = 0; t < 1234; t++) tickEconomieBase(etat, dispo, TERRAIN);
+  const residusQuartz = dispo.map((_, i) => etat.residus[i].quartz ?? 0);
+  assert.ok(residusQuartz.some((r) => r > 0), 'montage : aucun résidu, le test ne mesure rien');
+  const depart = etat.ressources.quartz;
+  assert.ok(depart > 0 && depart < cap, 'montage : le stock doit être en route, ni vide ni plein');
+
+  const ticks = ticksAvantLaSaturation(residusQuartz, debitsQuartz, depart, cap);
+  assert.ok(Number.isInteger(ticks) && ticks > 0);
+
+  // CE QUI EST MESURÉ : le moteur, exécuté tick par tick DEPUIS CET ÉTAT-LÀ. Au
+  // tick annoncé le stock est AU plafond ; un tick plus tôt, il n'y est pas.
+  const avant = structuredClone(etat);
+  for (let t = 0; t < ticks - 1; t++) tickEconomieBase(avant, dispo, TERRAIN);
+  assert.ok(avant.ressources.quartz < cap,
+    'un tick avant l\'échéance, le plein est déjà fait : l\'annonce est trop tardive');
+  tickEconomieBase(avant, dispo, TERRAIN);
+  assert.equal(avant.ressources.quartz, cap, 'au tick annoncé, le plein n\'est pas fait');
+
+  // ⚠⚠ FALSIFICATION — ET ELLE A DÛ ÊTRE RÉÉCRITE, PARCE QUE LA PREMIÈRE NE
+  // MESURAIT RIEN. Elle comparait le résultat à `manque / débitTotal` en
+  // attendant un écart ; **mesuré, il n'y en a pas** sur les nombres du jeu. Un
+  // collecteur verse 312 000 milli par heure, soit 8,67 par tick, et trois
+  // producteurs en versent 26 : l'écart que les résidus peuvent créer vaut
+  // quelques milli, donc MOINS que le gain d'un seul tick, et les deux calculs
+  // tombent sur le même tick. La division naïve n'est pas fausse sur ce jeu —
+  // elle est fausse EN GÉNÉRAL, et c'est pour ça que la forme exacte est
+  // gardée ; mais un test qui prétendrait le contraire mentirait.
+  //
+  // ⚠⚠ ET LA SECONDE TENTATIVE N'A PAS MIEUX MARCHÉ, POUR LA MÊME RAISON : à
+  // débits égaux, des résidus pleins n'avancent l'échéance d'AUCUN tick sur ce
+  // montage — mesuré, 17 188 dans les deux cas. Trois résidus à leur maximum
+  // valent trois milli d'avance, et un tick en verse vingt-six. **Sur les
+  // nombres de ce jeu, rien ne distingue la forme exacte de la division
+  // naïve.** C'est un fait de réglage, pas de code, et il se dit ici plutôt que
+  // d'être caché derrière une assertion qui ne tombe jamais.
+  //
+  // ⚠ LE LOCK DE L'IMPLANTATION EST DONC SYNTHÉTIQUE, ET IL EST DÉCLARÉ TEL. La
+  // fonction est PURE : son contrat est l'arithmétique du tick, et il se vérifie
+  // sur des nombres choisis pour que les résidus PORTENT — hors de la plage du
+  // jeu, délibérément. Deux producteurs, des débits qui ne divisent pas l'heure,
+  // des résidus non nuls : la forme exacte rend 9 999 là où la division naïve
+  // rend 10 000. Une implantation qui ignorerait les résidus tomberait ici.
+  const exact = ticksAvantLaSaturation([12_345, 30_000], [7_000, 11_000], 0, 5_000);
+  const naifSynthetique = Math.ceil((5_000 * TICKS_PAR_HEURE) / 18_000);
+  assert.equal(exact, 9_999);
+  assert.equal(naifSynthetique, 10_000);
+  assert.ok(exact < naifSynthetique, 'les résidus ne sont pas lus');
+  // ⚠ ET LE MONTAGE RÉEL RESTE CELUI QUI COMPTE : lui seul confronte le résultat
+  // au MOTEUR exécuté, ce qu'aucune formule ne peut simuler.
+  assert.ok(total > 0);
+
+  // ⚠ ET LES DEUX EXTRÊMES SE DISENT. Déjà plein — ou au-dessus, le surplus
+  // étant gelé depuis le 26/08 — rend 0 ; rien qui produise rend `null`, pas une
+  // durée immense.
+  assert.equal(ticksAvantLaSaturation(residusQuartz, debitsQuartz, cap, cap), 0);
+  assert.equal(ticksAvantLaSaturation(residusQuartz, debitsQuartz, cap + 1000, cap), 0);
+  assert.equal(ticksAvantLaSaturation([0, 0], [0, 0], 0, cap), null);
 });

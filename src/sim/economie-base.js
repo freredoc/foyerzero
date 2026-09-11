@@ -477,3 +477,67 @@ export function rattrapageEconomieBase(etat, disposition, champs, nbTicks, major
     etat.ressources[ressource] = stock > plafond ? plafond : stock;
   }
 }
+
+/**
+ * Dans combien de TICKS le stock d'une ressource touchera sa capacité.
+ *
+ * ⚠⚠ ELLE REFAIT L'ARITHMÉTIQUE DU TICK, ELLE NE DIVISE PAS UN MANQUE PAR UN
+ * DÉBIT. Chaque bâtiment porte SON résidu, et les restes ne s'additionnent pas :
+ * le gain cumulé du bâtiment `b` après `n` ticks vaut
+ * `floor((residu_b + n × debit_b) / TICKS_PAR_HEURE)` — c'est la même forme
+ * fermée que `rattrapageEconomieBase`, qui produit un état strictement identique
+ * à `n` appels du tick. Un `manque / débitTotal` serait faux de plusieurs ticks
+ * dès que deux bâtiments produisent la même ressource, et personne ne le verrait
+ * sur un compteur qui descend.
+ *
+ * ⚠ LE TOTAL EST MONOTONE EN `n`, DONC LA RECHERCHE EST DICHOTOMIQUE ET EXACTE.
+ * Une somme de parties entières ne s'inverse pas en forme fermée ; elle se
+ * borne, et la borne vient du débit total — `ceil(manque × TICKS_PAR_HEURE /
+ * total)` ticks suffisent toujours, puisque chaque résidu est positif ou nul.
+ *
+ * ⚠ TROIS RÉPONSES, ET LES DEUX EXTRÊMES SE DISENT. `0` quand le stock est DÉJÀ
+ * au plafond — ou au-dessus, le surplus étant gelé et non amputé depuis le
+ * 26/08. `null` quand rien ne produit cette ressource : ce n'est pas « dans
+ * très longtemps », c'est « jamais à ce rythme », et un écran qui afficherait
+ * une durée mentirait. Un entier de ticks sinon.
+ *
+ * @param {Array<number>} residus le résidu de chaque bâtiment, pour CETTE ressource
+ * @param {Array<number>} debits le débit par heure de chaque bâtiment, pour CETTE ressource
+ * @param {number} stockMilli
+ * @param {number} capaciteMilli
+ * @returns {number|null} ticks, ou `null` si le plein n'arrivera jamais
+ */
+export function ticksAvantLaSaturation(residus, debits, stockMilli, capaciteMilli) {
+  if (!Array.isArray(residus) || !Array.isArray(debits)) {
+    throw new TypeError('ticksAvantLaSaturation : deux tableaux attendus');
+  }
+  if (!Number.isInteger(stockMilli) || !Number.isInteger(capaciteMilli)) {
+    throw new TypeError('ticksAvantLaSaturation : stock et capacité en milli-unités entières');
+  }
+  if (stockMilli >= capaciteMilli) return 0;
+  const total = debits.reduce((s, d) => s + (d ?? 0), 0);
+  if (total <= 0) return null;
+
+  const manque = capaciteMilli - stockMilli;
+  const gain = (n) => {
+    let acquis = 0;
+    for (let i = 0; i < debits.length; i++) {
+      const debit = debits[i] ?? 0;
+      if (debit === 0) continue;
+      acquis += Math.floor(((residus[i] ?? 0) + n * debit) / TICKS_PAR_HEURE);
+    }
+    return acquis;
+  };
+
+  // La borne haute : sans aucun résidu, le total suffit à couvrir le manque en
+  // ce nombre de ticks. Les résidus ne peuvent qu'AVANCER l'échéance.
+  let haut = Math.ceil((manque * TICKS_PAR_HEURE) / total);
+  if (gain(haut) < manque) haut += 1;
+  let bas = 1;
+  while (bas < haut) {
+    const milieu = Math.floor((bas + haut) / 2);
+    if (gain(milieu) >= manque) haut = milieu;
+    else bas = milieu + 1;
+  }
+  return haut;
+}
