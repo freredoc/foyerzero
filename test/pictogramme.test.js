@@ -343,8 +343,8 @@ test('PIC T5 — `ATLAS.interface` et le dossier portent exactement les mêmes n
  * dix autres tranquilles.
  */
 const TAILLES_D_AVANT = {
-  'atlas-batiment-128.webp': 491442, // 507076 avant EMPRISES-ET-DÉLAI, 299848 avant ART-90
-  'atlas-batiment-64.webp': 179002, // 185210 avant EMPRISES-ET-DÉLAI, 107050 avant ART-90
+  'atlas-batiment-128.webp': 530710, // 491442 avant TERRITOIRE-ET-ÉCHELLE, 507076 avant EMPRISES-ET-DÉLAI
+  'atlas-batiment-64.webp': 190064, // 179002 avant TERRITOIRE-ET-ÉCHELLE, 185210 avant EMPRISES-ET-DÉLAI
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
   'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
@@ -409,6 +409,16 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // de 185 210 à **179 002**. **Aucun sprite n'entre ni ne sort** : 83 des deux
   // côtés, comme à ART-90.
   //
+  // ⚠⚠ ET LES DEUX MÊMES SONT RÉANCRÉS UNE TROISIÈME FOIS AU LOT
+  // TERRITOIRE-ET-ÉCHELLE, 11/09, ET ILS REGROSSISSENT. Les quatre états d'un
+  // bâtiment partagent désormais UNE échelle, celle de l'état NEUF : les trois
+  // états abîmés cessent d'être rétrécis pour faire tenir leur fumée, donc ils
+  // occupent plus de pixels. `atlas-batiment-128.webp` passe de 491 442 à
+  // **530 710** (+39 268), le 64 de 179 002 à **190 064** (+11 062).
+  // **Aucun sprite n'entre ni ne sort** : 83 des deux côtés, pour la troisième
+  // fois. ⚠ Et **132 des 162 PNG changent de dessin** — les trente autres sont
+  // les états neufs dont l'ancrage ne déplace rien, plus la vignette mixte.
+  //
   // ⚠⚠ ET LES SEIZE AUTRES LIGNES N'ONT PAS BOUGÉ D'UN OCTET, CE QUI EST LA
   // MOITIÉ QUI PROUVE. Le lot ne touche que la famille `batiment` :
   // `--forcer batiment` la nomme, et `carte` comme `interface` restent
@@ -436,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 314 390 octets, la marge sur la borne T10 est de 2,98 %', () => {
+test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 est de 2,42 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -675,16 +685,22 @@ test('PIC T7 — le livrable pèse 9 314 390 octets, la marge sur la borne T10 e
   // toucher — MUR (+142) puis celui-ci (+3 496). L'écart cumulé faisait
   // **3 638 octets**, sous la tolérance de 50 000, donc VERT, et c'est
   // exactement ce que cette dernière assertion existe pour empêcher.
-  // ⚠ CE LOT-CI SAIT CE QU'IL DÉPLACE, ET IL LE VENTILE : **+3 496** contre
-  // l'arbre pristine de `main` = `ea79a16` (9 310 894) — feuille +464 ·
-  // JavaScript +2 689 · balisage +343 · **images +0 · audio +0**, la somme des
-  // cinq postes tombant EXACTEMENT sur le total, et **307 lignes `data:` / 306
-  // URI de part et d'autre**. Aucune ressource n'entre : la borne NE BOUGE PAS.
+  // ⚠⚠ ET LE LOT TERRITOIRE-ET-ÉCHELLE LE RÉANCRE UNE FOIS DE PLUS, 11/09 :
+  // **+53 066** contre l'arbre pristine de `main` = `72245db` (9 314 390),
+  // ventilé poste par poste — **images +52 360 · JavaScript +706 · feuille +0 ·
+  // balisage +0 · audio +0**, la somme des cinq postes tombant EXACTEMENT sur le
+  // total, et **307 lignes `data:` / 306 URI de part et d'autre**.
+  // ⚠ LES 52 360 OCTETS SONT UN SEUL FICHIER, AU DERNIER OCTET :
+  // `atlas-batiment-128.webp` passe de 491 442 à 530 710, soit 655 256 → 707 616
+  // en base64. La grille 64 grossit aussi — 179 002 → 190 064 — et **ne coûte
+  // rien au livrable**, `GRILLE_ATLAS` valant 128.
+  // ⚠ AUCUNE RESSOURCE N'ENTRE — ce sont les MÊMES 306 URI, dont un qui pèse plus
+  // lourd : la borne NE BOUGE PAS.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_314_390;          // remesuré au lot RAID-ET-ÉCRAN, base `ea79a16`
-  const MARGE = BORNE - MESURE;      // 285 610 octets
-  assert.equal(MARGE, 285_610);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.98);
+  const MESURE = 9_367_456;          // remesuré au lot TERRITOIRE-ET-ÉCHELLE, base `72245db`
+  const MARGE = BORNE - MESURE;      // 232 544 octets
+  assert.equal(MARGE, 232_544);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.42);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

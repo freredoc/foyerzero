@@ -181,6 +181,11 @@ const BATIMENTS = ATLAS.batiment.noms.filter((n) => n.startsWith('bat_'));
 const RUINES = ATLAS.batiment.noms.filter((n) => !n.startsWith('bat_'));
 const PANACHE = 'bat_j_artillerie_anti_infanterie_tres_abime';
 
+// ⚠ LES TROIS SUFFIXES D'ÉTAT ABÎMÉ. `cleDuSprite` les connaît déjà pour retirer
+// le suffixe ; ici on a besoin de savoir si un sprite EN PORTE un — l'état neuf
+// est celui qui n'en a pas.
+const ETATS_ABIMES = ['_tres_abime', '_abime', '_detruit'];
+
 /** La clé de bâtiment d'un nom de sprite : `bat_j_caserne_abime` → `caserne`. */
 function cleDuSprite(nom) {
   const sans = nom.slice('bat_x_'.length);
@@ -210,7 +215,23 @@ function boiteDuSprite(grille, nom) {
 // ED T1 — chaque sprite mesure l'emprise de SON palier (ex-`AR T2`, retourné)
 // ---------------------------------------------------------------------------
 
-test('ED T1 — les 81 sprites de bâtiment mesurent chacun l\'emprise de SON palier', () => {
+test('ED T1 — l\'emprise est atteinte par l\'état NEUF, et les abîmés la dépassent', () => {
+  // ⚠⚠ L'ÉNONCÉ CHANGE DE SENS LE 11/09, ET PAS SEULEMENT LES NOMBRES. Jusque-là
+  // les quatre-vingt-un sprites portaient CHACUN l'emprise de son palier, parce
+  // que `batiments_v2.py` appelait `recadrer` SANS `cote_ref` : chaque état était
+  // normalisé sur sa PROPRE boîte d'encre, et la boîte d'un état abîmé est plus
+  // large — la fumée monte, les gravats s'étalent. Plus large ramenée à la même
+  // emprise veut dire réduite davantage : **le corps du bâtiment rétrécissait en
+  // brûlant**. Ethan, 10/09 : « les bâtiments abîmés ont tous la même dimension,
+  // fumée et destruction incluses. C'est pour ça qu'un bâtiment abîmé semble
+  // réduit. Les sprites doivent être réduits de la même façon, pas sprite par
+  // sprite », puis « l'emprise est atteinte par l'état neuf, pas par l'état
+  // abîmé ».
+  //
+  // ⚠⚠ C'EST LE MÊME DÉFAUT, À LA LETTRE, QUE LE LOT EMBLÈMES-ABÎMÉS A CORRIGÉ
+  // POUR LES EMBLÈMES DE CARTE — une base de niveau 1 ressortait à la taille
+  // d'une niveau 50. `tools/emblemes.py` passe `cote_ref` depuis ce jour-là ;
+  // `batiments_v2.py` ne l'avait jamais reçu.
   assert.equal(BATIMENTS.length, 81,
     `${BATIMENTS.length} bâtiments dans l'index : vingt à quatre états plus la vignette mixte `
     + 'font 81 — un sprite est entré ou sorti, il faut décider');
@@ -233,8 +254,12 @@ test('ED T1 — les 81 sprites de bâtiment mesurent chacun l\'emprise de SON pa
 
   for (const grille of [64, 128]) {
     const facteur = grille / 32;
-    const fautifs = [];
-    let justes = 0;
+    const horsNeuf = [];
+    let neufs = 0;
+    let dessus = 0;
+    let dessous = 0;
+    let pireDessous = 0;
+    let pireNom = '';
     for (const nom of BATIMENTS) {
       const cle = cleDuSprite(nom);
       // ⚠ LA VIGNETTE MIXTE N'EST PAS UN BÂTIMENT : elle EMPRUNTE l'emprise du
@@ -245,21 +270,49 @@ test('ED T1 — les 81 sprites de bâtiment mesurent chacun l\'emprise de SON pa
       const b = boiteDuSprite(grille, nom);
       assert.equal(b.cote, grille, `${nom} : le sprite ne fait pas ${grille} pixels de côté`);
       const plusGrande = Math.max(b.largeur, b.hauteur);
-      const tolere = (nom === PANACHE && grille === 128) ? 2 : 1;
-      if (Math.abs(plusGrande - vise) > tolere) fautifs.push(`${nom} (${plusGrande} pour ${vise})`);
-      if (nom === PANACHE) continue;
-      if (plusGrande === vise) justes += 1;
+      const abime = ETATS_ABIMES.some((s) => nom.endsWith(s));
+      if (!abime) {
+        // ⚠⚠ L'ÉTAT NEUF ATTEINT SON EMPRISE EXACTEMENT, ET C'EST L'ARBITRAGE
+        // D'ETHAN MESURÉ AU PIXEL. Vingt bâtiments plus la vignette, sur les deux
+        // grilles, **zéro écart** : ni tolérance, ni exception.
+        neufs += 1;
+        if (plusGrande !== vise) horsNeuf.push(`${nom} (${plusGrande} pour ${vise})`);
+        continue;
+      }
+      if (plusGrande > vise) dessus += 1;
+      if (plusGrande < vise) {
+        dessous += 1;
+        if (vise - plusGrande > pireDessous) {
+          pireDessous = vise - plusGrande;
+          pireNom = nom;
+        }
+      }
     }
-    assert.deepEqual(fautifs, [],
-      `grille ${grille} : ${fautifs.length} sprite(s) hors de l'emprise de leur palier — `
-      + fautifs.slice(0, 6).join(', '));
-    // ⚠ ET LA BORNE N'EST PAS LARGE : quatre-vingts sur quatre-vingts tombent
-    // EXACTEMENT sur leur cible, le ±1 n'est employé par personne. Mesuré au lot
-    // EMPRISES-ET-DÉLAI comme il l'était à ART-90 : les paliers ont changé, la
-    // précision de la chaîne non.
-    assert.equal(justes, BATIMENTS.length - 1,
-      `grille ${grille} : ${justes} sprites exactement sur leur palier sur ${BATIMENTS.length - 1} — `
-      + 'la tolérance de ±1 a commencé à servir, il faut regarder pourquoi');
+    assert.deepEqual(horsNeuf, [],
+      `grille ${grille} : ${horsNeuf.length} état(s) NEUF hors de leur emprise — `
+      + horsNeuf.slice(0, 6).join(', '));
+    assert.equal(neufs, 21,
+      `grille ${grille} : ${neufs} états neufs mesurés au lieu de vingt et un`);
+
+    // ⚠⚠ ET C'EST ICI QUE L'ANCIENNE RÈGLE EST FALSIFIÉE DE FACE. Sans
+    // `cote_ref`, chaque état retombe sur SA propre boîte, donc TOUS les
+    // quatre-vingt-un tomberaient exactement sur leur emprise et `dessus`
+    // vaudrait ZÉRO. Le compte mesuré est **cinquante sur soixante**, sur les
+    // deux grilles.
+    assert.equal(dessus, 50,
+      `grille ${grille} : ${dessus} états abîmés dépassent leur emprise au lieu de cinquante — `
+      + 'la référence commune a-t-elle disparu ?');
+
+    // ⚠⚠ LES DIX AUTRES SONT SOUS LEUR EMPRISE, ET C'EST JUSTE : ce sont des
+    // `_detruit` dont les gravats sont plus BAS et plus ÉTROITS que le bâtiment
+    // debout. Un tas de décombres n'a aucune raison d'atteindre la taille de ce
+    // qu'il remplace, et le forcer à l'atteindre serait l'agrandir.
+    const attendu = grille === 128 ? 6 : 4;
+    assert.equal(dessous, attendu,
+      `grille ${grille} : ${dessous} états abîmés sous leur emprise au lieu de ${attendu}`);
+    assert.ok(pireDessous <= (grille === 128 ? 14 : 6),
+      `grille ${grille} : ${pireNom} est à ${pireDessous} sous son emprise — le pire relevé vaut `
+      + `${grille === 128 ? 14 : 6}, et c'est l'artillerie anti-infanterie détruite`);
   }
 
   // ⚠⚠ LES TROIS PALIERS SE VOIENT DANS LES PIXELS, ET PAS SEULEMENT DANS LA
@@ -274,31 +327,27 @@ test('ED T1 — les 81 sprites de bâtiment mesurent chacun l\'emprise de SON pa
   const b29 = boiteDuSprite(64, 'bat_j_caserne');
   assert.equal(Math.max(b29.largeur, b29.hauteur), 58, 'la Caserne ne prend plus 92 %');
 
-  // ⚠⚠ UNE EXCEPTION SUR QUATRE-VINGT-UNE, RECONDUITE NOMMÉMENT ET REMESURÉE —
-  // ET ELLE EST ENCORE NÉCESSAIRE, ce qui est la moitié qui compte. L'artillerie
-  // anti-infanterie TRÈS ABÎMÉE sort à **57 sur 58** en grille 64 et à **114 sur
-  // 116** en 128, EXACTEMENT comme à ART-90 : son palier n'a pas bougé — elle est
-  // au 92 %, celui qui vaut encore 29 — donc son dessin n'a pas été retouché.
+  // ⚠⚠ L'EXCEPTION DU PANACHE EST LEVÉE, ET ELLE NE DORT PAS : ELLE EST
+  // FALSIFIÉE DE FACE. Depuis ART-90, `bat_j_artillerie_anti_infanterie_tres_abime`
+  // était le seul sprite sous son palier — **57 sur 58** en 64, **114 sur 116**
+  // en 128 —, et la cause était l'érosion : `eroder(m, 3)` de `conditionner`
+  // ronge trois pixels du masque, et ce dessin-là finit en panache large de 3 px
+  // sur ses premières lignes encrées. La cause n'a pas disparu ; ce qui a changé,
+  // c'est que ce sprite n'est plus normalisé sur sa PROPRE boîte — il est à
+  // l'échelle de l'état neuf, et il DÉPASSE désormais son emprise.
   //
-  // ⚠⚠ LA CAUSE EST L'ÉROSION, PAS L'ARRONDI, ET C'EST CE QUI EXPLIQUE QU'ELLE
-  // SURVIVE AU CHANGEMENT DE PALIER. `eroder(m, 3)` de `conditionner` ronge trois
-  // pixels du masque dans la boîte recadrée ; ce dessin-là finit en PANACHE DE
-  // FUMÉE large de 3 px sur ses premières lignes encrées, et même interrompu, si
-  // bien que l'érosion emporte douze lignes de la source. Un changement
-  // d'emprise ne touche pas à ça.
-  //
-  // ⚠ ELLE EST ASSERTÉE ENCORE NÉCESSAIRE — l'idiome de `DETTES_ACCENT`. Le jour
-  // où le dessin ou l'érosion changeront, ce test tombera pour dire que
-  // l'exception n'a plus lieu d'être, au lieu de la laisser dormir.
+  // ⚠ ON L'ASSERTE LEVÉE PLUTÔT QUE DE LA RETIRER EN SILENCE : le jour où un lot
+  // ramènerait la normalisation par sprite, ce test-ci tomberait en nommant
+  // l'endroit.
   assert.equal(PALIERS.artillerie_anti_infanterie, 29,
-    'le panache a changé de palier : sa mesure est à refaire avant de la reconduire');
-  for (const [grille, mesure, ecartAttendu] of [[64, 57, 1], [128, 114, 2]]) {
+    'le panache a changé de palier : sa mesure est à refaire avant de conclure');
+  for (const [grille, mesure] of [[64, 61], [128, 122]]) {
     const vise = PALIERS.artillerie_anti_infanterie * (grille / 32);
     const b = boiteDuSprite(grille, PANACHE);
     assert.equal(Math.max(b.largeur, b.hauteur), mesure,
       `${PANACHE} en ${grille} : la mesure du panache a bougé (visé ${vise})`);
-    assert.equal(vise - mesure, ecartAttendu,
-      `${PANACHE} en ${grille} : l'exception n'est plus nécessaire — la retirer`);
+    assert.ok(mesure > vise,
+      `${PANACHE} en ${grille} : il est repassé SOUS son emprise — l'exception d'ART-90 est à rouvrir`);
   }
 });
 
@@ -372,9 +421,23 @@ test('ED T2 — les trois paliers sont deux à deux différents, et le défaut e
   }
 
   // La classification d'Ethan, ligne par ligne — c'est ce qu'il a validé.
+  //
+  // ⚠⚠ LA SOUCHE A QUITTÉ LE PALIER HAUT LE 11/09, ET C'EST UNE LIGNE RETIRÉE DE
+  // LA TABLE, PAS UNE LIGNE CHANGÉE. Elle y était avec le Chantier parce que les
+  // deux sont le même objet des deux côtés — leur perte RASE la base. Une fois
+  // les quatre états mis à la même échelle, elle ne tenait plus dans sa case :
+  // mesuré, son état DÉTRUIT touche les deux bords latéraux à 98 %. Ethan l'a
+  // descendue à 92 %, qui EST le défaut — la réécrire `'souche': …` ferait la
+  // ligne que la table interdit, celle qui ne dit rien et qui survivrait à un
+  // changement de défaut. **Le Chantier, lui, reste à 98 % : il tient.**
   assert.deepEqual(Object.keys(PALIERS).filter((c) => PALIERS[c] === 31).sort(),
-    ['chantier_de_construction', 'souche'],
-    'le palier 98 % n\'est plus exactement le Chantier et la Souche');
+    ['chantier_de_construction'],
+    'le palier 98 % n\'est plus exactement le Chantier');
+  // ⚠ ET LA SOUCHE EST AU DÉFAUT SANS ÊTRE NOMMÉE — les deux moitiés ensemble,
+  // sans quoi une ligne `'souche': EMPRISE_QUATRE_VINGT_DOUZE` remise passerait.
+  assert.equal(PALIERS.souche, 29, 'la Souche n\'est plus au palier de 92 %');
+  assert.ok(!('souche' in NOMMEES),
+    'la Souche est revenue dans `EMPRISE_PAR_BATIMENT` : 92 % EST le défaut, la ligne ne dit rien');
   assert.deepEqual(Object.keys(PALIERS).filter((c) => PALIERS[c] === 27).sort(),
     ['accumulateur', 'centrale', 'collecteur_quartz', 'collecteur_scorie',
       'gangue', 'noeud', 'raffinerie', 'terril'],
@@ -423,13 +486,25 @@ test('ED T3 — la vignette du collecteur mixte porte l\'emprise du collecteur, 
   // icône à une échelle que plus aucun collecteur ne pose. C'est la
   // falsification qui l'a dit : comparer deux sorties égales protège du MAUVAIS
   // nombre, pas du BON. Ce qui l'attrape est de lire l'APPEL.
-  const MOTIF_EMPRUNT = /out\.append\(\(nom, source, emprise_du_batiment\(emprunte\), False\)\)/;
+  // ⚠ LE MOTIF SUIT LA SIGNATURE DE `taches`, QUI REND DEUX CHAMPS DE PLUS
+  // DEPUIS LE 11/09 — la référence d'échelle et l'ancrage. Ce qu'il garde n'a pas
+  // changé d'un mot : l'emprise de la vignette est un APPEL, jamais un nombre.
+  const MOTIF_EMPRUNT = /out\.append\(\(nom, source, emprise_du_batiment\(emprunte\), False, None, 'centre'\)\)/;
   assert.match(NU, MOTIF_EMPRUNT,
     'la vignette mixte ne calcule plus son emprise depuis le bâtiment qu\'elle '
     + 'emprunte : elle se taira au premier réglage du palier de l\'économie');
   // ⚠ L'APPÂT, DANS L'AUTRE SENS : le motif refuse un nombre à la place de l'appel.
-  assert.ok(!MOTIF_EMPRUNT.test('        out.append((nom, source, 27, False))'),
+  assert.ok(!MOTIF_EMPRUNT.test("        out.append((nom, source, 27, False, None, 'centre'))"),
     'le motif de la garde accepterait un nombre écrit en dur');
+
+  // ⚠⚠ ET LA VIGNETTE GARDE SA PROPRE RÉFÉRENCE, CE QUI EST UN NON-CHANGEMENT
+  // DÉLIBÉRÉ DU LOT TERRITOIRE-ET-ÉCHELLE. Elle n'a qu'UN état : il n'y a aucune
+  // famille à mettre à la même échelle. Lui prêter celle du collecteur quartz
+  // déplacerait l'icône de la palette, qu'Ethan n'a pas visée. Le `None` et le
+  // `'centre'` du motif ci-dessus le disent, et cette ligne-ci le mesure dans les
+  // pixels : la vignette est toujours EXACTEMENT à l'emprise du collecteur.
+  assert.match(NU, /reference = cote_de_letat_neuf\(prefixe, cle\)/,
+    'les quatre états ne partagent plus une référence d\'échelle');
 
   // ⚠ ET LE MONTAGE DISCRIMINE : le collecteur n'est PAS au palier par défaut.
   // Sans cette ligne, l'égalité mesurée ci-dessous serait vraie d'une vignette
@@ -455,7 +530,7 @@ test('ED T3 — la vignette du collecteur mixte porte l\'emprise du collecteur, 
 });
 
 // ---------------------------------------------------------------------------
-// ED T4 — les deux ruines suivent le Chantier et la Souche
+// ED T4 — les deux ruines suivent le Chantier
 // ---------------------------------------------------------------------------
 
 test('ED T4 — les deux ruines mesurent 98 %, et le nombre vient d\'une seule écriture', () => {
@@ -463,6 +538,12 @@ test('ED T4 — les deux ruines mesurent 98 %, et le nombre vient d\'une seule �
   // HAUT et non au défaut, et la raison est de jeu : une ruine remplace à l'écran
   // une base RASÉE TOUT ENTIÈRE. Plus petite que le bâtiment central qu'elle
   // recouvre, elle se lirait comme un rétrécissement du site.
+  //
+  // ⚠ LE PALIER HAUT N'EST PLUS QUE LE CHANTIER DEPUIS LE 11/09 — la Souche est
+  // descendue à 92 % pour tenir dans sa case une fois ses quatre états mis à la
+  // même échelle (`ED T2`). Les ruines, elles, n'ont qu'UN état : rien ne les
+  // fait déborder, et elles restent où Ethan les a mises. Ce test lit le palier
+  // du Chantier, donc il n'a pas eu une ligne à changer.
   for (const grille of [64, 128]) {
     const vise = PALIERS.chantier_de_construction * (grille / 32);
     for (const nom of RUINES) {
