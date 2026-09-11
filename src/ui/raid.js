@@ -47,9 +47,11 @@ import { TICK_MS } from '../sim/clock.js';
 // partent avec elle, pour la même raison — cet écran ne range plus l'armée, il
 // range une copie.
 import {
-  formationDepuisLArmee, resynchroniserLaFormation, reglerActiviteEnFormation,
+  formationDepuisLArmee, formationPourLaCible, retenirLaFormation,
+  resynchroniserLaFormation, reglerActiviteEnFormation,
   problemesDuDeplacementEnFormation, deplacerEnFormation,
   problemesDeLaPermutationEnFormation, permuterEnFormation,
+  problemesDeLaTranslationEnFormation, translaterLaFormation,
   problemesDeLEmbarquement, embarquerEnFormation,
   problemesDuDebarquementEnFormation, debarquerEnFormation,
   estPassager, estPorteur, passagerDe,
@@ -381,7 +383,7 @@ function ligneDeLEntite(entite) {
  * ici les ferait diverger.
  *
  * @param {object} entite une entité de `src/sim/combat.js`
- * @returns {{titre: string, picto: string, sections: Array}}
+ * @returns {{titre: string, sections: Array}}
  */
 export function ficheDeLEntite(entite) {
   const ligne = ligneDeLEntite(entite);
@@ -462,9 +464,8 @@ export function ficheDeLEntite(entite) {
 
   return {
     titre: `${nomAffiche(entite)} · niv. ${formaterEntier(entite.niveau)}`,
-    // ⚠ LA MÊME CLÉ QUE LES DEUX AUTRES FICHES : le rendu est partagé, donc les
-    // trois vues doivent avoir EXACTEMENT les mêmes clés.
-    picto: PICTOGRAMMES.niveau,
+    // ⚠ PLUS DE `picto` DE TITRE — point 7, 10/09. Le rendu est partagé : les
+    // quatre vues le perdent ensemble, ou aucune.
     sections: [
       { titre: 'Au combat', lignes: combat },
       { titre: 'La pièce', lignes: pieces },
@@ -719,14 +720,22 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   /**
    * La formation de raid — la copie de travail de l'armée.
    *
-   * ⚠⚠ ELLE SE RECONSTRUIT À CHAQUE OUVERTURE DE L'ÉCRAN, PAR `ouvrirSurLaCible`,
-   * ET C'EST LA SEULE PORTE. Ethan, 08/09 : « la formation de raid repart
-   * toujours de celle d'Offense, et toutes les unités repartent actives ».
-   * Une seconde reconstruction ailleurs — au retour d'un rapport, à la fin d'un
-   * déroulé — effacerait en silence le rangement que le joueur vient de faire.
+   * ⚠⚠ ELLE SE RÉSOUT À CHAQUE OUVERTURE DE L'ÉCRAN, PAR `ouvrirSurLaCible`, ET
+   * C'EST LA SEULE PORTE. Une seconde résolution ailleurs — au retour d'un
+   * rapport, à la fin d'un déroulé — effacerait en silence le rangement que le
+   * joueur vient de faire.
    *
-   * ⚠ ELLE NE VA JAMAIS DANS `etat`, ET NE SE SÉRIALISE PAS : elle vit ici, elle
-   * meurt avec l'écran. C'est ce qui fait que `SAVE_VERSION` ne bouge pas.
+   * ⚠⚠ « SE RÉSOUT » ET PLUS « SE RECONSTRUIT » — Ethan, 10/09 : « je reviens
+   * sur la cible, les unités restent dans leur position ». `formationPourLaCible`
+   * rend la formation RETENUE quand la cible, la base et l'empreinte d'armée
+   * correspondent, et une formation neuve sinon. Les deux arbitrages datés sont
+   * en tête de `sim/formation-de-raid.js` ; ne pas « rétablir » la remise à zéro
+   * sans les avoir lus.
+   *
+   * ⚠ ET ELLE ENTRE DÉSORMAIS DANS `etat`, PAR `retenirLaFormation` : c'est ce
+   * qui fait passer `SAVE_VERSION` de 31 à 32. Un raid non terminé est le cas
+   * d'usage d'Ethan, pas un cas limite — la mémoire doit survivre à la fermeture
+   * du jeu.
    *
    * ⚠ ET ELLE VAUT LA LISTE VIDE TANT QU'AUCUNE CIBLE N'EST OUVERTE, jamais
    * `null` : `peindreVagues` et `vueDuRaid` la parcourent sans avoir à demander
@@ -1398,6 +1407,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // maison, puisque c'est la formation que `composerLesVagues` lit. Aucun
     // test ne l'aurait dit — les deux chemins sont muets.
     if (m.ecritSurLArmee) resynchroniserLaFormation(etatCourant, formation);
+    retenir();
     desarmer();
     peindreVagues();
     apresGeste();
@@ -1436,6 +1446,21 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     return trouve === -1 ? null : trouve;
   }
 
+  /**
+   * Range la formation dans l'état, pour cette cible.
+   *
+   * ⚠⚠ APPELÉE À CHAQUE GESTE QUI TOUCHE LES QUATRE CHAMPS RETENUS, ET JUSTE
+   * AVANT `apresGeste` — qui SAUVEGARDE. C'est ce qui fait que la mémoire
+   * survit à toutes les portes de sortie sans qu'aucune ait à y penser : retour
+   * à la carte, retour en Offense, raid lancé, application tuée. Une écriture
+   * posée sur une seule des sorties serait la première à être oubliée quand une
+   * cinquième apparaîtra.
+   */
+  function retenir() {
+    if (etatCourant === null || cibleCourante === null) return;
+    retenirLaFormation(etatCourant, cibleCourante, formation);
+  }
+
   /** On demande, on agit si la liste est vide, on répète le refus sinon. */
   function tenter(problemes, agir) {
     if (problemes.length > 0) {
@@ -1444,6 +1469,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     }
     agir();
     avis('');
+    retenir();
     peindreVagues();
     apresGeste();
   }
@@ -1810,6 +1836,41 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       : `${bilan.reparees} réparée(s), ${bilan.impayables} hors de portée de la réserve.`);
   });
 
+  // ⚠⚠ LES QUATRE FLÈCHES — point 9, 10/09. Elles passent par `tenter`, donc
+  // par le MÊME chemin que le déplacement d'une pièce : on DEMANDE au moteur, on
+  // agit si la liste est vide, on répète le refus sinon — et `retenir()` range
+  // la formation neuve avant `apresGeste()`, qui sauvegarde. Un geste qui
+  // écrirait directement serait le seul de cet écran à ne pas être retenu.
+  //
+  // ⚠ LA TABLE DES SENS EST CELLE DU MOTEUR, ET L'ÉCRAN N'EN ÉCRIT PAS UNE
+  // SECONDE : ce qui reste ici est le LIBELLÉ accessible et le pictogramme.
+  // Le sens « haut » vaut la vague qui DÉCROÎT, et c'est `SENS_DE_TRANSLATION`
+  // qui le dit — pas cette boucle.
+  //
+  // ⚠ ET LE PICTOGRAMME PARLE, DONC IL PORTE UN LIBELLÉ. Il est SEUL dans son
+  // bouton : sans `aria-label`, la flèche n'aurait aucun nom accessible — c'est
+  // la règle des deux flèches de `#navigation`, à la lettre.
+  for (const [sens, picto, libelle] of [
+    ['gauche', PICTOGRAMMES.precedent, 'Décaler la formation vers la gauche'],
+    ['haut', PICTOGRAMMES.precedent, 'Décaler la formation vers le haut'],
+    ['bas', PICTOGRAMMES.suivant, 'Décaler la formation vers le bas'],
+    ['droite', PICTOGRAMMES.suivant, 'Décaler la formation vers la droite'],
+  ]) {
+    const bouton = $(`raid-fleche-${sens}`);
+    if (bouton !== null) {
+      bouton.textContent = '';
+      bouton.append(creerPictogramme(doc, picto, libelle));
+      bouton.title = libelle;
+    }
+    brancher(`raid-fleche-${sens}`, () => {
+      if (etatCourant === null) return;
+      tenter(
+        problemesDeLaTranslationEnFormation(formation, sens),
+        () => translaterLaFormation(formation, sens),
+      );
+    });
+  }
+
   brancher('raid-retour-carte', () => { fermerPanneaux(); versEcran('monde'); });
   brancher('raid-retour-offense', () => { fermerPanneaux(); versEcran('offense'); });
 
@@ -2020,12 +2081,20 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // les trois doivent s'ouvrir sur la défense. Une valeur posée une seule fois
     // au câblage n'aurait tenu que pour la première.
     bandeCourante = BANDE_A_L_OUVERTURE;
-    // ⚠⚠ LA FORMATION REPART DE L'ARMÉE D'OFFENSE, ICI ET NULLE PART AILLEURS.
-    // Ethan, 08/09 : « elle repart toujours de celle d'Offense, et toutes les
-    // unités repartent actives ». C'est aussi le chemin de « Ré-attaquer », qui
-    // repasse par cette fonction : après un raid, l'armée est abîmée et le
-    // rangement de la passe précédente n'a plus de sens.
-    formation = formationDepuisLArmee(etat);
+    // ⚠⚠ LA FORMATION SE RÉSOUT ICI, ET NULLE PART AILLEURS — mémoire d'abord,
+    // armée d'Offense en repli. Ethan, 10/09 : « je reviens sur la cible, les
+    // unités restent dans leur position. Je ne suis pas obligé de remettre mes
+    // unités à chaque fois. »
+    //
+    // ⚠⚠ ET « RÉ-ATTAQUER » EN HÉRITE, CE QUI EST LE POINT ET NON UN EFFET DE
+    // BORD. Ce bouton repasse par cette fonction ; le commentaire d'ici disait
+    // jusqu'au 10/09 qu'« après un raid, le rangement de la passe précédente n'a
+    // plus de sens ». C'est exactement ce qu'Ethan renverse : son cas d'usage
+    // est le raid qui laisse le site DEBOUT, et il veut retrouver sa formation.
+    //
+    // ⚠ CE QUI RESTE FRAIS : `niveau` et `degatsMilli`, relus dans `armee` par
+    // `formationPourLaCible` — une unité réparée entre deux passes part réparée.
+    formation = formationPourLaCible(etat, cibleCourante);
     coteVoulu = null;
     decalageX = 0;
     // ⚠ HORS BORNES, PAS ZÉRO, ET C'EST LE MÊME GESTE QU'`allerALaBande`. La

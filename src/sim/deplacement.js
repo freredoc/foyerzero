@@ -353,8 +353,14 @@ function casesEnLigneDroite(carre) {
  * porte, et que le message est produit par la simulation. Le reformuler dans
  * `ui/` créerait une seconde formulation qui finirait par dire autre chose que
  * la règle — c'est ce que `CLAUDE.md` §6 dit déjà des refus de pose.
+ *
+ * ⚠⚠ ET ELLE S'EXPORTE DEPUIS LE POINT 6, 10/09 : la carte annonce le délai
+ * AVANT la confirmation, et elle le dit avec CES mots-là. C'est le paragraphe
+ * ci-dessus pris par l'autre bout — la phrase ne descend pas dans l'écran,
+ * c'est l'écran qui monte la chercher. ⚠ Et surtout pas `formaterDuree` de
+ * `ui/raid.js`, qui est un autre barème : il compte des TICKS DE COMBAT.
  */
-function enDuree(ticks) {
+export function enDuree(ticks) {
   const minutes = Math.ceil((ticks * 60) / TICKS_PAR_HEURE);
   if (minutes < 60) return `${minutes} min`;
   const heures = Math.floor(minutes / 60);
@@ -435,6 +441,35 @@ export function poserLaBaseSur(etat, rangee, colonne, laBase = baseCourante(etat
  * @param {{rangee: number, colonne: number}} cible
  * @returns {{avant: object, apres: object, poisAjoutes: number}}
  */
+/**
+ * Ce qu'un saut vers CETTE case coûtera en attente : la distance facturée, et
+ * les ticks.
+ *
+ * ⚠⚠ UNE ÉCRITURE, DEUX LECTEURS, ET C'EST TOUT L'OBJET DE CETTE FONCTION —
+ * point 6, 10/09. `deplacerLaBase` l'appelle pour ÉCRIRE
+ * `dernierDeplacementDelaiTicks` ; l'écran de la carte l'appelle pour ANNONCER
+ * le délai avant la confirmation. Recalculer la distance côté écran donnerait
+ * deux nombres pour un geste, et c'est exactement ce que l'en-tête de
+ * `casesEnLigneDroite` interdit depuis le lot RÈGLES-DE-CARTE — « la distance
+ * qui se paie doit être celle que l'écran annonce ».
+ *
+ * ⚠ ELLE NE JUGE RIEN. Le refus est le travail de `problemesDuDeplacement` ;
+ * celle-ci répond « combien », y compris sur une case que le geste refusera —
+ * l'écran ne l'appelle qu'après avoir demandé les problèmes.
+ *
+ * ⚠ ET LA DISTANCE SE PREND SUR LA POSITION COURANTE, donc AVANT le saut :
+ * `poserLaBaseSur` écrit `position`, et la mesurer après rendrait zéro.
+ *
+ * @param {object} etat
+ * @param {{rangee: number, colonne: number}} cible
+ * @returns {{distance: number, ticks: number}}
+ */
+export function delaiDuDeplacementVers(etat, cible) {
+  const laBase = baseCourante(etat);
+  const distance = casesEnLigneDroite(distanceCarreeCases(laBase.position, cible));
+  return { distance, ticks: delaiDeplacementTicks(etat, distance) };
+}
+
 export function deplacerLaBase(etat, cible) {
   const laBase = baseCourante(etat);
   const problemes = problemesDuDeplacement(etat, cible);
@@ -443,13 +478,15 @@ export function deplacerLaBase(etat, cible) {
       `deplacement impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  const distance = casesEnLigneDroite(distanceCarreeCases(laBase.position, cible));
-  const bilan = poserLaBaseSur(etat, cible.rangee, cible.colonne);
-  laBase.dernierDeplacementTick = etat.horloge.nbTicks;
   // ⚠⚠ LES DEUX S'ÉCRIVENT ENSEMBLE, ET LA DISTANCE SE PREND AVANT LE SAUT.
   // `poserLaBaseSur` écrit `position` : la mesurer après rendrait zéro, donc le
   // délai le plus court du barème, à tous les coups et en silence.
-  laBase.dernierDeplacementDelaiTicks = delaiDeplacementTicks(etat, distance);
+  // ⚠ ET C'EST `delaiDuDeplacementVers` QUI LE DIT, LA MÊME QUE L'ÉCRAN LIT —
+  // point 6, 10/09 : le nombre ANNONCÉ est le nombre FACTURÉ, par construction.
+  const attente = delaiDuDeplacementVers(etat, cible);
+  const bilan = poserLaBaseSur(etat, cible.rangee, cible.colonne);
+  laBase.dernierDeplacementTick = etat.horloge.nbTicks;
+  laBase.dernierDeplacementDelaiTicks = attente.ticks;
   return bilan;
 }
 

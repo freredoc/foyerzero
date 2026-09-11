@@ -317,12 +317,58 @@
      entier. C'est le §2.1 du lot ASSAUT : un geste irréversible et payant ne
      peut pas avoir la taille d'un geste de navigation. */
   #raid-rangee { display: flex; align-items: stretch; gap: 4px; padding: 4px 6px; }
-  #raid-boutons { display: flex; gap: 3px; flex: 1; min-width: 0; }
-  #raid-boutons button {
-    flex: 1; min-width: 0; padding: 5px 2px; font-size: 9px; line-height: 1.1;
+  /* ⚠⚠ DEUX RANGÉES DEPUIS LE POINT 9, ET C'EST LA PLACE VERTICALE QU'ON
+     PREND — Ethan, 10/09 : « rajouter des flèches gauche, droite, haut, bas dans
+     le menu là, parce qu'on a déjà trop de place quelque part en bas ». Mesuré
+     avant d'écrire une ligne, à la géométrie du S25 FE : les cinq boutons de mots
+     faisaient **45,6 × 48 px** pour un texte de 9 px sur une ou deux lignes — la
+     hauteur venait d'`align-items: stretch` alignant la rangée sur les 48 px
+     d'`ATTAQUER`, et les trois quarts en étaient vides. Les flèches s'y logent
+     sans qu'un pixel soit pris à personne : `#raid-boutons` fait toujours
+     **240 × 48**, `#raid-rangee` toujours 56, et le canevas ne perd rien.
+     ⚠ ET LES COLONNES SONT `auto`, PLUS `1fr` : les cinq mots se dimensionnent à
+     leur contenu et se partagent le mou. Mesuré des deux côtés — à parts égales
+     « Simulateur » demandait 48,5 px pour 45,6 et se coupait EN PLEIN MOT ; à
+     colonnes `auto` il en reçoit 57,7, et **aucun des cinq ne se coupe plus**.
+     Le point 9 rend donc la rangée plus lisible qu'il ne l'a trouvée.
+     ⚠ Le `>` n'est pas décoratif : sans lui, la règle des mots attraperait aussi
+     les quatre flèches, qui sont des petits-enfants. */
+  #raid-boutons {
+    display: grid; grid-template-columns: repeat(5, auto); gap: 3px;
+    align-content: stretch; flex: 1; min-width: 0;
+  }
+  #raid-boutons > button {
+    min-width: 0; padding: 2px; font-size: 9px; line-height: 1.1;
     overflow-wrap: anywhere;
     background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
   }
+  /* ⚠ QUATRE PARTS ÉGALES SUR TOUTE LA LARGEUR — 57,8 px de côté au relevé, la
+     cible de doigt la plus large de cette rangée. L'ordre est celui d'une croix
+     aplatie : les deux flèches horizontales aux extrémités, les deux verticales
+     au milieu. */
+  #raid-fleches {
+    grid-column: 1 / -1;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;
+  }
+  #raid-fleches button {
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; font-size: 11px;
+    background: #343A2C; color: #F5F3E8; border: 1px solid #161914;
+  }
+  /* ⚠⚠ LE HAUT ET LE BAS SONT LA GAUCHE ET LA DROITE TOURNÉES D'UN QUART DE
+     TOUR, ET C'EST DÉLIBÉRÉ. `PICTOGRAMMES` ne porte que `ui_fleche_gauche` et
+     `ui_fleche_droite` — vérifié dans `src/data/atlas.js` : la famille
+     `interface` n'a AUCUNE flèche verticale. Inventer un sprite serait un lot
+     d'art ; écrire un glyphe `▲` serait une seconde façon de dire une flèche à
+     côté de celles que l'atlas porte déjà. On tourne donc le MÊME dessin : une
+     flèche gauche pivotée d'un quart de tour horaire pointe en haut, une flèche
+     droite pointe en bas.
+     ⚠ `transform` EST INTERDIT SUR LA GRILLE DE LA BASE, PAS ICI. L'interdiction
+     du lot POSE-À-L'ÉCRAN nomme `#chantier-grille`, `.case` et `.jeton` — elle
+     défend le POINTAGE d'une case, et un bouton n'a pas de case à désigner. Le
+     précédent est `.couche-tournante`, qui tourne une tourelle depuis le lot
+     SPRITES-V2-JOUEUR. */
+  #raid-fleche-haut .picto, #raid-fleche-bas .picto { transform: rotate(90deg); }
   /* ⚠ « VRAIMENT EN GROS » SE MESURE : au moins 48 px de haut, la cible de doigt
      que le reste de la page n'atteint jamais, et une largeur qui tient le mot
      sans le couper sur 360 px CSS.
@@ -3212,6 +3258,23 @@
             <button type="button" id="raid-simuler">Simulateur</button>
             <button type="button" id="raid-retour-carte">Carte</button>
             <button type="button" id="raid-retour-offense">Offense</button>
+            <!-- ⚠⚠ LES QUATRE FLÈCHES DÉCALENT TOUTE LA FORMATION D'UN CRAN, ET
+                 LE REFUS EST EN BLOC — point 9, 10/09. Si une seule pièce
+                 sortirait de la grille ou tomberait sur une occupée, RIEN ne
+                 bouge et la ligne d'avis dit pourquoi : une formation déplacée à
+                 moitié est pire que rien. La règle vit dans
+                 `problemesDeLaTranslationEnFormation` de `sim/formation-de-raid.js`,
+                 jamais ici.
+                 ⚠ ELLES NAISSENT VIDES : le pictogramme se DEMANDE à
+                 `ui/pictogramme.js` au câblage, comme les deux flèches de
+                 `#navigation`. Un nom de sprite écrit dans le balisage serait la
+                 faute que ce module existe pour empêcher. -->
+            <div id="raid-fleches">
+              <button type="button" id="raid-fleche-gauche"></button>
+              <button type="button" id="raid-fleche-haut"></button>
+              <button type="button" id="raid-fleche-bas"></button>
+              <button type="button" id="raid-fleche-droite"></button>
+            </div>
           </div>
           <button type="button" id="raid-attaquer" disabled><b>ATTAQUER</b><small hidden></small></button>
         </div>

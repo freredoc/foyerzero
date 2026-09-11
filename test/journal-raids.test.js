@@ -451,7 +451,13 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // pas un numéro figé, c'est qu'on ne bumpe pas sans passer par ici.
   // ⚠ ET PAR RÈGLES-DE-CARTE, LE 10/09, pour la même raison : la base gagne
   // `dernierDeplacementDelaiTicks`. Le journal, lui, n'a toujours rien ajouté.
-  assert.equal(SAVE_VERSION, 31);
+  // ⚠⚠ ET RAID-ET-ÉCRAN Y EST PASSÉ À SON TOUR, LE 10/09, EN LE SACHANT : la
+  // formation de raid RETENUE entre dans l'état — Ethan, « je reviens sur la
+  // cible, les unités restent dans leur position ». Elle vivait jusque-là dans
+  // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
+  // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
+  // jeu. Le maillon v31 → v32 est dans `state.js`.
+  assert.equal(SAVE_VERSION, 32);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

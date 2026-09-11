@@ -46,6 +46,7 @@ import {
 } from '../src/ui/recherche.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 /** Un état neuf, migré au format courant, avec un compteur qu'on peut charger. */
 function partie(pointsMilli = '0') {
@@ -3651,6 +3652,14 @@ test('MODULES-D T10 — sur une pièce ENTAMÉE, seul le plafond monte', () => {
 function partieAvecGarnison(garnison, modulesDefense) {
   const etat = creerEtat(2026);
   rattraperJeu(etat, 3001);
+  // ⚠⚠ LES TROIS BÂTIMENTS DE PRODUCTION, ET APRÈS LE RATTRAPAGE — lot
+  // RAID-ET-ÉCRAN, 10/09. Le point 4 d'Ethan fait refuser le DÉPART d'une
+  // pièce dont le bâtiment de production est tombé, donc tout montage qui
+  // compose une armée doit désormais les porter. L'aide monte le Chantier au
+  // niveau 5 ; posée AVANT, elle déplacerait la moyenne des bâtiments du
+  // joueur, donc le niveau du camp, qui se fixe à l'apparition — et les ancres
+  // de ce test avec.
+  poserLesBatimentsDeProduction(etat);
   for (let c = 1; c <= 6; c += 1) {
     baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
   }

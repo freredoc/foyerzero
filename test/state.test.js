@@ -2458,7 +2458,13 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // `dernierDeplacementDelaiTicks`, la durée contractée au dernier saut, parce
   // que le délai dépend désormais de la distance PARCOURUE et qu'aucun recalcul
   // ne peut la retrouver. Le maillon v30 → v31 est dans `state.js`.
-  assert.equal(SAVE_VERSION, 31, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RÈGLES-DE-CARTE, lui, y est passé (10/09)');
+  // ⚠⚠ ET RAID-ET-ÉCRAN Y EST PASSÉ À SON TOUR, LE 10/09, EN LE SACHANT : la
+  // formation de raid RETENUE entre dans l'état — Ethan, « je reviens sur la
+  // cible, les unités restent dans leur position ». Elle vivait jusque-là dans
+  // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
+  // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
+  // jeu. Le maillon v31 → v32 est dans `state.js`.
+  assert.equal(SAVE_VERSION, 32, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());

@@ -3944,6 +3944,21 @@ export const EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE = {
 export const OCTETS_AJOUTES_PAR_REGLES_DE_CARTE = 36;
 
 /**
+ * Ce que le lot RAID-ET-ÉCRAN ajoute à la sauvegarde — 10/09/2026.
+ *
+ * ⚠ UN SEUL CHAMP, À LA RACINE ET NON PAR BASE, ET IL VAUT `null` DANS CE
+ * SCÉNARIO. `,"formationRetenue":null` fait **vingt-quatre octets** — le
+ * scénario du témoin n'ouvre aucun écran de raid, donc rien n'y est retenu.
+ * C'est le nombre le plus petit qu'un champ neuf puisse coûter, et il est FIXE
+ * sur les vingt-cinq graines : si l'écart dépendait de la partie, c'est qu'une
+ * formation s'y serait rangée toute seule.
+ *
+ * ⚠ IL S'AJOUTE AUX CINQ PRÉCÉDENTS AU LIEU DE LES REMPLACER — chacun dit ce que
+ * SON lot a coûté, et la somme reste lisible ligne par ligne.
+ */
+export const OCTETS_AJOUTES_PAR_RAID_ET_ECRAN = 24;
+
+/**
  * Les vingt-cinq empreintes du rapport du raid LOINTAIN, dix-huitième couche.
  *
  * ⚠⚠ VINGT-CINQ SUR VINGT-CINQ, ET LE RAID DE PROXIMITÉ ZÉRO SUR VINGT-CINQ.

@@ -1713,10 +1713,10 @@ export function lignesDuPanneau(apercu) {
 
   return {
     titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
-    // ⚠ LE TITRE PORTE TOUJOURS « · niv. N », DONC IL PORTE LE PICTOGRAMME DU
-    // NIVEAU. Les deux fiches — un bâtiment, une pièce — le composent de la même
-    // façon, et c'est la seule grandeur que TOUTES les deux annoncent.
-    picto: PICTOGRAMMES.niveau,
+    // ⚠ PLUS DE `picto` DE TITRE — point 7, 10/09. Le titre porte toujours
+    // « · niv. N » ; ce qui part est le blason posé à sa gauche. Les quatre vues
+    // le perdent ENSEMBLE, sans quoi `ERGO T7 bis` — « la vue d'une pièce a la
+    // MÊME forme que celle d'un bâtiment » — tomberait sur la première oubliée.
     sections,
     // ⚠ `possible` NE DÉSACTIVE RIEN. Il décide d'une teinte, pas d'un
     // `disabled` : « un indice n'est pas une interdiction » (CLAUDE.md §4), et
@@ -1817,11 +1817,10 @@ export function lignesDeLaPiece(apercu) {
 
   return {
     titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
-    // ⚠⚠ LA MÊME CLÉ QUE LA FICHE D'UN BÂTIMENT, ET `ERGO T7 bis` LE MESURE.
-    // Les deux vues doivent avoir EXACTEMENT les mêmes clés — c'est ce qui
-    // permet un seul rendu —, donc ajouter `picto` d'un côté seulement fait
-    // rougir la suite. C'est arrivé, et c'est ce test-là qui l'a dit.
-    picto: PICTOGRAMMES.niveau,
+    // ⚠⚠ ET ELLE PERD SON `picto` DE TITRE EN MÊME TEMPS QUE LA FICHE D'UN
+    // BÂTIMENT — point 7, 10/09. `ERGO T7 bis` exige que les deux vues aient
+    // EXACTEMENT les mêmes clés : le retirer d'un seul côté fait rougir la
+    // suite, et c'est déjà arrivé dans l'autre sens.
     sections,
     // ⚠ `possible` NE DÉSACTIVE RIEN, comme pour les bâtiments : le refus
     // chiffré du moteur en apprend plus au joueur qu'un bouton mort.
@@ -1865,13 +1864,21 @@ export function lignesDeLaPiece(apercu) {
  * @param {object} vue ce que rend `lignesDuPanneau` ou `lignesDeLaPiece`
  */
 export function peindreVueDuPanneau(doc, elements, vue) {
-  // ⚠⚠ LE TITRE SE RECOMPOSE, IL NE S'ÉCRIT PLUS D'UN TRAIT. `textContent`
-  // vide les enfants : poser le pictogramme AVANT lui le ferait disparaître à la
-  // peinture suivante, ce qui ne lève pas et ne se voit qu'à l'œil.
+  // ⚠⚠ LE TITRE N'A PLUS DE PICTOGRAMME — Ethan, 10/09, point 7 : « il y a une
+  // espèce de blason à gauche du nom quand on clique sur une unité ou un
+  // bâtiment. L'enlever. » Il vivait ICI, dans le rendu partagé, donc l'insertion
+  // se retire UNE fois pour les quatre lecteurs — le Chantier, l'Offense, la
+  // fiche d'une cible ennemie et le journal des raids — et le champ `picto` de
+  // niveau TITRE part de leurs quatre producteurs.
+  //
+  // ⚠ LES PICTOGRAMMES DE LIGNE RESTENT, ET C'EST LA MOITIÉ À NE PAS TOUCHER.
+  // Ethan vise le blason du TITRE ; `ligne.picto` est dans le CORPS, il nomme la
+  // grandeur de chaque paire, et `CÂB T7` le mesure toujours ligne par ligne.
+  //
+  // ⚠ LE TITRE SE COMPOSE ENCORE, IL NE S'ÉCRIT PAS D'UN TRAIT : `textContent =
+  // vue.titre` marcherait aujourd'hui et retirerait le seul endroit où une
+  // décoration peut revenir sous garde. On garde le nœud de texte explicite.
   elements.titre.textContent = '';
-  if (vue.picto !== undefined && vue.picto !== null) {
-    elements.titre.append(creerPictogramme(doc, vue.picto));
-  }
   elements.titre.append(doc.createTextNode(vue.titre));
   elements.corps.textContent = '';
   for (const section of vue.sections) {
@@ -2147,7 +2154,9 @@ export function vueDuJournal(rapports, tickCourant) {
   const sections = liste.length === 0
     ? [{ titre: JOURNAL_VIDE, lignes: [] }]
     : [...liste].reverse().map((r) => sectionDuRapport(r, tickCourant));
-  return { titre: TITRE_JOURNAL, picto: PICTOGRAMMES.temps, sections };
+  // ⚠ SANS `picto` DEPUIS LE POINT 7 : le journal partage le rendu, donc le
+  // blason du titre part ici aussi. Ses lignes, elles, gardent les leurs.
+  return { titre: TITRE_JOURNAL, sections };
 }
 
 /**
@@ -3982,6 +3991,17 @@ export function initialiserEcranChantier(doc, {
     posableChoisi = null;
     poseEnAttente = null;
     deplacementEnCours = null;
+    // ⚠⚠ ET UNE ACTION DONT LE BOUTON VA DISPARAÎTRE SE DÉSARME — point 8,
+    // 10/09. L'action armée SURVIT au changement de bande, et c'est voulu : elle
+    // s'applique à ce qu'on touche. Mais depuis que le bouton se masque là où il
+    // n'a pas de moteur, la laisser armée laisserait un mode ACTIF que plus
+    // aucun bouton ne montre et qu'aucun geste ne peut annuler — retoucher le
+    // bouton armé est la seule façon de désarmer. C'est le piège exact que le
+    // dépôt refuse depuis le 28/08 sur cette barre.
+    if (actionArmee !== null && TERRAINS[terrainCourant()].actions[actionArmee] === null) {
+      actionArmee = null;
+    }
+    marquerBoutonsAction();
     // ⚠⚠ ET LA SÉLECTION TOMBE AVEC EUX — Ethan, 07/09, point 5. Elle survivait
     // au changement de bande : `terrainSelection` restait `batiments` pendant
     // qu'on regardait la garnison, si bien que `rafraichir` réécrivait dix fois
@@ -4832,8 +4852,33 @@ export function initialiserEcranChantier(doc, {
    * l'oublier, et la barre serait restée à l'écran après un refus.
    */
   function marquerBoutonsAction() {
+    // ⚠⚠ UN BOUTON SANS MOTEUR SUR CETTE BANDE-LÀ NE S'AFFICHE PLUS — Ethan,
+    // 10/09, point 8 : « bouton réparer en onglet défense : obsolète ». Il
+    // répondait au lieu d'agir, et la phrase était juste — le Complexe de
+    // défense répare la garnison gratuitement et tout seul depuis le lot
+    // COMPLEXE. Un bouton qui ne peut RIEN faire n'apprend plus rien une fois
+    // qu'on le sait : il occupe la barre.
+    //
+    // ⚠⚠ ET C'EST LA TABLE QUI DÉCIDE, JAMAIS UN `=== 'defense'` ÉCRIT ICI.
+    // `TERRAINS[…].actions[nom] === null` est déjà la forme « pas de moteur sur
+    // ce terrain », et `chantier.test.js` interdit de reconnaître la défense à
+    // son nom dans cet écran. Le jour où une cinquième action naîtra sans moteur
+    // d'un côté, elle se masquera sans qu'une ligne soit écrite.
+    //
+    // ⚠ CE QUI RESTE : LE MOTEUR, LE LIBELLÉ ET `actionSansMoteur`. Ce qui
+    // disparaît est l'AFFICHAGE du bouton sur la bande où il ne sert à rien ;
+    // `ACTIONS.reparer` garde son `problemes`/`agir`, que la bande Bâtiments
+    // emploie, et le long bloc de `TERRAINS.defense.actions` qui dit POURQUOI
+    // `reparer` vaut `null` reste mot pour mot — c'est lui qui empêchera qu'on
+    // le recâble.
+    //
+    // ⚠ ET `#offense-reparer` N'EST PAS CONCERNÉ : il a un vrai moteur,
+    // `reparerUnePiece`, sur l'écran d'armée. Les deux ne s'harmonisent pas.
+    const terrain = TERRAINS[terrainCourant()];
     for (const [nom, action] of Object.entries(ACTIONS)) {
-      $(action.bouton).classList.toggle('arme', actionArmee === nom);
+      const bouton = $(action.bouton);
+      bouton.classList.toggle('arme', actionArmee === nom);
+      bouton.hidden = terrain.actions[nom] === null;
     }
     // ⚠ « TOUT RÉPARER » N'APPARAÎT QUE LE MODE RÉPARER ARMÉ — Ethan, 01/09, sur
     // l'écran de raid ; c'est la même discipline, sur l'autre écran.

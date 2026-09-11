@@ -37,6 +37,7 @@ import { basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { campDeLaCase } from '../src/sim/territoire.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { caseRasee } from '../src/sim/ruines.js';
+import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const T0 = 1_700_000_000_000;
@@ -810,6 +811,14 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   const partie = (acquis) => {
     const etat = creerEtat(2026);
     rattraperJeu(etat, 3001);
+    // ⚠⚠ LES TROIS BÂTIMENTS DE PRODUCTION, ET APRÈS LE RATTRAPAGE — lot
+    // RAID-ET-ÉCRAN, 10/09. Le point 4 d'Ethan fait refuser le DÉPART d'une
+    // pièce dont le bâtiment de production est tombé, donc tout montage qui
+    // compose une armée doit désormais les porter. L'aide monte le Chantier au
+    // niveau 5 ; posée AVANT, elle déplacerait la moyenne des bâtiments du
+    // joueur, donc le niveau du camp, qui se fixe à l'apparition — et les ancres
+    // de ce test avec.
+    poserLesBatimentsDeProduction(etat);
     for (let c = 1; c <= 6; c += 1) {
       baseCourante(etat).armee.push({ id: 'meute', vague: 1, colonne: c, niveau: 1, degatsMilli: 0 });
     }

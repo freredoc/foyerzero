@@ -24,7 +24,7 @@ import {
   palierDuSite, nomDuSite, etiquettesRetenues, prioriteDeLEtiquette,
   traitDeLaFleche, traitRogne, centreDeLaCase, initialiserEcranMonde, EPAISSEUR_HALO,
   ciblageDuSite,
-  RAYON_DU_BILAN, fenetreDuBilan, bilanDuTerritoire, lignesDuBilan,
+  RAYON_DU_BILAN, fenetreDuBilan, bilanDuTerritoire, lignesDuBilan, lignesDeLAttente,
   clesDesPoisAcquis, phraseDesPoisAcquis, vueDesPois,
   ruineDeLaCase, nomDeLaRuine, lignesDeLaRuine, resteDeLaRuine, NOM_DU_VAINQUEUR,
 } from '../src/ui/monde.js';
@@ -64,6 +64,7 @@ import { creerEtat, rattraperJeu, poserEffectif, serialiser } from '../src/sim/s
 import { nombreDAttaquantes } from '../src/sim/raid-ouvrage.js';
 import {
   casesAtteignables, ticksAvantProchainDeplacement, problemesDuDeplacement,
+  delaiDuDeplacementVers,
 } from '../src/sim/deplacement.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
@@ -3579,8 +3580,24 @@ test('PC T1 — le bilan annoncé est celui que la carte peint', () => {
   assert.notDeepEqual(attendu, compterLeBilan(etat, voisine, fenetreDuBilan(m.base, voisine)),
     'montage : décaler la cible d\'une case ne change pas le bilan — rien n\'est mesuré');
 
-  assert.deepEqual(lignesDuCorps(m.parId), lignesDuBilan(attendu),
-    'le panneau n\'annonce pas le bilan que la carte donne');
+  // ⚠⚠ LE PANNEAU PORTE DEUX LIGNES DE PLUS DEPUIS LE POINT 6, 10/09 — Ethan :
+  // « indiquer temps de déplacement avant confirmation ». La distance facturée
+  // et l'attente entrent PAR LA MÊME PORTE que le bilan — `peindreLesLignes`, en
+  // un seul appel —, donc ce test-ci les voit, et c'est ce qu'on lui demande :
+  // il mesurait déjà que le panneau annonce EXACTEMENT ce que le moteur donne.
+  //
+  // ⚠ L'ORDRE EST ASSERTÉ, ET IL DIT QUELQUE CHOSE : ce que le geste COÛTE se
+  // lit avant ce qu'il RAPPORTE.
+  //
+  // ⚠ CE TEST NE JUGE PAS LA COURBE DU DÉLAI, et il ne doit pas : le barème
+  // appartient à Ethan. Il mesure que les deux lignes viennent bien de
+  // `delaiDuDeplacementVers`, c'est-à-dire de la fonction que `deplacerLaBase`
+  // lit pour FACTURER — une cohérence entre deux sites, jamais un seuil.
+  assert.deepEqual(
+    lignesDuCorps(m.parId),
+    [...lignesDeLAttente(delaiDuDeplacementVers(etat, m.cible)), ...lignesDuBilan(attendu)],
+    'le panneau n\'annonce pas le bilan que la carte donne',
+  );
   assert.equal(m.parId.get('monde-panneau-confirmation').hidden, false,
     'la confirmation ne s\'est pas ouverte');
 
