@@ -698,10 +698,40 @@ test('RAID-B T12 bis — le rapport de défense traverse la sauvegarde', () => {
   assert.equal(relu.rapports.length, 1);
   assert.equal(relu.rapports[0].sens, 'defense');
   assert.equal(relu.rapports[0].verdict, 'defaite-totale');
-  // ⚠ AUCUN `resultat` DE COMBAT NE SE RANGE, et la borne de poids tient : un
-  // rapport de défense reste de l'ordre du demi-kilo-octet.
-  assert.ok(JSON.stringify(relu.rapports[0]).length < 1024,
-    'un rapport de défense pèse plus d\'un kilo-octet');
+  // ⚠⚠ CETTE GARDE EST RETOURNÉE PAR LE LOT REJEU, PAS ASSOUPLIE — 12/09, Ethan :
+  // « tu fais le rejeu quand même. » Elle exigeait « moins d'un kilo-octet » au
+  // motif qu'« aucun `resultat` de combat ne se range » : la borne mesurait DEUX
+  // choses à la fois, et l'arbitrage n'en renverse qu'une. Mesuré sur ce montage :
+  // le rapport passe de **417 à 1 915 octets**, dont **1 489 pour le montage**.
+  // La borne d'un kilo-octet portait donc sur la grandeur qui vient de changer,
+  // et elle est déplacée sur celle qui n'a pas bougé.
+  //
+  // ⚠ PREMIÈRE MOITIÉ, CE QUI N'A PAS CHANGÉ : hors son montage, un rapport de
+  // défense reste de l'ordre du demi-kilo-octet. 417 mesuré, borne à 512.
+  const { rejeu, ...sansRejeu } = relu.rapports[0];
+  assert.ok(JSON.stringify(sansRejeu).length < 512,
+    'un rapport de défense, montage exclu, pèse plus d\'un demi-kilo-octet');
+  // ⚠⚠ SECONDE MOITIÉ, ET C'EST TOUT CE QUI RESTE DE « NE PAS STOCKER LE
+  // COMBAT » : ce qui se range est un MONTAGE — l'état de DÉPART, qui se rejoue —
+  // et JAMAIS un `resultat`, qui porte les positions et les PV de chaque entité à
+  // chaque tick. Les clés le disent : un montage a `vagues` et `niveau`, un
+  // résultat a `entites`, `termine`, `tick` et `cause`.
+  assert.ok(rejeu !== undefined && rejeu !== null,
+    'le rapport ne porte pas son montage : le journal ne pourra pas le rejouer');
+  for (const attendue of ['niveau', 'vagues', 'proprietaireDefense']) {
+    assert.ok(Object.prototype.hasOwnProperty.call(rejeu, attendue),
+      `le montage rangé n'a pas « ${attendue} » : il ne se rejouera pas`);
+  }
+  for (const interdite of ['entites', 'termine', 'tick', 'cause']) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(rejeu, interdite),
+      `un RÉSULTAT de combat s'est rangé dans le rapport (« ${interdite} »)`);
+  }
+  // ⚠ ET LA COMPTABILITÉ DE REPORT NE VOYAGE PAS — `pourLeRejeu` la retire, et
+  // `creerCombat` ne la lit pas. Mesuré : une centaine d'octets par rapport.
+  for (const interdite of ['indicesDefenseurs', 'indicesBatiments']) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(rejeu, interdite),
+      `« ${interdite} » voyage dans le rapport sans que le rejeu l'emploie`);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1177,7 +1207,15 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
   // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
   // jeu. Le maillon v31 → v32 est dans `state.js`.
-  assert.equal(SAVE_VERSION, 32, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  // ⚠⚠ ET LE LOT REJEU Y PASSE À SON TOUR, LE 12/09, EN LE SACHANT — 32 → 33.
+  // Ethan : « tu fais le rejeu quand même. » Chaque rapport range désormais le
+  // MONTAGE de son combat, sans quoi le journal ne pourrait pas le rejouer : le
+  // montage est l'état de DÉPART d'un combat fini, et rien dans l'état
+  // d'aujourd'hui ne le conserve. Le coût est publié — 7 780 octets par rapport
+  // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
+  // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
+  // un rapport d'avant ne se rejoue pas, et le journal le dit.
+  assert.equal(SAVE_VERSION, 33, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

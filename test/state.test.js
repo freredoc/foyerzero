@@ -825,43 +825,45 @@ test('état — une base déjà bancale reste constructible', () => {
 // Le Chantier plafonne, et les bâtiments de production ouvrent — 29/08
 // ---------------------------------------------------------------------------
 
-test('état — le Chantier plafonne le niveau de toute la base, sauf le sien', () => {
-  // ARBITRÉ le 29/08 par Ethan : « le chantier de construction définit le
-  // niveau max des bâtiments. Donc aucun bâtiment ne peut avoir un niveau
-  // supérieur à celui du chantier. »
+test('état — le Chantier NE plafonne PLUS le niveau des bâtiments', () => {
+  // ⚠⚠ GARDE RETOURNÉE, PAS RETIRÉE — arbitrage d'Ethan du 12/09/2026, qui
+  // RENVERSE celui du 29/08 : « enlever le plafond imposé par le chantier de
+  // construction qui limite le niveau max des bâtiments. » Elle exigeait le code
+  // `plafond-chantier` sur un collecteur au niveau du Chantier ; elle exige
+  // maintenant son ABSENCE, et elle falsifie l'ancienne règle de face — un lot
+  // qui la remettrait ferait tomber ce test au lieu de passer au vert.
   const etat = creerEtat(4242);
   const champ = baseCourante(etat).champs.cases[0];
   poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
   baseCourante(etat).economie.ressources = { quartz: 9e9, scorie: 9e9, electricite: 9e9 };
 
-  // Montage falsifiable : sans le plafond, cette montée serait payable. On le
-  // prouve en montant le Chantier d'abord, puis en revenant en arrière.
-  assert.equal(niveauDuChantier(etat), 1);
+  // ⚠ LE MONTAGE MORD ENCORE, ET C'EST CE QUI FAIT LA DIFFÉRENCE AVEC UN TEST
+  // VACUEUX : le Chantier est au niveau 1 et le collecteur y est aussi, donc
+  // c'est EXACTEMENT le montage que l'ancienne règle refusait.
+  assert.equal(niveauDuChantier(etat), 1, 'montage : le Chantier doit être au plus bas');
+  assert.equal(baseCourante(etat).disposition[1].niveau, 1);
   assert.deepEqual(
-    problemesDeLAmelioration(etat, 1).map((p) => p.code), ['plafond-chantier'],
-    'le collecteur devrait être plafonné par le Chantier',
+    problemesDeLAmelioration(etat, 1).map((p) => p.code), [],
+    'le collecteur est encore plafonné par le Chantier',
   );
-  assert.match(problemesDeLAmelioration(etat, 1)[0].message, /Chantier de construction/);
-  assert.throws(() => ameliorer(etat, 1), /impossible/);
-  assert.equal(baseCourante(etat).disposition[1].niveau, 1, 'un refus ne doit rien avoir monté');
-
-  // ⚠ LE CHANTIER NE SE PLAFONNE PAS LUI-MÊME. Il EST la référence ; lui
-  // appliquer la règle figerait la base à son niveau de départ pour toujours.
-  assert.deepEqual(problemesDeLAmelioration(etat, 0), []);
-  ameliorer(etat, 0);
-  assert.equal(niveauDuChantier(etat), 2);
-
-  // Et le plafond se lève AVEC lui, d'un cran exactement.
-  assert.deepEqual(problemesDeLAmelioration(etat, 1), []);
   ameliorer(etat, 1);
-  assert.equal(baseCourante(etat).disposition[1].niveau, 2);
-  assert.deepEqual(
-    problemesDeLAmelioration(etat, 1).map((p) => p.code), ['plafond-chantier'],
-    'le collecteur devrait être bloqué à nouveau, au niveau du Chantier',
+  assert.equal(baseCourante(etat).disposition[1].niveau, 2,
+    'la montée au-dessus du Chantier n\'a pas eu lieu');
+
+  // ⚠⚠ ET ELLE MONTE AUSSI LOIN QUE LE JEU L'AUTORISE, CHANTIER RESTÉ EN BAS.
+  // Trois crans au-dessus : c'est la propriété que le renversement achète, et un
+  // plafond remis d'un cran la ferait tomber.
+  ameliorer(etat, 1);
+  ameliorer(etat, 1);
+  assert.equal(baseCourante(etat).disposition[1].niveau, 4);
+  assert.equal(niveauDuChantier(etat), 1, 'le Chantier n\'a pas eu à monter');
+  assert.ok(
+    !JSON.stringify(problemesDeLAmelioration(etat, 1)).includes('plafond-chantier'),
+    'le code `plafond-chantier` est revenu',
   );
 
-  // Le plafond du JEU reste le premier à parler : à 50, c'est lui qui refuse,
-  // pas le Chantier — sinon le message enverrait monter un bâtiment déjà au bout.
+  // ⚠ LE PLAFOND DU JEU, LUI, RESTE — et il est désormais le SEUL sur un
+  // bâtiment. À 50, c'est lui qui refuse.
   const auBout = creerEtat(11);
   baseCourante(auBout).disposition[0].niveau = GEOGRAPHIE.niveauPlafond;
   assert.deepEqual(
@@ -1145,30 +1147,29 @@ test('état — l\'amorce paie de quoi démarrer, et c\'est vérifié sur les pr
   // plutôt que sur les nombres 30 · 30 · 20 — si un prix montait, c'est ici
   // que ça devrait se voir, pas dans une partie livrée injouable.
   //
-  // ⚠⚠ ET LA CHAÎNE A CHANGÉ D'ORDRE LE 29/08, PAS DE NATURE. Le Chantier
-  // plafonne désormais le niveau de toute la base : la PREMIÈRE montée payable
-  // d'une partie est forcément la sienne. C'était déjà le premier geste de
-  // l'ouverture mesurée de CLAUDE.md §6 ; c'en est maintenant le seul possible,
-  // et ce test le vérifie au lieu de le supposer.
+  // ⚠⚠ LA CHAÎNE A CHANGÉ D'ORDRE DEUX FOIS, ET LE MONTAGE SUIT — C'EST LE
+  // MONTAGE QU'ON RÉPARE, JAMAIS L'ASSERTION. Le 29/08 le Chantier plafonnait
+  // toute la base, donc la PREMIÈRE montée payable était forcément la sienne, et
+  // ce test l'exigeait par le code `plafond-chantier`. Le 12/09 Ethan retire ce
+  // plafond : cette prémisse a cessé d'être vraie, et le test tomberait sur un
+  // code juste. Ce qu'il garde — l'amorce paie de quoi démarrer, sur les prix
+  // RÉELS — n'a pas bougé d'un mot ; ce qui part est l'ORDRE IMPOSÉ.
   const etat = creerEtat(779);
   const champ = baseCourante(etat).champs.cases[0];
   poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
 
-  // Rien d'autre que le Chantier ne peut monter tant qu'il est au niveau 1.
-  assert.deepEqual(
-    problemesDeLAmelioration(etat, 1).map((p) => p.code), ['plafond-chantier'],
-    'le collecteur devrait être plafonné par un Chantier de niveau 1',
+  // ⚠⚠ LES DEUX PREMIÈRES MONTÉES SONT DÉSORMAIS PAYABLES DANS N'IMPORTE QUEL
+  // ORDRE, et c'est très exactement ce que le renversement achète. Un plafond
+  // remis d'un cran ferait tomber la première de ces deux lignes.
+  assert.deepEqual(problemesDeLAmelioration(etat, 1).map((p) => p.code), [],
+    'le collecteur est encore plafonné par un Chantier de niveau 1',
   );
-
-  // Et l'amorce paie SA montée à lui, qui est le vrai premier geste.
   assert.deepEqual(problemesDeLAmelioration(etat, 0), [],
     'l\'amorce ne paie même pas la première montée du Chantier');
+
+  // Et l'amorce les paie tous les deux, dans l'ordre que le joueur veut.
   ameliorer(etat, 0);
   assert.equal(baseCourante(etat).disposition[0].niveau, 2);
-
-  // Le plafond se lève avec lui : le collecteur devient montable, et payable.
-  assert.deepEqual(problemesDeLAmelioration(etat, 1), [],
-    'le collecteur reste bloqué alors que le Chantier est monté');
   ameliorer(etat, 1);
   assert.equal(baseCourante(etat).disposition[1].niveau, 2);
 
@@ -2538,7 +2539,15 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
   // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
   // jeu. Le maillon v31 → v32 est dans `state.js`.
-  assert.equal(SAVE_VERSION, 32, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  // ⚠⚠ ET LE LOT REJEU Y PASSE À SON TOUR, LE 12/09, EN LE SACHANT — 32 → 33.
+  // Ethan : « tu fais le rejeu quand même. » Chaque rapport range désormais le
+  // MONTAGE de son combat, sans quoi le journal ne pourrait pas le rejouer : le
+  // montage est l'état de DÉPART d'un combat fini, et rien dans l'état
+  // d'aujourd'hui ne le conserve. Le coût est publié — 7 780 octets par rapport
+  // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
+  // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
+  // un rapport d'avant ne se rejoue pas, et le journal le dit.
+  assert.equal(SAVE_VERSION, 33, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());

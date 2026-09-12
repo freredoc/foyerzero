@@ -1026,15 +1026,23 @@ test('RAID-A T7 — les deux panneaux affichent les MÊMES nombres', () => {
   // C'est la leçon d'`ERGO T7 ter` : importer n'est pas appeler.
   const source = sansCommentairesRaidA(lireSource('src', 'ui', 'raid.js'))
     .replace(/import \{[^}]*\} from '[^']*';/g, '');
-  // ⚠⚠ UN SEUL APPEL, ET C'ÉTAIT DÉJÀ VRAI AVANT LE DÉMÉNAGEMENT : le compte de
-  // DEUX comptait la DÉCLARATION plus l'appel, pas deux appels. Les deux panneaux
-  // passent par `remplirLignes`, qui appelle la vue une fois — c'est ce partage
-  // que le `deepEqual` ci-dessus mesure, pas ce compte-ci. La déclaration étant
-  // partie dans `ui/rapport.js`, il ne reste que l'appel.
-  assert.equal((source.match(/lignesDuResultat\(/g) ?? []).length, 1,
+  // ⚠⚠ UN SEUL APPEL, ET IL A CHANGÉ DE NOM AU LOT REJEU — `lignesDuResultat(`
+  // valait 1, `lignesDuPanneauDeFin(` vaut 1. Ce qui est gardé n'a pas bougé :
+  // les deux panneaux passent par `remplirLignes`, qui appelle la vue UNE fois,
+  // et le compte de DEUX d'avant le 11/09 comptait la déclaration plus l'appel.
+  // Ce qui a changé, c'est que le rejeu fait entrer un raid SUBI dans ce panneau,
+  // donc la vue DISPATCHE par sens — et le dispatch vit dans `ui/rapport.js`, à
+  // côté des deux fonctions de lignes.
+  assert.equal((source.match(/lignesDuPanneauDeFin\(/g) ?? []).length, 1,
     'les deux panneaux ne partagent plus une seule fonction de rendu');
-  // ⚠ ET ELLE N'EST PAS RECOPIÉE ICI : une seule écriture, dans `ui/rapport.js`.
-  assert.ok(!/function lignesDuResultat\(/.test(source),
+  // ⚠⚠ ET L'ÉCRAN N'APPELLE PLUS LA VUE OFFENSE DIRECTEMENT. C'est ce qui refuse
+  // le retour de la faute : appeler `lignesDuResultat` ici afficherait le butin
+  // et les points d'un raid SUBI, qui n'en a pas.
+  assert.equal((source.match(/lignesDuResultat\(/g) ?? []).length, 0,
+    'l\'écran de raid appelle la vue OFFENSE au lieu du dispatch par sens');
+  // ⚠ ET AUCUNE DES DEUX N'EST RECOPIÉE ICI : une seule écriture, dans
+  // `ui/rapport.js`, pour le dispatch comme pour les lignes.
+  assert.ok(!/function lignesDuResultat\(|function lignesDuPanneauDeFin\(/.test(source),
     'l\'écran de raid a récupéré une copie de la vue du rapport');
   // ⚠⚠ AUCUN DES QUATRE POURCENTAGES DU RAPPORT N'EST CALCULÉ DANS L'ÉCRAN : ils
   // ne s'y LISENT que sur `rapport`. C'est ce qui les rend exacts dans le

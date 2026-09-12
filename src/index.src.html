@@ -3013,6 +3013,17 @@
         <b id="journal-titre" class="titre">—</b>
       </div>
       <div id="journal-corps" class="corps"></div>
+      <!-- ⚠⚠ REJOUER UN RAID — arbitrage d'Ethan du 12/09. Il ne paraît que sur
+           un rapport DÉPLIÉ qui porte son montage : les rapports d'avant la v33
+           n'en ont pas, et la migration ne peut pas le leur inventer. C'est la
+           session qui décide, `rapportRejouable` qui répond, et `vueDuJournal`
+           qui reste pure — ce bouton-ci n'a aucune règle.
+           ⚠ IL REPREND `.ameliorer`, LA RÈGLE DU BOUTON DE PIED D'UN
+           `.panneau-detail`, ET N'EN AJOUTE AUCUNE : même place, même taille,
+           même teinte que « Améliorer » des deux fiches. Il ne passe PAS par le
+           bouton du rendu partagé — celui-là pose le pictogramme de flèche
+           montante de l'amélioration, qui promettrait une montée de niveau. -->
+      <button type="button" id="journal-rejouer" class="ameliorer" hidden></button>
     </div>
     <!-- ⚠ L'ÉCRAN DU TUTORIEL. Il ne porte AUCUNE règle : ce qui est fait ou
          non se décide dans `sim/missions.js`, qui lit la base. Il n'a pas de

@@ -77,7 +77,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 32;
+export const SAVE_VERSION = 33;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -1107,27 +1107,17 @@ export function problemesDeLAmelioration(etat, index) {
     return problemes;
   }
 
-  // ⚠⚠ LE CHANTIER PLAFONNE TOUTE LA BASE — arbitré le 29/08/2026 par Ethan :
-  // « le chantier de construction définit le niveau max des bâtiments. Donc
-  // aucun bâtiment ne peut avoir un niveau supérieur à celui du chantier. »
-  // C'est ce qui fait du Chantier le vrai rythme de la partie : on ne monte
-  // plus rien tant qu'il n'est pas monté lui-même.
+  // ⚠⚠ LE CHANTIER NE PLAFONNE PLUS LE NIVEAU DES BÂTIMENTS — arbitrage d'Ethan
+  // du 12/09/2026, qui RENVERSE celui du 29/08 (« le chantier de construction
+  // définit le niveau max des bâtiments »). Le code `plafond-chantier` n'existe
+  // plus, et `niveauDuChantier` reste exportée : elle est LUE ailleurs, elle ne
+  // refuse plus rien ici.
   //
-  // ⚠ ET IL NE SE PLAFONNE PAS LUI-MÊME. Il EST la référence ; lui appliquer la
-  // règle le figerait à son niveau de départ, et plus rien dans la base ne
-  // monterait jamais. Son seul plafond est celui du jeu, testé juste au-dessus.
-  const plafondDuChantier = niveauDuChantier(etat);
-  if (batiment.id !== ID_CHANTIER && vise > plafondDuChantier) {
-    problemes.push({
-      code: 'plafond-chantier',
-      message: `le ${BASE_BATIMENTS[ID_CHANTIER].nom.joueur} est au niveau `
-        + `${plafondDuChantier} : montez-le d'abord`,
-    });
-    // Le coût du niveau visé n'a pas de sens tant qu'il est interdit, mais on
-    // le calcule quand même : le joueur doit pouvoir lire les DEUX raisons
-    // d'un refus, pas seulement la première. « Un indice n'est pas une
-    // interdiction » vaut aussi pour les messages.
-  }
+  // ⚠ LES DEUX AUTRES PLAFONDS RESTENT, ET ILS NE SONT PAS CELUI-CI. Le Centre
+  // de commandement et le QG de défense bornent toujours le niveau des PIÈCES,
+  // par `plafond-commandement` de `problemesDeLAmeliorationDEffectif` : ce sont
+  // des budgets de force, pas le rythme de la construction. Ne pas les retirer
+  // en croyant achever ce lot-ci.
 
   // ⚠⚠ UN BÂTIMENT ABÎMÉ NE MONTE PAS — arbitrage d'Ethan du 12/09/2026, « ça
   // doit bloquer ». Ce n'est pas une gêne ajoutée au joueur, c'est un PIÈGE
@@ -3356,6 +3346,32 @@ const MIGRATIONS = {
   31: (s) => {
     s.version = 32;
     if (s.formationRetenue === undefined) s.formationRetenue = null;
+  },
+  /**
+   * v32 → v33 : un rapport de raid porte le montage de son combat.
+   *
+   * ⚠⚠ ELLE NE CALCULE RIEN, ET ELLE NE PEUT RIEN CALCULER. Le montage d'un raid
+   * est l'état de DÉPART d'un combat déjà fini : la garnison, les bâtiments et
+   * l'armée tels qu'ils étaient à cet instant-là. Une v32 ne les a nulle part —
+   * la garnison a été réparée par le Complexe depuis, `sitesEntames` est écrasé
+   * par les raids suivants, et l'armée est revenue de plusieurs passes. Le
+   * reconstruire depuis l'état d'AUJOURD'HUI donnerait un combat voisin et faux,
+   * ce que le brief interdit nommément : « un rejeu faux est pire qu'aucun
+   * rejeu. »
+   *
+   * ⚠ DONC LES ANCIENS RAPPORTS NE SE REJOUENT PAS, ET LE JOURNAL LE DIT. Elle
+   * ne pose même pas le champ : « absent » vaut « pas rejouable », et
+   * `vueDuJournal` n'affiche le bouton que sur un rapport qui porte son montage.
+   * Poser `rejeu: null` aurait donné une SECONDE façon d'écrire la même absence,
+   * dont un seul lecteur aurait reçu la prochaine correction.
+   *
+   * ⚠ ET ELLE NE VIDE PAS `rapports`. Un rapport v32 reste parfaitement lisible
+   * — dix-huit champs, tout ce que le journal affichait hier — et le jeter pour
+   * la seule raison qu'il ne se rejoue pas retirerait au joueur l'historique
+   * qu'il avait, pour lui rendre une fonction qu'il n'aura pas dessus.
+   */
+  32: (s) => {
+    s.version = 33;
   },
 };
 

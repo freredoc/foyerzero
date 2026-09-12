@@ -992,7 +992,15 @@ test('FR T3 — la chaîne de migration se rejoue en entier, et le maillon 31 �
 
   const migre = migrer(vieille);
   assert.equal(migre.version, SAVE_VERSION);
-  assert.equal(SAVE_VERSION, 32, 'SAVE_VERSION a bougé sans que ce test suive');
+  // ⚠⚠ ET LE LOT REJEU Y PASSE À SON TOUR, LE 12/09, EN LE SACHANT — 32 → 33.
+  // Ethan : « tu fais le rejeu quand même. » Chaque rapport range désormais le
+  // MONTAGE de son combat, sans quoi le journal ne pourrait pas le rejouer : le
+  // montage est l'état de DÉPART d'un combat fini, et rien dans l'état
+  // d'aujourd'hui ne le conserve. Le coût est publié — 7 780 octets par rapport
+  // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
+  // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
+  // un rapport d'avant ne se rejoue pas, et le journal le dit.
+  assert.equal(SAVE_VERSION, 33, 'SAVE_VERSION a bougé sans que ce test suive');
   // ⚠⚠ LE MAILLON 31 → 32 A JOUÉ, ET IL N'A RIEN INVENTÉ. Une v0 ne sait ni
   // quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
   // formation vivait dans la fermeture de l'écran et ne se sérialisait pas.
