@@ -519,10 +519,19 @@ function verdictDuRaid(rase, batiments) {
  * courants — dont un seul serait éprouvé, et le rejeu divergerait du rapport
  * sans que rien ne le dise. Un seul montage, deux appelants.
  *
- * ⚠ ET IL NE VOYAGE PAS DANS LE RAPPORT. Le mettre dans le rapport le ferait
- * entrer dans les dix rapports gardés, donc dans la sauvegarde : c'est
- * exactement ce que « ne pas stocker le combat » interdit. L'écran le demande
- * AVANT le raid, s'en sert pour rejouer, et le jette.
+ * ⚠⚠ ET IL VOYAGE DÉSORMAIS DANS LE RAPPORT — arbitrage d'Ethan du 12/09/2026,
+ * qui RENVERSE ce que ce bloc disait jusqu'ici : « le mettre dans le rapport le
+ * ferait entrer dans les dix rapports gardés, donc dans la sauvegarde ». C'était
+ * vrai, et c'est le PRIX, pas un empêchement : le lot BARÈME-ET-REJEU l'a mesuré
+ * — 7 780 octets par rapport sur une base neuve, donc une sauvegarde qui passe de
+ * 8 948 à 86 748 octets, soit ×9,7 — l'a publié, et Ethan a tranché « tu fais le
+ * rejeu quand même ». Voir `pourLeRejeu` juste en dessous.
+ *
+ * ⚠ ET C'EST CE MONTAGE-CI QUI SE RANGE, JAMAIS UN SECOND RECOMPOSÉ. Le rejeu
+ * doit rendre le combat qui a EU LIEU : recomposer depuis l'état d'aujourd'hui
+ * donnerait un combat voisin — site réparé, armée réparée, modules achetés
+ * depuis — et le joueur aurait raison de le croire faux. C'est ce que le brief
+ * interdit en toutes lettres, « un rejeu faux est pire qu'aucun rejeu ».
  *
  * @param {object} etat
  * @param {object} site identité rendue par `siteDeLaCase`
@@ -539,6 +548,37 @@ export function montageDuRaid(etat, site) {
     },
     majorationsPoi: { joueur: majorationsDeCombat(etat.poisAcquis ?? []) },
   };
+}
+
+/**
+ * Ce qu'un rapport range pour que son combat se rejoue à l'identique.
+ *
+ * ⚠⚠ C'EST L'ARGUMENT EXACT DE `creerCombat`, ET RIEN D'AUTRE. Le rejeu est
+ * exact parce que le combat n'a AUCUN hasard — le tirage du langage n'apparaît
+ * pas une fois dans `sim/combat.js`, et la garde §4 de `test/clock.test.js` le
+ * refuse dans tout `src/sim/`, ce paragraphe-ci compris : elle a fait tomber sa
+ * première écriture, qui NOMMAIT la fonction pour dire qu'on ne l'emploie pas.
+ * Septième fois du dépôt — c'est le TEXTE qu'on corrige, jamais la garde —
+ * donc le montage détermine entièrement le combat. Ranger
+ * un montage INCOMPLET rejouerait faux, et le brief le dit : « un montage
+ * incomplet rejoue faux, et un rejeu faux est pire qu'aucun rejeu. »
+ *
+ * ⚠ LES DEUX TABLEAUX D'INDICES SORTENT, ET EUX SEULS. `indicesDefenseurs` et
+ * `indicesBatiments` sont la comptabilité de `sim/raid-ouvrage.js` — ils disent
+ * à quelle pièce de la base reporter les dégâts — et `creerCombat` ne les lit
+ * PAS : il destructure par propriété, donc un champ qu'il ignore ne change rien
+ * au combat. Les garder coûterait une centaine d'octets par rapport, dix fois,
+ * pour une grandeur que le rejeu n'emploie jamais. ⚠ Ne pas élargir ce retrait
+ * « pour gagner encore » : tout le reste est lu.
+ *
+ * @param {object} montageComplet ce qui a été passé à `creerCombat`
+ * @returns {object} le même montage, sans la comptabilité de report
+ */
+export function pourLeRejeu(montageComplet) {
+  const {
+    indicesDefenseurs: _d, indicesBatiments: _b, ...rejeu
+  } = montageComplet;
+  return rejeu;
 }
 
 /**
@@ -691,6 +731,18 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
     restantEtai: restantDeLId(resultat.batiments, plein.batiments, 'etai'),
     reparationInduite: reparationInduite(etat),
     verdict: verdictDuRaid(verdict.rase, resultat.batiments),
+    // ⚠⚠ LE MONTAGE DU COMBAT, POUR QUE LE JOURNAL LE REJOUE — arbitrage d'Ethan
+    // du 12/09. C'est l'argument EXACT qui vient d'être passé à `creerCombat`
+    // trente lignes plus haut, donc le rejeu rend le combat qui a eu lieu, au
+    // tick près. Le recomposer à l'ouverture du journal en donnerait un second,
+    // voisin et faux : le site porte ses dégâts depuis, l'armée est réparée, et
+    // les modules ont pu s'acheter entre-temps.
+    //
+    // ⚠ IL EST RANGÉ APRÈS LE COMBAT ET IL DÉCRIT L'AVANT — `montage` et
+    // `vagues` sont pris avant `resoudre`, et `resoudre` travaille sur ce que
+    // `creerCombat` a CONSTRUIT, pas sur le montage. Les relire ici est donc
+    // sûr, et c'est ce qui permet de les ranger une seule fois.
+    rejeu: pourLeRejeu({ ...montage, vagues }),
   };
 
   // ⚠⚠ LE RAPPORT SE RANGE ICI, DONC LE SIMULATEUR N'EN RANGE AUCUN — et c'est
@@ -698,9 +750,13 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // de la copie reçoit le rapport, celui de l'état réel n'est jamais touché.
   // Ranger le rapport dans `simulerRaid` aurait été le seul moyen de se tromper.
   //
-  // ⚠ ON RANGE LE RAPPORT, JAMAIS LE `resultat`. Un résultat complet porte les
-  // vagues, les positions et les PV de chaque entité : dix de ces objets
-  // rendraient la sauvegarde illisible. Mesuré : un rapport pèse 645 octets.
+  // ⚠ ON RANGE LE RAPPORT ET SON MONTAGE, JAMAIS LE `resultat`. La distinction
+  // survit à l'arbitrage du 12/09 et elle est tout ce qui reste de « ne pas
+  // stocker le combat » : un MONTAGE dit l'ÉTAT DE DÉPART — qui est là, à quels
+  // PV, avec quels modules — et se rejoue ; un RÉSULTAT porte en plus les
+  // positions et les PV de chaque entité à chaque tick, c'est-à-dire le combat
+  // déroulé, qui ne se rejoue pas puisqu'il est déjà fini. Le premier se
+  // reconstruit en un appel, le second serait une bande vidéo.
   garderLeRapport(etat, rapport);
   return rapport;
 }

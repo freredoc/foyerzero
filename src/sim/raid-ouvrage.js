@@ -46,7 +46,7 @@ import { modulesDebloquesDuJoueur, nomDuModule } from './recherche.js';
 import { UNITES } from '../data/combat.js';
 import { majorationsDeCombat } from './poi.js';
 import { poserLaBaseSur } from './deplacement.js';
-import { reparerLaGarnison, garderLeRapport } from './raid.js';
+import { reparerLaGarnison, garderLeRapport, pourLeRejeu } from './raid.js';
 import { baseCourante } from './base-courante.js';
 import { pvMaxDeLaPieceDeGarnisonMilli, ramenerLaGarnison } from './reparation.js';
 
@@ -860,6 +860,23 @@ export function subirUnRaid(etat, base, minute, options = {}) {
     restantDefense: restantPct(resultat.defenses),
     restantBatiments: restantPct(resultat.batiments),
     verdict: verdictDeLaDefense(rase, resultat.batiments),
+    // ⚠⚠ LE MONTAGE DU COMBAT, POUR QUE LE JOURNAL LE REJOUE — arbitrage d'Ethan
+    // du 12/09, la moitié SUBIE. C'est l'argument exact passé à `creerCombat`
+    // ci-dessus, donc la garnison et les bâtiments de l'époque, à leurs PV de
+    // l'époque, contre la vague que le tirage avait composée.
+    //
+    // ⚠⚠ ET C'EST CE CÔTÉ-CI QUI RENDAIT LE REJEU IRRÉDUCTIBLE. Un raid subi
+    // se rejoue contre une base que rien ne peut reconstituer : la garnison est
+    // réparée par le Complexe depuis, `sitesEntames` ne parle pas de la base du
+    // joueur, et le raid suivant écrase ce qui restait. Le montage EST donc la
+    // seule trace, et c'est lui que les 7 780 octets mesurés paient.
+    //
+    // ⚠ ET LA VAGUE ASSAILLANTE N'EST PAS DU COÛT IRRÉDUCTIBLE, MESURÉ : elle se
+    // reconstruit bit pour bit depuis `attaquant` et `minute`, par la même
+    // double passe de hachage que ci-dessus. Elle voyage quand même, parce que
+    // la ranger séparément voudrait dire DEUX chemins de composition — celui du
+    // raid et celui du rejeu — dont un seul serait éprouvé.
+    rejeu: pourLeRejeu(montage),
   };
   garderLeRapport(etat, rapport);
   return rapport;

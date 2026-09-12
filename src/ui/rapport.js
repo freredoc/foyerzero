@@ -468,6 +468,53 @@ export function lignesDetailleesDuRapport(rapport) {
 }
 
 /**
+ * Le détail d'un rapport dans la forme du PANNEAU DE FIN — `{quoi, valeur}`.
+ *
+ * ⚠⚠ C'EST LA TRADUCTION INVERSE DE `lignesDetailleesDuRapport`, ET ELLE EXISTE
+ * POUR LE REJEU. Le panneau de fin de raid a toujours rendu `lignesDuResultat`,
+ * qui ne connaît que le sens OFFENSE : un rejeu de raid SUBI y afficherait le
+ * butin et les points d'un combat qui n'en a pas. Les deux fonctions de lignes
+ * existaient déjà, chacune dans sa forme ; ce qui manquait était le dispatch de
+ * ce côté-ci. ⚠ On TRADUIT, on ne recopie pas — c'est le motif écrit au-dessus
+ * de `lignesDetailleesDuRapport`, pris dans l'autre sens.
+ *
+ * @param {object} rapport
+ * @returns {Array<{quoi: string, valeur: string, picto?: object}>}
+ */
+export function lignesDuPanneauDeFin(rapport) {
+  if (rapport.sens !== 'defense') return lignesDuResultat(rapport);
+  return lignesDeLaDefense(rapport).map((l) => ({
+    quoi: l.libelle, valeur: l.avant, picto: l.picto,
+  }));
+}
+
+/**
+ * Le rapport que cette clé désigne, s'il porte de quoi se rejouer.
+ *
+ * ⚠⚠ « REJOUABLE » VEUT DIRE « IL PORTE SON MONTAGE », ET RIEN D'AUTRE. Un
+ * rapport écrit avant la v33 n'en a pas, et la migration 32 → 33 ne peut PAS le
+ * lui inventer : le montage est l'état de départ d'un combat fini, que rien dans
+ * l'état d'aujourd'hui ne conserve. L'absence du champ est donc le message, et
+ * c'est pourquoi la migration ne pose même pas `null` — deux façons d'écrire la
+ * même absence auraient donné deux lecteurs dont un seul suivrait.
+ *
+ * ⚠ ELLE PREND LA CLÉ, PAS L'INDICE, pour la raison de `cleDuRapport` : le
+ * journal est une file de dix, et l'arrivée d'un onzième rapport fait glisser
+ * tous les indices d'un cran.
+ *
+ * @param {Array<object>} rapports `etat.rapports`
+ * @param {string|null} cle celle de `cleDuRapport`
+ * @returns {object|null}
+ */
+export function rapportRejouable(rapports, cle) {
+  if (cle === null || cle === undefined) return null;
+  const liste = Array.isArray(rapports) ? rapports : [];
+  const trouve = liste.find((r) => cleDuRapport(r) === cle);
+  if (trouve === undefined) return null;
+  return trouve.rejeu === undefined || trouve.rejeu === null ? null : trouve;
+}
+
+/**
  * La vue du journal — les dix derniers raids, du plus RÉCENT au plus ancien.
  *
  * ⚠⚠ UNE SEULE VUE POUR LES DEUX ÉCRANS, ET C'EST LA DEMANDE D'ETHAN PRISE À LA

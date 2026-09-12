@@ -43,7 +43,7 @@ import {
 // ⚠ LE JOURNAL VIENT DE `ui/rapport.js` DEPUIS LE 11/09 : il déplie maintenant
 // les lignes du panneau de fin de raid, et celles-là ne pouvaient pas être lues
 // depuis `ui/chantier.js` sans fermer un cycle d'imports.
-import { vueDuJournal } from './rapport.js';
+import { vueDuJournal, rapportRejouable } from './rapport.js';
 import { tousLesFonds, nomCssDuFond } from '../render/fond.js';
 import { initialiserPanneauDeTransfert } from './transfert.js';
 import { initialiserEcranOffense } from './offense.js';
@@ -1144,13 +1144,54 @@ export function initialiserSession(doc) {
   // justement pour éviter.
   let rapportDeplie = null;
 
+  // ⚠⚠ LE BOUTON DE REJEU SE DÉCIDE ICI, ET LA VUE RESTE PURE — arbitrage
+  // d'Ethan du 12/09, « tu fais le rejeu quand même ». `vueDuJournal` ne sait
+  // rien de ce bouton : elle rend des sections, et `rapportRejouable` répond à la
+  // seule question qui compte — ce rapport-ci porte-t-il son montage. Le lui
+  // faire porter aurait mis une décision d'écran dans une fonction que quatre
+  // tests mesurent pour sa pureté.
+  //
+  // ⚠ ET IL NE PARAÎT QUE SUR UN RAPPORT DÉPLIÉ. Dix boutons alignés sur un
+  // écran de 360 px ne diraient pas lequel se rejoue ; le dépliant EST la
+  // sélection, et c'est déjà le geste qu'Ethan a demandé le 11/09 pour lire un
+  // rapport. Replier le retire.
   function peindreLeJournal() {
     if (etat === null) return;
     peindreVueDuPanneau(
       doc, elementsJournal,
       vueDuJournal(etat.rapports, etat.horloge.nbTicks, rapportDeplie),
     );
+    const bouton = $('journal-rejouer');
+    if (bouton === null) return;
+    const rejouable = rapportRejouable(etat.rapports, rapportDeplie);
+    bouton.hidden = rejouable === null;
+    // ⚠ LE LIBELLÉ DIT LE SENS, parce que les deux se rejouent et qu'ils ne
+    // montrent pas la même chose : un raid MENÉ déroule l'assaut du joueur sur
+    // un site, un raid SUBI déroule la défense de sa propre base. Écrire
+    // « Rejouer » tout court laisserait le joueur découvrir lequel à l'image.
+    if (rejouable !== null) {
+      bouton.textContent = rejouable.sens === 'defense'
+        ? 'Rejouer ce raid subi' : 'Rejouer ce raid';
+    }
   }
+
+  // ⚠⚠ LE REJEU OUVRE L'ÉCRAN DE RAID, ET IL NE PASSE PAS PAR UNE CIBLE. C'est
+  // `rejouerUnRapport` qui monte le combat depuis le montage rangé ; la session
+  // ne fait que changer d'écran et lui passer le rapport. ⚠ L'ORDRE COMPTE :
+  // `montrerEcran` d'abord, parce que le rejeu MESURE son canevas en démarrant
+  // — un élément caché mesure zéro, la leçon d'`initialiserBanc`.
+  $('journal-rejouer').addEventListener('click', () => {
+    if (etat === null || ecranRaid === null) return;
+    const rapport = rapportRejouable(etat.rapports, rapportDeplie);
+    if (rapport === null) return;
+    montrerEcran('raid');
+    // ⚠⚠ ET LES ATLAS SE PASSENT ICI AUSSI — TROUVÉ AU BANC, PAS À LA RELECTURE.
+    // L'écran de raid ne les retient que si on les lui a donnés une fois, et le
+    // chemin ordinaire les donne à `ouvrir` ; un rejeu qui ouvre l'écran EN
+    // PREMIER — ce qui est le cas d'un joueur qui va droit au journal — dessinait
+    // sans eux, et `canvas2d` levait sur « la famille d'atlas manque ».
+    ecranRaid.rejouerUnRapport(etat, rapport, atlasDeLaScene(doc));
+  });
 
   // ⚠⚠ LE TOUCHER EST DÉLÉGUÉ SUR LE CORPS, PAS POSÉ SUR CHAQUE SECTION. Le
   // journal se repeint entièrement à chaque ouverture et à chaque toucher : des

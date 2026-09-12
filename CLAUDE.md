@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **11/09/2026**, version 0.99.51 · build 153.
+Dernière révision : **12/09/2026**, version 0.99.54 · build 156.
 
 ---
 
@@ -42,7 +42,209 @@ Dernière révision : **11/09/2026**, version 0.99.51 · build 153.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 12/09/2026 (après le lot BARÈME-ET-REJEU), à confronter :**
+**Référence au 12/09/2026 (après le lot REJEU), à confronter :**
+⚠⚠ **DEUX DEMANDES D'ETHAN, ET LA SECONDE EST CELLE QUE LE LOT PRÉCÉDENT AVAIT
+ARRÊTÉE.** « juste enlever le plafond imposer par le chantier de construction qui
+limite le niv max des bâtiments. Il y reste sur qg def et centre commandement »,
+puis, en interrompant le contrôle : « + tu fais le rejeu quand même ». `npm test`
+rend **1601 pass / 0 fail** au sens de la garde de `documentation.test.js` — c'est
+le NOMBRE de tests déclarés ; le verdict mesuré est **1600 pass · 0 fail ·
+1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et `npm run check` sort
+en 0. ⚠⚠ **LE COMPTE NE BOUGE PAS D'UN TEST, ET C'EST LA CONSIGNE** — « pas de
+test » : **aucun n'entre**. Ce qui a été fait sur `test/` était OBLIGATOIRE pour ne
+pas laisser `main` rouge, et se lit au §7 du rapport.
+`npm run build` → `dist/index.html`, **9 384 775 octets**, 0 référence externe.
+Coût **+1 105 octets, SANS UN OCTET D'IMAGE NI DE SON**, mesuré poste par poste
+contre le livrable rebâti dans un `git worktree` sur l'arbre pristine de `main` =
+`d2dfae3` (**9 383 670**) : **JavaScript +1 014 · balisage +91 · feuille +0 ·
+images +0 · audio +0**, la somme des cinq postes tombant EXACTEMENT sur le total
+des DEUX côtés, et **306 URI / 307 lignes `data:` de part et d'autre**. Borne T10
+**inchangée à 9 600 000**, marge **215 225 octets, 2,24 %**. Version et build
+passent à **0.99.54 · build 156** — et **les deux restent des CHAÎNES**, vérifié au
+type. Le lot touche `src/index.src.html`, `src/sim/raid.js`,
+`src/sim/raid-ouvrage.js`, `src/sim/state.js`, `src/ui/raid.js`,
+`src/ui/rapport.js`, `src/ui/session.js`, `package.json`, **huit** fichiers de
+`test/`, le témoin de BASES-0, et fait entrer `rapports/RAPPORT-lotREJEU.md`.
+**Pas une ligne de `src/data/`, `src/render/`, `src/son/`, `tools/` ni `art/`** —
+vérifié au diff.
+⚠⚠ **`main` A BOUGÉ SOUS LE LOT, ET LA FUSION A ÉTÉ VÉRIFIÉE AUX SOURCES
+PRIMAIRES.** Ethan a fusionné la PR #137 pendant la session ; le précédent du
+10/09 — la PR #128 fusionnée sur un commit qui ne portait PAS son correctif —
+interdit de croire la notification. Le commit de fusion `d2dfae3` a pour parents
+`f6fb04e`, la base exacte que le lot précédent avait mesurée, et `5ac1e38`, et
+**`git diff --stat 5ac1e38 origin/main` est VIDE** : les deux arbres sont
+identiques, donc les nombres du rapport précédent décrivent `main` au mot et il
+n'y avait RIEN à remesurer.
+⚠⚠ **LE PLAFOND DU CHANTIER DISPARAÎT, ET C'EST L'ARBITRAGE DU 29/08 QUI EST
+RENVERSÉ.** Ce jour-là : « le chantier de construction définit le niveau max des
+bâtiments ». Le code `plafond-chantier` n'existe plus dans
+`problemesDeLAmelioration`. ⚠ `niveauDuChantier` RESTE exportée — elle est LUE
+ailleurs, la réparation des bâtiments étant indexée sur le Chantier ; elle ne
+refuse plus rien, c'est tout.
+⚠⚠ **ET LES DEUX AUTRES PLAFONDS NE SONT PAS CELUI-CI — VÉRIFIÉ AU CODE.** Le
+Centre de commandement et le QG de défense bornent le niveau des **PIÈCES**, par
+`plafond-commandement` de `problemesDeLAmeliorationDEffectif` : ce sont des budgets
+de force, pas le rythme de la construction, et les deux codes ne se croisent nulle
+part. Un commentaire le dit à l'endroit du retrait, pour qu'un lot futur ne les
+retire pas « en croyant achever celui-ci ».
+⚠ **ET `état — l'amorce paie de quoi démarrer` EST TOMBÉ, MONTAGE RÉPARÉ ET NON
+ASSERTION ASSOUPLIE** : sa prémisse était que le premier geste payable d'une partie
+neuve est le SEUL. Le Collecteur se monte aussi désormais ; le montage exige que
+les deux premières montées soient payables dans l'un comme dans l'autre ordre.
+⚠⚠ **LE REJEU D'UN RAID EST FAIT, ET LA MESURE QUI AVAIT FAIT S'ARRÊTER LE LOT
+PRÉCÉDENT EST FAUSSE D'UN FACTEUR DEUX — MESURÉE, PAS SUPPOSÉE.** Il publiait
+**7 780 o par rapport sur une base neuve, 8 908 à moitié pleine, 10 312 sur une
+base pleine**, soit ×9,7 · ×9,3 · ×9,0. **Relevé sur les vingt-cinq parties réelles
+du témoin de BASES-0, après vingt-quatre heures sous le feu : 5 à 7 rapports
+gardés, sauvegarde 5 883 → 6 907 o sans le montage et 18 036 → 23 522 avec, soit
+×3,07 à ×3,44 (médiane ×3,16), pour 2 302 à 2 430 o par rapport** (médiane 2 352),
+et **×4,5 à ×4,9 projeté à dix rapports**. Pire cas ABSOLU, balayé sur 120 sites de
+niveau 50 des trois types avec les quatre vagues pleines à 36 attaquants de
+niveau 50 : **7 198 o par rapport**, donc 71 980 o pour les dix gardés.
+⚠⚠ **ET L'ÉCART SE DÉCOMPOSE : LA PROJECTION COMPTAIT DEUX FOIS.** Elle ajoutait
+« la base du joueur TELLE QU'ELLE ÉTAIT — disposition, garnison, armée, dégâts de
+l'époque » au montage ; or **le montage que `creerCombat` reçoit PORTE DÉJÀ le camp
+qui défend** — ses bâtiments, sa garnison — et les vagues qui attaquent. Il n'y
+avait rien à ajouter. Le ×9,7 était une addition, pas une mesure.
+⚠⚠ **ET CE N'EST PAS L'OPTION BON MARCHÉ QUI EST PRISE.** Le rapport précédent
+laissait quatre issues à Ethan ; il n'en a choisi aucune et a dit « tu fais le rejeu
+quand même ». **Le rejeu est donc COMPLET — les dix rapports gardés, les deux sens
+de raid.** Se rabattre de soi-même sur « le dernier raid seulement » (×1,9) aurait
+été rétrécir la demande en silence, et le rejeu APPROXIMATIF de la quatrième issue
+est interdit par `JRN T9`, qui refuse qu'un chiffre de rapport se recompose depuis
+l'état d'aujourd'hui.
+⚠⚠ **`pourLeRejeu` REND L'ARGUMENT EXACT DE `creerCombat`, MOINS DEUX TABLEAUX
+D'INDICES — ET L'EXACTITUDE EST MESURÉE : SEPT REJEUX SUR SEPT TOMBENT AU TICK ET À
+LA CAUSE PRÈS.** 900/`duree`, 412, 572, 391, 392, 572 et 311/`souche`, rangé contre
+rejoué. Le tirage du langage n'apparaît pas une fois dans `src/sim/combat.js` : le
+montage détermine ENTIÈREMENT le combat, ce que les deux cents témoins mesurent
+depuis JOURNAL-DE-COMBAT. ⚠ `indicesDefenseurs` et `indicesBatiments` sortent
+parce que `creerCombat` destructure par propriété et ne les lit JAMAIS — ils
+servent à `reporterLesDegats`, après coup. **Ne pas élargir ce retrait « pour
+gagner encore » : tout le reste est lu.**
+⚠ **ET C'EST LE MONTAGE QUI EST RANGÉ, JAMAIS LE `resultat`.** Le premier est l'état
+de DÉPART d'un combat et il se rejoue ; le second porte les positions et les PV de
+chaque entité à chaque tick — une bande vidéo, des centaines de kilo-octets, qui se
+regarde et ne se rejoue pas. `RAID-B T12 bis` garde la distinction par quatre
+assertions nommées.
+⚠⚠ **`SAVE_VERSION` PASSE DE 32 À 33, ET LA MIGRATION NE CALCULE RIEN — ELLE NE
+POSE MÊME PAS LE CHAMP.** Une v32 ne sait ni quelle garnison le site portait, ni
+quels obstacles, ni quelles vagues sont parties : lui en inventer un ferait rejouer
+un combat qui n'a pas eu lieu. **« Absent » vaut « pas de rejeu », et c'est la SEULE
+écriture de cette absence** — poser `rejeu: null` en donnerait deux, donc deux
+lecteurs dont un seul recevrait la prochaine correction. ⚠ Et elle ne vide PAS
+`rapports` : les dix derniers raids sont de l'histoire.
+⚠⚠ **L'ÉCRAN : UN BOUTON DANS LE JOURNAL, ET RIEN DE PLUS.** `#journal-rejouer`
+réemploie la règle `.panneau-detail .ameliorer` — **+0 octet de feuille, mesuré** —
+et il ne passe PAS par le bouton partagé de `peindreVueDuPanneau`, qui écrit
+`PICTOGRAMMES.ameliorer` EN DUR : une flèche verte d'amélioration au-dessus d'un
+rapport de raid promettrait une montée de niveau. Il ne paraît que sur un rapport
+DÉPLIÉ qui porte un montage — `rapportRejouable` est PURE et rend `null` sinon.
+⚠⚠ **ET `ouvrirEnRejeu` NE PASSE PAS PAR `ouvrirSurLaCible`, DÉLIBÉRÉMENT** :
+celle-ci relit `siteDeLaCase`, donc elle montrerait le site tel qu'il est
+AUJOURD'HUI — un autre combat. ⚠ **Pas de cible, donc pas de second raid depuis un
+rejeu** : `cibleCourante` vaut `null`, « Attaquer » et « Ré-attaquer » se gardent
+tous les deux dessus, et c'est ce qui fait du rejeu une CONSULTATION. Relevé à
+l'attribut : « Ré-attaquer » est **inerte** dans les deux sens.
+⚠⚠ **CINQ DÉFAUTS TROUVÉS AU BANC, AUCUN À LA RELECTURE.** Chromium, géométrie du
+S25 FE, livrable servi sur une vraie origine, sauvegarde de SEPT rapports injectée
+AVANT le premier chargement. (1) `peindreVagues` LEVAIT sur une formation nulle —
+`formation.forEach` — et le rejeu s'arrêtait avant sa première image ; la grille des
+quatre vagues est l'ÉDITEUR de composition, un rejeu ne compose rien, donc il n'en
+peint aucune. ⚠ Et on ne lui donne PAS `montage.vagues` à la place : ce n'est pas la
+même forme — un tableau PAR VAGUE, dont les entrées ne portent ni `vague`, ni
+`degatsMilli`, ni `actif`. (2) `fondDeLaBase` aurait levé sur tout raid MENÉ et sur
+lui seul — un montage d'`executerRaid` ne porte PAS `proprietaireDefense`, c'est
+`creerCombat` qui le défaute ; le propriétaire se lit désormais sur le COMBAT, comme
+le chemin ordinaire vingt lignes plus haut. (3) Les atlas n'arrivaient pas : l'écran
+ne les retient que si on les lui a donnés une fois, et un joueur qui va droit au
+journal ouvre l'écran EN PREMIER — `canvas2d` levait sur « la famille d'atlas
+"fond_j_01" manque ». (4) La sauvegarde injectée était écrasée par le `pagehide` du
+premier chargement — **défaut du BANC, pas du jeu**, et le premier relevé annonçait
+« Aucun raid mené ni subi » sur une partie qui en portait sept.
+⚠⚠ **ET LE CINQUIÈME EST CELUI QU'ON NE VOIT QU'EN REGARDANT : LE REJEU N'AVAIT
+AUCUNE PORTE DE SORTIE.** Mesuré : un rejeu de raid mené sur une base de niveau 14
+**tournait encore au bout de soixante-dix secondes**, tout le chrome masqué et
+`#raid-vitesses` caché — le joueur était retenu jusqu'à quatre-vingt-dix secondes
+devant une consultation qu'il venait de demander. **`#raid-vitesses` s'ouvre donc
+dans un rejeu**, et c'est une LECTURE de l'arbitrage du 01/09 et non son
+renversement : « le vrai raid se regarde en temps réel » porte sur un raid dont
+l'issue se joue SOUS LES YEUX du joueur, qui vient d'en payer les points ; un rejeu
+ne joue rien. ⚠ Le bandeau « Simulateur », lui, RESTE caché — un rejeu n'est pas une
+simulation, et le mot dirait que rien de ce qu'on regarde n'est arrivé. **Une ligne
+renverse cette lecture-ci.**
+⚠⚠ **ET LES DEUX PANNEAUX DE FIN SONT DE LA BONNE FORME, RELEVÉS À L'ÉCRAN.** Raid
+MENÉ, dix lignes d'offense — « Verdict Défaite totale », « Butin 0 quartz ·
+0 scorie », « Défense restante 68 % », « Bâtiments restants 100 % », « Souche
+100 % », « Étai 100 % », « Infanterie 22 min 23 s · — de la réserve », « Véhicules
+sans bâtiment », « Aviation sans bâtiment », « Durée du combat 1 min 30 s » ; raid
+SUBI, huit lignes de défense **sans butin ni points** — « Fin du combat Chantier de
+construction tombé », « Durée du combat 31 s », « Défense restante 0 % »,
+« Bâtiments restants 0 % », « Garnison au plancher 3 pièce(s) », « Bâtiments au
+plancher 5 pièce(s) », « Réserve de réparation vidée », « Base rasée, reculée de
+20 case(s) · r 240 → r 260 ». C'est `lignesDuPanneauDeFin` qui route sur `sens`, et
+c'est la mesure qui dit qu'elle route juste : la vue d'OFFENSE aurait affiché un
+butin sous un raid subi. ⚠ **Zéro erreur de page, débordement 0, ni `NaN` ni
+`undefined` ni `Infinity`**, et `drawImage` instrumenté rend **3 846 poses** sur la
+première seconde du rejeu mené contre **1 857** sur le subi — un rejeu qui n'aurait
+rien peint aurait passé toutes les assertions de forme.
+⚠ **ET LE BOUTON TOMBE À `y = 783`, DONC SOUS LE PLI — RELEVÉ, NON CORRIGÉ.** Il est
+le dernier enfant du journal, qui défile ; le joueur doit descendre pour le trouver
+après avoir déplié un rapport. Le remonter demande de le poser DANS le dépliant,
+donc dans `vueDuJournal`, qui est PURE et partagée par deux vues. **Ethan tranche.**
+⚠⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGT-TROISIÈME COUCHE, ET C'EST LA PLUS ÉTROITE
+EN NOMBRE DE CHAMPS DE SON HISTOIRE : HUIT COUPLES SUR 350, ET LES HUIT SONT
+`rapports`.** Les SIX PREMIÈRES PHASES sont identiques AU BIT — `etat.rapports` est
+VIDE jusqu'au premier raid, qui est la phase 7. ⚠⚠ **ET AUCUN SCALAIRE NE BOUGE,
+LA TAILLE DE LA SAUVEGARDE COMPRISE** : elle se relève à la phase 6, donc avant
+qu'un montage y soit rangé — **aucun terme `OCTETS_AJOUTES_PAR_*` n'entre**, et
+c'est la seule couche de l'histoire de ce témoin qui ajoute un champ à la sauvegarde
+sans en ajouter un. ⚠ Les deux tables de rapport sont PLEINES, 25 sur 25 des deux
+côtés, là où BARÈME-ET-REJEU n'en remplissait que 9 et 14 : là-bas la règle changeait
+le DÉROULÉ d'un combat et ne mordait que là où une alliée bloquait une alliée ; ici
+ce qui bouge est la FORME du rapport. **Une table creuse voudrait dire qu'un raid sur
+deux ne se rejouerait pas.**
+⚠ **ET LA LISTE DES CLÉS SE COMPOSE, ELLE NE SE RÉÉCRIT PAS.**
+`CLES_AJOUTEES_PAR_REJEU = ['rejeu']` entre à côté de
+`CLES_DU_RAPPORT_AVANT_TRANSFERT`, qui est un RELEVÉ pris sur `origin/main` dans un
+arbre détaché : le modifier effacerait ce qu'il mesure. C'est cette assertion
+structurelle qui porte la preuve — une seconde clé entrée fait tomber le test en la
+NOMMANT.
+⚠ **LES DEUX CENTS TÉMOINS DE COMBAT NE BOUGENT PAS D'UN BIT** :
+`test/temoins-combat.js` n'a pas une ligne de changée et `src/sim/combat.js` non
+plus — `pourLeRejeu` ne fait que RANGER l'argument que `creerCombat` a déjà reçu.
+⚠⚠ **AUCUNE ASSERTION N'A ÉTÉ RETIRÉE NI ASSOUPLIE.** **Deux gardes sont RETOURNÉES**
+— `état — le Chantier plafonne le niveau de toute la base`, dont la prémisse EST
+l'arbitrage renversé et qui garde le même montage mordant, et `RAID-B T12 bis`, qui
+bornait le POIDS du rapport. ⚠ Ce dernier est retourné **sur la grandeur qui n'a pas
+changé** : mesuré, le rapport pèse **1 915 octets dont 1 489 de montage**, donc
+**417 sans lui**, et la sauvegarde entière **3 110** ; la borne porte désormais sur
+le rapport MOINS son montage (< 512), et il garde en plus que le `rejeu` ne porte
+**ni `entites`, ni `termine`, ni `tick`, ni `cause`** — la distinction
+montage/résultat — **ni les deux tableaux d'indices**. ⚠ `RAID-A T7` est réancré ET
+RESSERRÉ : il refuse désormais que l'écran appelle la vue d'OFFENSE, qui afficherait
+butin et points sous un raid subi. ⚠ **Cinq réancrages de `SAVE_VERSION`** et un
+montage réparé.
+⚠⚠ **`PIC T7` EST RÉANCRÉ POUR LA TROISIÈME FOIS EN DEUX JOURS.** Les 1 105 octets
+valent un quarante-cinquième de sa tolérance de 50 000 : le laisser tomberait très
+exactement sous la dérive LENTE que sa dernière assertion existe pour refuser, et le
+pourcentage annoncé par ce fichier-ci cesserait d'être celui du disque.
+⚠ **UNE GARDE A LU MA PROPRE PROSE — SEPTIÈME FOIS DU DÉPÔT.** Le commentaire de
+`pourLeRejeu` écrivait le nom du tirage du langage EN CLAIR, pour dire qu'il
+n'apparaît pas dans `sim/combat.js` ; `test/clock.test.js` §4 balaie `src/sim/`
+commentaires compris. **C'est le TEXTE qui a été corrigé, pas la garde** — après
+`viewport-fit=cover`, `MENTION_SATURE`, `variante.js`, `render/contour.js`, le
+calque des traits et `REPARATION_AILLEURS`.
+⚠ **ET CHAQUE PATCH A ÉTÉ ASSERTÉ APPLIQUÉ AVANT D'ÊTRE CRU**, chacun derrière un
+`assert s.count(v) == 1` : c'est la leçon du lot précédent, où deux `sed` n'avaient
+rien remplacé et où la suite était restée VERTE.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot ne
+touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠ **ET LE LOT N'EST PAS SUR UNE BRANCHE NOMMÉE PAR UN BRIEF — il n'y a pas de
+brief.** L'environnement d'exécution épingle la session à
+`claude/new-session-ae87x9` ; les deux demandes y sont poussées d'un seul tenant.
+
+**Auparavant, après le lot BARÈME-ET-REJEU :**
 ⚠⚠ **DEUX DES CINQ POINTS ÉTAIENT DES RÉGRESSIONS, ET ELLES ONT ÉTÉ REPRODUITES
 AVANT D'ÊTRE CORRIGÉES ; LE TROISIÈME S'EST ARRÊTÉ SUR SA PROPRE CONDITION
 D'ARRÊT.** `npm test` rend **1601 pass / 0 fail** au sens de la garde de

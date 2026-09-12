@@ -1511,6 +1511,22 @@ export const RAPPORTS_TRANSFERT = {
  * dans ce témoin-ci, et il n'a jamais porté `butinPerdu` : l'Ouvrage ne pille
  * pas.
  */
+/**
+ * La SEULE clé qu'un rapport de raid gagne au lot REJEU, 12/09/2026 : `rejeu`.
+ *
+ * ⚠⚠ ELLE EST NOMMÉE PLUTÔT QU'AJOUTÉE À LA LISTE D'AVANT, et c'est la même
+ * discipline que `butinPerdu` qui en sort : `CLES_DU_RAPPORT_AVANT_TRANSFERT` est
+ * un RELEVÉ, pris sur `origin/main` dans un arbre détaché, et le modifier
+ * effacerait ce qu'il mesure. `bases.test.js` compose — la capture d'origine,
+ * moins ce qui est parti, plus ce qui entre — si bien que le diff de ce fichier
+ * raconte l'histoire du rapport lot par lot.
+ *
+ * ⚠ ET C'EST L'ASSERTION QUI PORTE LA PREUVE, PAS LES CINQUANTE EMPREINTES :
+ * une seconde clé entrée — ou une clé partie — fait tomber le test en la NOMMANT,
+ * là où une empreinte dirait seulement « ça a bougé ».
+ */
+export const CLES_AJOUTEES_PAR_REJEU = ['rejeu'];
+
 export const CLES_DU_RAPPORT_AVANT_TRANSFERT = [
   'butin', 'butinPerdu', 'cause', 'cible', 'cout', 'pointsRestants', 'rase',
   'rechercheMilli', 'reparationInduite', 'restantBatiments', 'restantDefense',
@@ -4561,4 +4577,176 @@ export const RAPPORTS_OUVRAGE_BAREME_ET_REJEU = {
   23: '0ac725a4989225d7',
   24: '1116316ecd2829bc',
   25: '86157bfcc2d9668e',
+};
+
+/**
+ * La VINGT-TROISIÈME couche du témoin — lot REJEU, 12/09/2026.
+ *
+ * ⚠⚠ HUIT COUPLES SUR 350, ET LES HUIT SONT `rapports`. C'est la couche la plus
+ * ÉTROITE en nombre de CHAMPS de toute l'histoire de ce témoin : un seul champ,
+ * sur les huit phases où un rapport existe. Le §4 du lot range dans chaque
+ * rapport le MONTAGE du combat qui l'a produit, pour que le joueur puisse le
+ * rejouer depuis le journal ; un rapport qui porte une clé de plus ne rend pas la
+ * même empreinte, et rien d'autre ne peut bouger.
+ *
+ * ⚠⚠ LES SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT, et c'est la moitié qui
+ * prouve : `etat.rapports` est VIDE jusqu'au premier raid, qui est la phase 7.
+ * Un lot qui aurait touché au combat, à la carte, à l'économie ou à un geste se
+ * serait vu avant.
+ *
+ * ⚠⚠ ET AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25 : ni les
+ * gestes de construction, ni ceux d'armement, ni la TAILLE DE LA SAUVEGARDE, ni
+ * les cases atteignables, ni le déplacement, ni les bases attaquantes, ni le
+ * nombre de cibles, ni la cible retenue, ni la non-fuite de la simulation, ni son
+ * exactitude, ni l'équivalence des deux chemins d'avancement. La sauvegarde se
+ * relève à la phase 6, AVANT le premier raid : aucun rapport n'y est rangé, donc
+ * le montage n'y coûte pas un octet et aucun terme `OCTETS_AJOUTES_PAR_*` n'entre.
+ *
+ * ⚠ NI `position`, NI `disposition`, NI `sitesEntames`, NI `armee`, NI `economie`
+ * — le lot ne touche AUCUNE règle de combat, et le montage qu'il range est celui
+ * que `creerCombat` a déjà reçu. C'est un STOCKAGE, pas un calcul.
+ */
+export const DEPLACES_PAR_REJEU = {
+  p07_raidProcheApres: {
+    rapports: 'e9d3165a3e35d84c',
+  },
+  p08_100ticks: {
+    rapports: 'e9d3165a3e35d84c',
+  },
+  p09_deplace: {
+    rapports: 'e9d3165a3e35d84c',
+  },
+  p10_montee: {
+    rapports: 'e9d3165a3e35d84c',
+  },
+  p11_raidOuvrageApres: {
+    rapports: 'b8de89faa0ffcf7c',
+  },
+  p12_veilleDuRaid: {
+    rapports: 'b8de89faa0ffcf7c',
+  },
+  p13_apresLeRaid: {
+    rapports: '3b3c4f4b2d077db5',
+  },
+  p14_sousLeFeu: {
+    rapports: 'ba47eebef861e325',
+  },
+};
+
+/**
+ * L'empreinte de la partie ENTIÈRE, graine par graine, après le lot REJEU.
+ *
+ * ⚠⚠ LES VINGT-CINQ BOUGENT, ET IL N'Y A PAS DE `??` À ATTENDRE ICI. Le montage
+ * entre dans TOUT rapport de TOUTE partie : aucune graine ne peut tomber à
+ * l'octet sur la couche d'avant, contrairement aux lots MUR (3 laissées),
+ * VITESSE (3) et BARÈME-ET-REJEU (3), qui touchaient au DÉROULÉ du combat et ne
+ * mordaient donc que là où leur règle avait de quoi mordre. Le `??` de
+ * `bases.test.js` reste NÉCESSAIRE pour les couches d'avant, qu'il chaîne.
+ */
+export const EMPREINTES_PAR_GRAINE_REJEU = {
+  1: '29a121afe7f561a2',
+  2: '02e25ba473f2695b',
+  3: '7f90d3a5bddc68f9',
+  4: '4e96a862f9f2d4e2',
+  5: 'c50bdc657cd6dabd',
+  6: '341fe60e244f5551',
+  7: 'a00523e3df88f7e7',
+  8: '5dcb3ccbe3245096',
+  9: 'c4eaa9d1f11f0711',
+  10: 'f095fecf12d1fb48',
+  11: 'a41c29782fae0357',
+  12: '159f2f93dd55060b',
+  13: '78821dd7e5158392',
+  14: '8f329ba297e8fa8c',
+  15: 'b76f109780347680',
+  16: 'e687546528e0469b',
+  17: 'c80016931b8c2974',
+  18: 'ec925bb48fd7a72b',
+  19: 'd93db3d4517ed957',
+  20: 'edcdf041f726132b',
+  21: 'f686837272cbbf09',
+  22: '4ec5e41c3c8ca79e',
+  23: '095871dc9e8543ee',
+  24: '3a3a8510b79db5a6',
+  25: '734b6e6d7338104f',
+};
+
+/**
+ * Les empreintes du rapport du raid de PROXIMITÉ — **VINGT-CINQ sur vingt-cinq**.
+ *
+ * ⚠⚠ ET L'ÉCART AVEC LA COUCHE D'AVANT EST TOUTE L'ATTRIBUTION DU LOT.
+ * BARÈME-ET-REJEU n'en déplaçait que 9 sur 25 côté proximité et 14 sur 25 côté
+ * Ouvrage, parce qu'il changeait le DÉROULÉ d'un combat : il ne mordait que là où
+ * une alliée bloquait une alliée. Ici les deux tables sont PLEINES, et elles
+ * doivent l'être — ce qui bouge n'est pas l'issue du raid mais la FORME du
+ * rapport, qui gagne une clé. Une table creuse voudrait dire qu'un rapport sur
+ * deux ne porte pas son montage, c'est-à-dire qu'un raid sur deux ne se
+ * rejouerait pas.
+ *
+ * ⚠ ET L'ASSERTION STRUCTURELLE DE `bases.test.js` EST CE QUI PORTE LA PREUVE,
+ * pas ces cinquante empreintes : la seule clé qui ENTRE est `rejeu`, et aucune ne
+ * sort. Une empreinte ne dirait que « ça a bougé ».
+ */
+export const RAPPORTS_PROCHE_REJEU = {
+  1: '2f3f5d552e81500c',
+  2: '338319eef4a41e66',
+  3: 'b0b93fe09d574c1b',
+  4: '039f3a1bd7e9f3ad',
+  5: '1bdc7df82578b733',
+  6: 'e2a71c06cd798e6e',
+  7: '6f86fa20f4e93447',
+  8: '7bf6765b16af13cf',
+  9: 'e06925e79500916e',
+  10: 'ceaa36db57129740',
+  11: 'a92b337c66452f4e',
+  12: 'ccbadb05b2023d48',
+  13: '275d96cb76dccc1d',
+  14: 'cf0ad9034dba1a17',
+  15: '10ac5579467e0a69',
+  16: '31da217c564ebf61',
+  17: '48388e7bb5bdeaa5',
+  18: '7efb6ab48c713b11',
+  19: '5bbe9895a9d9ccd8',
+  20: 'f988f5ffcd03ae4d',
+  21: '4bf9454719911895',
+  22: '619a1382da56002d',
+  23: '86c141ad66bdee51',
+  24: 'cd462bc798d480cc',
+  25: '1bdd1467daeb38d5',
+};
+
+/**
+ * Les empreintes du rapport du raid de l'OUVRAGE — **VINGT-CINQ sur vingt-cinq**.
+ *
+ * ⚠ Voir le bloc du raid de proximité juste au-dessus pour l'attribution. Les
+ * deux tables sont pleines pour la même raison, et l'égalité des deux comptes est
+ * elle aussi un fait : le montage entre par `executerRaid` comme par
+ * `subirUnRaid`, donc les deux sens de raid le portent.
+ */
+export const RAPPORTS_OUVRAGE_REJEU = {
+  1: 'a170aa74e3073a0d',
+  2: '3353c7a8c7483568',
+  3: '1fab1712f912548d',
+  4: 'b0b5258115c14c45',
+  5: '61d637281915c1b8',
+  6: '29de907c43de5917',
+  7: '0f1cfb7c044ba4cf',
+  8: '29a8eba3e9b3aced',
+  9: '3050548f77626325',
+  10: '0236307c55a09e33',
+  11: 'dbc057d1a3dd360c',
+  12: '60e0a109f3a6f540',
+  13: 'fdada89cb43e855b',
+  14: '7f8d80aab3bf7f79',
+  15: '1927e54c5104c691',
+  16: '0377a1ffc48215e8',
+  17: '1d2bce569969497c',
+  18: '415e278279836262',
+  19: 'f59f86547af17e33',
+  20: 'a131197dba1fe537',
+  21: '6f01c5ff1ae9a41e',
+  22: '752c509fe9c79fd3',
+  23: '39c0b7afe0adcc08',
+  24: '07792d0560f1a0d2',
+  25: '6c426bd17ba16f21',
 };

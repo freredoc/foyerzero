@@ -112,6 +112,8 @@ import {
   RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
   DEPLACES_PAR_BAREME_ET_REJEU, EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU,
   RAPPORTS_PROCHE_BAREME_ET_REJEU, RAPPORTS_OUVRAGE_BAREME_ET_REJEU,
+  DEPLACES_PAR_REJEU, EMPREINTES_PAR_GRAINE_REJEU,
+  RAPPORTS_PROCHE_REJEU, RAPPORTS_OUVRAGE_REJEU, CLES_AJOUTEES_PAR_REJEU,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -240,7 +242,17 @@ function empreinteAttendue(phase, champ) {
   // ⚠ ATTRIBUTION MESURÉE : `src/sim/combat.js` seul remis au pristine, les deux
   // cents témoins de combat rendent 0 écart — ni le barème (§1) ni le refus
   // d'améliorer une pièce abîmée (§2) ne déplacent un bit de ce témoin-ci.
-  return DEPLACES_PAR_BAREME_ET_REJEU[phase]?.[champ]
+  // ⚠⚠ VINGT-TROISIÈME COUCHE — lot REJEU, 12/09. **HUIT couples sur 350, et
+  // les huit sont `rapports`** : c'est la couche la plus étroite en nombre de
+  // CHAMPS de toute l'histoire de ce témoin. Chaque rapport range désormais le
+  // MONTAGE du combat qui l'a produit, pour qu'on puisse le rejouer depuis le
+  // journal ; un rapport qui porte une clé de plus ne rend pas la même empreinte,
+  // et rien d'autre ne peut bouger. ⚠⚠ LES SIX PREMIÈRES PHASES SONT IDENTIQUES
+  // AU BIT — `etat.rapports` est VIDE jusqu'au premier raid, qui est la phase 7 —
+  // et AUCUN scalaire ne bouge, la taille de la sauvegarde comprise : elle se
+  // relève à la phase 6, donc avant qu'un montage y soit rangé.
+  return DEPLACES_PAR_REJEU[phase]?.[champ]
+    ?? DEPLACES_PAR_BAREME_ET_REJEU[phase]?.[champ]
     ?? DEPLACES_PAR_VITESSE[phase]?.[champ]
     ?? DEPLACES_PAR_APPROCHE[phase]?.[champ]
     ?? DEPLACES_PAR_MUR[phase]?.[champ]
@@ -653,7 +665,14 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // ne se retrouve derrière une alliée au moment où son compteur compterait, et
     // aucune ne fluait dans la sous-case d'une autre. Le `??` reste donc
     // NÉCESSAIRE, comme aux lots MUR et VITESSE.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU[g]
+    // ⚠⚠ REJEU (12/09) DÉPLACE LES VINGT-CINQ, ET IL NE POUVAIT PAS EN LAISSER.
+    // Le montage entre dans TOUT rapport de TOUTE partie : contrairement aux lots
+    // MUR, VITESSE et BARÈME-ET-REJEU — qui en laissaient trois chacun parce
+    // qu'ils touchaient au DÉROULÉ du combat et ne mordaient que là où leur règle
+    // avait de quoi mordre —, celui-ci change la FORME du rapport. Le `??` reste
+    // NÉCESSAIRE pour les couches d'avant, qu'il chaîne.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_REJEU[g]
+      ?? EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU[g]
       ?? EMPREINTES_PAR_GRAINE_VITESSE[g] ?? EMPREINTES_PAR_GRAINE_APPROCHE[g]
       ?? EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
       ecarts.push(g);
@@ -822,8 +841,18 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // bases attaquantes, nombre de cibles, cible retenue, non-fuite et
       // exactitude de la simulation, équivalence des deux chemins — dit que seul
       // le DÉROULÉ du combat a changé.
+      // ⚠⚠ ET LE LOT REJEU LES DÉPLACE TOUS LES DEUX, SUR LES VINGT-CINQ
+      // GRAINES — ET LES DEUX TABLES SONT PLEINES, LÀ OÙ BARÈME-ET-REJEU N'EN
+      // REMPLISSAIT QUE 9 SUR 25 ET 14 SUR 25. C'est toute l'attribution du lot :
+      // là-bas la règle changeait le DÉROULÉ d'un combat, donc elle ne mordait que
+      // là où une alliée bloquait une alliée ; ici ce qui bouge n'est pas l'ISSUE
+      // du raid mais la FORME du rapport, qui gagne son montage. Une table creuse
+      // voudrait dire qu'un raid sur deux ne se rejouerait pas. Ce qui NE bouge
+      // pas juste au-dessus — les dix-sept scalaires, la taille de la sauvegarde
+      // comprise — dit que le lot ne touche ni le combat, ni la carte, ni
+      // l'économie, ni le choix de cible.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
+        ? (RAPPORTS_OUVRAGE_REJEU[g] ?? RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
           ?? RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
           ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
@@ -832,7 +861,7 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
+        : (RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
           ?? RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_PROCHE_RETOUCHES[g]
           ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]
@@ -846,7 +875,15 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // rapport porte EXACTEMENT les clés d'avant, moins `butinPerdu`. Une
       // seconde clé retirée — ou ajoutée — fait tomber ce test en la NOMMANT,
       // là où une empreinte dirait seulement « ça a bougé ».
-      const clesAttendues = CLES_DU_RAPPORT_AVANT_TRANSFERT.filter((k) => k !== 'butinPerdu');
+      // ⚠⚠ ET LA LISTE SE COMPOSE, ELLE NE SE RÉÉCRIT PAS. La capture d'origine,
+      // MOINS ce que TRANSFERT a retiré, PLUS ce que REJEU ajoute : chaque lot
+      // nomme son mouvement, et le diff de `temoins-bases-0.js` raconte
+      // l'histoire du rapport lot par lot. Réécrire la liste en bloc effacerait
+      // ce qu'elle mesure — c'est un RELEVÉ pris sur `origin/main`.
+      const clesAttendues = [
+        ...CLES_DU_RAPPORT_AVANT_TRANSFERT.filter((k) => k !== 'butinPerdu'),
+        ...CLES_AJOUTEES_PAR_REJEU,
+      ];
       assert.deepEqual(
         Object.keys(x[`${prefixe}Rapport`]).sort(), [...clesAttendues].sort(),
         `graine ${g} : ${cle} — le rapport a gagné ou perdu une clé autre que butinPerdu`,
@@ -2167,3 +2204,5 @@ test('BASES-1 T15 bis — les satellites de TOUTES les bases sont sur la carte',
     .filter((s) => s.type === 'camp' || s.type === 'avantPoste').length;
   assert.equal(dessines, tous.length, 'la carte ne dessine pas tous les satellites');
 });
+
+

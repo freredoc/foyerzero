@@ -97,7 +97,7 @@ import { executer } from '../render/canvas2d.js';
 import { baseCourante } from '../sim/base-courante.js';
 // ⚠ LES QUATRE VIENNENT DE `ui/rapport.js` DEPUIS LE 11/09 — voir la note à
 // l'endroit où elles étaient écrites, quelques lignes plus bas.
-import { lignesDuResultat, formaterDuree } from './rapport.js';
+import { lignesDuPanneauDeFin, formaterDuree } from './rapport.js';
 import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // ⚠⚠ LE PLAFOND DU ZOOM ET LA POSE D'UN SPRITE SE PRENNENT LÀ OÙ ILS SONT DÉJÀ.
 // `COTE_CASE_MAX` est le plafond de la base — « le raid prend le même » —, et
@@ -1119,9 +1119,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // `lignesDuResultat` du MÊME rapport : ils ne peuvent pas diverger, puisqu'ils
   // n'ont rien à calculer. C'est ce que le test T7 vérifie.
 
+  // ⚠⚠ IL DISPATCHE PAR SENS DEPUIS LE REJEU, ET IL NE LE FAISAIT PAS. Ce
+  // panneau n'a jamais vu qu'un raid MENÉ — c'est cet écran qui les lance —
+  // donc `lignesDuResultat` suffisait ; un rejeu de raid SUBI y affichait le
+  // butin et les points d'un combat qui n'en a pas. Le dispatch vit dans
+  // `ui/rapport.js`, à côté des deux fonctions de lignes, et pas ici : les
+  // recopier aurait donné deux lecteurs du même rapport.
   function remplirLignes(hote, rapport) {
     hote.textContent = '';
-    for (const ligne of lignesDuResultat(rapport)) {
+    for (const ligne of lignesDuPanneauDeFin(rapport)) {
       const bloc = doc.createElement('div');
       bloc.className = 'ligne';
       const quoi = doc.createElement('span');
@@ -1163,6 +1169,18 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   function peindreVagues() {
     const hote = $('raid-vagues');
     if (hote === null || etatCourant === null) return;
+    // ⚠⚠ UN REJEU N'A PAS DE FORMATION, ET IL NE PEINT DONC AUCUNE VAGUE —
+    // TROUVÉ AU BANC, PAS À LA RELECTURE. La grille des quatre vagues est
+    // l'ÉDITEUR de composition : un rejeu ne compose rien, il montre un combat
+    // qui a eu lieu. Sans ce garde-fou, `vaguesDeLArmee` recevait `null` et
+    // `formation.forEach` levait au premier toucher du bouton du journal — le
+    // rejeu s'arrêtait avant d'avoir dessiné une image.
+    // ⚠ ET ON NE LUI DONNE PAS `montage.vagues` À LA PLACE : ce n'est pas la
+    // même forme — un tableau PAR VAGUE, dont les entrées ne portent ni `vague`,
+    // ni `degatsMilli`, ni `actif` —, et la remettre à plat referait une seconde
+    // écriture de ce que `composerLesVagues` sait déjà lire. `#raid-bas` est
+    // masqué pendant le déroulé, et `#raid-fin` le couvre à la fin.
+    if (formation === null) return;
     hote.textContent = '';
     cellules.clear();
     for (const vague of vaguesDeLArmee(etatCourant, formation)) {
@@ -2048,9 +2066,105 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     }
   }
 
+  /**
+   * Rejoue un raid du journal, depuis le montage rangé dans son rapport.
+   *
+   * ⚠⚠ IL NE PASSE PAS PAR `ouvrirSurLaCible`, ET C'EST LE POINT. Ce chemin-là
+   * relit `siteDeLaCase` : il montrerait le site TEL QU'IL EST — réparé, ou rasé,
+   * ou entamé par trois passes depuis — au lieu du combat qui a eu lieu. Un rejeu
+   * ne demande rien à l'état courant ; il ne lit que son rapport.
+   *
+   * ⚠⚠ ET IL VAUT POUR LES DEUX SENS. Un raid SUBI n'a aucune cible sur la carte
+   * — c'est la base du joueur qui était attaquée — donc `cibleCourante` reste
+   * `null` : « Ré-attaquer » se garde déjà là-dessus, et `surRetourALaCarte` le
+   * tolère comme au premier câblage. C'est la première fois que cet écran montre
+   * un combat où le joueur DÉFEND, et rien n'a eu à changer pour ça : le camp est
+   * dans le montage depuis MODULES-E, le décor depuis MURS-OUVRAGE.
+   *
+   * ⚠ LE DÉCOR SE TIRE SUR LA CASE DE L'ADVERSAIRE, ET C'EST UNE LECTURE
+   * DÉCLARÉE. `fondDeLaBase` prend une case pour choisir une variante parmi
+   * quatre ; le montage ne porte pas de position, et la seule que le rapport
+   * connaisse des deux côtés est celle d'en face. Côté SUBI, la variante peinte
+   * n'est donc pas celle de l'écran de la base — c'est cosmétique, déterministe,
+   * et ça ne coûte pas un octet de sauvegarde de plus.
+   *
+   * @param {object} etat
+   * @param {object} rapport une entrée d'`etat.rapports` qui porte `rejeu`
+   */
+  function ouvrirEnRejeu(etat, rapport, atlasFournis = null) {
+    if (rapport === null || rapport === undefined) return;
+    const montage = rapport.rejeu;
+    if (montage === null || montage === undefined) return;
+    etatCourant = etat;
+    if (atlasFournis !== null) atlas = atlasFournis;
+    // ⚠ PAS DE CIBLE, DONC PAS DE SECOND RAID DEPUIS UN REJEU. « Attaquer » et
+    // « Ré-attaquer » se gardent tous les deux sur `cibleCourante`, et c'est ce
+    // qui fait du rejeu une CONSULTATION : on regarde, on n'engage rien.
+    cibleCourante = null;
+    // ⚠ LE RAPPORT COURANT EST CELUI DU JOURNAL, donc `#raid-fin` montre à la
+    // fin du rejeu exactement les lignes que le dépliant montrait — même source,
+    // deux formes, et `lignesDuPanneauDeFin` fait la traduction.
+    rapportCourant = rapport;
+    simulation = false;
+    formation = null;
+    combat = null;
+    fondCourant = null;
+    bandeCourante = null;
+    coteVoulu = null;
+    decalageX = 0;
+    decalageY = -Infinity;
+    marquerBascule();
+    fermerPanneaux();
+    desarmer();
+    peindreVagues();
+    const qui = rapport.sens === 'defense' ? rapport.attaquant : rapport.cible;
+    const titre = $('raid-titre');
+    if (titre !== null) {
+      const quoi = rapport.sens === 'defense' ? 'Raid subi' : 'Raid mené';
+      titre.textContent = `${quoi} · ${qui?.type ?? '—'} · niveau `
+        + `${qui?.niveau ?? 0} · rangée ${qui?.rangee ?? 0}, colonne ${qui?.colonne ?? 0}`;
+    }
+    // ⚠ LE BANDEAU DU SIMULATEUR RESTE CACHÉ. Un rejeu n'est pas une simulation :
+    // il montre un combat qui a EU LIEU, et « Simulateur » dirait au joueur que
+    // rien de ce qu'il regarde n'est arrivé.
+    $('raid-bandeau').hidden = true;
+    // ⚠⚠ MAIS LES VITESSES S'OUVRENT, ET C'EST LA MESURE DU BANC QUI L'A DÉCIDÉ.
+    // L'arbitrage du 01/09 — « le vrai raid se regarde en temps réel, sans
+    // contrôle de vitesse » — porte sur un raid dont l'issue se joue SOUS LES YEUX
+    // du joueur, qui vient d'en payer les points. Un rejeu ne joue rien : le
+    // combat est commis, et rien de ce que le joueur touche ne peut en changer le
+    // verdict. **Relevé au banc : un rejeu de raid mené sur une base de niveau 14
+    // tourne encore au bout de soixante-dix secondes**, tout le chrome masqué —
+    // sans `#raid-vitesses`, qui porte « Instantané », il n'y a AUCUNE porte de
+    // sortie d'un déroulé, et le joueur est retenu quatre-vingt-dix secondes
+    // devant une consultation qu'il a demandée. Cet arbitrage-ci est une LECTURE,
+    // et une ligne le renverse.
+    $('raid-vitesses').hidden = false;
+    vitesse = 1;
+    entrerDansLeDeroule();
+    // ⚠ `vagues` EST DÉJÀ DANS LE MONTAGE RANGÉ — `pourLeRejeu` garde l'argument
+    // ENTIER de `creerCombat`. On ne le repasse donc pas à côté : `rejouer` fait
+    // un `{ ...montage, vagues }`, et lui donner la liste du montage lui-même est
+    // l'identité. C'est ce qui rend le rejeu exact au tick près.
+    rejouer(montage, montage.vagues ?? []);
+    // ⚠⚠ LE PROPRIÉTAIRE SE LIT SUR LE COMBAT, JAMAIS SUR LE MONTAGE — TROUVÉ AU
+    // BANC. Un montage d'`executerRaid` ne porte PAS `proprietaireDefense` : c'est
+    // `creerCombat` qui le défaute, et `fondDeLaBase` LÈVE sur un propriétaire
+    // inconnu. Le lire dans le montage faisait donc tomber le rejeu de tout raid
+    // MENÉ, et lui seul — un raid SUBI porte le champ, donc il passait. C'est le
+    // même source que le chemin ordinaire, vingt lignes plus haut.
+    fondCourant = fondDeLaBase(
+      combat.proprietaireDefense, montage.type, qui?.rangee ?? 1, qui?.colonne ?? 1,
+    );
+  }
+
   return {
     /** Entre dans l'écran de raid sur une cible. */
     ouvrir(etat, cible, atlasFournis = null) { ouvrirSurLaCible(etat, cible, atlasFournis); },
+    /** Rejoue un raid du journal — voir `ouvrirEnRejeu`. */
+    rejouerUnRapport(etat, rapport, atlasFournis = null) {
+      ouvrirEnRejeu(etat, rapport, atlasFournis);
+    },
     peindre(etat) { etatCourant = etat; peindreVagues(); },
     // ⚠ QUITTER L'ÉCRAN REND LE CHROME. Sans cette ligne, changer d'onglet
     // pendant un déroulé laisserait la page sans onglets — donc sans moyen d'en

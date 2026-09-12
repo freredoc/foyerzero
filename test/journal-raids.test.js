@@ -506,7 +506,15 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // la fermeture de l'écran de raid et ne se sérialisait pas ; un raid non
   // terminé est le cas d'usage, donc la mémoire doit survivre à la fermeture du
   // jeu. Le maillon v31 → v32 est dans `state.js`.
-  assert.equal(SAVE_VERSION, 32);
+  // ⚠⚠ ET LE LOT REJEU Y PASSE À SON TOUR, LE 12/09, EN LE SACHANT — 32 → 33.
+  // Ethan : « tu fais le rejeu quand même. » Chaque rapport range désormais le
+  // MONTAGE de son combat, sans quoi le journal ne pourrait pas le rejouer : le
+  // montage est l'état de DÉPART d'un combat fini, et rien dans l'état
+  // d'aujourd'hui ne le conserve. Le coût est publié — 7 780 octets par rapport
+  // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
+  // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
+  // un rapport d'avant ne se rejoue pas, et le journal le dit.
+  assert.equal(SAVE_VERSION, 33);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();
