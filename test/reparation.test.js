@@ -1247,8 +1247,18 @@ test('RETOUR-D T3 — les 70 % suivent la SANTÉ du Complexe', () => {
 test('RETOUR-D T4 — la rampe rend le plein À LA DURÉE, et pas avant', () => {
   const etat = baseAvecComplexe(5);
   const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
-  const duree = ticksDeRetour(5, 5, 1000);
-  assert.equal(duree, TICKS_PAR_HEURE, 'une pièce au niveau du Complexe revient en une heure');
+  const pvMaxMilli = pvMaxDeLaPieceDeGarnisonMilli('merlon', 5);
+  // ⚠⚠ RÉÉCRIT LE 12/09 — UNE HEURE EST UNE VITESSE, PAS UNE DURÉE. Ce test
+  // écrivait `ticksDeRetour(5, 5, 1000) === TICKS_PAR_HEURE`, c'est-à-dire
+  // « toute pièce revient en une heure ». La durée dépend désormais de ce qu'il
+  // reste à rendre : une perte de moitié laisse 15 % après le palier, donc 15 %
+  // d'une heure — NEUF MINUTES. Ce qu'il garde n'a pas changé : la rampe rend le
+  // plein À la durée, et pas avant.
+  const duree = ticksDeRetour({
+    niveau: 5, niveauComplexe: 5, santeMilli: 1000, perdusMilli: pvMaxMilli / 2, pvMaxMilli,
+  });
+  assert.equal(duree, 9 * (TICKS_PAR_HEURE / 60),
+    `une pièce à moitié abîmée revient en ${enHeuresMinutes(duree)} au lieu de 9 min`);
 
   // ⚠ LE PREMIER TICK EST CELUI QUI STAMPE, et l'écoulé se compte À PARTIR DE
   // LUI. Avancer d'abord et stamper ensuite mesurerait une rampe qui n'a pas
@@ -1274,11 +1284,16 @@ test('RETOUR-D T5 — le dépassement suit `facteurMilli`, jamais une pente écr
   // ⚠⚠ LE DISCRIMINANT EST L'ARRONDI AU MILLIÈME. `facteurMilli(11)` rend 2 594,
   // là où 1,10^10 vaut 2,5937424601 : l'écart est de NEUF TICKS sur 93 384, soit
   // un dix-millième. Un test « à 1 % près » ne verrait rien.
-  const attendu = Math.ceil((facteurMilli(11) / 1000) * TICKS_PAR_HEURE);
-  const mesure = ticksDeRetour(15, 5, 1000);
+  // ⚠ RÉÉCRIT LE 12/09 : la durée se mesure sur une pièce RASÉE, donc sur 30 %
+  // d'une heure au lieu d'une heure pleine. Le discriminant, lui, ne bouge pas.
+  const rase = (niveau, niveauComplexe, santeMilli) => ticksDeRetour({
+    niveau, niveauComplexe, santeMilli, perdusMilli: 1_000_000, pvMaxMilli: 1_000_000,
+  });
+  const attendu = Math.ceil(0.3 * (facteurMilli(11) / 1000) * TICKS_PAR_HEURE);
+  const mesure = rase(15, 5, 1000);
   assert.equal(mesure, attendu, `+10 rend ${enHeuresMinutes(mesure)}`);
-  assert.equal(mesure, 93_384, '+10 doit rendre 2 h 36, à la seconde');
-  assert.notEqual(mesure, Math.ceil(1.10 ** 10 * TICKS_PAR_HEURE),
+  assert.equal(mesure, 28_016, '+10 sur une rasée doit rendre 28 016 ticks, AU TICK');
+  assert.notEqual(mesure, Math.ceil(0.3 * 1.10 ** 10 * TICKS_PAR_HEURE),
     'une pente écrite en dur rendrait le même nombre : l\'arrondi ne discrimine plus');
 
   // ⚠⚠ SECOND DISCRIMINANT : LA PENTE DE `data/niveaux.js`, PAS LE DRAPEAU.
@@ -1290,52 +1305,91 @@ test('RETOUR-D T5 — le dépassement suit `facteurMilli`, jamais une pente écr
   const memoire = NIVEAU.penteHaute;
   try {
     NIVEAU.penteHaute = 1.2;
-    assert.notEqual(ticksDeRetour(15, 5, 1000), mesure,
+    assert.notEqual(rase(15, 5, 1000), mesure,
       'la durée ne suit pas `NIVEAU.penteHaute` : la pente est recopiée quelque part');
   } finally {
     NIVEAU.penteHaute = memoire;
   }
-  assert.equal(ticksDeRetour(15, 5, 1000), mesure, 'le montage n\'a pas rendu la table');
+  assert.equal(rase(15, 5, 1000), mesure, 'le montage n\'a pas rendu la table');
   assert.equal(NIVEAU.penteBasse, NIVEAU.penteHaute,
     'les deux pentes diffèrent : `NIVEAU.deuxRegimes` redevient un discriminant');
 });
 
-test('RETOUR-D T6 — la pénalité touche ses deux points arbitrés, et elle est LINÉAIRE', () => {
-  // Les deux points d'Ethan : une heure à pleine santé, le plancher à 1 PV.
-  assert.equal(ticksDeRetour(5, 5, 1000), TICKS_PAR_HEURE, 'pleine santé ne rend pas une heure');
+test('RETOUR-D T6 — la santé DIVISE la vitesse, elle ne s\'ajoute plus à une durée', () => {
+  // ⚠⚠ RETOURNÉ LE 12/09, ET C'EST L'ARBITRAGE QUI CHANGE, PAS UN RÉGLAGE. Ce
+  // test figeait deux points — « 1 h à pleine santé, 24 h à 1 PV » — et la forme
+  // LINÉAIRE entre les deux, tranchée par Ethan le 06/09. Une heure est devenue
+  // une VITESSE : le Complexe abîmé ne rallonge plus une durée fixe, il divise
+  // la vitesse de retour. `heuresAuPlancher` n'existe plus, et le plancher de
+  // 24 h avec elle.
+  const rase = (santeMilli) => ticksDeRetour({
+    niveau: 5, niveauComplexe: 5, santeMilli, perdusMilli: 1_000_000, pvMaxMilli: 1_000_000,
+  });
 
+  // Pleine santé, pièce RASÉE : 70 % d'un coup, 30 % en 30 % d'une heure.
+  assert.equal(rase(1000), Math.round(0.3 * TICKS_PAR_HEURE),
+    `une rasée sous un Complexe entier revient en ${enHeuresMinutes(rase(1000))} au lieu de 18 min`);
+
+  // ⚠⚠ LA FORME EST UNE DIVISION, ET C'EST LÀ QU'ON LA DÉPARTAGE DE LA LINÉAIRE.
+  // À mi-vie le palier tombe de moitié (35 % au lieu de 70 %) ET la vitesse est
+  // divisée par deux : 0,65 × 2 = 1,3 h. Une forme linéaire entre deux bornes
+  // rendrait la moyenne des bornes ; il n'y a plus de borne haute.
+  const miVie = rase(500);
+  assert.equal(miVie, Math.round(1.3 * TICKS_PAR_HEURE),
+    `à mi-vie une rasée revient en ${enHeuresMinutes(miVie)} au lieu de 1 h 18`);
+  assert.notEqual(miVie, (rase(1000) + rase(1)) / 2,
+    'la forme est redevenue linéaire entre deux bornes : la santé doit DIVISER');
+
+  // ⚠⚠ ET LE PLANCHER DE DIVISION SE MESURE, PARCE QUE ZÉRO EST ATTEIGNABLE. Un
+  // PV sur les 2 500 000 milli-PV du plus petit Complexe possible vaut 0,4
+  // millième, donc ZÉRO une fois arrondi — et les bâtiments du joueur planchent
+  // à 1 PV. `1000 / 0` rendrait `Infinity` ; `ticksDeRetour` planche la division
+  // à un millième, donc à mille heures, et non à un « jamais » que la règle n'a
+  // pas. La garde « jamais » reste `santeMilli === null`, et elle seule.
   const etat = baseAvecComplexe(1);
   const pose = santeDuComplexe(etat, 0);
   const max = BASE_BATIMENTS.complexeDeDefense.pv * facteurMilli(pose.niveau);
   pose.degatsMilli = max - 1000; // 1 PV, pas zéro
   const complexe = complexeDeLaBase(baseCourante(etat));
   assert.notEqual(complexe.santeMilli, null, 'à 1 PV le Complexe est ENCORE debout');
-  const plancher = ticksDeRetour(1, 1, complexe.santeMilli);
-  assert.equal(plancher, RETOUR_DEFENSES.heuresAuPlancher * TICKS_PAR_HEURE,
-    `à 1 PV la pièce revient en ${enHeuresMinutes(plancher)}`);
-
-  // ⚠⚠ ET LA FORME ENTRE LES DEUX EST LINÉAIRE — arbitrage d'Ethan du 06/09 qui
-  // renverse la proposition GÉOMÉTRIQUE des deux briefs. Les deux formes
-  // touchent les mêmes deux points ; elles ne diffèrent qu'entre eux, et c'est
-  // là qu'on les départage.
-  const miVie = ticksDeRetour(5, 5, 500);
-  assert.equal(miVie, (TICKS_PAR_HEURE + plancher) / 2,
-    `à mi-vie la pénalité rend ${enHeuresMinutes(miVie)} au lieu de la moyenne des deux bornes`);
-  const geometrique = Math.ceil(RETOUR_DEFENSES.heuresAuPlancher ** 0.5 * TICKS_PAR_HEURE);
-  assert.notEqual(miVie, geometrique,
-    'la pénalité est géométrique : Ethan a tranché pour la linéaire le 06/09');
+  assert.equal(complexe.santeMilli, 0, 'un PV ne s\'arrondit plus à zéro millième');
+  const plancher = ticksDeRetour({
+    niveau: 1, niveauComplexe: 1, santeMilli: complexe.santeMilli,
+    perdusMilli: 1_000_000, pvMaxMilli: 1_000_000,
+  });
+  assert.equal(plancher, 1000 * TICKS_PAR_HEURE,
+    `à 1 PV la rasée revient en ${enHeuresMinutes(plancher)} au lieu de mille heures`);
+  assert.ok(Number.isFinite(plancher), 'la santé nulle a laissé passer un Infinity');
 });
 
-test('RETOUR-D T7 — les deux facteurs se MULTIPLIENT, ils ne se remplacent pas', () => {
-  const seulDepassement = ticksDeRetour(15, 5, 1000);
-  const seuleSante = ticksDeRetour(5, 5, 500);
-  const les2 = ticksDeRetour(15, 5, 500);
+test('RETOUR-D T7 — les trois facteurs se MULTIPLIENT, ils ne se remplacent pas', () => {
+  // ⚠ RÉÉCRIT LE 12/09 : il y a TROIS facteurs depuis que la part à rendre entre
+  // dans le calcul — le reste après palier, le dépassement, la santé. Ce que le
+  // test garde n'a pas changé : aucun n'écrase les autres.
+  const sur = (niveau, santeMilli, part) => ticksDeRetour({
+    niveau,
+    niveauComplexe: 5,
+    santeMilli,
+    perdusMilli: 1_000_000 * part,
+    pvMaxMilli: 1_000_000,
+  });
+  const seulDepassement = sur(15, 1000, 1);
+  const seuleSante = sur(5, 500, 1);
+  const les2 = sur(15, 500, 1);
 
-  assert.equal(les2, 1_167_300, `+10 sur un Complexe à mi-vie rend ${enHeuresMinutes(les2)}`);
-  assert.ok(Math.abs(les2 - (seulDepassement * seuleSante) / TICKS_PAR_HEURE) <= 1,
+  assert.equal(les2, 121_400, `+10 sur un Complexe à mi-vie rend ${enHeuresMinutes(les2)}`);
+  // ⚠ TROIS TICKS DE TOLÉRANCE, ET ILS SE COMPTENT : chacun des trois `Math.ceil`
+  // en arrondit un. Sous cette barre, le produit ne dirait plus rien.
+  assert.ok(Math.abs(les2 - (seulDepassement * seuleSante) / (0.3 * TICKS_PAR_HEURE)) <= 3,
     `${les2} n'est pas le produit de ${seulDepassement} et ${seuleSante}`);
   assert.ok(les2 > seulDepassement && les2 > seuleSante,
     'un des deux facteurs a écrasé l\'autre au lieu de s\'y multiplier');
+
+  // ⚠ ET LE TROISIÈME MULTIPLIE AUSSI : une perte de moitié met la MOITIÉ du
+  // temps d'une rasée, à santé et dépassement égaux. C'est la moitié neuve de ce
+  // test, et celle qui tombe si quelqu'un remet une durée constante.
+  assert.equal(sur(5, 1000, 0.5) * 2, sur(5, 1000, 1),
+    'la durée ne suit pas ce qu\'il reste à rendre : elle est redevenue constante');
 });
 
 test('RETOUR-D T8 — chaque pièce a SA durée, jamais une seule pour la garnison', () => {
@@ -1354,32 +1408,52 @@ test('RETOUR-D T8 — chaque pièce a SA durée, jamais une seule pour la garnis
   assert.equal(new Set(echeances).size, 3, `trois niveaux, ${new Set(echeances).size} échéance(s)`);
   assert.ok(echeances[0] < echeances[1] && echeances[1] < echeances[2],
     `les échéances ne croissent pas avec le niveau : ${echeances.join(' · ')}`);
-  assert.equal(echeances[0], TICKS_PAR_HEURE, 'la pièce au niveau du Complexe ne paie rien');
+  // ⚠ RÉÉCRIT LE 12/09 : la pièce au niveau du Complexe ne paie toujours aucun
+  // dépassement, mais elle ne met plus UNE HEURE — elle met 15 % d'une heure,
+  // une moitié perdue laissant 15 % à rendre après le palier. Neuf minutes.
+  assert.equal(echeances[0], 9 * (TICKS_PAR_HEURE / 60),
+    'la pièce au niveau du Complexe ne paie rien');
 });
 
 test('RETOUR-D T9 — Complexe à ZÉRO PV : rien ne revient, JAMAIS', () => {
-  // ⚠⚠ LA GARDE, ET ELLE N'EST PAS ÉMERGENTE. À santé nulle la formule rend la
-  // pénalité maximale — vingt-quatre heures — et non « jamais » : c'est la ligne
-  // `santeMilli === null` de `pvApresRetour` qui refuse. Le rapport mesure ce
-  // qui se passe quand on la retire, et c'est 24 h.
+  // ⚠⚠ LA GARDE, ET ELLE N'EST PAS ÉMERGENTE. À santé nulle la formule rend mille
+  // heures — le plancher de division de `ticksDeRetour` — et non « jamais » :
+  // c'est la ligne `rendLesPv` de `pvApresRetour` qui refuse. Le rapport mesure
+  // ce qui se passe quand on la retire, et c'est mille heures, pas l'infini.
   const pvMax = 1_000_000;
-  const cent = 100 * TICKS_PAR_HEURE;
+  const cent = 100_000 * TICKS_PAR_HEURE;
   const mort = pvApresRetour({
     pvMaxMilli: pvMax, pvApresRaidMilli: 250_000,
     niveau: 5, niveauComplexe: 5, santeMilli: null, ecouleTicks: cent,
   });
-  assert.equal(mort, 250_000, `cent heures plus tard la pièce vaut ${mort} sur ${pvMax}`);
+  assert.equal(mort, 250_000, `cent mille heures plus tard la pièce vaut ${mort} sur ${pvMax}`);
 
   // ⚠ FALSIFIABLE : la MÊME pièce, sous un Complexe à un millième de vie,
   // revient — et en 24 h très exactement. C'est ce que la garde refuse, et sans
   // ce couple « zéro n'est pas rien » ne voudrait rien dire.
+  // ⚠⚠ RÉÉCRIT LE 12/09, ET LE CONTRE-EXEMPLE A CHANGÉ D'ÉCHELLE. Il opposait un
+  // Complexe à UN MILLIÈME de vie, qui rendait tout en 24 h ; la règle de vitesse
+  // le fait rendre en MILLE heures — cent ne suffisent donc plus. Ce que le couple
+  // garde est intact : zéro n'est pas rien, et la garde porte sur le `null` seul.
+  const mille = 1000 * TICKS_PAR_HEURE;
   const vivant = pvApresRetour({
     pvMaxMilli: pvMax, pvApresRaidMilli: 250_000,
-    niveau: 5, niveauComplexe: 5, santeMilli: 0, ecouleTicks: cent,
+    niveau: 5, niveauComplexe: 5, santeMilli: 0, ecouleTicks: mille,
   });
   assert.equal(vivant, pvMax, 'un Complexe à 1 PV ne ramène plus rien');
-  assert.equal(ticksDeRetour(5, 5, 0), 24 * TICKS_PAR_HEURE,
-    'sans la garde, une santé nulle rendrait tout en 24 h — c\'est ce qu\'elle empêche');
+  // ⚠ ET IL RAMÈNE QUELQUE CHOSE BIEN AVANT, ce qui distingue « très lent » de
+  // « jamais » : à mi-chemin la pièce a dépassé son point de départ.
+  const aMiChemin = pvApresRetour({
+    pvMaxMilli: pvMax, pvApresRaidMilli: 250_000,
+    niveau: 5, niveauComplexe: 5, santeMilli: 0, ecouleTicks: mille / 2,
+  });
+  assert.ok(aMiChemin > 250_000 && aMiChemin < pvMax,
+    `à mi-chemin la pièce vaut ${aMiChemin} : la rampe n'avance pas`);
+  assert.equal(ticksDeRetour({
+    niveau: 5, niveauComplexe: 5, santeMilli: 0,
+    perdusMilli: pvMax, pvMaxMilli: pvMax,
+  }), 1000 * TICKS_PAR_HEURE,
+  'sans la garde, une santé nulle rendrait tout en mille heures — pas un Infinity');
 });
 
 test('RETOUR-D T10 — sans Complexe construit, la garnison ne revient JAMAIS', () => {
@@ -1411,7 +1485,20 @@ test('RETOUR-D T11 — la santé se FIGE à l\'instant du raid', () => {
   const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
   tickJeu(etat);
   const avant = retourDeLaPiece(baseCourante(etat), piece, etat.horloge.nbTicks).ticks;
-  assert.ok(avant > TICKS_PAR_HEURE, 'le montage ne mesure rien : le Complexe est entier');
+  // ⚠ RÉÉCRIT LE 12/09 : la borne était « plus d'une heure », ce qu'une pièce à
+  // moitié abîmée ne met plus sous aucun Complexe — elle met 15 % d'une heure à
+  // pleine santé. Ce que le montage doit prouver n'a pas changé : le Complexe
+  // n'est PAS entier. On le mesure donc contre la MÊME pièce sous un Complexe
+  // entier, ce qui reste vrai quels que soient les nombres.
+  const sousUnComplexeEntier = ticksDeRetour({
+    niveau: 5,
+    niveauComplexe: 5,
+    santeMilli: 1000,
+    perdusMilli: piece.retour.degatsAuDebutMilli,
+    pvMaxMilli: pvMaxDeLaPieceDeGarnisonMilli('merlon', 5),
+  });
+  assert.ok(avant > sousUnComplexeEntier,
+    `le montage ne mesure rien : ${avant} ticks, autant qu'un Complexe entier`);
   const degatsAvant = piece.degatsMilli;
 
   // Le Complexe est remis à neuf : la rampe en cours ne doit pas bouger.
@@ -1427,7 +1514,7 @@ test('RETOUR-D T11 — la santé se FIGE à l\'instant du raid', () => {
   const neuve = abimerLaPiece(poserEnGarnison(etat, 'casemate', 5), 0.5);
   tickJeu(etat);
   assert.equal(retourDeLaPiece(baseCourante(etat), neuve, etat.horloge.nbTicks).ticks,
-    TICKS_PAR_HEURE, 'la pièce neuve n\'a pas profité du Complexe réparé');
+    9 * (TICKS_PAR_HEURE / 60), 'la pièce neuve n\'a pas profité du Complexe réparé');
 });
 
 test('RETOUR-D T12 — les deux chemins d\'avancement rendent la même garnison, RAID COMPRIS', () => {
@@ -1579,13 +1666,27 @@ test('RETOUR-D T20 — une rampe malformée est REFUSÉE au chargement', () => {
 test('RETOUR-D T19 — `1 + dépassement` ne sort jamais de la table des niveaux', () => {
   // La borne tient par construction — le Complexe vaut au moins 1 — mais la
   // nommer donne un message qui dit LEQUEL des deux niveaux est en cause.
-  assert.equal(ticksDeRetour(NIVEAU.plafond, 1, 1000) > 0, true);
+  const a = (niveau) => ({
+    niveau, niveauComplexe: 1, santeMilli: 1000, perdusMilli: 1_000_000, pvMaxMilli: 1_000_000,
+  });
+  assert.equal(ticksDeRetour(a(NIVEAU.plafond)) > 0, true);
   assert.throws(
-    () => ticksDeRetour(NIVEAU.plafond + 1, 1, 1000),
+    () => ticksDeRetour(a(NIVEAU.plafond + 1)),
     /niveau de pièce|dépassement|hors de/,
     'un dépassement hors table passe en silence',
   );
-  assert.throws(() => ticksDeRetour(5.5, 1, 1000), /entier/, 'un niveau non entier passe');
+  assert.throws(() => ticksDeRetour(a(5.5)), /entier/, 'un niveau non entier passe');
+  // ⚠ LES DEUX BORNES NEUVES DU 12/09 : une santé qui ne ramène rien n'a pas de
+  // durée, et un pvMax nul diviserait par zéro. Les deux LÈVENT plutôt que de
+  // laisser un `Infinity` ou un `NaN` traverser `Math.ceil`.
+  assert.throws(
+    () => ticksDeRetour({ ...a(5), santeMilli: null }),
+    /santé/, 'une santé « jamais » rend une durée au lieu de lever',
+  );
+  assert.throws(
+    () => ticksDeRetour({ ...a(5), pvMaxMilli: 0 }),
+    /pvMax/, 'un pvMax nul divise par zéro en silence',
+  );
 });
 
 // ---------------------------------------------------------------------------

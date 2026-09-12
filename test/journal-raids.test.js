@@ -39,6 +39,7 @@ import { APRES_RAID } from '../src/data/sites.js';
 import {
   vueDuJournal, JOURNAL_VIDE, TITRE_JOURNAL, cleDuRapport,
   lignesDeLaDefense, lignesDetailleesDuRapport, LIBELLE_CAUSE,
+  VERDICTS_MENES, VERDICTS_SUBIS, issueEstBonne,
 } from '../src/ui/rapport.js';
 import { LIBELLE_VERDICT } from '../src/ui/chantier.js';
 
@@ -654,4 +655,127 @@ test('JD T1 — un rapport déplié montre son détail, et lui seul', () => {
   }).map((l) => l.libelle);
   assert.ok(detailMene.includes('Verdict') && detailMene.includes('Butin'),
     `le détail d'un raid mené ne vient pas du panneau de fin : ${detailMene.join(', ')}`);
+});
+
+// ---------------------------------------------------------------------------
+// VITESSE — le point 9 : le journal dit de quel côté l'issue tombe
+// ---------------------------------------------------------------------------
+
+test('VIT T6 — les six clauses d\'issue sont celles que le moteur produit', () => {
+  // ⚠⚠ LA PRÉMISSE DU BRIEF EST FAUSSE, ET C'EST MESURÉ ICI. Il écrit : « sur un
+  // raid SUBI, "Victoire totale" est l'issue vue de l'ATTAQUANT ».
+  // `verdictDeLaDefense` porte en toutes lettres « le miroir de `verdictDuRaid`,
+  // vu du côté de celui qui se défend » — base rasée → `defaite-totale`, rien
+  // touché → `victoire-totale`. **Le verdict est déjà celui du joueur.** Ce qui
+  // manquait, c'est que rien ne le DISAIT.
+  //
+  // ⚠ CE TEST CONFRONTE LES TABLES À LA SOURCE, IL NE LES RECOPIE PAS. C'est
+  // l'idiome de `JD T1` juste au-dessus : une cinquième branche ajoutée à l'une
+  // des deux fonctions du moteur fait tomber ce test au lieu d'afficher
+  // « undefined » au joueur.
+  //
+  // MONTAGE QUI LE FAIT TOMBER : ajouter un `return 'match-nul'` dans
+  // `verdictDuRaid`, ou retirer `defaite` de la table du subi.
+  const verdictsDe = (fichier, fonction) => {
+    const source = sansCommentaires(lire(fichier));
+    const debut = source.indexOf(`function ${fonction}(`);
+    assert.ok(debut > 0, `le montage ne trouve pas ${fonction} dans ${fichier}`);
+    const corps = source.slice(debut, source.indexOf('\n}', debut));
+    const trouves = [...corps.matchAll(/return '([a-z-]+)'/g)].map((m) => m[1]);
+    assert.ok(trouves.length >= 3,
+      `le montage ne mesure rien : ${trouves.length} verdicts trouvés dans ${fonction}`);
+    return [...new Set(trouves)].sort();
+  };
+
+  const menes = verdictsDe('src/sim/raid.js', 'verdictDuRaid');
+  const subis = verdictsDe('src/sim/raid-ouvrage.js', 'verdictDeLaDefense');
+  // ⚠ LE MONTAGE PROUVE D'ABORD QU'IL DISCRIMINE : les deux ensembles diffèrent.
+  assert.notDeepEqual(menes, subis,
+    'le montage ne mesure rien : les deux camps produisent les mêmes verdicts');
+
+  assert.deepEqual(Object.keys(VERDICTS_MENES).sort(), menes,
+    'les clauses d\'un raid mené et les verdicts du moteur ont divergé');
+  assert.deepEqual(Object.keys(VERDICTS_SUBIS).sort(), subis,
+    'les clauses d\'un raid subi et les verdicts du moteur ont divergé');
+  // ⚠ ET CHAQUE VERDICT A UN MOT DANS LA TABLE PARTAGÉE — sans quoi la ligne
+  // afficherait la clé interne.
+  for (const v of [...menes, ...subis]) {
+    assert.ok(LIBELLE_VERDICT[v] !== undefined, `« ${v} » n'a pas de libellé`);
+  }
+
+  // ⚠ « BONNE » SE DÉRIVE DU NOM, ET LES DEUX CÔTÉS SE DISTINGUENT.
+  assert.equal(issueEstBonne('victoire-totale'), true);
+  assert.equal(issueEstBonne('victoire'), true);
+  assert.equal(issueEstBonne('defaite'), false);
+  assert.equal(issueEstBonne('defaite-totale'), false);
+});
+
+test('VIT T7 — la ligne d\'issue nomme ce qui s\'est passé, et sa couleur suit', () => {
+  // ⚠⚠ LE DÉFAUT D'ETHAN, PRIS PAR SON VRAI BOUT : « Victoire totale » sous
+  // « Raid subi » se lit dans les deux sens tant qu'on ne connaît pas la
+  // convention. La ligne porte maintenant ce qui s'est passé.
+  //
+  // MONTAGE QUI LE FAIT TOMBER : rendre `LIBELLE_VERDICT[verdict]` seul, sans la
+  // clause du sens — c'est exactement la ligne d'avant le lot.
+  const tick = creerEtat(7).horloge.nbTicks;
+  const subi = {
+    sens: 'defense', tick, verdict: 'victoire-totale',
+    attaquant: ATTAQUANTE, sanction: { perdu: null },
+  };
+  const mene = {
+    sens: 'offense', tick, verdict: 'victoire-totale',
+    cible: ATTAQUANTE, butin: { quartz: 10, scorie: 5 },
+  };
+  // ⚠ LE JOURNAL SE LIT À L'ENVERS — le plus récent d'abord, sur une COPIE. Le
+  // montage range donc le mené en dernier pour le retrouver en tête.
+  const vue = vueDuJournal([subi, mene], tick);
+  const [sMene, sSubi] = vue.sections;
+  const issueDe = (section) => section.lignes.find((l) => l.libelle === 'Issue');
+
+  // ⚠ LES DEUX SECTIONS PORTENT LE MÊME VERDICT, ET C'EST LE POINT DU MONTAGE :
+  // s'il variait, on ne saurait pas si c'est le SENS qui change la phrase.
+  assert.equal(sMene.titre.startsWith('Raid mené'), true);
+  assert.equal(sSubi.titre.startsWith('Raid subi'), true);
+  assert.equal(sMene.classe, 'raid-mene');
+  assert.equal(sSubi.classe, 'raid-subi');
+  assert.notEqual(sMene.classe, sSubi.classe,
+    'le code couleur ne sépare pas mené de subi');
+
+  const menee = issueDe(sMene);
+  const subie = issueDe(sSubi);
+  assert.notEqual(menee.avant, subie.avant,
+    'le même verdict rend la même phrase des deux côtés : la clause du sens manque');
+  assert.match(menee.avant, /^Victoire totale · /);
+  assert.match(menee.avant, /site rasé/);
+  assert.match(subie.avant, /attaque repoussée/);
+  // ⚠ ET LA COULEUR DIT L'ISSUE, PAS LE SENS : une attaque repoussée est une
+  // BONNE nouvelle, et le titre rouge du « Raid subi » ne doit pas la teindre.
+  assert.equal(menee.classe, 'issue-bonne');
+  assert.equal(subie.classe, 'issue-bonne');
+
+  const rase = vueDuJournal([{ ...subi, verdict: 'defaite-totale' }], tick);
+  const perdue = issueDe(rase.sections[0]);
+  assert.equal(perdue.classe, 'issue-mauvaise');
+  assert.match(perdue.avant, /votre base est rasée/);
+
+  // ⚠ ET LA FEUILLE PORTE LES QUATRE RÈGLES — une classe que le code pose sans
+  // qu'aucune règle ne la peigne se réécrit sans qu'on s'aperçoive de rien.
+  const feuille = lire('src/index.src.html');
+  for (const [selecteur, teinte] of [
+    ['.panneau-detail .section.raid-mene h3', '#8C9A72'],
+    ['.panneau-detail .section.raid-subi h3', '#E43E32'],
+    ['.panneau-detail .ligne.issue-bonne b', '#8C9A72'],
+    ['.panneau-detail .ligne.issue-mauvaise b', '#E43E32'],
+  ]) {
+    const motif = new RegExp(
+      `${selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{[^}]*${teinte}`,
+    );
+    assert.match(feuille, motif, `« ${selecteur} » ne peint pas ${teinte}`);
+  }
+  // ⚠ ET L'ORDRE PORTE : `.depliable h3` a la MÊME spécificité, et une section du
+  // journal porte les deux classes. Si elle repassait devant, le code couleur
+  // serait inerte sur le seul écran qui l'emploie.
+  assert.ok(feuille.indexOf('.panneau-detail .section.raid-subi h3')
+    > feuille.indexOf('.panneau-detail .section.depliable h3'),
+    'la règle du sens passe avant celle du dépliant : la teinte du sens est perdue');
 });

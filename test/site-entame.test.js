@@ -278,9 +278,22 @@ test('RETOUR-D T13 — sur une BASE de l\'Ouvrage aussi, l\'Étai commande les d
   assert.equal(apresUneHeure.santeComplexeMilli, 0,
     'la santé figée d\'un Étai à 1 PV ne vaut pas zéro millième');
 
-  // ⚠ ET LE PALIER, LUI, A DÉJÀ JOUÉ — mais à santé nulle il ne rend rien : la
-  // rampe seule ramènera les défenses, en vingt-quatre heures.
-  rattraperJeu(etat, 23 * TICKS_REPARATION_BASE);
+  // ⚠⚠ ET LE PALIER, LUI, A DÉJÀ JOUÉ — mais à santé nulle il ne rend rien : la
+  // rampe seule ramènera les défenses. ⚠ RÉÉCRIT LE 12/09, ET LE NOMBRE A CHANGÉ
+  // D'ORDRE DE GRANDEUR : l'ancienne pénalité linéaire plafonnait à 24 h, la
+  // règle de vitesse divise par la santé et la santé se range en MILLIÈMES. Un
+  // Étai à 1 PV y vaut zéro millième ; `ticksDeRetour` planche la division à un
+  // millième, donc à MILLE heures. C'est le pire cas que la nouvelle règle sache
+  // décrire, et c'est ce qui distingue « très lent » de « jamais » — l'entrée se
+  // purge pour de bon, et le site redevient entier.
+  // ⚠ UNE HEURE S'EST DÉJÀ ÉCOULÉE PLUS HAUT : on s'arrête à 999 h au total,
+  // donc un cheveu AVANT le bout, pour que le « pas encore » mesure quelque
+  // chose. `TICKS_REPARATION_BASE` vaut une heure — asserté par `RETOUR-D T13`
+  // lui-même, qui l'emploie comme unité.
+  rattraperJeu(etat, 998 * TICKS_REPARATION_BASE);
+  assert.ok(etatDuSite(etat, cible),
+    'les défenses sont revenues AVANT le bout : le plancher de division a sauté');
+  rattraperJeu(etat, 2 * TICKS_REPARATION_BASE);
   assert.equal(etatDuSite(etat, cible), null,
     'les défenses de la base ne sont pas revenues au bout de la rampe');
   assert.deepEqual(montageCourant(etat, cible), intact, 'la base n\'est pas revenue entière');

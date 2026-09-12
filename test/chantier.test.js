@@ -75,7 +75,9 @@ import { NIVEAU } from '../src/data/niveaux.js';
 import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { satellitesVides } from '../src/sim/satellites.js';
 import { creerPointsAttaque } from '../src/sim/points-attaque.js';
-import { reservesVides, complexeDeLaBase, ticksDeRetour } from '../src/sim/reparation.js';
+import {
+  reservesVides, complexeDeLaBase, ticksDeRetourDUnePieceRasee,
+} from '../src/sim/reparation.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orientation.js';
 import { positionDepartJoueur } from '../src/sim/carte.js';
@@ -92,16 +94,17 @@ import {
 import { fonderUneBase } from '../src/sim/fondation.js';
 import * as moteurEtat from '../src/sim/state.js';
 import * as moteurReparation from '../src/sim/reparation.js';
-import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
+import { TICKS_PAR_HEURE, TICKS_PAR_SECONDE } from '../src/sim/clock.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 // ⚠ LE LOT RÉPARER-ÉCRAN MONTE L'ÉCRAN POUR DE BON — voir le faux document en
 // bas de fichier, et le motif qui l'accompagne.
 import { initialiserEcranChantier } from '../src/ui/chantier.js';
 import * as moteurEcranChantier from '../src/ui/chantier.js';
 import {
-  crediterLesReserves, plafondDeLaReserveDesBatiments,
+  crediterLesReserves, plafondDeLaReserveDesBatiments, plafondDeLaReserve,
+  diviseurDuBatiment,
   coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments, direLaDuree,
-  pvMaxDeLaPieceDeGarnisonMilli,
+  pvMaxDeLaPieceDeGarnisonMilli, retourDeLaPiece, ramenerLaGarnison,
 } from '../src/sim/reparation.js';
 import { rattraperJeu } from '../src/sim/state.js';
 import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
@@ -1057,28 +1060,47 @@ test('EC T3 — armer un mode ne recadre plus le décor, sur les trois écrans',
       `#${id} n'est plus un ancêtre positionné : l'avis se cale sur toute la page`);
   }
 
-  // ⚠⚠ LES DEUX BARRES QUI PORTENT UN BOUTON ONT CESSÉ DE FAIRE LA MÊME CHOSE LE
-  // 11/09, ET C'EST L'ARGUMENT QUI A CÉDÉ, PAS LE FAIT. Ce bloc disait : « un
-  // bouton doit RECEVOIR le toucher, donc il ne peut pas quitter le flux ».
-  // C'était un raccourci : ce qui interdit de recevoir le doigt, c'est
-  // `pointer-events: none`, pas `position: absolute`. Ethan, 11/09, point 5 :
-  // « il laisse un vide quand il n'est pas là […] c'est moche. Ça doit partir et
-  // ne pas décaler le sprite. » Le vide était de 27 px CSS, mesuré, payés en
-  // permanence par le canevas du raid.
+  // ⚠⚠ LES DEUX BARRES QUI PORTENT UN BOUTON ONT FINI PAR SORTIR DU FLUX TOUTES
+  // LES DEUX — celle du raid le 11/09, celle du Chantier au lot VITESSE. Ce bloc
+  // a porté DEUX arguments successifs et les deux étaient des raccourcis. Le
+  // premier : « un bouton doit RECEVOIR le toucher, donc il ne peut pas quitter
+  // le flux » — faux, ce qui interdit de recevoir le doigt est
+  // `pointer-events: none`. Le second, écrit le 11/09 : « celle du Chantier y
+  // reste, elle porte DEUX enfants » — le nombre d'enfants ne décide de rien, et
+  // elle se pose sur la barre contextuelle, pas sur la grille.
   //
-  // ⚠ CELLE DU RAID SORT DONC DU FLUX, celle du Chantier y reste : elle porte
-  // DEUX enfants, dont la réserve des bâtiments, et le haut et le bas de sa
-  // grille sont déjà pris par `#chantier-garnison` et `#chantier-avis`. Deux
-  // écrans, deux réponses, et chacune écrite là où elle s'applique.
+  // ⚠⚠ ETHAN, 12/09, POINT 15 : « la barre vide au-dessus de la barre
+  // contextuelle », sur les bandes Défense et Offense. Mesuré dans Chromium avant
+  // d'y toucher : `#chantier-reparation` occupait 22 px × 360 à y = 580, en
+  // `visibility: hidden`, sur les DEUX bandes de la Base — et sur la bande
+  // Défense elle ne peut JAMAIS paraître, `TERRAINS.defense.actions.reparer`
+  // valant `null` depuis le lot RAID-ET-ÉCRAN. C'était donc 22 px de vide
+  // permanent. Après : `#chantier-defile` mesure 396,16 px désarmé comme armé —
+  // 0 px de décalage — et `elementFromPoint` au centre du bouton rend le bouton.
   const regleDe = (selecteur) => {
     const m = feuille.match(new RegExp(`${selecteur}\\s*\\{([^}]*)\\}`));
     assert.ok(m, `la règle « ${selecteur} » a disparu de la feuille`);
     return m[1];
   };
-  assert.match(regleDe('#chantier-reparation\\.repliee'), /visibility:\s*hidden/,
-    'la barre du Chantier rend sa place : la grille se recadre sous elle');
-  assert.doesNotMatch(regleDe('#chantier-reparation\\.repliee'), /display:\s*none/,
-    'le repli du Chantier est redevenu un `display: none`');
+  const poseDuChantier = regleDe('#chantier-reparation');
+  assert.match(poseDuChantier, /position:\s*absolute/,
+    'la barre du Chantier est revenue dans le flux : elle réserve à nouveau sa hauteur');
+  assert.match(poseDuChantier, /bottom:\s*100%/,
+    'la barre du Chantier ne se pose plus au-dessus de la barre contextuelle');
+  assert.doesNotMatch(poseDuChantier, /pointer-events:\s*none/,
+    'la barre du Chantier n\'accepte plus le doigt : elle porte un bouton');
+  assert.match(regleDe('#chantier-reparation\\.repliee'), /display:\s*none/,
+    'le repli du Chantier réserve encore sa place : les 22 px de vide reviennent');
+  // ⚠ ET SON BLOC ENGLOBANT EST LA BARRE CONTEXTUELLE, sans quoi elle se
+  // calerait sur l'écran entier et paraîtrait en haut de la page.
+  assert.match(regleDe('#chantier-contexte'), /position:\s*relative/,
+    'la barre contextuelle n\'est plus le bloc englobant de la barre de réparation');
+  // ⚠⚠ ET LA RÈGLE DES BOUTONS DE LA BARRE CONTEXTUELLE EST UN ENFANT DIRECT.
+  // Mesuré : sans le `>`, elle l'emportait sur `#chantier-tout-reparer`, qui a
+  // une spécificité plus faible, et lui imposait ses 34 px et son fond ardoise —
+  // le bouton passait de 22 à 40 px de haut.
+  assert.match(feuille, /#chantier-contexte > button\s*\{/,
+    'la règle des boutons de la barre contextuelle a perdu son `>` : elle restyle « Tout réparer »');
   assert.match(regleDe('#raid-tout-reparer\\.repliee'), /display:\s*none/,
     '« tout réparer » réserve encore sa place : le vide de 27 px revient');
   const poseDuRaid = regleDe('#raid-tout-reparer');
@@ -5343,50 +5365,225 @@ test('RÉPARER T11 — le bouton global n\'apparaît que le mode Réparer armé'
   doc.getElementById('chantier-reparer').click();
   assert.equal(repliee(), true, 'désarmer laisse le bloc à l\'écran');
 
-  // ⚠⚠ ET ELLE NE QUITTE JAMAIS LE FLUX — c'est ce que le point 5 achète, et
-  // c'est la moitié qu'aucune de ces quatre bascules ne mesure. Un `hidden`
-  // remis, ou une classe qui poserait `display: none`, rendraient les lignes
-  // ci-dessus VERTES et le défaut d'Ethan intact : la barre disparaîtrait pour de
-  // bon et le champ se recadrerait à chaque armement.
+  // ⚠⚠ ET ELLE NE PREND PLUS DE PLACE DU TOUT — lot VITESSE, point 15 d'Ethan,
+  // qui RENVERSE l'arbitrage du 10/09 que ce bloc gardait. Il exigeait qu'elle
+  // RÉSERVE sa hauteur (`visibility: hidden`) pour que l'armement ne recadre pas
+  // le champ ; mesuré, cela coûtait 22 px de vide permanent au-dessus de la barre
+  // contextuelle, sur les DEUX bandes — et sur la Défense, où le bouton Réparer
+  // est masqué, ces 22 px ne pouvaient JAMAIS servir. Elle est posée
+  // `bottom: 100%` de la barre contextuelle depuis, donc ni prise ni réservée :
+  // `#chantier-defile` mesure 396,16 px désarmé comme armé.
+  //
+  // ⚠ L'ATTRIBUT `hidden` RESTE INTERDIT, ET POUR LA MÊME RAISON QU'AVANT :
+  // `[hidden]` porte un `!important` en tête de feuille et l'emporterait sur la
+  // classe, si bien que le repli cesserait d'être commandé par `repliee`.
   assert.equal(barre.hidden, false,
-    'la barre a repris l\'attribut `hidden` : elle pousse à nouveau le champ');
+    'la barre a repris l\'attribut `hidden` : le repli n\'est plus commandé par la classe');
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
   const regle = feuille.match(/#chantier-reparation\.repliee[^{]*\{([^}]*)\}/);
   assert.ok(regle, 'la règle de repli de la barre a disparu');
-  assert.match(regle[1], /visibility:\s*hidden/,
-    'la barre se replie autrement que par `visibility` : elle reprendrait sa hauteur');
-  assert.doesNotMatch(regle[1], /display:\s*none/,
-    'la barre se replie par `display: none` : sa place n\'est plus réservée');
+  assert.match(regle[1], /display:\s*none/,
+    'la barre réserve encore sa place : les 22 px de vide du point 15 reviennent');
+  const pose = feuille.match(/#chantier-reparation\s*\{([^}]*)\}/);
+  assert.ok(pose, 'la règle de pose de la barre a disparu');
+  assert.match(pose[1], /position:\s*absolute/,
+    'la barre est revenue dans le flux : elle repousserait le champ');
 });
 
 test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', () => {
-  // ⚠ LA CONVENTION VIENT DE L'ÉCRAN DE RAID, elle n'est pas inventée ici :
-  // `.abimee` y borde l'emplacement d'une unité entamée depuis le 01/09.
+  // ⚠⚠ LA PROPRIÉTÉ N'A PAS BOUGÉ, LE MOYEN SI — lot VITESSE, 12/09. Ce test
+  // exigeait le carré rouge `.jeton.abimee`, repris de l'écran de raid le
+  // 05/09 : il disait QU'IL Y A une avarie, et il fallait sélectionner la pièce
+  // pour apprendre COMBIEN. Ethan demande une barre de vie à sa place. Ce qui
+  // est gardé ici reste « un abîmé se voit sur la grille, dans les DEUX
+  // bandes » ; ce qui est réécrit est la forme, et la garde REFUSE le retour du
+  // carré pour que les deux ne cohabitent pas.
   const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
   abimerLeBatiment(etat, 1, 0.5);
   const laBase = baseCourante(etat);
   poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 5, colonne: 3, niveau: 1 });
-  laBase.garnison[0].degatsMilli = 1;
+  const maxMerlon = pvMaxDeLaPieceDeGarnisonMilli('merlon', 1);
+  laBase.garnison[0].degatsMilli = Math.round(maxMerlon * 0.4);
+  // Une seconde pièce à UN milli de dégât : c'est le « dès que `degatsMilli > 0` »
+  // du brief, et c'est le seuil que la barre doit franchir.
+  poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 5, colonne: 5, niveau: 1 });
+  laBase.garnison[1].degatsMilli = 1;
 
   const { doc } = ecranMonte(etat);
   const jetonDe = (rangee, colonne) => caseDe(doc, rangee, colonne).children
     .find((c) => c.classList.contains('jeton'));
+  const barreDe = (rangee, colonne) => jetonDe(rangee, colonne).children
+    .find((c) => c.classList.contains('barre-vie'));
+
   const pose = laBase.disposition[1];
-  assert.ok(jetonDe(pose.rangee, pose.colonne).classList.contains('abimee'),
-    'le bâtiment abîmé ne se voit pas');
-  assert.ok(jetonDe(5, 3).classList.contains('abimee'),
-    'la pièce de garnison abîmée ne se voit pas');
-  // Falsifiable : un intact ne la porte pas, sinon la classe ne dirait rien.
+  const barreBatiment = barreDe(pose.rangee, pose.colonne);
+  assert.equal(barreBatiment.hidden, false, 'le bâtiment abîmé n\'a pas de barre');
+  assert.equal(barreBatiment.children[0].style.width, '50%',
+    'la barre du bâtiment ne dit pas la moitié de vie qui lui reste');
+
+  const barreGarnison = barreDe(5, 3);
+  assert.equal(barreGarnison.hidden, false, 'la pièce de garnison abîmée n\'a pas de barre');
+  assert.equal(barreGarnison.children[0].style.width, '60%',
+    'la barre de la garnison ne dit pas les six dixièmes qui lui restent');
+
+  assert.equal(barreDe(5, 5).hidden, false,
+    'un milli de dégât ne fait pas paraître la barre : le seuil n\'est pas « > 0 »');
+
+  // Falsifiable : un intact ne la montre pas, sinon la barre ne dirait rien.
   const chantier = laBase.disposition[0];
-  assert.ok(!jetonDe(chantier.rangee, chantier.colonne).classList.contains('abimee'),
-    'un bâtiment intact est marqué abîmé');
+  assert.equal(barreDe(chantier.rangee, chantier.colonne).hidden, true,
+    'un bâtiment intact porte une barre de vie');
 
   // Et la feuille la peint — une classe sans règle est un lot invisible.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.match(feuille, /\.jeton\.abimee\s*\{[^}]*#E43E32/,
-    'la classe `abimee` du jeton n\'a pas de règle');
+  assert.match(feuille, /\.jeton \.barre-vie\s*\{[^}]*#8A1E17/,
+    'la barre de vie du jeton n\'a pas de règle');
+  assert.match(feuille, /\.jeton \.barre-vie i\s*\{[^}]*#8C9A72/,
+    'la part restante de la barre n\'a pas de teinte');
+  // ⚠ ET LE CARRÉ NE REVIENT PAS. Une règle que plus rien ne pose est une
+  // décoration que rien n'explique ; les deux ensemble diraient deux fois le
+  // même fait, dont une fois sans le chiffre.
+  assert.doesNotMatch(feuille, /\.jeton\.abimee\s*\{/,
+    'le carré rouge du jeton est revenu à côté de la barre qui le remplace');
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'chantier.js'), 'utf8');
+  assert.doesNotMatch(ecran, /classList\.add\('abimee'\)/,
+    'l\'écran pose encore la classe `abimee` sur un jeton');
+});
+
+// ⚠⚠ `poserEnGarnison` EST DÉCLARÉE PLUS BAS, ET ELLE SERT ICI PAR HISSAGE. Le
+// premier jet de `VIT T3` en avait écrit une seconde, qui posait en (5, 2),
+// (5, 4) et (5, 6) : sur la graine du montage l'une de ces cases porte un
+// obstacle, et `poserEffectif` a levé. Les cases se DEMANDENT au moteur — c'est
+// une leçon payée six fois par le dépôt — et deux aides qui font le même travail
+// divergeraient au premier ajustement.
+
+test('VIT T3 — chaque pièce de la bande Défense porte son rebours, sans être sélectionnée', () => {
+  // ⚠⚠ CE QUE LE JETON AJOUTE, C'EST « LAQUELLE » — Ethan, 12/09. La tête de
+  // bande annonce déjà « 2 pièces en retour, la première dans 39 min », et le
+  // bandeau contextuel dit l'échéance de la pièce SÉLECTIONNÉE. Ce test tient
+  // la troisième vue : toutes les pièces à la fois, sans un toucher.
+  const etat = baseAvecCommandement(3, 20);
+  poser(etat, 'complexeDeDefense', 13, 1);
+  const cErafle = poserEnGarnison(etat, 'merlon');
+  const cRase = poserEnGarnison(etat, 'merlon');
+  const cIntacte = poserEnGarnison(etat, 'merlon');
+  assert.equal(new Set([cErafle, cRase, cIntacte].map((c) => `${c.rangee}:${c.colonne}`)).size, 3,
+    'le montage a posé deux pièces sur la même case : il ne distingue rien');
+  const laBase = baseCourante(etat);
+  const maxMerlon = pvMaxDeLaPieceDeGarnisonMilli('merlon', 1);
+  // Une éraflée, une rasée, une intacte. ⚠ LES DEUX PREMIÈRES DOIVENT RENDRE
+  // DEUX DURÉES DIFFÉRENTES, sinon le test passerait sur un rebours constant —
+  // c'est très exactement la règle que le lot VITESSE installe.
+  laBase.garnison[0].degatsMilli = Math.round(maxMerlon * 0.2);
+  laBase.garnison[1].degatsMilli = maxMerlon;
+
+  const { doc } = ecranMonte(etat);
+  const reboursDe = (rangee, colonne) => caseDe(doc, rangee, colonne).children
+    .find((c) => c.classList.contains('jeton')).children
+    .find((c) => c.classList.contains('rebours'));
+
+  const erafle = reboursDe(cErafle.rangee, cErafle.colonne);
+  const rase = reboursDe(cRase.rangee, cRase.colonne);
+  const intacte = reboursDe(cIntacte.rangee, cIntacte.colonne);
+  assert.equal(erafle.hidden, false, 'la pièce éraflée n\'annonce pas son retour');
+  assert.equal(rase.hidden, false, 'la pièce rasée n\'annonce pas son retour');
+  assert.equal(intacte.hidden, true, 'une pièce intacte annonce un retour');
+  assert.notEqual(erafle.textContent, rase.textContent,
+    `les deux attentes sont égales (« ${erafle.textContent} ») : le rebours est constant`);
+
+  // ⚠ ET CE QU'IL ÉCRIT EST CE QUE LE MOTEUR REND, pas un second compte. On
+  // compare au formatage de `retourDeLaPiece`, qui est la source des trois vues.
+  const attendu = (i) => direLaDuree(
+    retourDeLaPiece(laBase, laBase.garnison[i], etat.horloge.nbTicks).ticks,
+  );
+  assert.equal(erafle.textContent, attendu(0), 'le rebours du jeton diverge du moteur');
+  assert.equal(rase.textContent, attendu(1), 'le rebours du jeton diverge du moteur');
+
+  // ⚠⚠ « JAMAIS » N'EST PAS UNE DURÉE, ET SURTOUT PAS UN TIRET. Une durée
+  // absente se lirait « on ne sait pas » là où le fait est « jamais ».
+  const orphelin = baseAvecCommandement(3, 20);
+  const cSeule = poserEnGarnison(orphelin, 'merlon');
+  baseCourante(orphelin).garnison[0].degatsMilli = 1000;
+  const sans = ecranMonte(orphelin);
+  const jamais = caseDe(sans.doc, cSeule.rangee, cSeule.colonne).children
+    .find((c) => c.classList.contains('jeton')).children
+    .find((c) => c.classList.contains('rebours'));
+  assert.equal(jamais.hidden, false, 'la pièce sans retour ne dit rien');
+  assert.equal(jamais.textContent, 'jamais', jamais.textContent);
+  assert.ok(jamais.classList.contains('sans-retour'),
+    'la pièce sans retour porte la teinte d\'une attente');
+  assert.doesNotMatch(jamais.textContent, /\d/,
+    'un « jamais » qui porte un chiffre se lit comme une attente');
+
+  // ⚠⚠ ET LA BANDE DES BÂTIMENTS N'EN A AUCUN, PAR LA TABLE. Un bâtiment ne
+  // revient pas tout seul — le joueur le répare, en temps de réserve et en
+  // quartz ; lui poser une durée promettrait une attente que rien ne purge.
+  const chantier = laBase.disposition[0];
+  const surLeBatiment = caseDe(doc, chantier.rangee, chantier.colonne).children
+    .find((c) => c.classList.contains('jeton')).children
+    .find((c) => c.classList.contains('rebours'));
+  assert.equal(surLeBatiment, undefined, 'un bâtiment porte un rebours');
+  assert.equal(TERRAINS.batiments.retourDUnePiece, null,
+    'la bande des bâtiments s\'est vu donner une rampe');
+  assert.equal(TERRAINS.defense.retourDUnePiece, retourDeLaPiece,
+    'la bande Défense a cessé de demander son rebours au moteur');
+
+  // Et la feuille le peint — un nœud sans règle est un lot invisible.
+  const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(feuille, /\.jeton \.rebours\s*\{/, 'le rebours du jeton n\'a pas de règle');
+  assert.match(feuille, /\.jeton \.rebours\.sans-retour\s*\{[^}]*#E43E32/,
+    '« jamais » n\'a pas de teinte propre');
+});
+
+test('VIT T3 bis — le rebours se réécrit sans refabriquer un seul jeton', () => {
+  // ⚠⚠ C'EST LA MOITIÉ QUE `VIT T3` NE MESURE PAS. Le rebours DESCEND et la
+  // barre MONTE pendant qu'on les regarde : `rafraichir` passe dix fois par
+  // seconde, et rappeler `peindre` à chaque image referait quarante jetons,
+  // leurs sprites, leurs couches tournantes et leurs fonds. Le défaut serait
+  // muet — l'écran resterait juste, et seul un profileur le dirait.
+  const etat = baseAvecCommandement(3, 20);
+  poser(etat, 'complexeDeDefense', 13, 1);
+  const c = poserEnGarnison(etat, 'merlon');
+  const laBase = baseCourante(etat);
+  laBase.garnison[0].degatsMilli = Math.round(
+    pvMaxDeLaPieceDeGarnisonMilli('merlon', 1) * 0.5,
+  );
+
+  const { doc, ecran } = ecranMonte(etat);
+  const jeton = () => caseDe(doc, c.rangee, c.colonne).children
+    .find((e) => e.classList.contains('jeton'));
+  const avantJeton = jeton();
+  const avantRebours = avantJeton.children.find((c) => c.classList.contains('rebours'));
+  const avantTexte = avantRebours.textContent;
+  const avantLargeur = avantJeton.children
+    .find((c) => c.classList.contains('barre-vie')).children[0].style.width;
+
+  // La rampe avance : les dégâts fondent, l'échéance approche.
+  ramenerLaGarnison(etat, etat.horloge.nbTicks + 300 * TICKS_PAR_SECONDE);
+  etat.horloge.nbTicks += 300 * TICKS_PAR_SECONDE;
+  ecran.rafraichir(etat);
+
+  assert.equal(jeton(), avantJeton, 'le jeton a été refabriqué : `peindre` est repassé');
+  assert.equal(avantJeton.children.find((c) => c.classList.contains('rebours')), avantRebours,
+    'le nœud du rebours a été refabriqué');
+  assert.notEqual(avantRebours.textContent, avantTexte,
+    `le rebours n'a pas bougé (« ${avantTexte} ») : il ne se réécrit pas`);
+  assert.notEqual(
+    avantJeton.children.find((c) => c.classList.contains('barre-vie')).children[0].style.width,
+    avantLargeur, 'la barre de vie ne suit pas la rampe',
+  );
+
+  // ⚠ ET CE QUI REMONTE EST BIEN LA VIE, PAS L'ATTENTE. Une largeur qui
+  // baisserait pendant que la pièce guérit serait un signe inversé.
+  assert.ok(
+    Number.parseFloat(avantJeton.children
+      .find((c) => c.classList.contains('barre-vie')).children[0].style.width)
+    > Number.parseFloat(avantLargeur),
+    'la barre de vie descend pendant que la pièce se répare',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -5646,6 +5843,7 @@ test('CH-F T7 — les six uniques disent enfin ce qu\'ils commandent', () => {
     const section = lignesDuPanneau(apercu).sections.find((s) => s.titre === 'Ce qu\'il commande');
     assert.ok(section, `${id} : la section d'effet n'atteint pas le panneau`);
     let avecHorloge = 0;
+    let avecApres = 0;
     for (const ligne of section.lignes) {
       assert.equal(Object.keys(ligne).sort().join(','), 'apres,avant,libelle,picto',
         `${id} : la ligne a une forme que peindrePanneau ne connaît pas`);
@@ -5656,8 +5854,22 @@ test('CH-F T7 — les six uniques disent enfin ce qu\'ils commandent', () => {
       assert.ok(ligne.picto === null || ligne.picto === 'ui_temps',
         `${id} : « ${ligne.picto} » n'est pas le pictogramme d'une durée`);
       if (ligne.picto !== null) avecHorloge += 1;
-      assert.ok(ligne.avant.length > 0 && ligne.apres.length > 0);
+      assert.ok(ligne.avant.length > 0, `${id} : une ligne d'effet sans valeur courante`);
+      // ⚠⚠ `apres` PEUT VALOIR `null` DEPUIS LE 11/09, ET C'EST LE POINT 10
+      // D'ETHAN. La fiche des trois bâtiments de production dit désormais le
+      // PLAFOND DE RÉSERVE — et ce plafond ne dépend QUE du niveau de l'ARMÉE :
+      // monter la Caserne ne le bouge pas d'une seconde. Lui donner un
+      // « après » égal à l'avant se lirait comme un défaut d'affichage, et un
+      // « après » plus grand serait faux. **C'est l'assertion qu'on rouvre, pas
+      // la propriété** : une valeur PRÉSENTE doit toujours dire quelque chose.
+      assert.ok(ligne.apres === null || ligne.apres.length > 0,
+        `${id} : une ligne d'effet porte un « après » vide`);
+      if (ligne.apres !== null) avecApres += 1;
     }
+    // ⚠ ET LE BALAYAGE DOIT AVOIR VU AU MOINS UN « APRÈS » : sans cette ligne,
+    // un code qui mettrait `apres: null` partout passerait, et la fiche cesserait
+    // d'annoncer ce qu'une amélioration change.
+    assert.ok(avecApres > 0, `${id} : aucune ligne d'effet n'annonce ce que l'amélioration change`);
     // ⚠ FALSIFIABLE : le balayage doit avoir VU au moins une horloge sur les
     // six uniques, sinon il passerait aussi sur une table qui n'en pose
     // aucune. Mesuré : le Chantier de construction commande une durée.
@@ -5815,34 +6027,39 @@ test('F-J T6 — la durée du Complexe est celle d\'une pièce de SON niveau', (
   assert.notEqual(10, NIVEAU.plafond, 'le montage est au plafond : il ne discrimine pas');
 
   // ⚠⚠ ET LE COMPLEXE EST ABÎMÉ, SANS QUOI CE TEST NE VERRAIT PAS LA PIRE
-  // FAÇON DE SE TROMPER. Intact, `ticksDeRetour(10, 10, 1000)` vaut EXACTEMENT
-  // une heure — donc une fiche qui écrirait 36 000 en dur, sans jamais appeler
-  // la formule, passerait l'égalité comme l'inégalité. Sous avarie, les trois
-  // nombres divergent, et seule la fiche qui APPELLE tombe juste.
+  // FAÇON DE SE TROMPER. Intact, la durée d'une rasée vaut EXACTEMENT 18 min —
+  // donc une fiche qui écrirait 10 800 en dur, sans jamais appeler la formule,
+  // passerait l'égalité comme l'inégalité. Sous avarie, les trois nombres
+  // divergent, et seule la fiche qui APPELLE tombe juste.
   baseCourante(etat).disposition[index].degatsMilli = 800000;
 
   const complexe = complexeDe(etat);
   assert.equal(complexe.niveau, 10);
   assert.ok(complexe.santeMilli > 0 && complexe.santeMilli < 1000,
     `le Complexe est à ${complexe.santeMilli} ‰ : le montage ne discrimine pas`);
-  assert.notEqual(ticksDeRetour(10, 10, complexe.santeMilli), TICKS_PAR_HEURE,
-    'la durée abîmée retombe sur une heure ronde : un 36 000 écrit en dur passerait');
+  // ⚠ RÉÉCRIT LE 12/09 : la fiche annonce une pièce RASÉE, la durée dépendant
+  // désormais des dégâts. Le repère rond n'est plus une heure mais 18 minutes.
+  assert.notEqual(ticksDeRetourDUnePieceRasee(10, 10, complexe.santeMilli),
+    Math.round(0.3 * TICKS_PAR_HEURE),
+    'la durée abîmée retombe sur 18 min ronds : un 10 800 écrit en dur passerait');
   const [effet] = ficheDuComplexe(etat).effets;
   assert.equal(effet.forme, 'duree');
-  assert.equal(effet.avant, ticksDeRetour(10, 10, complexe.santeMilli),
+  assert.equal(effet.avant, ticksDeRetourDUnePieceRasee(10, 10, complexe.santeMilli),
     'la fiche n\'annonce pas la durée d\'une pièce de même niveau');
-  assert.notEqual(effet.avant, ticksDeRetour(NIVEAU.plafond, 10, complexe.santeMilli),
+  assert.notEqual(effet.avant,
+    ticksDeRetourDUnePieceRasee(NIVEAU.plafond, 10, complexe.santeMilli),
     'la fiche annonce encore le pire cas : les deux règles rendent le même nombre');
 });
 
-test('F-J T7 — Complexe entier : le repère de 1 h est tenu, et il est CALCULÉ', () => {
-  // ⚠⚠ « 1 h » EST CE QUE LA FORMULE REND, PAS CE QU'ON TAPE. `ticksDeRetour`
-  // fait `heuresDeBase × facteurMilli(1 + dépassement)/1000 × pénalité(santé)` ;
-  // à dépassement nul et pleine santé, les deux derniers facteurs valent un.
-  // Le nombre est écrit dans le test parce qu'un test qui refait la formule ne
-  // garde que la formule — 36 000 ticks à 10 Hz, soit une heure ronde.
-  const HEURE_EN_TICKS = 36000;
-  assert.equal(HEURE_EN_TICKS, TICKS_PAR_HEURE, 'le repère n\'est plus une heure');
+test('F-J T7 — Complexe entier : le repère de 18 min est tenu, et il est CALCULÉ', () => {
+  // ⚠⚠ RÉÉCRIT LE 12/09 — « 1 h » EST DEVENU UNE VITESSE, ET LE REPÈRE DE LA
+  // FICHE A SUIVI. Une heure est le temps de rendre CENT POUR CENT des PV ; une
+  // pièce rasée n'en a que 30 % à rendre après le palier des 70 %, donc la fiche
+  // annonce 18 minutes. Le nombre est écrit dans le test parce qu'un test qui
+  // refait la formule ne garde que la formule — 10 800 ticks à 10 Hz.
+  const DIX_HUIT_MIN_EN_TICKS = 10800;
+  assert.equal(DIX_HUIT_MIN_EN_TICKS, Math.round(0.3 * TICKS_PAR_HEURE),
+    'le repère n\'est plus les 30 % qui restent après le palier');
 
   for (const niveau of [1, 5, 10, 25, NIVEAU.plafond]) {
     const etat = baseDesUniques();
@@ -5850,15 +6067,17 @@ test('F-J T7 — Complexe entier : le repère de 1 h est tenu, et il est CALCUL�
     baseCourante(etat).disposition[index].niveau = niveau;
     assert.equal(complexeDe(etat).santeMilli, 1000, `niveau ${niveau} : le Complexe n'est pas entier`);
     const [effet] = ficheDuComplexe(etat).effets;
-    assert.equal(effet.avant, HEURE_EN_TICKS,
-      `niveau ${niveau} : la fiche n'annonce pas une heure ronde`);
+    assert.equal(effet.avant, DIX_HUIT_MIN_EN_TICKS,
+      `niveau ${niveau} : la fiche n'annonce pas 18 minutes rondes`);
   }
 
-  // ⚠ ET L'AUTRE REPÈRE DU §0 DE `CLAUDE.md` TIENT AUSSI — « 24 h TOUT ROND à
-  // 1 PV ». Il ne passe pas par la fiche, qui n'a pas de Complexe à 1 PV à
-  // montrer, mais il départage la formule d'une constante : une fiche qui
-  // écrirait 36 000 en dur rendrait la même chose ici.
-  assert.equal(ticksDeRetour(7, 7, 0), 24 * HEURE_EN_TICKS);
+  // ⚠⚠ ET L'AUTRE REPÈRE A CHANGÉ DE NATURE LE 12/09 : « 24 h TOUT ROND à 1 PV »
+  // était le PLANCHER de l'ancienne pénalité linéaire, et `heuresAuPlancher` a
+  // disparu de la table avec elle. Ce qui le remplace est le plancher de
+  // DIVISION — la santé se range en millièmes, un PV s'y arrondit à zéro, et
+  // `ticksDeRetour` divise par un millième au lieu de zéro. Mille heures, donc,
+  // et c'est fini : une fiche qui écrirait 10 800 en dur rendrait autre chose.
+  assert.equal(ticksDeRetourDUnePieceRasee(7, 7, 0), 1000 * TICKS_PAR_HEURE);
 });
 
 test('F-J T8 — la section du Complexe n\'annonce AUCUN coût', () => {
@@ -7324,4 +7543,73 @@ test('PE T2 — refusé faute de ressources, le bouton dit QUAND et ne compte pl
     'un refus que l\'attente ne lève pas doit rester écrit');
   assert.doesNotMatch(melange, /il manque/);
   assert.match(melange, /dans 1 min 30 s$/);
+});
+
+// ---------------------------------------------------------------------------
+// VITESSE — le point 10 : le plafond de réserve entre dans la fiche
+// ---------------------------------------------------------------------------
+
+test('VIT T8 — Caserne, Dépôt et Aérodrome disent le plafond, et le niveau DÉCOTE', () => {
+  // ⚠⚠ ETHAN, 11/09, POINT 10 : « la fiche doit dire le plafond de réserve
+  // courant et ce qu'une amélioration lui fait ». Le brief ajoute, et c'est la
+  // moitié qui coûte : **le niveau ne crédite rien, il décote**. Écrire
+  // « +X h de plafond » serait faux — `plafondDeLaReserveDeLaBase` ne lit que
+  // `base.armee`.
+  //
+  // MONTAGE QUI LE FAIT TOMBER : donner un `apres` à la ligne du plafond (elle
+  // annoncerait un gain que l'amélioration ne rend pas), ou retirer la ligne du
+  // diviseur (plus rien ne dirait ce que l'amélioration fait).
+  const etat = baseDesUniques();
+  const laBase = baseCourante(etat);
+  // ⚠ UNE ARMÉE POUR QUE LE PLAFOND NE SOIT PAS LE PLANCHER : à armée vide il
+  // vaut douze heures tout rond, et le montage ne distinguerait pas « lu » de
+  // « écrit en dur ».
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 6 });
+  const plafond = plafondDeLaReserve(etat);
+  assert.ok(plafond > 0, 'le montage ne mesure rien : plafond nul');
+
+  for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
+    const index = indiceDe(etat, id);
+    const apercu = apercuDuBatiment(etat, index);
+    const effets = new Map(apercu.effets.map((e) => [e.libelle, e]));
+
+    // ⚠ LE PLAFOND EST DIT, ET IL VIENT DU MOTEUR.
+    const reserve = [...effets.values()].find((e) => e.libelle.startsWith('Plafond de réserve'));
+    assert.ok(reserve, `${id} ne dit pas le plafond de réserve`);
+    assert.equal(reserve.avant, plafond,
+      `${id} : le plafond annoncé n'est pas celui du moteur`);
+    assert.equal(reserve.forme, 'duree');
+    // ⚠⚠ ET IL N'A PAS D'« APRÈS » — c'est l'assertion qui porte l'arbitrage.
+    assert.equal(reserve.apres, null,
+      `${id} : la fiche annonce un plafond différent après l'amélioration, `
+      + 'ce que le niveau ne fait pas');
+
+    // ⚠ ET CE QUE L'AMÉLIORATION FAIT VRAIMENT EST DIT À CÔTÉ : le diviseur
+    // MONTE, donc le temps et la scorie BAISSENT.
+    const decote = [...effets.values()].find((e) => e.forme === 'diviseur');
+    assert.ok(decote, `${id} ne dit pas ce que l'amélioration change`);
+    assert.ok(decote.apres > decote.avant,
+      `${id} : le diviseur ne monte pas — l'amélioration ne décoterait rien`);
+    assert.equal(decote.avant, diviseurDuBatiment(laBase.disposition[index].niveau));
+    assert.equal(decote.apres, diviseurDuBatiment(laBase.disposition[index].niveau + 1));
+  }
+
+  // ⚠⚠ ET LE PLAFOND SUIT L'ARMÉE, PAS LE BÂTIMENT — mesuré des deux côtés, sans
+  // quoi « il ne crédite rien » resterait une affirmation.
+  const avantMontee = apercuDuBatiment(etat, indiceDe(etat, 'caserne')).effets
+    .find((e) => e.libelle.startsWith('Plafond de réserve')).avant;
+  laBase.disposition[indiceDe(etat, 'caserne')].niveau += 5;
+  assert.equal(
+    apercuDuBatiment(etat, indiceDe(etat, 'caserne')).effets
+      .find((e) => e.libelle.startsWith('Plafond de réserve')).avant,
+    avantMontee,
+    'monter la Caserne a bougé le plafond : il ne dépend donc pas que de l\'armée',
+  );
+  laBase.armee[0].niveau = 30;
+  assert.notEqual(
+    apercuDuBatiment(etat, indiceDe(etat, 'caserne')).effets
+      .find((e) => e.libelle.startsWith('Plafond de réserve')).avant,
+    avantMontee,
+    'monter l\'ARMÉE n\'a pas bougé le plafond : la fiche ne le lit pas dans le moteur',
+  );
 });

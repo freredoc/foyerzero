@@ -104,9 +104,9 @@ import {
   problemesDeLaReparationDUnBatiment, reparerUnBatiment,
   coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments,
   problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
-  plafondDeLaReserveDesBatiments, direLaDuree,
-  complexeDeLaBase, retourDeLaPiece, ticksDeRetour, diviseurDuBatiment,
-  etatDeLaPose,
+  plafondDeLaReserveDesBatiments, plafondDeLaReserveDeLaBase, direLaDuree,
+  complexeDeLaBase, retourDeLaPiece, ticksDeRetourDUnePieceRasee, rendLesPv, diviseurDuBatiment,
+  etatDeLaPose, pvMaxDuBatimentMilli, pvMaxDeLaPieceDeGarnisonMilli,
 } from '../sim/reparation.js';
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
@@ -127,6 +127,9 @@ import { regenerationParHeureMilli, secondesAvantLePlein } from '../sim/points-a
 
 /** L'espace fine insécable du français, entre les milliers. */
 export const SEPARATEUR_MILLIERS = ' ';
+
+/** Mille — l'échelle des milli-unités et des millièmes du moteur. */
+const MILLE = 1000;
 
 /**
  * Groupe une suite de chiffres par trois, à la française.
@@ -1325,7 +1328,7 @@ export function libelleDuVoisin(type) {
  * @param {Array|null} candidate la même, ce bâtiment monté d'un niveau
  * @returns {Array<{libelle: string, avant: number|null, apres: number|null, forme: string}>}
  */
-function effetsDuBatiment(pose, def, vise, disposition, candidate) {
+function effetsDuBatiment(pose, def, vise, disposition, candidate, laBase) {
   // ⚠ LES DEUX MESURES SE PRENNENT SUR UNE VRAIE DISPOSITION, jamais sur un
   // montage d'une seule case fabriqué ici : `complexeDeLaBase` balaie la
   // disposition, et lui en donner une fausse serait mesurer autre chose que la
@@ -1371,29 +1374,34 @@ function effetsDuBatiment(pose, def, vise, disposition, candidate) {
     // devra dire les deux, c'est une SECONDE ligne qu'il faudra, pas ce
     // niveau-ci qu'il faudra remonter.**
     //
-    // ⚠⚠ ET LE CHIFFRE SE CALCULE, IL NE S'ÉCRIT PAS. « 1 h » est ce que la
-    // formule REND à dépassement nul, jamais ce qu'on tape ici : `ticksDeRetour`
-    // fait `heuresDeBase × facteurMilli(1 + 0)/1000 × pénalité(santé)`, et
-    // `facteurMilli(1)` vaut exactement 1 000. Mesuré aux niveaux 1, 5, 10, 25
-    // et 50 : 36 000 ticks, soit 1,0000 h à chaque fois — et 24,00 h à un PV.
-    // Les deux repères d'Ethan sont donc touchés par la formule, pas par une
-    // constante. `F-J T7` les rejoue.
+    // ⚠⚠ ET LE CHIFFRE SE CALCULE, IL NE S'ÉCRIT PAS. « 18 min » est ce que la
+    // formule REND à dépassement nul et à perte totale, jamais ce qu'on tape
+    // ici : `ticksDeRetour` rend `(1 − 0,7 × santé) × heuresDeBase × 1000/santé`,
+    // et `facteurMilli(1)` vaut exactement 1 000. `F-J T7` le rejoue.
+    //
+    // ⚠⚠ ET LA LIGNE NOMME DÉSORMAIS UNE PIÈCE RASÉE, PARCE QUE LA DURÉE DÉPEND
+    // DES DÉGÂTS DEPUIS LE 12/09. Avant, « une défense de son niveau » suffisait :
+    // toutes mettaient le même temps. Une éraflure de 20 % revient maintenant en
+    // 3 min 36 quand une rasée met 18 min — annoncer l'une pour l'autre ferait
+    // de cette ligne un chiffre au hasard. On annonce le PIRE cas, qui est la
+    // seule borne que le joueur ne dépassera pas, et le mot le dit.
     //
     // ⚠ ET LA BORNE DE `ticksDeRetour` TIENT MIEUX QU'AVANT, PAS MOINS BIEN.
     // Elle LÈVE quand `1 + dépassement` sort de `NIVEAU` ; le dépassement vaut
-    // désormais ZÉRO par construction, quel que soit le niveau du Complexe. Le
-    // choix entre `NIVEAU.plafond` et `GEOGRAPHIE.niveauPlafond` — qui valaient
-    // tous deux 50 et que ce bloc départageait — devient donc sans objet.
+    // ZÉRO par construction ici, quel que soit le niveau du Complexe. Le choix
+    // entre `NIVEAU.plafond` et `GEOGRAPHIE.niveauPlafond` — qui valaient tous
+    // deux 50 et que ce bloc départageait — reste donc sans objet.
     return [ligne(
-      'Retour d\'une défense de son niveau',
+      'Retour d\'une défense rasée de son niveau',
       'duree',
       (niveau, ou) => {
         const complexe = complexeDeLaBase({ disposition: ou });
-        // ⚠ SANTÉ NULLE — le Complexe à zéro PV — VEUT DIRE « rien ne revient,
-        // jamais », et non « très lentement ». Il n'y a pas de durée à
-        // annoncer ; `null` remonte, et la ligne se dira sans nombre.
-        if (complexe === null || complexe.santeMilli === null) return null;
-        return ticksDeRetour(niveau, niveau, complexe.santeMilli);
+        // ⚠ SANTÉ QUI NE RAMÈNE RIEN — pas de Complexe, ou moins d'un demi-
+        // millième de ses PV — VEUT DIRE « jamais », et non « très lentement ».
+        // Il n'y a pas de durée à annoncer ; `null` remonte, et la ligne se dira
+        // sans nombre.
+        if (complexe === null || !rendLesPv(complexe.santeMilli)) return null;
+        return ticksDeRetourDUnePieceRasee(niveau, niveau, complexe.santeMilli);
       },
     )];
   }
@@ -1404,11 +1412,35 @@ function effetsDuBatiment(pose, def, vise, disposition, candidate) {
     // rendrait au joueur les noms INTERNES des châssis, qui n'apparaissent
     // nulle part à l'écran ; en écrire une seconde table serait la seconde
     // vérité que §4 de `CLAUDE.md` interdit.
-    return [ligne(
-      `Réparation · ${FAMILLE_DE_CHASSIS[def.chassis]}`,
-      'diviseur',
-      (niveau) => diviseurDuBatiment(niveau),
-    )];
+    return [
+      ligne(
+        `Réparation · ${FAMILLE_DE_CHASSIS[def.chassis]}`,
+        'diviseur',
+        (niveau) => diviseurDuBatiment(niveau),
+      ),
+      // ⚠⚠ LE PLAFOND DE RÉSERVE — ETHAN, 11/09, POINT 10 : « la fiche doit dire
+      // le plafond de réserve courant et ce qu'une amélioration lui fait ». Il
+      // manquait, et c'est la moitié qui rend la ligne du dessus lisible : un
+      // diviseur ne veut rien dire tant qu'on ne sait pas dans quel stock il
+      // puise.
+      //
+      // ⚠⚠ ET ELLE N'A PAS D'« APRÈS », PARCE QUE LE NIVEAU NE CRÉDITE RIEN. Le
+      // plafond ne dépend QUE du niveau de l'armée — `plafondDeLaReserveDeLaBase`
+      // lit `base.armee` et rien d'autre. Écrire « 13 h → 14 h » ferait acheter
+      // une amélioration pour un stock qu'elle ne remplit pas ; écrire
+      // « 13 h → 13 h » se lirait comme un défaut d'affichage. La ligne dit le
+      // FAIT, et son libellé nomme la grandeur qui le gouverne.
+      //
+      // ⚠ ET LA VALEUR SE DEMANDE AU MOTEUR, comme les six autres effets : la
+      // recalculer ici donnerait un second plafond, que le premier réglage
+      // ferait diverger.
+      {
+        libelle: 'Plafond de réserve · armée',
+        forme: 'duree',
+        avant: plafondDeLaReserveDeLaBase(laBase),
+        apres: null,
+      },
+    ];
   }
 
   // Le Chantier garde sa section « Emplacements ouverts », qui existe et
@@ -1504,7 +1536,9 @@ export function apercuDuBatiment(etat, index) {
     // ⚠ CE QUE CE BÂTIMENT COMMANDE, quand il est UNIQUE — voir
     // `effetsDuBatiment`. Vide pour les quatre non uniques et pour le Chantier,
     // qui a sa propre section depuis toujours.
-    effets: effetsDuBatiment(b, def, auPlafond ? null : vise, laBase.disposition, candidate),
+    effets: effetsDuBatiment(
+      b, def, auPlafond ? null : vise, laBase.disposition, candidate, laBase,
+    ),
     // Le Chantier est le seul à ouvrir des emplacements ; pour les dix autres
     // la ligne n'aurait aucun sens et ne s'affiche pas.
     emplacements: def.role === 'central'
@@ -1961,6 +1995,14 @@ export function peindreVueDuPanneau(doc, elements, vue) {
       bloc.dataset.cle = String(section.cle);
       bloc.classList.add('depliable');
     }
+    // ⚠⚠ UNE SECTION PEUT AUSSI PORTER UNE CLASSE, DEPUIS LE 11/09 — point 9
+    // d'Ethan, le code couleur du journal. Même discipline que `cle` juste
+    // au-dessus : le nom est GÉNÉRIQUE, ce rendu-ci ne connaît ni raid ni
+    // verdict, et les trois autres lecteurs n'en posent aucune — pas d'attribut,
+    // pas une classe, pas un octet.
+    if (section.classe !== undefined && section.classe !== null) {
+      bloc.classList.add(String(section.classe));
+    }
     const titre = doc.createElement('h3');
     titre.textContent = section.titre;
     bloc.appendChild(titre);
@@ -1999,6 +2041,12 @@ export function peindreVueDuPanneau(doc, elements, vue) {
     for (const l of section.lignes) {
       const ligne = doc.createElement('div');
       ligne.className = l.mineur === true ? 'ligne mineure' : 'ligne';
+      // ⚠ ET UNE LIGNE AUSSI — la seconde moitié du code couleur du point 9 :
+      // la section dit mené ou subi, la ligne dit si l'issue est bonne. Même
+      // raison qu'au-dessus, et `mineure` reste ce qu'elle était.
+      if (l.classe !== undefined && l.classe !== null) {
+        ligne.classList.add(String(l.classe));
+      }
       const quoi = doc.createElement('span');
       quoi.className = 'quoi';
       // ⚠⚠ LE PICTOGRAMME EST DÉCORATIF ICI, ET IL EST DIT COMME TEL. Le
@@ -2480,6 +2528,62 @@ function motDuRetour(laBase, piece, maintenant) {
 }
 
 /**
+ * Ce qu'un JETON de garnison porte au sujet de son retour — `null` s'il est
+ * intact et n'a donc rien à dire.
+ *
+ * ⚠⚠ ELLE NE RECALCULE RIEN, ET C'EST TOUT CE QU'ON LUI DEMANDE. Elle reçoit ce
+ * que `retourDeLaPiece` a rendu ; refaire la soustraction ici donnerait un
+ * second compte de la même échéance, et le premier écart entre le jeton et la
+ * tête de bande se lirait comme un bogue du moteur.
+ *
+ * ⚠⚠ ET C'EST UN BADGE, PAS UNE PHRASE — c'est ce qui la distingue de
+ * `motDuRetour`, qui sert le bandeau contextuel. Les deux branchent sur les
+ * MÊMES trois états et rendent deux TEXTES différents, parce qu'une case de
+ * trente-six pixels ne porte pas « · abîmée, sans retour ». Ce qui ne doit pas
+ * se dédoubler est la RÉPONSE DU MOTEUR, et ni l'une ni l'autre ne la produit.
+ *
+ * ⚠ « JAMAIS », ET SURTOUT PAS UN TIRET NI UN VIDE. Une durée absente se lirait
+ * « on ne sait pas » là où le fait est « jamais » — c'est déjà la raison d'être
+ * du troisième état de `retourDeLaPiece`, et la tête de bande dit la phrase
+ * entière (« Sans Complexe de défense, les pièces abîmées… »).
+ *
+ * @param {{ etat: string, ticks: number|null }} retour
+ * @returns {{ texte: string, sansRetour: boolean }|null}
+ */
+export function badgeDuRetour(retour) {
+  if (retour.etat === 'intacte') return null;
+  if (retour.etat === 'sans-retour') return { texte: 'jamais', sansRetour: true };
+  return { texte: direLaDuree(retour.ticks), sansRetour: false };
+}
+
+/**
+ * La part de PV qui reste à une pièce, en millièmes — `null` si elle est intacte.
+ *
+ * ⚠ `null` VEUT DIRE « RIEN À DESSINER », PAS « MILLE ». Une barre pleine posée
+ * sur les quarante jetons d'une base saine ferait un écran où tout a l'air
+ * abîmé ; c'est la barre elle-même qui dit l'avarie, donc elle n'existe que
+ * quand il y en a une. C'est exactement ce que faisait le carré rouge qu'elle
+ * remplace.
+ *
+ * ⚠ ELLE SE MESURE SUR LE MAXIMUM DE LA PIÈCE, jamais sur un absolu. Les PV
+ * maximaux croissent avec le niveau : mille milli-PV de dégâts sont une
+ * égratignure au niveau 50 et la moitié de la vie au niveau 1, et une barre qui
+ * lirait l'absolu annoncerait la même avarie dans les deux cas.
+ *
+ * @param {number} degatsMilli
+ * @param {number} pvMaxMilli
+ * @returns {number|null}
+ */
+export function partRestanteMilli(degatsMilli, pvMaxMilli) {
+  const degats = degatsMilli ?? 0;
+  if (degats <= 0) return null;
+  if (!(pvMaxMilli > 0)) {
+    throw new RangeError(`barre de vie : pvMax « ${pvMaxMilli} » — milli-PV > 0 attendus`);
+  }
+  return Math.max(0, Math.min(MILLE, Math.round(((pvMaxMilli - degats) * MILLE) / pvMaxMilli)));
+}
+
+/**
  * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ.
  *
  * Jumelle de `casesPosables`, et pour les mêmes raisons : on interroge
@@ -2702,6 +2806,20 @@ export const TERRAINS = {
     // `degatsMilli` depuis le lot RAID-B ; les refus viennent maintenant de
     // `problemesDeLaReparationDUnBatiment`, qui les chiffre. Un champ que plus
     // rien ne lit est un commentaire menteur en puissance.
+    // ⚠⚠ LES PV MAXIMAUX D'UNE PIÈCE, POUR SA BARRE DE VIE — lot VITESSE. Les
+    // DEUX bandes portent `degatsMilli` : les bâtiments depuis le lot RAID-B,
+    // la garnison depuis GARNISON-ET-ARMÉE. La barre est donc posée par UNE
+    // ligne pour les deux, et c'est ce champ qui dit où chercher le maximum —
+    // un `=== 'defense'` écrit dans la boucle de peinture serait très
+    // exactement ce que deux gardes de ce fichier refusent.
+    pvMaxDe: (piece) => pvMaxDuBatimentMilli(piece.id, piece.niveau),
+    // ⚠⚠ `null` = CETTE BANDE N'A PAS DE REBOURS, ET CE N'EST PAS UN OUBLI. Un
+    // bâtiment ne revient pas tout seul : le joueur le répare, en temps de
+    // réserve et en quartz, par le mode Réparer. Le rebours du jeton dit une
+    // RAMPE — ce que le Complexe de défense ramène sans qu'on le lui demande —,
+    // et il n'y en a aucune de ce côté. Poser une durée ici promettrait une
+    // attente que rien ne purgerait.
+    retourDUnePiece: null,
     pourQui: 'la base',
   },
   defense: {
@@ -2827,6 +2945,13 @@ export const TERRAINS = {
     panneau: true,
     vueDuPanneau: (etat, index) => lignesDeLaPiece(apercuDeLaPiece(etat, 'garnison', index)),
 
+    // ⚠ LE MAXIMUM VIENT DES DEUX TABLES, ET `pvMaxDeLaPieceDeGarnisonMilli` les
+    // résout déjà — neuf ouvrages dans `DEFENSES`, huit unités dans `UNITES`.
+    pvMaxDe: (piece) => pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau),
+    // ⚠ ON DEMANDE AU MOTEUR, ON NE RECALCULE PAS. C'est la même fonction que
+    // lit `etatDeLaGarnison` en tête de bande et `motDuRetour` dans le bandeau
+    // contextuel : trois vues, une réponse.
+    retourDUnePiece: retourDeLaPiece,
     pourQui: 'la défense',
   },
 };
@@ -3450,6 +3575,21 @@ export function initialiserEcranChantier(doc, {
   let deplacementEnCours = null;
   const fenetre = doc.defaultView;
   const cellules = new Map(); // « rangée:colonne » → élément
+  // Les jetons peints, et les deux nœuds que chacun rafraîchit à chaque passe :
+  // sa barre de vie et son rebours. `peindre` la remplit, `rafraichirLesJetons`
+  // la parcourt.
+  //
+  // ⚠⚠ ELLE EXISTE POUR NE PAS REFABRIQUER LA GRILLE DIX FOIS PAR SECONDE. Le
+  // rebours DESCEND pendant qu'on le regarde et la barre MONTE pendant que la
+  // rampe soigne : les deux changent à chaque tick. Rappeler `peindre` les
+  // rendrait justes et referait quarante jetons, leurs sprites et leurs couches
+  // tournantes à chaque image — un défaut de rendu que `node --check` laisse
+  // passer, et que la tête de bande a déjà coûté une fois.
+  //
+  // ⚠ LES NŒUDS SONT CRÉÉS MÊME QUAND ILS N'ONT RIEN À DIRE, et masqués. Une
+  // pièce s'abîme puis guérit ENTRE deux peintures : créer le nœud à la demande
+  // ferait de `rafraichir` un second peintre, ce qu'il n'est pas.
+  const jetonsVivants = [];
 
   /**
    * Le bandeau qui parle au joueur — refus de pose, plus d'emplacements,
@@ -5501,31 +5641,19 @@ export function initialiserEcranChantier(doc, {
     // leur bande, la garnison dans la sienne, avec le sigle et la famille que
     // leur terrain leur donne. Une seconde boucle écrite pour la défense aurait
     // divergé au premier ajustement de jeton.
-    for (const terrain of Object.values(TERRAINS)) {
-      for (const b of terrain.pieces(etat)) {
+    // ⚠ LA BOUCLE PORTE LA CLÉ ET L'INDICE DEPUIS LE LOT VITESSE. Le rebours
+    // d'un jeton se réécrit dix fois par seconde SANS refabriquer la grille : il
+    // faut donc pouvoir retrouver la pièce que chaque nœud décrit, et un couple
+    // (terrain, indice) est exactement ce que `selection` emploie déjà.
+    jetonsVivants.length = 0;
+    for (const [cleTerrain, terrain] of Object.entries(TERRAINS)) {
+      const pieces = terrain.pieces(etat);
+      for (let i = 0; i < pieces.length; i += 1) {
+        const b = pieces[i];
         const case_ = cellules.get(cle(b.rangee, b.colonne));
         if (case_ === undefined) continue;
         const jeton = doc.createElement('div');
         jeton.className = `jeton ${terrain.familleDe(b.id)}`;
-        // ⚠⚠ UN ABÎMÉ SE VOIT, ET LA CONVENTION EST CELLE DE L'ÉCRAN DE RAID —
-        // lot RÉPARER-ÉCRAN, 05/09. `#ecran-raid .emplacement.abimee` borde en
-        // `#E43E32` depuis le 01/09 : reprendre la classe et la teinte apprend au
-        // joueur UNE grammaire pour les deux écrans, là où un second langage
-        // visuel lui en apprendrait deux pour le même fait.
-        //
-        // ⚠ ET C'EST LA MÊME LIGNE POUR LES DEUX BANDES, sans un `=== 'defense'`
-        // écrit à la main : une pièce de garnison porte `degatsMilli` comme un
-        // bâtiment, et deux gardes de ce fichier refusent déjà qu'une bande soit
-        // reconnue à son nom.
-        //
-        // ⚠⚠ ET « SON AVARIE NE DURE QU'UNE HEURE » ÉTAIT FAUX, DEUX FOIS. Le
-        // commentaire d'hier disait que « la garnison se répare toute seule »
-        // en une heure : jusqu'au lot COMPLEXE elle ne se réparait PAS DU TOUT,
-        // et depuis, l'heure est le cas le PLUS RAPIDE — un dépassement de
-        // niveau ou un Complexe abîmé la portent bien au-delà, et sans Complexe
-        // du tout la marque ne part jamais. C'est justement ce qui rend le
-        // marquage utile ici, et `#chantier-garnison` dit combien de temps.
-        if ((b.degatsMilli ?? 0) > 0) jeton.classList.add('abimee');
         // ⚠ LE TERRAIN DÉCIDE, PAS LE NOM DE LA BANDE. `spriteDe` vaut `null`
         // tant qu'une famille n'est pas branchée : la bande garde alors son
         // sigle. Les deux bandes sont branchées depuis le 30/08 ; la porte reste
@@ -5546,6 +5674,59 @@ export function initialiserEcranChantier(doc, {
         niveau.className = 'niveau';
         niveau.textContent = String(b.niveau);
         jeton.appendChild(niveau);
+        // ⚠⚠ LES TROIS ENFANTS ABSOLUS SE POSENT ENSEMBLE, ET APRÈS LE SIGLE.
+        // La branche `spriteDe === null` ci-dessus écrit `jeton.textContent`, ce
+        // qui VIDE les enfants : la barre posée avant elle disparaîtrait sans
+        // qu'une ligne le dise. Les deux bandes sont branchées aujourd'hui, donc
+        // cette branche est morte — et un jour où elle ne le serait plus, le
+        // défaut serait muet.
+        // ⚠⚠ LE CARRÉ ROUGE EST REMPLACÉ PAR UNE BARRE DE VIE — Ethan, 12/09.
+        // Le liseré `#E43E32` du lot RÉPARER-ÉCRAN disait QU'IL Y A une avarie
+        // et rien de plus ; il fallait sélectionner la pièce pour apprendre
+        // COMBIEN. La barre dit les deux d'un coup, et c'est la seule chose
+        // qu'on lui demande. ⚠ `.jeton.abimee` PART DONC AVEC SA RÈGLE : une
+        // classe que plus personne ne pose laisse au dépôt une décoration que
+        // rien n'explique, et la garde des classes de `chantier.test.js` ne
+        // regarde que le sens inverse.
+        //
+        // ⚠ ET C'EST TOUJOURS LA MÊME LIGNE POUR LES DEUX BANDES, sans un
+        // `=== 'defense'` écrit à la main : une pièce de garnison porte
+        // `degatsMilli` comme un bâtiment — les bâtiments depuis le lot RAID-B —
+        // et deux gardes de ce fichier refusent déjà qu'une bande soit reconnue
+        // à son nom. Ce qui diffère est le MAXIMUM, et c'est la table qui le
+        // dit, par `pvMaxDe`.
+        //
+        // ⚠⚠ LA BARRE EST UN ENFANT ABSOLU, JAMAIS UNE BORDURE. `.jeton` peint
+        // son sprite en `background-image`, dont `background-origin` vaut
+        // `padding-box` : une bordure rétrécirait la boîte de padding, donc le
+        // pixel art se recalerait d'un pixel. C'est déjà pourquoi le liseré
+        // qu'elle remplace était un `outline`. Le modèle est `.couche-tournante`
+        // — `position: absolute`, `pointer-events: none`.
+        const barre = doc.createElement('span');
+        barre.className = 'barre-vie';
+        barre.hidden = true;
+        const reste = doc.createElement('i');
+        barre.appendChild(reste);
+        jeton.appendChild(barre);
+        // ⚠⚠ LE REBOURS EST PAR PIÈCE, ET IL NE SE RECALCULE PAS — Ethan,
+        // 12/09. La tête de bande annonce déjà « 7 pièces en retour, la première
+        // dans 39 min » ; ce qu'elle ne dit pas, c'est LAQUELLE. Le nœud naît
+        // ici, VIDE, et `rafraichirLesJetons` y écrit par `textContent` dix fois
+        // par seconde : refabriquer quarante jetons à 10 Hz pour une chaîne de
+        // six caractères est un défaut de rendu que `node --check` laisse
+        // passer.
+        //
+        // ⚠ IL N'EXISTE QUE LÀ OÙ LA BANDE A UNE RAMPE, et c'est `retourDUnePiece`
+        // qui le dit. Un bâtiment ne revient pas tout seul : lui poser un rebours
+        // promettrait une attente que rien ne purgerait.
+        let rebours = null;
+        if (terrain.retourDUnePiece !== null) {
+          rebours = doc.createElement('span');
+          rebours.className = 'rebours';
+          rebours.hidden = true;
+          jeton.appendChild(rebours);
+        }
+        jetonsVivants.push({ cleTerrain, index: i, barre, reste, rebours });
         case_.appendChild(jeton);
       }
     }
@@ -5563,6 +5744,11 @@ export function initialiserEcranChantier(doc, {
     peindrePalette(etat);
     marquerCasesLegales();
     peindreApercu();
+    // ⚠ LES JETONS NAISSENT AVEC LEURS DEUX NŒUDS MASQUÉS ET VIDES : c'est cet
+    // appel qui les remplit pour la première image. Sans lui, une pièce abîmée
+    // n'aurait ni barre ni rebours jusqu'au premier passage de `rafraichir` —
+    // un dixième de seconde de vide que personne ne verrait, sauf une capture.
+    rafraichirLesJetons(etat);
     // À la première peinture, le Chantier est sélectionné d'office : un bandeau
     // contextuel vide au premier regard donne un écran qui a l'air en panne, et
     // le Chantier est de toute façon ce autour de quoi la base se lit.
@@ -5580,6 +5766,56 @@ export function initialiserEcranChantier(doc, {
       selection = chantier === -1 ? null : chantier;
     }
     selectionner(selection);
+  }
+
+  /**
+   * Réécrit la barre de vie et le rebours de chaque jeton, sans en refabriquer
+   * un seul.
+   *
+   * ⚠⚠ ELLE TOURNE DIX FOIS PAR SECONDE, ET C'EST POUR ÇA QU'ELLE N'ÉCRIT QUE
+   * DES FEUILLES. Le rebours DESCEND et la barre MONTE pendant qu'on les
+   * regarde : les deux changent à chaque tick, donc il faut les repeindre, et
+   * rappeler `peindre` referait quarante jetons, leurs sprites, leurs couches
+   * tournantes et leurs fonds à chaque image. Ici on pose un `hidden`, une
+   * largeur et un `textContent`.
+   *
+   * ⚠ ON DEMANDE AU MOTEUR, ON NE RECALCULE RIEN. `retourDeLaPiece` porte les
+   * trois états et l'échéance, `partRestanteMilli` fait la division des PV, et
+   * `badgeDuRetour` choisit le mot. Refaire la soustraction ici donnerait un
+   * second compte de la même échéance — et le premier écart entre le jeton et
+   * la tête de bande se lirait comme un bogue du moteur.
+   *
+   * ⚠ LA LISTE PEUT AVOIR VIEILLI D'UNE IMAGE, ET C'EST GARDÉ. Un geste — une
+   * pose, un retrait — change la longueur de `garnison` ou de `disposition`
+   * avant que `peindre` ne repasse : l'indice retenu désignerait alors une autre
+   * pièce, ou aucune. On sort sur la pièce absente au lieu de peindre la
+   * mauvaise.
+   *
+   * @param {object} etat
+   */
+  function rafraichirLesJetons(etat) {
+    if (jetonsVivants.length === 0) return;
+    const laBase = baseCourante(etat);
+    const maintenant = etat.horloge.nbTicks;
+    for (const j of jetonsVivants) {
+      const terrain = TERRAINS[j.cleTerrain];
+      const piece = terrain.pieces(etat)[j.index];
+      if (piece === undefined) continue;
+      const part = partRestanteMilli(piece.degatsMilli, terrain.pvMaxDe(piece));
+      j.barre.hidden = part === null;
+      if (part !== null) j.reste.style.width = `${part / 10}%`;
+      if (j.rebours === null) continue;
+      const badge = badgeDuRetour(terrain.retourDUnePiece(laBase, piece, maintenant));
+      j.rebours.hidden = badge === null;
+      // ⚠ LE MOT SE DISTINGUE DE LA DURÉE, ET PAS SEULEMENT PAR SON TEXTE.
+      // « jamais » n'est pas « bientôt » : une pièce sans Complexe ne revient
+      // PAS, et lui laisser la teinte d'une attente ferait attendre le joueur.
+      // La classe porte la distinction jusqu'à la feuille.
+      if (badge !== null) {
+        j.rebours.textContent = badge.texte;
+        j.rebours.classList.toggle('sans-retour', badge.sansRetour);
+      }
+    }
   }
 
   /**
@@ -5603,6 +5839,10 @@ export function initialiserEcranChantier(doc, {
     // même dès que la bande courante n'est pas la Défense, donc la boucle ne
     // parcourt la garnison que lorsqu'elle est à l'écran.
     ecrireLEtatDeLaGarnison();
+    // ⚠ ET LES JETONS AVEC ELLE, POUR LA MÊME RAISON. La tête de bande dit
+    // « la première dans 39 min », le jeton dit LAQUELLE : les deux portent un
+    // rebours, donc les deux descendent pendant qu'on les regarde.
+    rafraichirLesJetons(etat);
 
     // ⚠ LES POINTS D'ATTAQUE SE REPEIGNENT ICI, avec les trois ressources et
     // dans la même passe. Un second minuteur pour un seul nombre ferait deux

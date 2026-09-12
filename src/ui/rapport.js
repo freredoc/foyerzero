@@ -144,18 +144,71 @@ export const TITRE_JOURNAL = 'Journal des raids';
  * PROGRAMME, pas de jeu, et l'afficher en silence ferait lire une histoire
  * fausse.
  */
+/**
+ * Ce que chaque verdict veut dire, SENS PAR SENS — la seconde moitié du point 9.
+ *
+ * ⚠⚠ ETHAN, 11/09, POINT 9, ET SA PRÉMISSE EST FAUSSE — MESURÉE, PAS CRUE. Le
+ * brief écrit : « sur un raid SUBI, "Victoire totale" est l'issue vue de
+ * l'ATTAQUANT ». `verdictDeLaDefense` de `sim/raid-ouvrage.js` porte en toutes
+ * lettres « le miroir de `verdictDuRaid`, vu du côté de celui qui se défend »,
+ * et son corps le confirme : base rasée → `defaite-totale`, bâtiments entamés →
+ * `defaite`, rien touché → `victoire-totale`. **Le verdict est déjà celui du
+ * JOUEUR, des deux côtés.**
+ *
+ * ⚠⚠ CE QUI MANQUAIT EST DONC AUTRE CHOSE, ET LE DÉFAUT D'ETHAN EST RÉEL : rien
+ * ne DISAIT de quel côté l'issue tombait. « Victoire totale » sous « Raid subi »
+ * se lit dans les deux sens tant qu'on ne connaît pas la convention. La ligne
+ * porte maintenant ce qui s'est passé, pas seulement qui a gagné.
+ *
+ * ⚠ LES SIX CLAUSES SONT LUES DANS LE MOTEUR, ELLES NE S'INVENTENT PAS. Chacune
+ * traduit la branche exacte qui produit son verdict, et `VIT T6` confronte les
+ * CLÉS de ces deux tables aux littéraux que les deux fonctions du moteur
+ * rendent : une cinquième branche ajoutée là-bas ferait tomber ce test au lieu
+ * d'afficher « undefined » au joueur. C'est l'idiome de `JD T1`.
+ *
+ * ⚠ ET `victoire` N'EST PAS DANS LA TABLE DU SUBI, `defaite` PAS DANS CELLE DU
+ * MENÉ : aucune des deux fonctions ne les produit. Les y écrire « au cas où »
+ * ferait passer la garde ci-dessus sur des mots que rien ne peut afficher.
+ */
+export const VERDICTS_MENES = {
+  'victoire-totale': 'site rasé',
+  victoire: 'site entamé',
+  'defaite-totale': 'site intact',
+};
+
+export const VERDICTS_SUBIS = {
+  'victoire-totale': 'attaque repoussée',
+  defaite: 'votre base est entamée',
+  'defaite-totale': 'votre base est rasée',
+};
+
+/**
+ * Une issue est BONNE pour le joueur si son verdict commence par « victoire ».
+ *
+ * ⚠ DÉRIVÉ, PAS TABULÉ. Les quatre clés de `LIBELLE_VERDICT` se partagent en
+ * deux par leur nom ; une cinquième table à tenir d'accord avec elles serait la
+ * seconde vérité que ce fichier refuse ailleurs.
+ */
+export function issueEstBonne(verdict) {
+  return String(verdict).startsWith('victoire');
+}
+
 const SENS_DU_RAPPORT = {
   offense: {
     titre: 'Raid mené',
+    classe: 'raid-mene',
     libelleAdversaire: 'Cible',
     champAdversaire: 'cible',
     ligneDuBilan: ligneDuButin,
+    verdicts: VERDICTS_MENES,
   },
   defense: {
     titre: 'Raid subi',
+    classe: 'raid-subi',
     libelleAdversaire: 'Assaillant',
     champAdversaire: 'attaquant',
     ligneDuBilan: ligneDesPertes,
+    verdicts: VERDICTS_SUBIS,
   },
 };
 
@@ -204,12 +257,7 @@ function sectionDuRapport(rapport, tickCourant, ouvert) {
       apres: null,
       mineur: true,
     },
-    {
-      libelle: 'Issue',
-      picto: PICTOGRAMMES.temps,
-      avant: LIBELLE_VERDICT[rapport.verdict] ?? rapport.verdict,
-      apres: null,
-    },
+    ligneDeLIssue(forme, rapport.verdict),
     forme.ligneDuBilan(rapport),
   ];
   // ⚠⚠ LE DÉPLIANT — Ethan, 11/09. Les quatre lignes du résumé restent, et le
@@ -222,7 +270,35 @@ function sectionDuRapport(rapport, tickCourant, ouvert) {
   // Sans lui, rien n'apprend au joueur qu'un titre se touche — et le rendu
   // partagé sert quatre écrans dont trois n'ont rien à déplier.
   const marque = deplie ? '▴' : '▾';
-  return { cle, titre: `${forme.titre} · il y a ${age}  ${marque}`, lignes };
+  // ⚠ LA CLASSE DE LA SECTION DIT MENÉ OU SUBI — la première moitié du code
+  // couleur du point 9. Elle vient de la TABLE, jamais d'un `=== 'defense'`.
+  return {
+    cle, classe: forme.classe, titre: `${forme.titre} · il y a ${age}  ${marque}`, lignes,
+  };
+}
+
+/**
+ * La ligne « Issue » — le mot du verdict, ce qu'il veut dire, et sa couleur.
+ *
+ * ⚠ LE MOT VIENT DE `LIBELLE_VERDICT`, QUI EST PARTAGÉ. Trois fichiers le
+ * lisent ; en écrire un second ici donnerait deux vocabulaires pour la même
+ * issue, dont un seul suivrait la prochaine retouche.
+ *
+ * ⚠ UN VERDICT QUE LA TABLE DU SENS NE CONNAÎT PAS N'AJOUTE AUCUNE CLAUSE
+ * plutôt que d'écrire « undefined ». Il LÈVERAIT ailleurs — `VIT T6` le garde
+ * au dépôt —, mais un journal est le dernier endroit où l'on veut faire tomber
+ * l'écran : le rapport est déjà figé, et le joueur ne peut rien y changer.
+ */
+function ligneDeLIssue(forme, verdict) {
+  const mot = LIBELLE_VERDICT[verdict] ?? verdict;
+  const clause = forme.verdicts[verdict];
+  return {
+    libelle: 'Issue',
+    picto: PICTOGRAMMES.temps,
+    avant: clause === undefined ? mot : `${mot} · ${clause}`,
+    apres: null,
+    classe: issueEstBonne(verdict) ? 'issue-bonne' : 'issue-mauvaise',
+  };
 }
 
 /** Ce que le raid a rapporté — la même paire que le panneau de fin. */

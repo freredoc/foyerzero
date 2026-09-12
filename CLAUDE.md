@@ -42,7 +42,186 @@ Dernière révision : **11/09/2026**, version 0.99.51 · build 153.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 11/09/2026 (après le lot BASES-2), à confronter :**
+**Référence au 12/09/2026 (après le lot VITESSE), à confronter :**
+⚠⚠ **« UNE HEURE » N'EST PLUS UNE DURÉE, C'EST UNE VITESSE — ET `heuresAuPlancher`
+DISPARAÎT.** Ethan : une pièce à peine égratignée revenait en une heure comme une
+pièce rasée. `ticksDeRetour` prend désormais les PV PERDUS : palier instantané de
+70 % × santé, puis une rampe proportionnelle à ce qui reste. **Mesuré : deux
+pièces de MÊME niveau sous un Complexe INTACT rendent 3 min 36 s à 20 % de dégâts
+et 18 min à 100 %** — la durée suit les dégâts, ce qu'un plancher de 24 h
+interdisait. ⚠⚠ **CE LOT RENVERSE L'ARBITRAGE DU 06/09** (lot RETOUR-DÉFENSES),
+qui posait « 1 h à pleine santé, plancher 24 h à 1 PV » : le plancher n'existe
+plus, et `REPARATION_BASE_JOUEUR.heuresAuPlancher` est RETIRÉ de `src/data/base.js`.
+`npm test` rend **1599 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1598 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09),
+et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 383 149 octets**, 0 référence externe. Coût **+5 728 octets, SANS UN OCTET
+D'IMAGE NI DE SON**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `87153e3` (**9 377 421**) :
+**JavaScript +4 807 · feuille +829 · balisage +92 · images +0 · audio +0**, la
+somme des cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et **306
+URI / 307 lignes `data:` de part et d'autre**. Borne T10 **inchangée à
+9 600 000**, marge **216 851 octets, 2,26 %**. Version et build passent à
+**0.99.52 · build 154**. Le lot touche `src/data/base.js`, `src/index.src.html`,
+`src/render/scene.js`, `src/sim/reparation.js`, `src/sim/site-entame.js`,
+`src/ui/chantier.js`, `src/ui/offense.js`, `src/ui/rapport.js`,
+`src/ui/recherche.js`, `src/ui/session.js`, `package.json`, neuf fichiers de
+`test/`, et fait entrer `test/vitesse.test.js` et `rapports/RAPPORT-lotVITESSE.md`.
+**Pas une ligne de `src/sim/combat.js`, `src/sim/generateur.js`, `src/data/`
+hors `base.js`, `src/son/`, `tools/` ni `art/`** — vérifié au diff.
+⚠⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 32** — vérifié au diff. `retour`
+porte DÉJÀ `degatsAuDebutMilli` depuis le lot RETOUR-DÉFENSES : la formule neuve
+le LIT, elle n'ajoute aucun champ. Une sauvegarde d'avant le lot voit simplement
+ses attentes recalculées à la lecture, et c'est juste — la rampe est ANALYTIQUE.
+⚠⚠ **LA DURÉE SE CALCULE SUR LES DÉGÂTS GELÉS, JAMAIS SUR `degatsMilli`.** C'est
+la seule façon dont le rebours peut DESCENDRE : `degatsMilli` baisse à chaque
+tick sous la rampe, donc une durée qui le lirait se recalculerait plus courte ET
+repartirait d'un « reste » plus petit — le rebours se figerait au lieu de
+descendre. `retour.degatsAuDebutMilli` est gelé au tick du raid.
+⚠⚠ **CHAQUE PIÈCE DE LA BANDE DÉFENSE PORTE SA BARRE DE VIE ET SON REBOURS, SANS
+ÊTRE SÉLECTIONNÉE.** Deux enfants ABSOLUS du jeton, sur le modèle de
+`.couche-tournante` : un enfant dans le flux volerait au sprite la surface où
+`background-image` le peint, et un pixel art recalé d'un pixel n'est plus du
+pixel art. ⚠ **Rien n'est peint sur une pièce INTACTE** — `retourDeLaPiece` rend
+`intacte`, et les deux nœuds sont `hidden` : quatorze rebours à zéro seraient
+quatorze fois la même absence d'information. ⚠ Et sans Complexe la ligne dit
+**« jamais »**, jamais une durée : `sans-retour` n'est pas une attente longue.
+⚠⚠ **LE REBOURS SE RÉÉCRIT SANS REFABRIQUER UN SEUL JETON, ET C'EST MESURÉ.**
+`rafraichir` passe dix fois par seconde ; reconstruire la grille y ferait
+clignoter les cent soixante-deux cases sous le doigt. `VIT T3 bis` compte les
+nœuds AVANT et APRÈS et exige l'IDENTITÉ des éléments, pas leur nombre.
+⚠⚠ **UN BÂTIMENT DE L'OUVRAGE TUÉ EN RAID LAISSE SA RUINE À L'ÉCRAN — VU, PAS
+DÉDUIT.** `listeAffichage` le garde dans la liste, en `detruit`. **Relevé dans
+Chromium sur un VRAI raid, `drawImage` instrumenté, à la géométrie du S25 FE :
+le lot pose CINQ ruines — `bat_o_etai_detruit`, `_gangue_`, `_terril_`,
+`_souche_`, `_noeud_` — dont la première au dix-septième relevé, `#raid-fin`
+encore caché ; le même raid rejoué sur le livrable pristine de `main` n'en pose
+que TROIS**, et ni l'Étai ni la Souche — les deux qui tombent PENDANT le combat —
+n'y paraissent jamais. C'est la seule mesure qui distingue les deux codes : le
+reste est l'effondrement, qui dessinait déjà des ruines des deux côtés.
+⚠ **C'EST DU RENDU, ET RIEN D'AUTRE** : `src/sim/combat.js` n'a pas une ligne de
+changée, `estActive` non plus, et les deux cents témoins de combat sont verts.
+⚠⚠ **LA CAUSE RACINE DU POINT 8 ÉTAIT DANS LA SESSION, PAS DANS L'ÉCRAN.**
+`rafraichir` de `ui/offense.js` s'écrivait `if (etatCourant === null)
+peindre(etat);` — l'écran ouvert restait figé sur l'image de son ouverture ; mais
+**la boucle ne l'appelait de toute façon jamais**. Les deux moitiés sont
+corrigées, et `VIT T4` ne pouvait pas voir la seconde : il monte l'écran et
+appelle `rafraichir` lui-même. `VIT T4 ter` lit le bloc des 100 ms de
+`ui/session.js`. **Mesuré au boot : la réserve d'armée passe de « 40 s » à
+« 48 s » en huit secondes d'onglet ouvert — exactement quatre-vingts ticks — là
+où elle restait figée avant.**
+⚠ **ET LA BOUCLE RAFRAÎCHIT, ELLE NE REPEINT PAS.** `peindre` referait les
+trente-six emplacements dix fois par seconde ; `rafraichir` écrit trois
+`textContent` et sort du panneau sur sa signature. `VIT T4 ter` garde les deux
+sens, avec l'appât : la BASCULE, elle, repeint pour de bon.
+⚠⚠ **LA LECTURE (a) DU POINT 8 EST RETENUE, ET (b) N'EXISTE PAS.** « Le bouton
+améliorer n'indique pas d'heure restante » se lit soit (a) le temps de réparation
+de la pièce choisie, soit (b) une durée d'amélioration : **`ameliorerEffectif` est
+INSTANTANÉ et se paie d'avance**, donc annoncer une attente promettrait un
+mécanisme que le moteur n'a pas. La barre contextuelle écrit (a) —
+« réparer : 2 min de réserve · 63 scorie » —, et rien n'est recalculé dans l'UI.
+⚠⚠ **`#offense-reserve` ÉTAIT COMPLÈTE ET SEULEMENT TRONQUÉE — MESURÉ AVANT DE
+TOUCHER UNE LIGNE.** Dans Chromium, géométrie du S25 FE, elle demandait
+**345,91 px** et sa boîte en faisait **235,48** : **110,42 px coupés, 32 % de la
+phrase**. Ethan lisait « Réparation, max 12.0 h — infanterie 43 min · véhi… » et
+croyait voir trois maxima. Le remède est donc d'AFFICHAGE — `white-space: nowrap`,
+`text-overflow: ellipsis` et `overflow: hidden` partent — et **pas un mot du texte
+n'a été raccourci** : après, le texte fait **203,86 px** dans une boîte de
+**235,48**, soit 31,62 px de mou, débordement 0.
+⚠⚠ **ET « TOUT RÉPARER » OUVRE UN DÉPLIANT AU LIEU DE DÉPENSER.** Le geste a
+changé de porteur : le bouton de la barre OUVRE, le bouton du PANNEAU répare —
+une dépense globale et irréversible gagne son devis avant le geste, ce que
+`data/base.js` demande déjà pour la démolition. Relevé à l'écran : « Dépôt de
+véhicules · Réserve véhicule 48 s · Demandé 28 s · Pionnier · v1 21 s · 38,8k
+scorie · Pionnier · v1 7 s · 12,9k scorie », débordement 0. ⚠ **Aucun coût n'est
+recalculé** : tout vient de `coutDeLaReparation` et de `reservoirsDeLArmee`, et
+la scorie s'arrondit comme `reparerUnePiece` débite — `Math.ceil`, pièce par
+pièce.
+⚠ **ÉCART DÉCLARÉ AU §4.15 : AUCUNE BARRE N'A ÉTÉ RETIRÉE.** Le brief demande de
+MESURER laquelle est peinte vide avant d'en retirer une, et d'épargner
+`#offense-reparation`. Mesuré : elle ne l'est pas — elle porte la ligne complète
+et le bouton, et la ligne est la moitié du point 13. **Rien ne sort.**
+⚠⚠ **UN MODULE NE DIT NI SON PRIX NI CE QU'IL FAIT TANT QUE SA PIÈCE N'EST PAS
+ACHETÉE.** Le masquage se fait dans la vue PURE, jamais dans le DOM : `cadreDOM`
+n'écrit pas de `div.description` vide, comme il ne peint aucun `div.raison` vide
+depuis RECH-É T4. Les DEUX cadres du 06/09 restent — le second porte
+**« Verrouillé »** et la phrase « la pièce doit être débloquée avant son
+module », et **aucune seconde formulation du refus n'est écrite** : c'est celle
+que `lignePourLAchat` rend déjà. Relevé à l'écran : Fusiliers « Acquis » → son
+Flashbang affiche « 10,0M » et sa description ; Pionnier « 100 » → son Flashbang
+affiche « Verrouillé » et rien d'autre.
+⚠⚠ **LE JOURNAL SÉPARE LE MENÉ DU SUBI PAR LA COULEUR ET PAR LE MOT — ET LA
+PRÉMISSE DU BRIEF EST RÉFUTÉE, MESURÉE.** Il pose que « le verdict est celui de
+l'ATTAQUANT des deux côtés » : **faux**. `verdictDeLaDefense` est écrite et
+documentée comme « le miroir de `verdictDuRaid`, vu du côté de celui qui se
+défend », et les deux ensembles mesurés le disent — mené
+{victoire-totale, victoire, defaite-totale}, subi
+{victoire-totale, defaite, defaite-totale}. Ce qui manquait n'était pas le sens,
+c'était que **rien ne le DISAIT**. `VERDICTS_MENES` et `VERDICTS_SUBIS` ajoutent
+la clause — « victoire totale · site rasé » contre « victoire totale · attaque
+repoussée » —, et `issueEstBonne` donne la teinte : `#8C9A72` pour une victoire,
+`#E43E32` pour une défaite. ⚠ **Aucune teinte neuve**, et les quatre règles CSS
+sont écrites APRÈS `.panneau-detail .section.depliable h3` : les trois sélecteurs
+ont la MÊME spécificité 0,3,1, donc c'est l'ORDRE qui décide.
+⚠ **ET LES SIX CLAUSES SE CONFRONTENT À LA SOURCE** : `VIT T6` grep les
+`return '…'` de `verdictDuRaid` et de `verdictDeLaDefense` et les compare aux
+clés des deux tables — l'idiome de `JD T1`. Un cinquième verdict ajouté au moteur
+ferait afficher « undefined » à un journal qui recopierait la liste de mémoire.
+⚠⚠ **LA FICHE DE LA CASERNE, DU DÉPÔT ET DE L'AÉRODROME DIT LE PLAFOND, ET LE
+NIVEAU NE CRÉDITE PAS — IL DÉCOTE.** Écrire « +X h de plafond » aurait été faux :
+le plafond de la réserve d'armée est indexé sur le niveau de l'ARMÉE, pas sur
+celui du bâtiment. Ce que le bâtiment commande, c'est le DIVISEUR du coût —
+mesuré : **1 → ÷1,0000 · 10 → ÷2,1719 · 12 → ÷2,5804 · 20 → ÷6,3890 · 30 →
+÷19,8434 · 50 → ÷191,4152**, soit −8,3 % par niveau sous la rupture et −10,7 %
+au-dessus. La fiche porte donc DEUX lignes : `Réparation · <famille>`, qui rend
+« ÷ 2,17 → ÷ 2,37 », et **`Plafond de réserve · armée`**, dont l'`apres` vaut
+`null` — améliorer ce bâtiment ne le déplace pas d'une seconde.
+⚠ **ET `CH-F T7` A PERDU SA PRÉMISSE, IL EST RÉÉCRIT ET NON ASSOUPLI.** Il
+exigeait `ligne.apres.length > 0` de toute ligne d'effet ; une ligne qui dit un
+état sans « si j'améliorais » porte `apres: null`. Il tolère `null` **et compte**
+les lignes qui portent un `apres` : un code qui les annulerait toutes tombe.
+⚠⚠ **DEUX TESTS D'ANCRAGE ENTRENT — `VIT T1` ET `VIT T2` — ET LE COMPTE PASSE DE
+1 581 À 1 599.** Dix-huit entrent en tout, un fichier naît (`test/vitesse.test.js`),
+**aucune assertion n'a été retirée ni assouplie** ; **onze sont RÉÉCRITES** parce
+que la règle qu'elles figeaient est celle que ce lot renverse — les huit de
+`test/reparation.test.js` que le brief nomme, les deux de `test/chantier.test.js`,
+et `CH-F T7`. **`PIC T7` est réancré** : 9 377 421 → 9 383 149, marge 2,26 %.
+⚠⚠ **VINGT-HUIT FALSIFICATIONS JOUÉES, VINGT-HUIT CHUTES, ET DEUX ONT DÛ ÊTRE
+REPRISES AVANT DE MORDRE.** La première tombait dans un COMMENTAIRE — le
+`Math.ceil(cout.scorie)` que le patch visait est nommé deux fois, et la première
+occurrence est de la prose ; la seconde reposait sur un montage DÉGÉNÉRÉ — une
+Meute de niveau 3 abîmée de 400 milli rend 0,0000245 de scorie, donc `ceil` 1 et
+`round` 0, et la sonde `includes('1')` tombait sur un chiffre de la DURÉE. Montage
+remesuré au niveau 12 et 50 000 milli : **62,355 → `ceil` 63, `round` 62, durée
+« 52 s »**, les trois se distinguent. *Une falsification qui ne mord pas se
+vérifie avant d'être crue.*
+⚠⚠ **ET DEUX DE MES PROPRES MONTAGES TOMBAIENT ROND — QUATRIÈME ET CINQUIÈME FOIS
+DU DÉPÔT.** `VIT T9` posait une réserve de trois heures pile, où `Math.floor` et
+`Math.ceil` rendent « 3.0 h » tous les deux ; et **au-delà de l'heure ils
+rendraient le même nombre QUOI QU'IL ARRIVE** — `direLaDuree` le dit en toutes
+lettres, passé 3 600 s c'est la DÉCIMALE qui arrondit et le paramètre cesse de
+mordre. L'assertion ne peut donc vivre que SOUS l'heure, et 30 min + 1 tick y
+rend 30 contre 31.
+⚠⚠ **SIX GESTES JOUÉS AU BANC, DANS UN VRAI NAVIGATEUR, SUR DE VRAIES PARTIES.**
+Chromium, géométrie du S25 FE, sauvegardes injectées dans `localStorage`.
+(1) rebours **« 47 s » → « 40 s » → « 33 s »**, barre 98,7 % → 98,9 % → 99,1 % ;
+(2) la même pièce finit sa réparation — **« 4 s » → nœuds masqués**, barre et
+rebours disparus ; (3) Complexe abîmé — **4 min / 18 min** deviennent
+**3,8 h / 18,9 h**, et le rebours continue de descendre ; (4) la ruine VUE au
+milieu du combat (ci-dessus) ; (5) la réserve d'armée **40 s → 48 s** en huit
+secondes d'onglet ouvert ; (6) le module d'une unité non achetée dit
+« Verrouillé » et rien d'autre. **Zéro erreur de page sur les sept parties, et
+ni `Infinity` ni `NaN` ni `undefined` dans un texte affiché.**
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET LE BRIEF L'INTERDISAIT
+NOMMÉMENT** : le lot ne touche ni `art/`, ni un outil de la chaîne — zéro fichier
+au diff.
+⚠⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/vitesse-defenses` ; l'environnement d'exécution épingle la session
+à `claude/new-session-34lj7g` et interdit de pousser ailleurs sans autorisation
+explicite. Le lot y est poussé d'un seul tenant.
+
+**Auparavant, après le lot BASES-2 :**
 ⚠⚠ **LE MOTEUR DE FONDATION EXISTAIT DEPUIS BASES-1 ET AUCUN ÉCRAN NE
 L'APPELAIT — C'EST LE PREMIER TROU QUE SON PROPRE RAPPORT NOMMAIT.**
 `problemesDeLaFondation`, `butinDeLaFondation` et `fonderUneBase` sont écrits et
@@ -11291,7 +11470,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   69 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   70 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -11302,7 +11481,7 @@ test/                   69 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
-  voisinage  paquets  art-90  emprises-et-delai  mur  approche
+  voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

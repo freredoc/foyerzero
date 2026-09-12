@@ -769,6 +769,24 @@ export function initialiserSession(doc) {
       // se verrait apparaître sous ses yeux. `rafraichir` ne fait rien quand la
       // carte n'est pas en scène.
       if (ecranMonde !== null) ecranMonde.rafraichir(etat);
+      // ⚠⚠ ET L'OFFENSE, DEPUIS LE 11/09 — POINT 8 D'ETHAN : « le bouton
+      // améliorer de l'onglet offense ne se met pas à jour ». La cause racine
+      // était ICI, pas dans l'écran : `rafraichir` de `ui/offense.js` était bien
+      // écrite du côté de l'écran, mais **la boucle ne l'appelait jamais**.
+      // Mesuré au boot sans tête avant le correctif : la ligne de réserve reste
+      // à « 39 s » après huit secondes d'onglet ouvert, alors que le moteur a
+      // crédité quatre-vingts ticks.
+      //
+      // ⚠ LE COMMENTAIRE AU-DESSUS DISAIT « LA CARTE, ET ELLE SEULE », ET IL EST
+      // RÉÉCRIT PLUTÔT QUE ENJAMBÉ : ce qui le justifiait est qu'un écran ne se
+      // repeint que si quelque chose y bouge SANS que le joueur touche à rien.
+      // C'est vrai des satellites de la carte ; c'est vrai aussi des trois
+      // réserves de réparation, qui montent d'un tick par tick.
+      //
+      // ⚠ ET `rafraichir` DE CET ÉCRAN-LÀ NE RECONSTRUIT RIEN : trois
+      // `textContent` et un panneau qui sort sur sa signature. Y appeler
+      // `peindre` referait les trente-six emplacements dix fois par seconde.
+      if (ecranOffense !== null) ecranOffense.rafraichir(etat);
     }
     if (instant - derniereSauvegardeMs >= PERIODE_SAUVEGARDE_MS) sauvegarder();
   }
