@@ -597,10 +597,31 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // 5 478 au lot COLONNE, 3 539 au lot DISPOSITION-OUVRAGE, 2 618 au lot MUR, et
   // quarante ticks ici. **Aucun barème n'a été touché.**
   //
-  // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
-  // n'importe quel autre raid. Celui-là, et personne d'autre.
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : ILS SONT DEUX, ET LA LISTE BOUGE DES DEUX
+  // CÔTÉS. `mixte/base/42` SORT — il se conclut désormais dans le plafond —,
+  // `infanterie/avantPoste/11` et `mixte/base/1` entrent. Un allongement
+  // uniforme ne ferait pas sortir un raid ; ce qui se passe est qu'une unité
+  // bloquée par une alliée se range au lieu de fluer et que son compteur de repli
+  // est gelé, donc les files se dénouent autrement — un raid qui traînait
+  // s'achève, deux raids qui s'achevaient traînent.
+  //
+  // ⚠⚠ ET AUCUN DES DEUX N'EST UN GEL, vérifié comme les fois précédentes en
+  // portant `maxTicks` à 20 000 : ils se concluent par `attaquants` aux ticks
+  // **938** (1,04 fois le plafond) et **1 018** (1,13 fois). Le pire des deux est
+  // le second meilleur dépassement que ce test ait relevé — 4 645 au lot CARTE,
+  // 5 478 au lot COLONNE, 3 539 au lot DISPOSITION-OUVRAGE, 2 618 au lot MUR,
+  // 940 au lot APPROCHE. **Aucun barème n'a été touché**, et l'arbitrage revient
+  // à Ethan.
+  //
+  // ⚠ LE COMPTE REMONTE DE UN À DEUX, ET IL FAUT LE DIRE DANS CE SENS-LÀ : le gel
+  // du repli garde sur le terrain des unités qui en sortaient, donc un raid qui
+  // se terminait « attaquants » sous le plafond peut désormais l'atteindre. C'est
+  // le prix mesuré de la seconde règle, et il est au rapport.
+  //
+  // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus deux » laisserait entrer
+  // n'importe quel autre raid. Ceux-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), ['mixte/base/42'],
+    expires.sort(), ['infanterie/avantPoste/11', 'mixte/base/1'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.

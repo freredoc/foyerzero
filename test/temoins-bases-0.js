@@ -4370,3 +4370,195 @@ export const EMPREINTES_PAR_GRAINE_VITESSE = {
   24: '7704ee177b8d57c7',
   25: 'efe9c8dff86be5f2',
 };
+
+// ---------------------------------------------------------------------------
+// LOT BARÈME-ET-REJEU (12/09) — la vingt-deuxième couche
+// ---------------------------------------------------------------------------
+
+/**
+ * Ce que le chevauchement allié interdit déplace — **TRENTE-SEPT COUPLES SUR
+ * 350**, et les SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT.
+ *
+ * ⚠⚠ LE SCÉNARIO NE COMBAT PAS AVANT SON PREMIER RAID, ET TOUT CE QUE LE LOT
+ * CHANGE EST DANS LE COMBAT. Deux règles, qui ne se recouvrent pas : une entité
+ * ne flue plus dans la sous-case d'une ALLIÉE — ni à la verticale ni à la
+ * latérale, Ethan le 12/09 : « pas de chevauchement allié ni horizontal ni
+ * vertical. Totalement interdit. » — et son compteur de repli est GELÉ tant
+ * qu'une alliée la bloque, si bien qu'elle attend derrière au lieu de rentrer à
+ * la base au trentième tick.
+ *
+ * ⚠⚠ ET L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE : en remettant le seul
+ * `src/sim/combat.js` du livrable pristine de `main` = `f6fb04e` sous le reste
+ * du lot, les deux cents témoins de combat rendent **0 écart sur 1 600 champs**.
+ * Ni le barème de défense (§1) ni le refus d'améliorer une pièce abîmée (§2) ne
+ * déplacent un seul bit de ce témoin-ci : `DEFENSES[x].points` n'est lu ni par
+ * `sim/generateur.js` ni par `sim/combat.js`.
+ *
+ * ⚠⚠ AUCUN SCALAIRE NE BOUGE — LES DIX-SEPT, SUR 25 GRAINES SUR 25. Ni les
+ * gestes de construction, ni ceux d'armement, ni la taille de la sauvegarde, ni
+ * les cases atteignables, ni le déplacement, ni le nombre de bases attaquantes,
+ * ni le nombre de cibles, ni la cible retenue, ni la non-fuite de la simulation,
+ * ni son exactitude, ni l'équivalence des deux chemins d'avancement. C'est cette
+ * moitié-là qui dit que le lot ne touche ni la carte, ni l'économie, ni la pose,
+ * ni le choix de cible — seulement le DÉROULÉ du combat.
+ *
+ * ⚠⚠ ET `position` ET `disposition` BOUGENT À LA PHASE 13, SUR UNE SEULE GRAINE
+ * SUR VINGT-CINQ. Mesuré graine par graine contre le pristine : la **17** seule,
+ * qui passe de `200,16` à `220,16` — l'Ouvrage y RASE la base du joueur dans la
+ * fenêtre de cinq minutes, là où elle tenait. ⚠ Et les vingt-cinq convergent de
+ * nouveau en phase 14, à `280,16` : vingt-quatre heures sous le feu rasent la
+ * base des deux côtés de la règle. Le lot avance un rasage d'une fenêtre, il n'en
+ * crée pas un.
+ */
+export const DEPLACES_PAR_BAREME_ET_REJEU = {
+  p07_raidProcheApres: {
+    sitesEntames: '430d7829609fa5a6',
+    rapports: '519212aff96d6f19',
+    armee: '383340e838869ade',
+    economie: 'ff74fa284525cb48',
+  },
+  p08_100ticks: {
+    sitesEntames: '430d7829609fa5a6',
+    rapports: '519212aff96d6f19',
+    armee: '383340e838869ade',
+    economie: 'b45d3e4e89d087eb',
+  },
+  p09_deplace: {
+    sitesEntames: '430d7829609fa5a6',
+    rapports: '519212aff96d6f19',
+    armee: '383340e838869ade',
+    economie: 'b45d3e4e89d087eb',
+  },
+  p10_montee: {
+    sitesEntames: '430d7829609fa5a6',
+    rapports: '519212aff96d6f19',
+    armee: '383340e838869ade',
+    economie: 'b45d3e4e89d087eb',
+  },
+  p11_raidOuvrageApres: {
+    recherche: 'e10a6556616af561',
+    sitesEntames: '64b8df323e8e47c8',
+    rapports: 'fe589bce58be7c31',
+    armee: 'ae45971c577bfcbb',
+    economie: 'b45d3e4e89d087eb',
+  },
+  p12_veilleDuRaid: {
+    recherche: 'e10a6556616af561',
+    sitesEntames: 'e20cb20b803a5db3',
+    rapports: 'fe589bce58be7c31',
+    armee: 'ae45971c577bfcbb',
+    economie: 'b45d3e4e89d087eb',
+  },
+  p13_apresLeRaid: {
+    recherche: 'e10a6556616af561',
+    sitesEntames: '7ebbb0cc86418875',
+    rapports: 'cbab58121e7fc1a8',
+    position: 'b6eaca06c17caf12',
+    disposition: '0469f9b3f75de717',
+    armee: 'ae45971c577bfcbb',
+    economie: 'a2196d7d2476f3e7',
+  },
+  p14_sousLeFeu: {
+    recherche: 'e10a6556616af561',
+    sitesEntames: '64d98a02fdd7f2b4',
+    rapports: 'ea84d1ff25c327da',
+    armee: 'ae45971c577bfcbb',
+  },
+};
+
+/**
+ * Les empreintes par graine après le lot BARÈME-ET-REJEU — **vingt-deux sur
+ * vingt-cinq**.
+ *
+ * ⚠⚠ LES GRAINES 3, 9 ET 15 TOMBENT À L'OCTET SUR LA COUCHE D'AVANT, et le `??`
+ * de `bases.test.js` est donc NÉCESSAIRE, pas une précaution — sans lui, trois
+ * graines seraient comparées à `undefined` et le test dirait qu'elles divergent
+ * alors qu'elles sont IDENTIQUES. Même leçon qu'au lot MUR, qui en laissait trois
+ * lui aussi (15, 21, 24), et qu'au lot VITESSE (2, 3, 22).
+ *
+ * ⚠ CE QUE CES TROIS PARTIES-LÀ ONT DE PARTICULIER N'EST PAS DEVINÉ : sur elles,
+ * aucune des deux règles ne mord dans les deux raids du scénario — aucune
+ * attaquante ne se retrouve derrière une alliée au moment où son compteur de
+ * repli compterait, et aucune ne fluait dans la sous-case d'une autre.
+ */
+export const EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU = {
+  1: 'e29d50dd52bb8d6c',
+  2: '33ad4226d56b30cc',
+  4: '4549b1697737adc4',
+  5: 'a6c7d003028f5536',
+  6: '8b50e75ed5a35c41',
+  7: 'e63f8a99b44eb2a5',
+  8: '2298f81bc323b6a0',
+  10: '155c4bce174aca72',
+  11: '096a3b9115e701cd',
+  12: 'c97d612505e2f1cd',
+  13: '38e8621b6502ca96',
+  14: 'f2efdc04f249c07e',
+  16: '3e39e0d73f090a93',
+  17: '2dd6ed70a1891a00',
+  18: '6b23426c9fd60f53',
+  19: '032b822c13991eea',
+  20: 'a12f9d1968053f76',
+  21: 'c3f9d8dfd2e4d311',
+  22: 'd366abb5c2457e6f',
+  23: '98dbe58ab69d1de2',
+  24: '3da155a1da9d3513',
+  25: 'e8680672a14c5ffe',
+};
+
+
+/**
+ * Les empreintes du rapport du raid de PROXIMITÉ — **NEUF sur vingt-cinq**.
+ *
+ * ⚠⚠ ET L'ÉCART ENTRE LES DEUX MOITIÉS EST L'ATTRIBUTION DU LOT, EXACTEMENT
+ * COMME AU LOT MUR — MAIS DANS L'AUTRE SENS. MUR déplaçait **23 sur 25 côté
+ * proximité et 4 sur 25 côté Ouvrage** : ses deux règles portaient sur les
+ * STRUCTURES, et le raid de proximité vise un camp GÉNÉRÉ, qui porte murs,
+ * barrières et tourelles, quand celui de l'Ouvrage frappe la base du JOUEUR, qui
+ * n'en a aucun. Ce lot-ci rend **9 sur 25 et 14 sur 25** : la règle porte sur les
+ * ALLIÉES, donc elle ne mord ni sur les mêmes pièces ni dans les mêmes
+ * proportions — elle mord là où il y a FOULE, et c'est la base du joueur, dont le
+ * scénario a posé la garnison, qui en porte le plus.
+ *
+ * ⚠ LES NEUF SE NOMMENT : 1, 4, 8, 10, 13, 14, 16, 23, 25. Les seize autres
+ * restent gardées contre `RAPPORTS_PROCHE_APPROCHE` — c'est cette moitié-là qui
+ * dit que le lot ne déplace pas tous les raids par principe.
+ */
+export const RAPPORTS_PROCHE_BAREME_ET_REJEU = {
+  1: 'd8f3e4632edad992',
+  4: '72018416105ad1e2',
+  8: 'ee35a5e812dff9c8',
+  10: 'a501c474ca2a899a',
+  13: '36f81b24a7259834',
+  14: '323d59b20622c7aa',
+  16: 'c5ac0bb497839d15',
+  23: 'd7df442ff16225e0',
+  25: '0b5fade8b08dc032',
+};
+
+/**
+ * Les empreintes du rapport du raid de l'OUVRAGE — **QUATORZE sur vingt-cinq**.
+ *
+ * ⚠ Voir le bloc du raid de proximité juste au-dessus pour l'attribution : c'est
+ * l'ÉCART entre 9 et 14 qui dit ce que la règle touche, et il est l'inverse de
+ * celui du lot MUR.
+ *
+ * ⚠ LES QUATORZE SE NOMMENT : 1, 4, 7, 8, 10, 11, 13, 14, 17, 18, 20, 23, 24, 25.
+ * Les onze autres restent gardées contre `RAPPORTS_OUVRAGE_APPROCHE`.
+ */
+export const RAPPORTS_OUVRAGE_BAREME_ET_REJEU = {
+  1: 'da3267b8264bb806',
+  4: '73ad9bde7783bd51',
+  7: '327ec728eb5d3828',
+  8: 'e777e3151a4dd5cf',
+  10: 'd0fbda8596b7680c',
+  11: 'a0861d5a00e647b2',
+  13: '9e4040666ec93048',
+  14: 'a6a750d9ff8d4f7c',
+  17: 'e1bf15cd5b39b7f7',
+  18: '80b537763c53a9ce',
+  20: '2c656fdf6fde1234',
+  23: '0ac725a4989225d7',
+  24: '1116316ecd2829bc',
+  25: '86157bfcc2d9668e',
+};

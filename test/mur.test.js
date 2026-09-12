@@ -256,15 +256,28 @@ test('MUR T3 — bloquée par un mur, l\'unité reste sur sa case au millième p
 });
 
 // ---------------------------------------------------------------------------
-// MUR T4 — un embouteillage ALLIÉ ne range personne
+// MUR T4 — un embouteillage ALLIÉ range aussi, et il gèle le repli
 // ---------------------------------------------------------------------------
 
-test('MUR T4 — derrière une alliée bloquée, la suivante GARDE sa position intermédiaire', () => {
-  // ⚠⚠ C'EST LA GARDE DU PÉRIMÈTRE, ET ELLE VAUT UNE MESURE : ranger l'entité
-  // dès que la case devant est occupée — alliée comprise — déplace 1 041 champs
-  // sur 1 600 des témoins de combat et 198 combats sur 200. Restreint aux
-  // occupantes de `vitesseMilli === 0`, il en déplace 339. Sans ce test, un lot
-  // futur élargirait le rangement à tout blocage sans voir ce qu'il casse.
+test('MUR T4 — derrière une alliée bloquée, la suivante se RANGE et ne se replie pas', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ PAR LE LOT BARÈME-ET-REJEU, 12/09/2026, ET IL PORTAIT
+  // LE PÉRIMÈTRE QUE L'ARBITRAGE RENVERSE. Il exigeait que la seconde GARDE sa
+  // position intermédiaire — 2 960, soit 960 millièmes dans la case de son
+  // alliée — au motif mesuré que ranger tout blocage « déplace 1 041 champs sur
+  // 1 600 des témoins de combat et 198 combats sur 200 ». **La mesure était
+  // juste ; c'est l'arbitrage qui a changé.** Ethan, sur une vraie partie :
+  // « les véhicules étaient à 80 % sur l'infanterie, plutôt que d'attendre
+  // derrière », puis, mis devant le chiffre : « pas de chevauchement allié ni
+  // horizontal ni vertical. Totalement interdit. »
+  //
+  // ⚠⚠ ET IL FALSIFIE L'ANCIENNE RÈGLE DE FACE, il ne se contente pas de changer
+  // de nombre : il exige que la position soit un MULTIPLE EXACT de case, ce que
+  // 2 960 n'est pas. Un lot futur qui restaurerait le périmètre d'hier tombe donc
+  // sur l'assertion, et non sur une valeur qu'on pourrait croire mal réancrée.
+  //
+  // ⚠ LE COÛT DU RENVERSEMENT EST PAYÉ EN TÉMOINS, ET IL EST AU RAPPORT : les
+  // deux tables de `test/temoins-combat.js` reçoivent une COUCHE, elles ne sont
+  // pas recapturées.
   const etat = creerCombat(montage({
     defenseurs: [{ id: 'merlon', rangee: 4, colonne: 5 }],
     vagues: [[
@@ -279,15 +292,31 @@ test('MUR T4 — derrière une alliée bloquée, la suivante GARDE sa position i
   jouer(etat, 60);
 
   // Celle de DEVANT est bloquée par une structure immobile : elle se range.
+  // C'est l'acquis du lot MUR, et il ne bouge pas.
   assert.equal(devant.rangeeMilli, 3 * MILLI_PAR_CASE,
     'la première ne s\'est pas rangée : le montage ne mesure rien');
 
-  // Celle de DERRIÈRE est bloquée par une ALLIÉE, qui n'est pas immobile au sens
-  // du lot — `vitesseMilli` non nul. Elle garde donc sa position intermédiaire.
-  assert.notEqual(derriere.rangeeMilli % MILLI_PAR_CASE, 0,
-    'la seconde a été rangée : le rangement a débordé sur un blocage ALLIÉ');
-  assert.equal(derriere.rangeeMilli, 2960);
+  // Celle de DERRIÈRE est bloquée par une ALLIÉE : elle se range AUSSI, sur sa
+  // PROPRE case, et elle n'a pas franchi un millième de celle de devant.
+  assert.equal(derriere.rangeeMilli % MILLI_PAR_CASE, 0,
+    'la seconde flue encore dans la case de son alliée');
+  assert.equal(derriere.rangeeMilli, 2 * MILLI_PAR_CASE);
+  assert.notEqual(derriere.rangeeMilli, 2960, 'elle garde la position d\'avant le lot');
+
+  // ⚠⚠ ET SON COMPTEUR DE REPLI EST GELÉ — c'est la SECONDE moitié de la phrase
+  // d'Ethan, « puis ils ont disparu. Mais 0 détruit. » Sous l'ancienne règle
+  // cette pièce-ci ne se repliait pas non plus, mais pour une raison FRAGILE :
+  // elle TIRE sur le merlon deux cases devant, donc `nuit(e)` remettait son
+  // compteur à zéro. Le gel le tient désormais quoi qu'elle ait à portée, et
+  // c'est ce que mesure `test/repli.test.js` T4, où rien n'est à portée.
+  assert.equal(derriere.ticksInutiles, 0, 'son compteur monte derrière une ALLIÉE');
   assert.equal(derriere.sorti, false, 'la seconde s\'est repliée');
+
+  // ⚠ ET LES DEUX RESTENT DANS LEUR CASE : le rangement est un RECADRAGE de
+  // position, il ne déplace aucune pièce. L'occupation ne bouge donc pas, et
+  // rien de ce que le moteur indexe par case n'est touché.
+  assert.equal(Math.floor(devant.rangeeMilli / MILLI_PAR_CASE), 3);
+  assert.equal(Math.floor(derriere.rangeeMilli / MILLI_PAR_CASE), 2);
 });
 
 // ---------------------------------------------------------------------------
@@ -438,20 +467,27 @@ test('MUR T6 — bloquée LATÉRALEMENT par un mur, la défenseuse reste sur sa 
 });
 
 // ---------------------------------------------------------------------------
-// MUR T6 bis — le PÉRIMÈTRE : devant une alliée MOBILE, elle garde sa position
+// MUR T6 bis — le PÉRIMÈTRE : devant une alliée MOBILE aussi, elle se range
 // ---------------------------------------------------------------------------
 
-test('MUR T6 bis — gênée par une alliée MOBILE, la défenseuse GARDE sa position intermédiaire', () => {
-  // ⚠⚠ C'EST LE PENDANT LATÉRAL DE `MUR T4`, ET IL GARDE LE PÉRIMÈTRE. On ne se
-  // range que devant une STRUCTURE IMMOBILE : Ethan nomme « un mur, tourelles,
-  // structure », et les trois sont à `vitesseMilli === 0`. Devant une alliée
+test('MUR T6 bis — gênée par une alliée MOBILE, la défenseuse se RANGE sur sa case', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ PAR LE LOT BARÈME-ET-REJEU, 12/09/2026, ET IL EST LE
+  // PENDANT LATÉRAL DE `MUR T4`. Il exigeait l'INVERSE — « devant une alliée
   // MOBILE, la case se libérera d'elle-même, et ranger lui coûterait à chaque
-  // fois les millièmes qu'elle vient de gagner — c'est très exactement le prix
-  // que `combat.test.js` mesure à la verticale, 960 millièmes rendus.
+  // fois les millièmes qu'elle vient de gagner » — et ce raisonnement n'est pas
+  // faux : il est ÉCARTÉ. Ethan nomme les DEUX axes, « ni horizontal ni
+  // vertical », et ce qu'il a vu à l'écran est précisément ces millièmes-là.
   //
-  // ⚠ SANS CE TEST, ÉLARGIR LE RANGEMENT À TOUT BLOCAGE PASSERAIT INAPERÇU.
-  // `MUR T6` seul serait vert, et tout embouteillage de colonne se mettrait à
-  // claquer sur les deux cents témoins.
+  // ⚠ CE QUI NE CHANGE PAS : le MONTAGE, au mot près. Le gêneur reste une
+  // Carapace, et pour la raison mesurée au lot MUR — elle vise les VÉHICULES,
+  // donc face à un assaut d'infanterie `cibleDuDecalage` ne lui rend personne et
+  // elle ne bouge pas d'un millième. **Un gêneur qui s'écarte ne gêne rien**, et
+  // c'est toujours vrai. Seul le SIGNE attendu s'inverse.
+  //
+  // ⚠ ET IL FALSIFIE L'ANCIENNE RÈGLE DE FACE : la valeur d'hier — le dernier
+  // multiple du pas sous la frontière de case — est recalculée et REFUSÉE
+  // nommément, plutôt que simplement remplacée. Un lot futur qui restaurerait le
+  // périmètre d'hier tombe donc sur une assertion qui le nomme.
   // ⚠⚠ LE GÊNEUR EST UNE CARAPACE, ET LE MONTAGE A DÛ ÊTRE REPRIS APRÈS MESURE.
   // Le premier jet prenait un Guetteur : MOBILE, mais il vise l'infanterie comme
   // la décaleuse, donc il se décale LUI AUSSI vers le même assaillant, libère la
@@ -468,17 +504,22 @@ test('MUR T6 bis — gênée par une alliée MOBILE, la défenseuse GARDE sa pos
   assert.notEqual(predilectionDe('carapace'), predilectionDe('meute'),
     'montage : le gêneur vise la même chose que la décaleuse, il va s\'écarter');
 
+  // La position d'AVANT le lot : le dernier multiple du pas qui tient sous la
+  // frontière de case. Elle est recalculée ici pour être REFUSÉE.
   const { numerateur, denominateur } = GRILLE.lateral;
   const pas = Math.floor((UNITES.meute.vitesse * numerateur) / denominateur);
   const k = Math.floor((MILLI_PAR_CASE - 1) / pas);
-  const attendu = 4 * MILLI_PAR_CASE + k * pas;
+  const avantLeLot = 4 * MILLI_PAR_CASE + k * pas;
+  assert.notEqual(avantLeLot % MILLI_PAR_CASE, 0,
+    'montage : la position d\'avant le lot était déjà un multiple, rien ne peut se distinguer');
 
   jouer(etat, 60);
   // ⚠ LE GÊNEUR N'A PAS BOUGÉ — sans quoi la mesure porterait sur autre chose.
   assert.equal(geneur.colonneMilli, 5 * MILLI_PAR_CASE,
     'montage : le gêneur s\'est décalé, il ne gêne plus');
-  assert.equal(d.colonneMilli, attendu,
-    'la défenseuse s\'est rangée devant une alliée mobile : le rangement déborde de son périmètre');
-  assert.notEqual(d.colonneMilli % MILLI_PAR_CASE, 0);
+  assert.equal(d.colonneMilli % MILLI_PAR_CASE, 0,
+    'elle flue encore dans la case de son alliée mobile');
+  assert.equal(d.colonneMilli, 4 * MILLI_PAR_CASE);
+  assert.notEqual(d.colonneMilli, avantLeLot, 'elle garde la position d\'avant le lot');
   assert.equal(caseColonneDe(d), 4, 'elle a franchi la case de son alliée');
 });

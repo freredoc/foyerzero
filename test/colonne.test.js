@@ -1004,8 +1004,28 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   //
   // ⚠ ET LE DÉFAUT EST TOUJOURS LE MÊME, dans `pvCourantsDesDefenses` quand
   // l'Étai est tombé. Aucune ligne de ce lot ne l'a touché.
+  //
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : SEPTIÈME RÉANCRAGE, ET LA DETTE N'EST
+  // TOUJOURS PAS PAYÉE — MAIS LE COMPTE TOMBE DE CINQ À **DEUX**, ET IL FAUT LE
+  // DIRE DANS CE SENS-LÀ. Le chevauchement allié interdit et le gel du repli
+  // changent le DÉROULÉ, donc ce que chaque passe laisse debout, donc les PV que
+  // `site-entame.js` range. Balayage du MÊME échantillon de 600 — `camp`,
+  // niveaux 25 à 30, graines 1 à 100 — : **deux lèvent encore**, `25/92` et
+  // `30/53`, et le message n'a pas changé d'un caractère — `pvMilli N hors de
+  // 1…M`. Une seule des cinq d'hier survit, la `25/92`, qui traverse ainsi son
+  // deuxième lot d'affilée.
+  //
+  // ⚠ DEUX N'EST PAS ZÉRO, ET LE TEST GARDE DONC ENCORE QUELQUE CHOSE. Le jour
+  // où le balayage rendra zéro, c'est la boucle ENTIÈRE qui devra sortir avec
+  // son commentaire, et non le seuil descendre à zéro — un test qui asserte
+  // qu'un défaut n'existe plus n'est pas une dette, c'est une garde, et elle
+  // s'écrit ailleurs, sur `pvCourantsDesDefenses`.
+  //
+  // ⚠ ET LA CAUSE EST TOUJOURS LA MÊME, ce que la seconde assertion mesure : le
+  // défaut est dans `pvCourantsDesDefenses` quand l'Étai est tombé. Aucune ligne
+  // de ce lot ne l'a touché — `src/sim/site-entame.js` n'apparaît pas au diff.
   for (const [type, niveau, graine] of [
-    ['camp', 25, 1], ['camp', 25, 92], ['camp', 26, 42],
+    ['camp', 25, 92], ['camp', 30, 53],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,
@@ -1026,8 +1046,8 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   }
   // ⚠ ASSERTÉE ENCORE VIOLÉE. Le jour où la dette est payée, cette ligne tombe
   // et quelqu'un vient la retirer — c'est ce qu'on lui demande.
-  assert.equal(leve.length, 3,
-    `la dette est payée sur ${3 - leve.length} des trois cas : retirer ce test et le dire`);
+  assert.equal(leve.length, 2,
+    `la dette est payée sur ${2 - leve.length} des deux cas : retirer ce test et le dire`);
   for (const m of leve) {
     assert.match(m, /pvMilli \d+ hors de 1…\d+/, `la levée a changé de nature : ${m}`);
   }

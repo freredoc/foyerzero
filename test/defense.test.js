@@ -83,39 +83,107 @@ test('T1 — les neuf abscisses ET les huit ordonnées sont celles du champ', ()
 // T2 — le budget est une barrière, les emplacements ne mordent jamais
 // ---------------------------------------------------------------------------
 
-test('T2 — le budget refuse en entier, et les 72 emplacements ne plafonnent jamais', () => {
-  // (a) Au niveau 8 le budget vaut 40 + 5 × 8 = 80. Le Merlon coûte 5 et paraît
-  // au niveau 6 : seize Merlons font 80 pile, le dix-septième est refusé.
+test('T2 — le budget refuse en entier, et c\'est la GÉOMÉTRIE qui mord la première', () => {
+  // ⚠⚠ CE TEST EST RETOURNÉ PAR LE LOT BARÈME-ET-REJEU, 12/09/2026, ET SA MOITIÉ
+  // (b) MESURAIT UN PROXY. Elle affirmait « le budget mord TOUJOURS le premier »
+  // et le vérifiait en comparant `floor(budgetMax / moinsCher)` à
+  // `NB_EMPLACEMENTS` (72). Or 72 n'est jamais atteignable : `poser` refuse la
+  // septième pose d'une rangée, donc le plafond RÉEL vaut
+  // `NB_RANGEES × OCCUPANTS_MAX_PAR_RANGEE` = 48. Mesuré sur le code d'AVANT le
+  // lot, Merlon à 5 : la bande sature à **48 pièces pour 240 points sur 290**, le
+  // premier refus est celui des six occupants, et il reste **50 points** que le
+  // joueur ne peut nulle part dépenser. La propriété annoncée était donc DÉJÀ
+  // fausse, et le test passait parce qu'il comparait 58 à un 72 hors d'atteinte.
+  //
+  // Le barème d'Ethan du 12/09 (Merlon 5 → 3) ne fait que le rendre bruyant :
+  // `moinsCher` tombe à 3, donc `floor(290 / 3)` vaut 96, et l'ancienne
+  // comparaison casse. On mesure désormais ce qu'elle prétendait mesurer.
+
+  // (a) Au niveau 8 le budget vaut 40 + 5 × 8 = 80. Le Merlon coûte 3 : le
+  // nombre de Merlons payables se DÉRIVE, il ne s'écrit pas — un 26 en dur
+  // deviendrait faux au prochain arbitrage de barème.
   // ⚠ Le MERLON et pas la Casemate : le statut « gratuite » de celle-ci reste
   // en suspens au classeur, et un test ne s'adosse pas à un chiffre ouvert.
   assert.equal(budgetDuNiveau(8), 80);
-  assert.equal(DEFENSES.merlon.points, 5);
+  assert.equal(DEFENSES.merlon.points, 3);
   assert.equal(DEFENSES.merlon.apparition, 6);
+  const budget8 = budgetDuNiveau(8);
+  const prix = DEFENSES.merlon.points;
+  const payables = Math.floor(budget8 / prix);
+  assert.equal(payables, 26, 'le barème a bougé : 26 est DÉRIVÉ, pas écrit');
+  // ⚠ 80 N'EST PAS DIVISIBLE PAR 3, ET LE RESTE SE DIT. L'ancien montage
+  // tombait rond — seize Merlons à 5 faisaient 80 pile — donc il ne distinguait
+  // pas un `floor` d'un arrondi. Ici il reste 2 points, et le refus porte sur la
+  // pièce qui les dépasserait.
+  assert.ok(payables * prix < budget8, 'montage dégénéré : le budget tombe rond');
+  // ⚠ ET LES 26 PIÈCES DOIVENT TENIR DANS LA GÉOMÉTRIE, sans quoi ce serait la
+  // règle des occupants qui refuserait et le test ne mesurerait plus le budget.
+  assert.ok(payables <= NB_RANGEES * OCCUPANTS_MAX_PAR_RANGEE,
+    `${payables} pièces payables pour ${NB_RANGEES * OCCUPANTS_MAX_PAR_RANGEE} cases posables`);
   let e = defenseVide(8);
   let poses = 0;
-  for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE && poses < 16; rangee += 1) {
-    for (let colonne = 1; colonne <= OCCUPANTS_MAX_PAR_RANGEE && poses < 16; colonne += 1) {
+  for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE && poses < payables; rangee += 1) {
+    for (let colonne = 1; colonne <= OCCUPANTS_MAX_PAR_RANGEE && poses < payables; colonne += 1) {
       e = poser(e, { rangee, colonne, id: 'merlon' });
       poses += 1;
     }
   }
-  assert.equal(bilan(e).pointsEngages, 80);
-  assert.equal(bilan(e).pointsRestants, 0);
-  assert.throws(() => poser(e, { rangee: 10, colonne: 9, id: 'merlon' }), /budget de 80/);
+  assert.equal(bilan(e).pointsEngages, payables * prix);
+  assert.equal(bilan(e).pointsEngages, 78);
+  assert.equal(bilan(e).pointsRestants, budget8 - payables * prix);
+  assert.equal(bilan(e).pointsRestants, 2);
+  // La pièce suivante demanderait 81 pour un budget de 80 : refusée.
+  assert.ok(bilan(e).pointsEngages + prix > budget8);
+  assert.throws(() => poser(e, { rangee: 9, colonne: 1, id: 'merlon' }), /budget de 80/);
 
-  // (b) Le budget mord TOUJOURS le premier, sur les cinquante niveaux. Les deux
-  // nombres se lisent dans les tables, jamais ne s'écrivent : ce test tombe le
-  // jour où le budget de défense est relevé, et c'est son but.
+  // (b) LA GÉOMÉTRIE MORD LA PREMIÈRE, ET ON LE MESURE EN REMPLISSANT. On pose
+  // la pièce la moins chère partout où la règle l'autorise, au niveau plafond,
+  // et on regarde CE QUI refuse.
   const budgetMax = budgetDuNiveau(NIVEAU.plafond);
   const moinsCher = Math.min(
     ...Object.values(DEFENSES).map((d) => d.points),
     ...Object.keys(UNITES).filter((id) => UNITES[id].defense.present).map((id) => UNITES[id].points),
   );
   assert.equal(budgetMax, 290);
-  assert.equal(moinsCher, 5);
-  assert.ok(Math.floor(budgetMax / moinsCher) <= NB_EMPLACEMENTS,
-    `${Math.floor(budgetMax / moinsCher)} pièces au budget contre ${NB_EMPLACEMENTS} emplacements`);
-  assert.equal(Math.floor(budgetMax / moinsCher), 58);
+  assert.equal(moinsCher, 3, 'le Mur de défense n\'est plus la pièce la moins chère');
+
+  const posables = NB_RANGEES * OCCUPANTS_MAX_PAR_RANGEE;
+  assert.equal(posables, 48);
+  assert.ok(posables < NB_EMPLACEMENTS,
+    'la règle des occupants ne borne plus rien : les 72 emplacements redeviendraient le plafond');
+
+  let plein = defenseVide(NIVEAU.plafond);
+  let premierRefus = null;
+  let nb = 0;
+  for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
+    for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
+      try {
+        plein = poser(plein, { rangee, colonne, id: 'merlon' });
+        nb += 1;
+      } catch (err) {
+        if (premierRefus === null) premierRefus = err.message;
+      }
+    }
+  }
+  // Le premier refus est celui des OCCUPANTS, jamais celui du budget.
+  assert.match(premierRefus, /occupants/, `premier refus : ${premierRefus}`);
+  assert.doesNotMatch(premierRefus, /budget/);
+  assert.equal(nb, posables, 'la bande n\'a pas saturé sur la règle des occupants');
+  // Et il RESTE des points que rien ne peut dépenser.
+  assert.equal(bilan(plein).pointsEngages, posables * moinsCher);
+  assert.ok(bilan(plein).pointsRestants > 0,
+    'le budget est épuisé : c\'est lui qui mord, et l\'ancienne assertion redevient vraie');
+  assert.equal(bilan(plein).pointsRestants, budgetMax - posables * moinsCher);
+
+  // ⚠⚠ ET L'ANCIENNE RÈGLE EST FALSIFIÉE DE FACE, pour qu'aucun lot ne la
+  // « restaure ». Elle comparait les pièces payables à `NB_EMPLACEMENTS` ; le
+  // nombre payable dépasse désormais les DEUX bornes, la géométrique comme
+  // l'affichée.
+  const payablesMax = Math.floor(budgetMax / moinsCher);
+  assert.equal(payablesMax, 96);
+  assert.ok(payablesMax > NB_EMPLACEMENTS,
+    `${payablesMax} pièces payables : l'ancienne comparaison à ${NB_EMPLACEMENTS} redeviendrait vraie`);
+  assert.ok(payablesMax > posables);
 });
 
 // ---------------------------------------------------------------------------
@@ -263,12 +331,35 @@ test('T7 — la couverture se calcule avec le prédicat du moteur, et sature en 
   }
 
   // L'indice marque exactement les artilleries des rangées 3, 4 et 5.
-  // Niveau 50 : huit Faucheuses à 22 et huit Casemates à 8 font 240 points, et
-  // le budget en vaut 290. Au niveau 30 il n'en vaudrait que 190 — le montage
-  // qui prouve doit tenir dans le budget, sinon il ne prouve rien.
+  // ⚠ LE MONTAGE A PERDU SA PRÉMISSE AU LOT BARÈME-ET-REJEU, ET C'EST LE MONTAGE
+  // QU'ON RÉPARE, JAMAIS L'ASSERTION. Il posait huit Faucheuses ET huit
+  // Casemates sur les huit rangées : 8 × 22 + 8 × 8 = 240 points pour un budget
+  // de 290 avant le lot, 8 × 30 + 8 × 10 = 320 après, donc REFUSÉ. Son propre
+  // commentaire disait déjà « le montage qui prouve doit tenir dans le budget,
+  // sinon il ne prouve rien ».
+  // ⚠ ET LE CONTRÔLE NÉGATIF EN SORT PLUS FORT : les Casemates ne sont plus
+  // posées que sur les rangées 3, 4 et 5, c'est-à-dire EXACTEMENT celles que
+  // l'indice marque. Un indice qui marquerait la RANGÉE au lieu de la PIÈCE
+  // passait l'ancien montage — les deux pièces étaient partout — et tombe sur
+  // celui-ci.
+  // ⚠ L'arithmétique se DÉRIVE des tables, elle ne se retape pas : un prochain
+  // réglage du barème fera tomber l'assertion de budget au lieu de faire
+  // rougir la pose.
+  const RANGEES_MARQUEES = [3, 4, 5];
+  const coutDuMontage = NB_RANGEES * DEFENSES.faucheuse.points
+    + RANGEES_MARQUEES.length * DEFENSES.casemate.points;
+  assert.equal(coutDuMontage, 270);
+  assert.ok(coutDuMontage <= budgetDuNiveau(50),
+    `le montage coûte ${coutDuMontage} pour un budget de ${budgetDuNiveau(50)}`);
+  // Et il ne tient pas par hasard : le montage d'AVANT le lot ne tiendrait plus.
+  assert.ok(NB_RANGEES * (DEFENSES.faucheuse.points + DEFENSES.casemate.points)
+    > budgetDuNiveau(50), 'le montage d\'avant le lot tiendrait encore : rien n\'est mesuré');
+
   let e = defenseVide(50);
   for (let rangee = PREMIERE_RANGEE; rangee <= DERNIERE_RANGEE; rangee += 1) {
     e = poser(e, { rangee, colonne: 5, id: 'faucheuse' });
+  }
+  for (const rangee of RANGEES_MARQUEES) {
     e = poser(e, { rangee, colonne: 6, id: 'casemate' });
   }
   const marques = indicesDeCouverture(e);

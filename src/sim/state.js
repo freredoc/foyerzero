@@ -1129,6 +1129,37 @@ export function problemesDeLAmelioration(etat, index) {
     // interdiction » vaut aussi pour les messages.
   }
 
+  // ⚠⚠ UN BÂTIMENT ABÎMÉ NE MONTE PAS — arbitrage d'Ethan du 12/09/2026, « ça
+  // doit bloquer ». Ce n'est pas une gêne ajoutée au joueur, c'est un PIÈGE
+  // qu'on lui ferme, et les deux moitiés sont MESURÉES sur les tables du dépôt.
+  //
+  // ⚠ PREMIÈRE MOITIÉ, L'AVARIE SE DILUE SANS SE RÉPARER. `degatsMilli` est un
+  // ABSOLU de milli-PV et le niveau monte les PV MAXIMUM par `facteurMilli` :
+  // mesuré sur un Collecteur à quartz, la MÊME avarie de 500 000 milli-PV se lit
+  // 30,30 % de ses PV max au niveau 2, 22,77 % au 5, 14,14 % au 10 et 11,68 % au
+  // 12 — sans qu'un seul PV lui ait été rendu. Le bâtiment PARAÎT guérir en
+  // montant, et l'écran le dit en part des PV max.
+  //
+  // ⚠ SECONDE MOITIÉ, ET C'EST CELLE QUI COÛTE AU JOUEUR : LA FACTURE MONTE.
+  // `coutDeLaReparationDUnBatiment` vaut `coutDeMontee(niveau).quartz / 230 ×
+  // part`, et la montée croît beaucoup plus vite que la part ne décroît —
+  // mesuré, la même avarie coûte 0,00 quartz au niveau 2, 0,03 au 5, 5,87 au 10
+  // et 24,38 au 12. Monter avant de réparer paie donc la réparation au tarif du
+  // niveau atteint. Sans cette garde, le joueur qui monte un bâtiment entamé
+  // croit l'avoir soigné et découvre la facture plus tard.
+  //
+  // ⚠ LE REFUS N'EFFACE RIEN, ET IL NE RÉPARE RIEN. Il dit seulement l'ordre des
+  // deux gestes ; `reparerUnBatiment` reste le seul chemin qui rende des PV, et
+  // l'arbitrage du 05/09 — « l'amélioration n'est pas un soin » — tient mot pour
+  // mot. Voir le même bloc dans `problemesDeLAmeliorationDEffectif`.
+  //
+  // ⚠ ET IL S'AJOUTE, IL NE COURT-CIRCUITE PAS. Le joueur doit lire les DEUX
+  // raisons d'un refus — « abîmé » ET « il manque 8 de quartz » — comme le
+  // plafond du Chantier le fait déjà juste au-dessus.
+  if ((batiment.degatsMilli ?? 0) > 0) {
+    problemes.push({ code: 'abimee', message: 'abîmé : réparez-le d\'abord' });
+  }
+
   const cout = coutDeMontee(batiment.id, vise);
   for (const r of RESSOURCES) {
     const duMilli = cout[r] * MILLI;
@@ -2048,6 +2079,31 @@ export function problemesDeLAmeliorationDEffectif(etat, force, index) {
       message: `le ${BASE_BATIMENTS[commandant].nom.joueur} est au niveau ${plafond}`
         + ' : montez-le d\'abord',
     });
+  }
+
+  // ⚠⚠ UNE PIÈCE ABÎMÉE NE MONTE PAS — même arbitrage d'Ethan du 12/09/2026, et
+  // la règle est écrite des DEUX côtés parce que les deux portes sont deux
+  // fonctions. Le raisonnement complet est dans `problemesDeLAmelioration` ;
+  // voici sa mesure du côté de l'armée, qui est plus brutale encore.
+  //
+  // ⚠ MESURÉ SUR UNE MEUTE, avarie ABSOLUE de 300 000 milli-PV : elle se lit
+  // 42,86 % des PV max au niveau 1, 38,96 % au 2, 18,18 % au 10 et 15,02 % au 12
+  // — l'avarie se dilue, aucun PV n'est rendu. Et la facture de
+  // `coutDeLaReparation` passe de 0,0 scorie au niveau 2 à 72,2 au 10 et 374,1 au
+  // 12 ; sur un Bélier, de 0,1 à 1 178,5. Monter une pièce entamée multiplie donc
+  // sa réparation par plusieurs centaines, et l'écran lui disait qu'elle allait
+  // mieux.
+  //
+  // ⚠ ET L'ARBITRAGE DU 03/09 N'EST PAS TOUCHÉ. `ameliorerEffectif` n'efface
+  // toujours pas `degatsMilli` — « les remettre à zéro ferait de l'amélioration
+  // un SOIN » : ce lot-ci ne soigne rien, il refuse le geste tant que la pièce
+  // est entamée. Les trois réserves de `sim/reparation.js` restent le seul
+  // chemin par lequel un PV revient.
+  //
+  // ⚠ IL S'AJOUTE AUX AUTRES REFUS, et l'ordre des `push` est celui de la
+  // lecture : le plafond, puis l'avarie, puis les manques.
+  if ((piece.degatsMilli ?? 0) > 0) {
+    problemes.push({ code: 'abimee', message: 'abîmée : réparez-la d\'abord' });
   }
 
   // Le coût se calcule MÊME quand le plafond refuse : le joueur doit pouvoir

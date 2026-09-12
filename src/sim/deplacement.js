@@ -234,6 +234,31 @@ export function ticksAvantProchainDeplacement(etat) {
  * @param {{rangee: number, colonne: number}} cible
  * @returns {Array<{code: string, message: string}>}
  */
+/**
+ * Les codes de refus qui portent sur la GÉOMÉTRIE de la case visée.
+ *
+ * ⚠⚠ CE N'EST PAS UNE LISTE DE GOÛT : C'EST LA PARTITION QUE LE MOTEUR IMPOSE,
+ * ET ELLE SE MESURE. Sur ces trois refus-là, et sur eux seuls,
+ * `delaiDuDeplacementVers` **LÈVE** — `delaiPourLaBase` borne la distance à
+ * `[1, porteeMaxCases]`, donc une case hors carte rend 300, la case de la base
+ * elle-même rend 0, et une case trop loin rend plus que dix. Relevé sur une base
+ * neuve en rangée 295 : « distance « 300 » », « distance « 0 » », « distance
+ * « 40 » ». Les refus de PERMISSION — `delai`, voisinage, territoire tenu —
+ * laissent passer le délai comme le bilan.
+ *
+ * ⚠ ELLE EST ICI, À CÔTÉ DES `push` QUI ÉCRIVENT CES CODES, ET PAS DANS L'ÉCRAN.
+ * Une liste recopiée dans `src/ui/` divergerait au premier code ajouté, et la
+ * divergence serait muette : l'écran peindrait un délai sur une case hors carte,
+ * donc il LÈVERAIT, donc le panneau ne s'ouvrirait plus — très exactement le
+ * défaut que le point 5 du 12/09 fait corriger, commis une seconde fois.
+ *
+ * ⚠ ET `trop-loin` PEUT VENIR AVEC UN REFUS DE PERMISSION, mesuré : une case à
+ * quarante cases rend `['trop-loin', 'voisinage', 'territoire-ennemi']`. La
+ * question à poser n'est donc pas « le premier code est-il géométrique » mais
+ * « y en a-t-il UN qui le soit ».
+ */
+export const CODES_DE_GEOMETRIE = Object.freeze(['hors-carte', 'sur-place', 'trop-loin']);
+
 export function problemesDuDeplacement(etat, cible) {
   const laBase = baseCourante(etat);
   const problemes = [];

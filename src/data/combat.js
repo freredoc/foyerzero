@@ -365,10 +365,50 @@ export const ORDRE_CHASSIS = ['escouade', 'blinde', 'aeronef'];
 // Faucheuse, le Mortier et le Harpon — sont des VÉHICULES, pas des structures :
 // c'est ce qui explique la part de cibles véhicule d'une garnison de haut
 // niveau. Une unité défensive mobile traverse librement toute sa rangée.
+// --- le barème de points de la défense ---------------------------------------
+// ⚠⚠ TROIS VALEURS SONT ARBITRÉES PAR ETHAN LE 12/09/2026, ET LA PRÉMISSE DU
+// BRIEF EST RÉFUTÉE — MESURÉE, PAS SUPPOSÉE. Il annonce que ces trois nombres
+// « cessent d'être des mesures pour devenir des arbitrages ». **Aucun des trois
+// n'était une mesure du relevé TA**, et l'un des trois en DEVIENT une :
+//
+//   pièce                   RELEVE-TA-ARSENAL.md   dépôt (ANNEXE-STATS)   Ethan 12/09
+//   Mur de défense          0                      5                      3
+//   Tourelle mitrailleuse   0                      8                      10
+//   Mirador                 30                     22                     30
+//
+// `RELEVE-TA-ARSENAL.md` l. 122 déclare l'échelle de la défense — **0 / 3 / 10 /
+// 15 / 30** — et ses l. 126-134 donnent Wall 0, MG Nest 0, Watchtower **30**.
+// Les 5, 8 et 22 du dépôt viennent d'`ANNEXE-STATS.md`, qui les titre « valeurs
+// relevées » et contredit le relevé : 5 et 8 ne sont même pas SUR l'échelle
+// qu'il déclare. L'arbitrage d'Ethan ramène donc le Mirador EXACTEMENT sur la
+// mesure du relevé, et pose les deux autres sur son échelle.
+//
+// ⚠ CE QUI RESTE UN ÉCART, ET IL SE DIT : le relevé met Wall et MG Nest à ZÉRO,
+// c'est-à-dire gratuits. 3 et 10 sont donc des arbitrages, mais des arbitrages
+// qui RÉDUISENT l'écart au relevé au lieu de le creuser. Ethan, textuellement :
+// « les murs doivent coûter 3 points et les tourelles 10 points », puis « 3
+// artilleries à 30 et seulement mur ».
+//
+// ⚠ LES DEUX BARRIÈRES NE SONT PAS DES MURS, et elles gardent leurs 5 points.
+// « Seulement mur » le dit ; `type` les sépare déjà — `mur` contre `barriere` —
+// et le relevé leur donne 3 quand il donne 0 au Wall : les confondre ferait
+// suivre à la Ronce et à la Herse un arbitrage qui ne les nomme pas.
+//
+// ⚠⚠ ET CE BARÈME A DEUX LECTEURS, PAS UN. `pointsEngages` de `sim/state.js`
+// compte la garnison DU JOUEUR contre son budget ; `forceDeLaDefense` de
+// `sim/site-de-la-case.js` somme la garnison D'UN SITE DE L'OUVRAGE et alimente
+// le chiffre de force affiché sur la carte. Changer ces trois nombres change
+// donc la force annoncée de tous les sites ennemis, alors qu'aucun n'a changé
+// d'un PV — c'est la même échelle des deux côtés, et c'est cohérent, mais ça se
+// voit à l'écran et c'est mesuré au rapport du lot.
+//
+// ⚠ LA COMPOSITION DES GARNISONS DE L'OUVRAGE NE BOUGE PAS : `genererSite`
+// travaille par densité et répartition, jamais par budget de points, et le seul
+// budget du générateur — `genererVague` — ne lit que `UNITES[id].points`.
 export const DEFENSES = {
   merlon: {
     nom: { ouvrage: 'Merlon', joueur: 'Mur de défense' }, ta: 'Wall', type: 'mur', cible: null,
-    points: 5, pv: 2000, portee: 0, porteeMini: 0,
+    points: 3, pv: 2000, portee: 0, porteeMini: 0,
     degatsFranchissement: null, bloque: true,
     degats: null, // ne tire pas
     moduleJoueur: 'autoReparation', moduleOuvrage: 'pvPlusVingt',
@@ -404,7 +444,7 @@ export const DEFENSES = {
   },
   casemate: {
     nom: { ouvrage: 'Casemate', joueur: 'Tourelle mitrailleuse' }, ta: 'MG Nest', type: 'tourelle', cible: 'infanterie',
-    points: 8, pv: 1000, portee: 2.5, porteeMini: 0,
+    points: 10, pv: 1000, portee: 2.5, porteeMini: 0,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 20, vehicule: 7, structureOuAviation: 8 },
     moduleJoueur: 'autoReparation', moduleOuvrage: 'munitionSpeciale',
@@ -428,7 +468,7 @@ export const DEFENSES = {
   },
   faucheuse: {
     nom: { ouvrage: 'Faucheuse', joueur: 'Mirador' }, ta: 'Watchtower', type: 'artillerie', cible: 'infanterie',
-    points: 22, pv: 600, portee: 5.5, porteeMini: 3.5,
+    points: 30, pv: 600, portee: 5.5, porteeMini: 3.5,
     degatsFranchissement: null, bloque: true,
     degats: { infanterie: 10, vehicule: 2, structureOuAviation: 1 },
     moduleJoueur: 'rayonMiniMoinsUn', moduleOuvrage: 'rayonMiniMoinsUn',

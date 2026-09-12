@@ -236,23 +236,41 @@ test('T3 — une unité qui ne peut plus rien faire rentre à la base', () => {
 // T4 — le repli ne se déclenche pas trop tôt
 // ---------------------------------------------------------------------------
 
-test('T4 — un blocage transitoire remet le compteur à zéro', () => {
+test('T4 — derrière une alliée, B ne flue pas et son compteur est GELÉ', () => {
   // Deux alliés en file dans la colonne 5, loin de toute cible : le seul
   // bâtiment est en (18,9), à quatre colonnes.
   //
   //   A — Fusilier posé D'EMBLÉE en rangée 18. Il ne peut ni avancer (c'est le
   //       fond) ni nuire (4000² = 16 000 000 contre une portée² de 2 250 000) :
   //       son compteur part au tick 1 et il rentre à la base au tick 30.
-  //   B — Chasseur en rangée 17, vitesse 90 milli/tick depuis le lot 4A. Parti
-  //       de 17 000, il est à 17 990 au tick 11 ; au tick 12 sa destination,
-  //       18 080, tombe en rangée 18, occupée par A. Entre alliés c'est un
-  //       BLOCAGE, jamais un écrasement — et sa portée² de 6 250 000 ne couvre
-  //       pas davantage la Gangue. Son compteur part donc au tick 12.
+  //   B — Chasseur en rangée 17, vitesse 90 milli/tick depuis le lot 4A.
   //
-  // ⚠ Seuils déplacés au lot 4A : de 12 à 29 inclus, B accumule 18 ticks
-  // inutiles au lieu de 20, sa vitesse de 90 lui laissant deux pas de plus
-  // avant le contact. Au tick 30 A libère la case en rentrant, B repart, et son
-  // compteur retombe à zéro — ce que ce test tient, inchangé.
+  // ⚠⚠ CE TEST EST RETOURNÉ PAR LE LOT BARÈME-ET-REJEU, 12/09/2026, ET IL EST LA
+  // MESURE LA PLUS LITTÉRALE DE CE QU'ETHAN A VU. Il décrivait, sur une vraie
+  // partie : « les véhicules étaient à 80 % sur l'infanterie, plutôt que
+  // d'attendre derrière. Puis ils ont disparu. Mais 0 détruit. » LES DEUX
+  // MOITIÉS DE SA PHRASE SONT DANS CE MONTAGE, et les deux étaient vraies :
+  //
+  //   — « à 80 % sur l'infanterie » : B partait de 17 000 et se figeait à
+  //     **17 990**, c'est-à-dire 990 millièmes dans la case 17 — en case 17 pour
+  //     le moteur, et DESSINÉ à 99 % sur la case 18, celle de A, par
+  //     `yDeRangeeMilli` qui projette la position et non l'index ;
+  //   — « puis ils ont disparu, mais 0 détruit » : son compteur d'inutilité
+  //     partait au tick 12 et montait à 18 ; sur une file un peu plus longue il
+  //     atteignait `TICKS_AVANT_REPLI` et B passait `sorti = true` — hors du
+  //     champ, compté parmi les SURVIVANTS, donc absent du décompte des pertes.
+  //     Il disparaissait parce qu'UNE DES SIENNES lui barrait le passage.
+  //
+  // ⚠ ETHAN, MIS DEVANT LA MESURE : « pas de chevauchement allié ni horizontal
+  // ni vertical. Totalement interdit. » Les deux règles sont donc distinctes et
+  // ce test garde les deux : B se RANGE sur sa case (17 000, multiple exact), et
+  // son compteur est GELÉ à zéro tant que l'alliée tient la case devant.
+  //
+  // ⚠⚠ ET LE 17 990 N'EST PAS PERDU, IL EST DÉPLACÉ DANS LE TEMPS — c'est ce qui
+  // fait de ce réancrage une mesure et non un ajustement. B atteint exactement
+  // 17 990 au tick **40**, dix ticks après que A a libéré la case : le même
+  // nombre, à l'autre bout du blocage, parce que B a bien rendu ses 990
+  // millièmes au lieu de les garder.
   const montage = {
     niveau: 1,
     saveur: null,
@@ -269,24 +287,47 @@ test('T4 — un blocage transitoire remet le compteur à zéro', () => {
   const bloqueur = etat.entites.find((e) => e.id === 'meute');
   const bloque = etat.entites.find((e) => e.id === 'fendeur');
 
-  jouer(etat, 11);
-  assert.equal(bloque.rangeeMilli, 17_990, '17 000 + 11 × 90');
-  assert.equal(bloque.ticksInutiles, 0, 'il progressait encore');
+  // ⚠ B NE BOUGE PAS D'UN MILLIÈME, DÈS LE PREMIER TICK. Avant le lot il partait
+  // à 17 090, 17 180… jusqu'à 17 990 ; il est désormais rangé sur sa case, et le
+  // multiple exact est ce qui le dit.
+  jouer(etat, 1);
+  assert.equal(bloque.rangeeMilli, 17 * 1000, 'il flue encore dans la case de son alliée');
+  assert.equal(bloque.rangeeMilli % 1000, 0, 'sa position n\'est pas un multiple de case');
 
   jouer(etat, 29);
-  assert.equal(bloque.ticksInutiles, 18, 'dix-huit ticks bloqué derrière son allié');
-  assert.equal(bloque.rangeeMilli, 17_990, 'et pas d\'un milli-case de plus');
-  assert.equal(bloque.sorti, false, 'il n\'est pas encore rentré');
+  assert.equal(bloque.rangeeMilli, 17 * 1000, 'et pas d\'un milli-case de plus');
+  assert.equal(bloque.ticksInutiles, 0,
+    'son compteur monte derrière une ALLIÉE : il doit être gelé');
+  assert.equal(bloque.sorti, false, 'il n\'est pas rentré');
   assert.equal(bloqueur.vivant, true, 'et son allié est toujours vivant : blocage, pas écrasement');
   assert.equal(bloqueur.ecrase, false);
-  assert.equal(bloqueur.ticksInutiles, 29);
+
+  // ⚠ ET LE GEL NE VAUT QUE POUR CELUI QUI EST BLOQUÉ PAR UNE ALLIÉE. A n'a rien
+  // devant lui — la rangée 19 n'existe pas —, donc SON compteur monte, et c'est
+  // ce qui fait que le blocage se dénoue au lieu de durer tout le raid. Un gel
+  // écrit sans condition figerait les deux et la file ne repartirait jamais.
+  assert.equal(bloqueur.ticksInutiles, 29, 'le gel a débordé sur celui qui bloque');
 
   // Au tick 30 A rentre à la base et libère la case dans le même tick.
   jouer(etat, 30);
   assert.equal(bloqueur.sorti, true);
   assert.equal(bloque.ticksInutiles, 0, 'le compteur est remis à zéro');
-  assert.equal(bloque.rangeeMilli, 18_080, 'et B a repris sa marche dès ce tick');
+  assert.equal(bloque.rangeeMilli, 17_090, 'et B a repris sa marche dès ce tick');
   assert.equal(bloque.sorti, false);
+
+  // ⚠⚠ LE 17 990 D'HIER, DIX TICKS PLUS TARD. C'est la contre-épreuve du
+  // réancrage : B a bien rendu les 990 millièmes qu'il gardait, et il les
+  // reparcourt une fois la voie libre. Un rangement qui aurait perdu de la
+  // distance ne retomberait pas sur ce nombre.
+  jouer(etat, 40);
+  assert.equal(bloque.rangeeMilli, 17_990, '17 000 + 10 × 90, la voie libérée');
+
+  // ⚠ ET UNE FOIS AU FOND, SANS PERSONNE DEVANT, IL SE REPLIE COMME A. Le gel
+  // est une propriété du BLOCAGE ALLIÉ, pas une immunité de l'unité : sans cette
+  // assertion, un gel écrit trop large rendrait le repli inatteignable.
+  jouer(etat, 50);
+  assert.ok(bloque.ticksInutiles > 0,
+    'au fond et sans alliée devant, son compteur doit repartir');
 });
 
 // ---------------------------------------------------------------------------
@@ -400,7 +441,22 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // d'apparition écrit explicitement, les deux cents témoins rendent 0 écart.
   // Ce que ce test existe pour tenir ne bouge toujours pas : au moins une unité
   // rentre à la base.
-  assert.equal(r.nbTicks, 489);
+  //
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : 489 → 509, ET LE RAID S'ALLONGE DE VINGT
+  // TICKS SANS QUE LE SITE CHANGE. C'est le second lot de l'histoire de ce
+  // seuil — après MUR — à le déplacer par le DÉROULÉ seul : ni la disposition,
+  // ni la garnison, ni le barème de l'Ouvrage ne bougent d'un identifiant.
+  // Deux règles neuves, qui tirent dans le MÊME sens : une unité bloquée par une
+  // ALLIÉE se range sur sa case au lieu de fluer jusqu'au contact — elle perd
+  // donc jusqu'à 999 millièmes de progression par embouteillage —, et son
+  // compteur de repli est GELÉ, donc elle attend au lieu de rentrer. Un raid où
+  // l'on attend plus et où l'on avance moins dure plus longtemps.
+  // ⚠ ET LE BUTIN EXPLOSE : 36 → 1 541 de quartz, 12 → 513 de scorie, soit
+  // quarante-deux fois. Le gel est ce qui le paie — les unités qui rentraient à
+  // la base restent sur le terrain et continuent de tirer. Les survivants
+  // tombent de 5 à 3, et les TROIS sont rentrés : c'est la même mécanique vue
+  // par l'autre bout, on reste plus longtemps donc on meurt davantage.
+  assert.equal(r.nbTicks, 509);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -436,8 +492,10 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // ticks de tirs de plus : une unité qui rentrait détruite rentre vivante, et
   // les bâtiments sont griffés pour la première fois depuis PAQUETS. C'est
   // l'effet d'équilibrage déclaré, et il est ici mesuré, pas cherché.
-  assert.deepEqual(r.butin, { quartz: 36, scorie: 12 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
+  // ⚠ LOT BARÈME-ET-REJEU : voir le bloc du tick ci-dessus — 36 → 1 541 et
+  // 12 → 513, cinq survivants → trois.
+  assert.deepEqual(r.butin, { quartz: 1541, scorie: 513 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',

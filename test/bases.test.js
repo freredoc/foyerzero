@@ -110,6 +110,8 @@ import {
   RAPPORTS_PROCHE_APPROCHE, RAPPORTS_OUVRAGE_APPROCHE,
   OCTETS_AJOUTES_PAR_REGLES_DE_CARTE, RAPPORTS_OUVRAGE_REGLES_DE_CARTE,
   RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
+  DEPLACES_PAR_BAREME_ET_REJEU, EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU,
+  RAPPORTS_PROCHE_BAREME_ET_REJEU, RAPPORTS_OUVRAGE_BAREME_ET_REJEU,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -223,7 +225,23 @@ function empreinteAttendue(phase, champ) {
   // son résultat, seulement l'état du site APRÈS coup. ⚠ Aucun scalaire ne bouge
   // non plus — ni les gestes, ni la sauvegarde, ni les cases atteignables, ni le
   // déplacement, ni les bases attaquantes, ni la cible retenue.
-  return DEPLACES_PAR_VITESSE[phase]?.[champ]
+  // ⚠⚠ VINGT-DEUXIÈME COUCHE — lot BARÈME-ET-REJEU, 12/09. **Trente-sept couples
+  // sur 350**, et les SIX PREMIÈRES PHASES sont identiques AU BIT : le scénario
+  // ne combat pas avant son premier raid, et tout ce que le lot change est DANS
+  // le combat. Deux règles qui ne se recouvrent pas — une entité ne flue plus
+  // dans la sous-case d'une ALLIÉE, ni à la verticale ni à la latérale, et son
+  // compteur de repli est GELÉ tant qu'une alliée la bloque. ⚠⚠ AUCUN SCALAIRE
+  // NE BOUGE — les dix-sept, sur 25 graines sur 25 : ni les gestes, ni la
+  // sauvegarde, ni les cases atteignables, ni le déplacement, ni les bases
+  // attaquantes, ni le nombre de cibles, ni la cible retenue, ni l'équivalence
+  // des deux chemins. ⚠ `position` et `disposition` bougent à la phase 13, sur la
+  // SEULE graine 17 : l'Ouvrage y rase la base dans la fenêtre de cinq minutes
+  // là où elle tenait, et les vingt-cinq convergent de nouveau en phase 14.
+  // ⚠ ATTRIBUTION MESURÉE : `src/sim/combat.js` seul remis au pristine, les deux
+  // cents témoins de combat rendent 0 écart — ni le barème (§1) ni le refus
+  // d'améliorer une pièce abîmée (§2) ne déplacent un bit de ce témoin-ci.
+  return DEPLACES_PAR_BAREME_ET_REJEU[phase]?.[champ]
+    ?? DEPLACES_PAR_VITESSE[phase]?.[champ]
     ?? DEPLACES_PAR_APPROCHE[phase]?.[champ]
     ?? DEPLACES_PAR_MUR[phase]?.[champ]
     ?? DEPLACES_PAR_REGLES_DE_CARTE[phase]?.[champ]
@@ -629,7 +647,14 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // tombent à l'octet sur `APPROCHE`. Sur ces trois parties-là, le site raidé
     // aux phases 12 et 13 est rendu dans le même état par les deux règles. Le
     // `??` reste donc NÉCESSAIRE, comme au lot MUR.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_VITESSE[g] ?? EMPREINTES_PAR_GRAINE_APPROCHE[g]
+    // ⚠⚠ BARÈME-ET-REJEU (12/09) N'EN DÉPLACE QUE VINGT-DEUX : les graines 3, 9
+    // et 15 tombent à l'octet sur `VITESSE`. Sur ces trois parties-là, aucune
+    // des deux règles ne mord dans les deux raids du scénario — aucune attaquante
+    // ne se retrouve derrière une alliée au moment où son compteur compterait, et
+    // aucune ne fluait dans la sous-case d'une autre. Le `??` reste donc
+    // NÉCESSAIRE, comme aux lots MUR et VITESSE.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU[g]
+      ?? EMPREINTES_PAR_GRAINE_VITESSE[g] ?? EMPREINTES_PAR_GRAINE_APPROCHE[g]
       ?? EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
       ecarts.push(g);
     }
@@ -787,8 +812,18 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // au-dessus — gestes, sauvegarde, cases atteignables, déplacement, bases
       // attaquantes, nombre de cibles et cible retenue — dit que le lot ne
       // touche ni la carte, ni l'économie, ni la pose.
+      // ⚠⚠ ET LE LOT BARÈME-ET-REJEU LES DÉPLACE TOUS LES DEUX, SUR LES
+      // VINGT-CINQ GRAINES — ET C'EST CE QUI LE DISTINGUE DE MUR, QUI N'EN
+      // DÉPLAÇAIT QUE 4 SUR 25 CÔTÉ OUVRAGE. Là-bas les deux règles portaient
+      // sur les STRUCTURES, et la base du JOUEUR n'a ni murs ni barrières ; ici
+      // la règle porte sur les ALLIÉES, et les deux camps en ont. Ce qui NE bouge
+      // pas juste au-dessus — les DIX-SEPT scalaires, gestes de construction et
+      // d'armement, taille de la sauvegarde, cases atteignables, déplacement,
+      // bases attaquantes, nombre de cibles, cible retenue, non-fuite et
+      // exactitude de la simulation, équivalence des deux chemins — dit que seul
+      // le DÉROULÉ du combat a changé.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_APPROCHE[g]
+        ? (RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
           ?? RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
           ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
@@ -797,7 +832,7 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_APPROCHE[g]
+        : (RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
           ?? RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_PROCHE_RETOUCHES[g]
           ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]

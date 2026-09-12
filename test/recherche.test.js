@@ -5699,6 +5699,19 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // plus petite des neuf restantes. ⚠ L'inversion de la graine 1 est un CONSTAT
   // à remonter, pas un défaut : aucun barème n'a été touché, et l'équilibrage
   // revient à Ethan.
+  //
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : LES TROIS GRAINES NE CHANGENT PAS, ET C'EST
+  // LA SECONDE FOIS QUE LA PRÉMISSE TIENT — après DISPOSITION-OUVRAGE. Les trois
+  // discriminent toujours aux trois niveaux, et le balayage des graines 1 à 60 en
+  // rend **onze**, LES MÊMES ONZE qu'au lot MUR : 7, 9, 18, 24, 33, 36, 39, 51,
+  // 52, 56, 57. Seules les VALEURS bougent, et c'est un constat.
+  //
+  // ⚠⚠ ET CETTE INVARIANCE EST LA MESURE QUI COMPTE. Les lots qui recomposaient
+  // la garnison d'un site — COLONNE, CIBLES-RANGÉES, PAQUETS — faisaient perdre
+  // son montage à ce test, parce qu'ils changeaient QUELLES pièces portent un
+  // module armé. Celui-ci ne touche ni la composition ni la disposition : il
+  // change la façon dont les attaquantes se rangent en approchant. Le canal reste
+  // donc porté par les mêmes pièces, et le sens qu'il donne aux points tient.
   const GRAINES = [7, 9, 24];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
@@ -5718,7 +5731,11 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // identiques au point, et deux des trois du niveau 50. Un balayage des graines
   // 1 à 60 en donne 33 qui discriminent aux trois niveaux, contre six au lot
   // précédent : la propriété est plus robuste qu'elle ne l'était.
-  const apres20 = { 7: 3_671_200n, 9: 4_086_271n, 24: 6_707_657n };
+  // ⚠ RÉANCRÉ AU LOT BARÈME-ET-REJEU : les trois valeurs bougent, et la PROPRIÉTÉ
+  // ne bouge pas — armé et vide rendent le même nombre au niveau 20, sur les
+  // trois graines. Un combat qui se déroule autrement ne rapporte pas les mêmes
+  // points ; que le canal ne morde pas sous 28 est ce qui est gardé ici.
+  const apres20 = { 7: 3_901_683n, 9: 4_045_833n, 24: 6_531_961n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5745,7 +5762,10 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // structure en se décalant : sur ces trois bases-là, une seule est dans ce
   // cas. ⚠ Et la propriété que ce test garde — le canal armé coûte MOINS que le
   // canal vide — tient sur les trois, aux niveaux 38 comme 50.
-  const apres38 = { 7: 326_352_543n, 9: 1_775_548_650n, 24: 524_648_503n };
+  // ⚠ RÉANCRÉ AU LOT BARÈME-ET-REJEU, sur les trois MÊMES graines. Le SENS est
+  // intact — armé reste sous vide sur les trois —, et c'est la seule chose que ce
+  // test mesure.
+  const apres38 = { 7: 335_384_514n, 9: 1_789_234_429n, 24: 486_555_667n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5764,7 +5784,12 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES, sur les trois graines neuves.
   // ⚠ RÉANCRÉ AU LOT DISPOSITION-OUVRAGE : seule la graine 1 bouge, les deux
   // autres sont identiques au point.
-  const apres50 = { 7: 7_964_841_806n, 9: 55_700_887_742n, 24: 22_479_132_014n };
+  // ⚠ RÉANCRÉ AU LOT BARÈME-ET-REJEU, sur les trois MÊMES graines. Le SENS est
+  // intact, et il est FRANC sur la 7 : **8,01 G armé contre 9,06 G vide**, soit
+  // 11,6 % de moins. Le Vol de vie et le Rayon minimum −1 sont armés à ce
+  // niveau-là, et une file qui attend derrière ses alliées les laisse travailler
+  // plus longtemps.
+  const apres50 = { 7: 8_008_420_457n, 9: 55_941_725_902n, 24: 21_934_757_798n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);
