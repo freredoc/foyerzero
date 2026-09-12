@@ -750,8 +750,16 @@ export function etatDeLaPose(pose) {
   return etatDuBatiment(Math.max(0, max - (pose.degatsMilli ?? 0)), max);
 }
 
-/** Les PV maximaux d'un bâtiment de la base, en milli-PV. */
-function pvMaxDuBatimentMilli(id, niveau) {
+/**
+ * Les PV maximaux d'un bâtiment de la base, en milli-PV.
+ *
+ * ⚠ EXPORTÉE DEPUIS LE LOT VITESSE, POUR LA BARRE DE VIE DU JETON. La bande des
+ * bâtiments porte `degatsMilli` depuis le lot RAID-B ; une barre qui lirait un
+ * absolu annoncerait la même avarie à tous les niveaux, donc l'écran a besoin du
+ * maximum — et il ne doit pas le recomposer, `BASE_BATIMENTS[id].pv` fois
+ * `facteurMilli` étant déjà écrit ici.
+ */
+export function pvMaxDuBatimentMilli(id, niveau) {
   const ligne = BASE_BATIMENTS[id];
   if (ligne === undefined) throw new RangeError(`réparation : bâtiment « ${id} » inconnu`);
   return ligne.pv * facteurMilli(niveau);
@@ -1187,7 +1195,76 @@ export function complexeDeLaBase(laBase) {
 }
 
 /**
- * Combien de ticks la rampe met à rendre le plein, sous ce Complexe-là.
+ * Cette santé figée ramène-t-elle quoi que ce soit ?
+ *
+ * ⚠⚠ `null` EST LE SEUL « JAMAIS », ET ZÉRO N'EN EST PAS UN — MESURÉ, PAS SUPPOSÉ.
+ * La tentation, le 12/09, était de traiter la santé arrondie à zéro comme un
+ * « jamais » : la règle de vitesse divise par la santé, et zéro y rend `Infinity`.
+ * **Elle a été écrite, puis retirée sur la mesure.** Sur une base de l'Ouvrage,
+ * `santeComplexeMilli` est FIGÉE au raid : un Étai laissé à 1 PV y vaut zéro
+ * millième, donc ses défenses ne seraient JAMAIS revenues et l'entrée n'aurait
+ * jamais été purgée — le site serait resté sans défense pour toujours, là où la
+ * règle d'avant le rendait en 24 h. Le « jamais » reste donc ce qu'il a toujours
+ * été : pas de Complexe, ou un Complexe à ZÉRO PV. C'est `ticksDeRetour` qui
+ * planche la DIVISION à un millième, et lui seul.
+ *
+ * ⚠ `undefined` EST TRAITÉ COMME `null` — une sauvegarde d'avant le champ, ou une
+ * entrée de site que `santeFigee` n'a pas renseignée.
+ *
+ * ⚠ CINQ LECTEURS, UNE SEULE ÉCRITURE. `pvApresRetour`, `retourDeLaPiece`,
+ * `ramenerLaGarnison`, `sim/site-entame.js` et la fiche du Chantier posent tous
+ * la même question, et chacun la posait à sa façon avant le 12/09.
+ *
+ * @param {number|null|undefined} santeMilli
+ * @returns {boolean}
+ */
+export function rendLesPv(santeMilli) {
+  return santeMilli !== null && santeMilli !== undefined;
+}
+
+/**
+ * Ce qui revient D'UN COUP à la fin du raid, en milli-PV.
+ *
+ * ⚠⚠ UNE SEULE ÉCRITURE DE « 700 × SANTÉ », ET ELLE EST NEUVE DU 12/09. Depuis
+ * que la durée se calcule sur ce qui RESTE à rendre, `ticksDeRetour` a besoin du
+ * palier autant que `pvApresRetour` : deux `Math.floor` du même produit auraient
+ * divergé au premier réglage de `partInstantaneeMilli`, et la première des deux
+ * à être retouchée aurait menti — la pièce aurait sauté à un niveau de PV que la
+ * durée ne décrit pas.
+ *
+ * @param {number} perdusMilli
+ * @param {number} santeMilli dans [0, 1000] — la santé VRAIE, jamais planchée
+ * @returns {number} milli-PV, ≤ perdusMilli
+ */
+export function palierInstantaneMilli(perdusMilli, santeMilli) {
+  return Math.floor(
+    (perdusMilli * RETOUR_DEFENSES.partInstantaneeMilli * santeMilli) / (MILLE * MILLE),
+  );
+}
+
+/**
+ * Combien de ticks la rampe met à rendre ce qui reste, sous ce Complexe-là.
+ *
+ * ⚠⚠ C'EST UNE VITESSE DEPUIS LE 12/09, PLUS UNE DURÉE, ET LA SIGNATURE A CHANGÉ
+ * POUR ÇA. Jusque-là la fonction ne lisait ni les dégâts ni les PV : une pièce
+ * éraflée et une pièce rasée mettaient le même temps. « En une heure » veut dire
+ * une heure pour rendre CENT POUR CENT des PV, donc l'attente est proportionnelle
+ * à ce qui reste à rendre APRÈS le palier. Les deux champs neufs — `perdusMilli`
+ * et `pvMaxMilli` — sont ce qui manquait ; la signature est devenue NOMMÉE pour
+ * qu'aucun appelant ne puisse glisser un milli-PV à la place d'un niveau.
+ *
+ * ⚠⚠ `perdusMilli` EST LE POINT DE DÉPART GELÉ, JAMAIS LES DÉGÂTS COURANTS. La
+ * rampe fait décroître `degatsMilli` ; calculer la durée dessus la rallongerait à
+ * mesure qu'elle approche, si bien que la pièce n'arriverait jamais et que le
+ * compte à rebours de l'écran REMONTERAIT sous les yeux du joueur. C'est
+ * `retour.degatsAuDebutMilli` qu'on lui passe, et `VIT T1 bis` mesure que le
+ * rebours décroît d'un tick par tick.
+ *
+ * ⚠⚠ ET LA SANTÉ DIVISE, DONC LE `null` EST REFUSÉ ET LE ZÉRO EST PLANCHÉ. Les
+ * deux ne disent pas la même chose : `null` est un fait de JEU — pas de Complexe,
+ * ou Complexe à zéro PV — que les cinq lecteurs annoncent AVANT d'arriver ici ;
+ * zéro est un ARRONDI, et il se planche à un millième plus bas. La pénalité
+ * linéaire d'avant absorbait les deux ; celle-ci ne peut plus.
  *
  * ⚠⚠ `1 + dépassement` NE PEUT PAS SORTIR DE `NIVEAU`, ET ON L'ASSERTE PLUTÔT
  * QUE DE L'ESPÉRER. Le dépassement vaut au plus `plafond − 1`, le niveau du
@@ -1198,30 +1275,80 @@ export function complexeDeLaBase(laBase) {
  *
  * ⚠ ARRONDI VERS LE HAUT, ET PLANCHER À UN TICK. Une durée est une ATTENTE, et
  * une attente s'arrondit vers le haut — même règle que le `Math.ceil` par défaut
- * de `direLaDuree`. Une durée nulle diviserait par zéro dans la rampe.
+ * de `direLaDuree`. Une durée nulle diviserait par zéro dans la rampe, et une
+ * éraflure que le palier rend en entier tombe très exactement dans ce cas.
  *
- * @param {number} niveauPiece
- * @param {number} niveauComplexe
- * @param {number} santeMilli dans [0, 1000]
+ * @param {object} arg
+ * @param {number} arg.niveau niveau de la PIÈCE
+ * @param {number} arg.niveauComplexe
+ * @param {number} arg.santeMilli dans [0, 1000] — `rendLesPv` en amont
+ * @param {number} arg.perdusMilli les PV à rendre, GELÉS au tick du raid
+ * @param {number} arg.pvMaxMilli les PV maximaux de la pièce
  * @returns {number} ticks, ≥ 1
  */
-export function ticksDeRetour(niveauPiece, niveauComplexe, santeMilli) {
-  if (!Number.isInteger(niveauPiece) || niveauPiece < 1) {
-    throw new RangeError(`réparation : niveau de pièce « ${niveauPiece} » — entier ≥ 1 attendu`);
+export function ticksDeRetour({
+  niveau, niveauComplexe, santeMilli, perdusMilli, pvMaxMilli,
+}) {
+  if (!Number.isInteger(niveau) || niveau < 1) {
+    throw new RangeError(`réparation : niveau de pièce « ${niveau} » — entier ≥ 1 attendu`);
   }
-  const depassement = Math.max(0, niveauPiece - niveauComplexe);
+  if (!rendLesPv(santeMilli)) {
+    throw new RangeError(
+      `réparation : santé « ${santeMilli} » — rien ne revient, la durée n'a pas de sens`,
+    );
+  }
+  // ⚠⚠ LE PLANCHER DE DIVISION, ET IL NE TOUCHE PAS LE PALIER. La santé se range
+  // en MILLIÈMES ENTIERS : un PV sur les 2 500 000 milli-PV du plus petit
+  // Complexe possible vaut 0,4 millième, donc ZÉRO une fois arrondi — le cas est
+  // atteignable côté joueur, les bâtiments planchant à 1 PV. `1000 / 0` rendrait
+  // `Infinity`, que `Math.ceil` laisse passer et qu'aucune durée ne sait dire.
+  // Un millième est la plus petite santé que l'échelle sache écrire, donc la
+  // plus lente que la règle sache décrire : à ce plancher, une pièce rasée
+  // revient en mille heures. ⚠ ET LE PALIER GARDE LA SANTÉ VRAIE — à zéro il ne
+  // rend rien, ce qui est juste, et surtout `pvApresRetour` calcule le sien avec
+  // la même valeur : deux `reste` différents feraient diverger la rampe de son
+  // échéance.
+  const santeQuiDivise = Math.max(1, santeMilli);
+  if (!(pvMaxMilli > 0)) {
+    throw new RangeError(`réparation : pvMax « ${pvMaxMilli} » — milli-PV > 0 attendus`);
+  }
+  const depassement = Math.max(0, niveau - niveauComplexe);
   if (1 + depassement > NIVEAU.plafond) {
     throw new RangeError(
-      `réparation : dépassement ${depassement} — pièce niveau ${niveauPiece}, `
+      `réparation : dépassement ${depassement} — pièce niveau ${niveau}, `
       + `Complexe niveau ${niveauComplexe}, plafond ${NIVEAU.plafond}`,
     );
   }
-  const rapport = RETOUR_DEFENSES.heuresAuPlancher / RETOUR_DEFENSES.heuresDeBase;
-  const penalite = 1 + (rapport - 1) * (1 - santeMilli / MILLE);
-  const heures = RETOUR_DEFENSES.heuresDeBase
-    * (facteurMilli(1 + depassement) / MILLE)
-    * penalite;
+  const perdus = Math.max(0, Math.min(pvMaxMilli, perdusMilli));
+  const reste = perdus - palierInstantaneMilli(perdus, santeMilli);
+  const heures = (reste / pvMaxMilli)
+    * RETOUR_DEFENSES.heuresDeBase
+    * (MILLE / santeQuiDivise)
+    * (facteurMilli(1 + depassement) / MILLE);
   return Math.max(1, Math.ceil(heures * TICKS_PAR_HEURE));
+}
+
+/**
+ * L'attente d'une pièce RASÉE de ce niveau-là — le pire cas, et la seule durée
+ * que la fiche d'un Complexe puisse annoncer sans nommer une pièce.
+ *
+ * ⚠⚠ ELLE NE DÉPEND PAS DU MODÈLE DE LA PIÈCE, ET C'EST CE QUI LA REND ÉCRIVABLE.
+ * À perte totale, `reste / pvMax` vaut `1 − partInstantaneeMilli × santé / 10⁶`
+ * quel que soit `pvMax` — pourvu que le `Math.floor` du palier tombe juste, ce
+ * qu'un million de milli-PV garantit : `10⁶ × 700 × santé / 10⁶` vaut `700 × santé`,
+ * un entier pour toute santé entière. La référence n'est donc pas une pièce
+ * plausible, c'est un dénominateur qui ne perd rien.
+ *
+ * @param {number} niveau
+ * @param {number} niveauComplexe
+ * @param {number} santeMilli
+ * @returns {number} ticks, ≥ 1
+ */
+export function ticksDeRetourDUnePieceRasee(niveau, niveauComplexe, santeMilli) {
+  const reference = MILLE * MILLE;
+  return ticksDeRetour({
+    niveau, niveauComplexe, santeMilli, perdusMilli: reference, pvMaxMilli: reference,
+  });
 }
 
 /**
@@ -1233,11 +1360,12 @@ export function ticksDeRetour(niveauPiece, niveauComplexe, santeMilli) {
  * partie, et ce qui permet aux deux camps de l'appeler sans se ressembler par
  * ailleurs.
  *
- * ⚠⚠ LA GARDE « RIEN NE REVIENT JAMAIS » EST ÉCRITE, PAS ÉMERGENTE. À santé
- * nulle la formule rendrait la pénalité maximale — vingt-quatre heures —, et
- * non « jamais ». `santeMilli === null` dit « pas de Complexe, ou Complexe à
- * zéro PV » ; retirer la ligne fait revenir les pièces en 24 h, ce qu'un test
- * mesure de face.
+ * ⚠⚠ LA GARDE « RIEN NE REVIENT JAMAIS » EST ÉCRITE, PAS ÉMERGENTE, ET ELLE EST
+ * DEVENUE OBLIGATOIRE LE 12/09. Elle disait `santeMilli === null` quand la
+ * formule rendait encore un nombre fini à santé nulle — vingt-quatre heures, et
+ * non « jamais ». Depuis que la durée DIVISE par la santé, retirer la ligne ne
+ * rend plus 24 h : elle rend `Infinity`, que rien en aval ne sait afficher. Elle
+ * passe donc par `rendLesPv`, qui refuse le zéro autant que le `null`.
  *
  * @param {object} arg
  * @param {number} arg.pvMaxMilli
@@ -1254,16 +1382,16 @@ export function pvApresRetour({
   const apres = Math.max(0, Math.min(pvMaxMilli, pvApresRaidMilli));
   const perdus = pvMaxMilli - apres;
   if (perdus <= 0) return pvMaxMilli;
-  if (santeMilli === null) return apres; // ⚠⚠ LA GARDE — voir plus haut.
+  if (!rendLesPv(santeMilli)) return apres; // ⚠⚠ LA GARDE — voir plus haut.
 
   // ⚠ LE PALIER PORTE SUR LES PV PERDUS DE CETTE PIÈCE-CI, DÉTRUITE COMPRISE.
   // Une pièce à zéro a tout perdu, donc elle se relève à 70 % × santé — c'est le
   // changement de fond du 05/09, la règle d'avant ne touchant que les
   // survivantes d'un camp.
-  const instantane = Math.floor(
-    (perdus * RETOUR_DEFENSES.partInstantaneeMilli * santeMilli) / (MILLE * MILLE),
-  );
-  const duree = ticksDeRetour(niveau, niveauComplexe, santeMilli);
+  const instantane = palierInstantaneMilli(perdus, santeMilli);
+  const duree = ticksDeRetour({
+    niveau, niveauComplexe, santeMilli, perdusMilli: perdus, pvMaxMilli,
+  });
   const ecoule = Math.max(0, ecouleTicks);
   if (ecoule >= duree) return pvMaxMilli;
   return apres + instantane + Math.floor(((perdus - instantane) * ecoule) / duree);
@@ -1284,23 +1412,43 @@ export function pvApresRetour({
  * @returns {{ etat: string, ticks: number|null }}
  */
 export function retourDeLaPiece(laBase, piece, maintenant) {
-  if ((piece.degatsMilli ?? 0) <= 0) return { etat: 'intacte', ticks: null };
+  const degats = piece.degatsMilli ?? 0;
+  if (degats <= 0) return { etat: 'intacte', ticks: null };
+  const pvMaxMilli = pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau);
   const r = piece.retour ?? null;
   if (r === null) {
     // Non stampée : soit il n'y a pas de Complexe, soit le tick ne l'a pas
     // encore vue. Le second cas ne dure qu'un dixième de seconde ; le premier
     // est la règle, et c'est lui qu'on annonce.
     const complexe = complexeDeLaBase(laBase);
-    if (complexe === null || complexe.santeMilli === null) {
+    if (complexe === null || !rendLesPv(complexe.santeMilli)) {
       return { etat: 'sans-retour', ticks: null };
     }
+    // ⚠ CE QUE LE FILET VA GELER, ET RIEN D'AUTRE. La pièce n'est pas encore
+    // stampée : le point de départ de sa rampe SERA ses dégâts d'aujourd'hui.
     return {
       etat: 'en-attente',
-      ticks: ticksDeRetour(piece.niveau, complexe.niveau, complexe.santeMilli),
+      ticks: ticksDeRetour({
+        niveau: piece.niveau,
+        niveauComplexe: complexe.niveau,
+        santeMilli: complexe.santeMilli,
+        perdusMilli: degats,
+        pvMaxMilli,
+      }),
     };
   }
-  if (r.santeMilli === null) return { etat: 'sans-retour', ticks: null };
-  const duree = ticksDeRetour(piece.niveau, r.niveauComplexe, r.santeMilli);
+  if (!rendLesPv(r.santeMilli)) return { etat: 'sans-retour', ticks: null };
+  // ⚠⚠ LES DÉGÂTS GELÉS, JAMAIS `piece.degatsMilli`. Celui-ci décroît pendant la
+  // rampe : la durée calculée dessus rétrécirait à chaque tick, et l'échéance
+  // `tickDuRaid + durée` reculerait plus vite que le temps n'avance — le rebours
+  // de l'écran REMONTERAIT. `VIT T1 bis` le mesure tick par tick.
+  const duree = ticksDeRetour({
+    niveau: piece.niveau,
+    niveauComplexe: r.niveauComplexe,
+    santeMilli: r.santeMilli,
+    perdusMilli: r.degatsAuDebutMilli,
+    pvMaxMilli,
+  });
   return { etat: 'en-attente', ticks: Math.max(0, r.tickDuRaid + duree - maintenant) };
 }
 
@@ -1386,12 +1534,20 @@ export function ramenerLaGarnison(etat) {
         continue;
       }
       if (piece.retour !== null && piece.retour !== undefined
-          && degats > piece.retour.degatsAuDebutMilli) {
+          && (degats > piece.retour.degatsAuDebutMilli
+              // ⚠⚠ UNE SANTÉ FIGÉE QUI NE RAMÈNE RIEN N'EST PAS UNE RAMPE, ET LA
+              // GARDER CONDAMNERAIT LA PIÈCE. Une sauvegarde d'avant le 12/09
+              // peut porter `santeMilli: 0` — un Complexe à 1 PV en rendait un —
+              // et ce zéro veut dire « jamais » depuis. Le déstamper laisse le
+              // filet reprendre la pièce avec le Complexe D'AUJOURD'HUI, ce qui
+              // est exactement ce que ce module refuse de perdre plus bas :
+              // « stamper `santeMilli: null` la condamnerait pour toujours ».
+              || !rendLesPv(piece.retour.santeMilli))) {
         piece.retour = null;
       }
       if (piece.retour === null || piece.retour === undefined) {
         if (complexe === undefined) complexe = complexeDeLaBase(base);
-        if (complexe === null || complexe.santeMilli === null) continue;
+        if (complexe === null || !rendLesPv(complexe.santeMilli)) continue;
         piece.retour = {
           tickDuRaid: maintenant,
           santeMilli: complexe.santeMilli,

@@ -105,6 +105,7 @@ import {
   DEPLACES_PAR_REGLES_DE_CARTE, EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE,
   DEPLACES_PAR_MUR, EMPREINTES_PAR_GRAINE_MUR,
   RAPPORTS_PROCHE_MUR, RAPPORTS_OUVRAGE_MUR,
+  DEPLACES_PAR_VITESSE, EMPREINTES_PAR_GRAINE_VITESSE,
   DEPLACES_PAR_APPROCHE, EMPREINTES_PAR_GRAINE_APPROCHE,
   RAPPORTS_PROCHE_APPROCHE, RAPPORTS_OUVRAGE_APPROCHE,
   OCTETS_AJOUTES_PAR_REGLES_DE_CARTE, RAPPORTS_OUVRAGE_REGLES_DE_CARTE,
@@ -214,7 +215,16 @@ function empreinteAttendue(phase, champ) {
   // avant d'atteindre la défense. ⚠ Aucun scalaire ne bouge : ni les gestes, ni
   // la sauvegarde, ni les cases atteignables, ni le déplacement, ni le nombre de
   // bases attaquantes, ni le nombre de cibles, ni la cible retenue.
-  return DEPLACES_PAR_APPROCHE[phase]?.[champ]
+  // ⚠⚠ VINGT-ET-UNIÈME COUCHE — lot VITESSE, 12/09. **DEUX couples sur 350**, et
+  // les deux sont `sitesEntames` : c'est la couche la plus étroite de l'histoire
+  // de ce témoin. Une heure de retour est devenue une VITESSE, donc les défenses
+  // d'un site raidé se relèvent plus vite entre deux passes. ⚠ `rapports` NE
+  // BOUGE PAS, et c'est la moitié qui prouve : le lot ne touche ni le combat ni
+  // son résultat, seulement l'état du site APRÈS coup. ⚠ Aucun scalaire ne bouge
+  // non plus — ni les gestes, ni la sauvegarde, ni les cases atteignables, ni le
+  // déplacement, ni les bases attaquantes, ni la cible retenue.
+  return DEPLACES_PAR_VITESSE[phase]?.[champ]
+    ?? DEPLACES_PAR_APPROCHE[phase]?.[champ]
     ?? DEPLACES_PAR_MUR[phase]?.[champ]
     ?? DEPLACES_PAR_REGLES_DE_CARTE[phase]?.[champ]
     ?? DEPLACES_PAR_PAQUETS[phase]?.[champ]
@@ -615,7 +625,11 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // toute graine, et tout attaquant entre deux cases plus bas. Le `??` reste
     // NÉCESSAIRE pour les couches d'avant, qui n'en déplaçaient pas toujours
     // vingt-cinq — c'est la leçon des graines 15, 21 et 24 du lot MUR.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_APPROCHE[g]
+    // ⚠⚠ VITESSE (12/09) N'EN DÉPLACE QUE VINGT-DEUX : les graines 2, 3 et 22
+    // tombent à l'octet sur `APPROCHE`. Sur ces trois parties-là, le site raidé
+    // aux phases 12 et 13 est rendu dans le même état par les deux règles. Le
+    // `??` reste donc NÉCESSAIRE, comme au lot MUR.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_VITESSE[g] ?? EMPREINTES_PAR_GRAINE_APPROCHE[g]
       ?? EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
       ecarts.push(g);
     }

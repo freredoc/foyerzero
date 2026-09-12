@@ -708,11 +708,22 @@ test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 e
   // +5 105 · balisage +104 · feuille +26 · images +0 · audio +0**, la somme des
   // cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI de
   // part et d'autre**. Le lot ne fait entrer ni une image ni un son.
+  // ⚠⚠ ET LE LOT VITESSE LE RÉANCRE, 12/09, PARCE QU'IL SAIT CE QU'IL DÉPLACE.
+  // L'ancre du lot BASES-2 était JUSTE au moment où elle a été écrite — le
+  // livrable de `87153e3` pèse **9 377 421** au bit, rebâti dans un `git
+  // worktree` sur l'arbre pristine. Ce lot-ci coûte **+5 728**, ce qui passe
+  // très en dessous de la tolérance de 50 000 : la laisser tomberait sous la
+  // dérive LENTE que la dernière assertion de ce test existe pour refuser.
+  // ⚠ VENTILÉ POSTE PAR POSTE contre ce même livrable pristine (**9 377 421**) :
+  // **JavaScript +4 807 · feuille +829 · balisage +92 · images +0 · audio +0**,
+  // la somme des cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et
+  // **306 URI / 307 lignes `data:` de part et d'autre**. Le lot ne fait entrer
+  // ni une image ni un son : la borne NE BOUGE PAS.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_377_421;          // remesuré au lot BASES-2, base `5d654d8`
-  const MARGE = BORNE - MESURE;      // 222 579 octets — 232 544 avant ce lot
-  assert.equal(MARGE, 222_579);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.32);
+  const MESURE = 9_383_149;          // remesuré au lot VITESSE, base `87153e3`
+  const MARGE = BORNE - MESURE;      // 216 851 octets — 222 579 avant ce lot
+  assert.equal(MARGE, 216_851);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.26);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

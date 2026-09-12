@@ -76,7 +76,7 @@ import { ruineFraiche } from './ruines.js';
 // `sim/territoire.js`, où la carte l'emploie. Le recopier ici en ferait deux.
 import { JOUEUR } from './territoire.js';
 import {
-  pvApresRetour, pvMaxDeLaPieceDeGarnisonMilli, ticksDeRetour,
+  pvApresRetour, pvMaxDeLaPieceDeGarnisonMilli, rendLesPv, ticksDeRetour,
 } from './reparation.js';
 
 /** Un PV vaut mille milli-PV, et une santé se range en millièmes. */
@@ -518,7 +518,7 @@ function santeFigee(entree, montage) {
  */
 function pvCourantsDesDefenses(etat, entree, montage) {
   const sante = santeFigee(entree, montage);
-  if (sante === null) return entree.pvDefensesMilli;
+  if (!rendLesPv(sante)) return entree.pvDefensesMilli;
   const ecoule = etat.horloge.nbTicks - entree.tickDuRaid;
   return entree.pvDefensesMilli.map((pv, i) => {
     if (pv === null) return null;
@@ -544,10 +544,28 @@ function pvCourantsDesDefenses(etat, entree, montage) {
  * le jour où une garnison mêlée y paraîtrait, et ne coûte rien.
  */
 function dureeDuRetourDesDefenses(entree, montage, sante) {
+  if (!rendLesPv(sante)) return null;
   let duree = 0;
-  for (const piece of montage.defenseurs) {
-    duree = Math.max(duree, ticksDeRetour(piece.niveau, entree.niveau, sante));
-  }
+  entree.pvDefensesMilli.forEach((pv, i) => {
+    // ⚠ `null` VEUT DIRE « INTACTE », ET UNE INTACTE N'ATTEND RIEN. C'est la
+    // convention que `pvCourantsDesDefenses` écrit en sortie : elle rend `null`
+    // dès que la pièce a retrouvé ses PV maximaux.
+    if (pv === null) return;
+    const piece = montage.defenseurs[i];
+    const pvMaxMilli = pvMaxDeLaPieceDeGarnisonMilli(piece.id, piece.niveau);
+    duree = Math.max(duree, ticksDeRetour({
+      niveau: piece.niveau,
+      niveauComplexe: entree.niveau,
+      santeMilli: sante,
+      // ⚠⚠ LES PV RANGÉS SONT LE POINT DE DÉPART GELÉ DE CE SITE-CI. `entree` ne
+      // bouge plus entre deux raids — le retour s'y calcule à la LECTURE —, donc
+      // `pvMax − pv` EST ce que la rampe a à rendre. Depuis le 12/09 la durée en
+      // dépend : une garnison éraflée se relève bien plus vite qu'une rasée, et
+      // prendre la perte totale purgerait l'entrée des heures trop tard.
+      perdusMilli: pvMaxMilli - pv,
+      pvMaxMilli,
+    }));
+  });
   return duree;
 }
 
@@ -652,8 +670,10 @@ export function reparerLesSites(etat) {
     // pendant la rampe — c'est ce qui garde les deux chemins d'avancement
     // équivalents sans qu'on ait à le vérifier.
     const sante = entree.santeComplexeMilli;
-    if (sante !== null && entree.pvDefensesMilli.some((v) => v !== null)
-        && ecoule >= dureeDuRetourDesDefenses(entree, montage, sante)) {
+    const dureeDefenses = rendLesPv(sante)
+      ? dureeDuRetourDesDefenses(entree, montage, sante) : null;
+    if (dureeDefenses !== null && entree.pvDefensesMilli.some((v) => v !== null)
+        && ecoule >= dureeDefenses) {
       entree.pvDefensesMilli = entree.pvDefensesMilli.map(() => null);
       change = true;
     }

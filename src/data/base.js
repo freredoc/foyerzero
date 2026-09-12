@@ -1106,39 +1106,41 @@ export const REPARATION_BASE_JOUEUR = {
 // se comporte simplement pas pareil des deux côtés, et le dire ici évite qu'on
 // croie un jour le dépassement inutile.
 //
-// ⚠⚠ LA PÉNALITÉ EST LINÉAIRE, ET C'EST UN ARBITRAGE D'ETHAN DU 06/09 QUI
-// RENVERSE LA PROPOSITION DES DEUX BRIEFS. Tous deux proposaient une forme
-// GÉOMÉTRIQUE — `(heuresAuPlancher / heuresDeBase) ** (1 − santé)` — au motif
-// que « tout l'est dans ce jeu » (1,09 · 1,10 · 1,15 · 1,32), et un plancher à
-// 72 h. Ethan : « la courbe choisie est géométrique. je préfère linéaire. 24h,
-// pas 72h ».
+// ⚠⚠ UNE HEURE EST UNE VITESSE, PAS UNE DURÉE — ARBITRAGE D'ETHAN DU 12/09, ET
+// IL SUPERSÈDE CELUI DU 06/09. Jusqu'ici la durée ne lisait NI les dégâts NI les
+// PV : une pièce éraflée et une pièce rasée mettaient le même temps, et ce temps
+// valait une heure à pleine santé quoi qu'il arrive. « En une heure » veut dire
+// désormais : une heure pour rendre CENT POUR CENT des PV. Ce qui reste à rendre
+// après le palier décide donc de l'attente.
 //
-//     pénalité(santé) = 1 + (heuresAuPlancher / heuresDeBase − 1) × (1 − santé)
+//     palier = ⌊perdus × partInstantaneeMilli × santé / 10⁶⌋   (inchangé)
+//     heures = (perdus − palier) / pvMax
+//              × heuresDeBase
+//              × 1000 / santé                  ← le Complexe abîmé RALENTIT
+//              × facteurMilli(1 + dépassement) / 1000
 //
-// ⚠ CE QUE LE CHANGEMENT DE FORME DÉPLACE SE MESURE, ET IL PORTE SUR LE MILIEU,
-// PAS SUR LES BORNES. Les deux formes touchent EXACTEMENT les deux points
-// arbitrés — 1 h à pleine santé, le plancher à 1 PV — et ne diffèrent qu'entre
-// les deux. À plancher égal de 24 h : géométrique 4 h 54 à mi-vie, linéaire
-// 12 h 30. La linéaire punit donc beaucoup plus tôt une avarie légère, ce qui
-// est le sens de l'arbitrage.
+// ⚠⚠ `heuresAuPlancher` A DISPARU DE CETTE TABLE, ET CE N'EST PAS UN OUBLI. Elle
+// portait le « 24 h » du 06/09 — le temps de retour sous un Complexe à 1 PV — et
+// la règle de vitesse la remplace par un facteur `1000 / santé` qui n'a pas de
+// borne haute. Une constante morte laissée ici se relirait comme une règle ; le
+// « jamais » reste porté par la garde `santeMilli === null`, qui couvre
+// désormais AUSSI la santé arrondie à zéro (voir `complexeDeLaBase`).
 //
-// LES DEUX TABLES, MESURÉES (`RETOUR-D T5`, `T6` et `T7` les rejouent) :
+// LA TABLE, MESURÉE (`VIT T1` la rejoue, dépassement nul) :
 //
-//     dépassement, Complexe entier        Complexe abîmé, dépassement nul
-//       +0  →  1 h 00                       100 %  →   1 h 00
-//       +5  →  1 h 37                        75 %  →   6 h 45
-//      +10  →  2 h 36                        50 %  →  12 h 30
-//      +20  →  6 h 44                        25 %  →  18 h 15
-//      +30  → 17 h 27                         1 PV →  24 h 00
+//     Complexe entier                     Perte totale, Complexe abîmé
+//       perte  20 %  →  3 min 36            100 %  →   18 min 00
+//       perte  50 %  →  9 min 00             90 %  →   24 min 40
+//       perte 100 %  → 18 min 00             50 %  →  1 h 18 min
 //
-// Les deux se multiplient : une pièce à +10 sur un Complexe à mi-vie revient en
-// 32 h 26.
+// Les deux facteurs se multiplient toujours : une perte de 20 % sur une pièce à
+// +1 niveau du Complexe revient en 3 min 58 au lieu de 3 min 36.
 //
-// ⚠ ET LA DERNIÈRE LIGNE TOMBE ROND PARCE QUE LA SANTÉ SE RANGE EN MILLIÈMES.
-// Un PV sur les 2 500 000 milli-PV d'un Complexe de niveau 1 vaut 0,4 millième,
-// donc zéro une fois arrondi — et 2 500 000 est le PLUS PETIT maximum possible,
-// si bien qu'aucun niveau de Complexe ne rend autre chose. Le second point
-// arbitré est donc touché EXACTEMENT, comme le premier.
+// ⚠⚠ ET CE QUE LA RÈGLE COÛTE SE DIT : LA GARNISON REVIENT BEAUCOUP PLUS VITE
+// QU'AVANT, DANS LES DEUX CAMPS. Le pire cas à Complexe entier tombe de 1 h à
+// 18 min, et une éraflure de 20 % de 1 h à 3 min 36. Côté Ouvrage, `pvApresRetour`
+// sert l'Étai par `sim/site-entame.js` : la garnison ennemie se relève donc plus
+// vite entre deux raids du joueur. Confirmé par Ethan le 12/09 — c'est voulu.
 //
 // ⚠⚠ SANS COMPLEXE CONSTRUIT, LA GARNISON NE REVIENT JAMAIS — ETHAN, 05/09.
 // Ce n'est ni un défaut ni un cas limite, c'est la règle, et c'est pourquoi
@@ -1152,9 +1154,10 @@ export const REPARATION_BASE_JOUEUR = {
 // bâtiments planchent à 1 PV et ne meurent pas. Côté Ouvrage l'Étai d'un camp
 // peut tomber, et c'est là qu'elle mord.
 //
-// ⚠ LES TROIS NOMBRES SONT POSÉS POUR ÊTRE JOUÉS ET CHANGÉS. `heuresDeBase` est
-// la seule que le modèle dicte (« en une heure ») ; `heuresAuPlancher` et
-// `partInstantaneeMilli` sont des arbitrages, et le premier a déjà bougé.
+// ⚠ LES DEUX NOMBRES SONT POSÉS POUR ÊTRE JOUÉS ET CHANGÉS. `heuresDeBase` est
+// la seule que le modèle dicte (« en une heure »), et elle a changé de SENS le
+// 12/09 sans changer de valeur : c'est la vitesse de rendre le plein, plus la
+// durée d'un retour. `partInstantaneeMilli` reste un arbitrage du 05/09.
 export const RETOUR_DEFENSES = {
   // ⚠ LE BÂTIMENT EST NOMMÉ ICI, comme `REPARATION_BASE_JOUEUR.indexeeSur`
   // nomme le Chantier et `POINTS_ARMEE` le QG. L'écrire en dur dans `sim/`
@@ -1164,9 +1167,6 @@ export const RETOUR_DEFENSES = {
 
   /** À pleine santé et sans dépassement — le « en une heure » du modèle. */
   heuresDeBase: APRES_RAID.reparationDefensesHeures,
-
-  /** Le Complexe à 1 PV. Arbitré à 24 h par Ethan le 06/09 (72 h auparavant). */
-  heuresAuPlancher: 24,
 
   /** Ce qui revient D'UN COUP à la fin du raid, avant la rampe. Ethan, 05/09. */
   partInstantaneeMilli: 700,

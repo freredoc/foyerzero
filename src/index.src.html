@@ -1341,18 +1341,79 @@
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;
   }
-  /* ⚠⚠ UN ABÎMÉ SE VOIT — lot RÉPARER-ÉCRAN, 05/09. La classe et la teinte sont
-     celles de l'écran de raid (`#ecran-raid .emplacement.abimee`), pour que le
-     joueur n'apprenne pas deux vocabulaires visuels pour le même fait.
+  /* ⚠⚠ LE CARRÉ ROUGE EST DEVENU UNE BARRE DE VIE — Ethan, 12/09, lot VITESSE.
+     `.jeton.abimee` bordait en `#E43E32` depuis le lot RÉPARER-ÉCRAN : il disait
+     QU'IL Y A une avarie, et il fallait sélectionner la pièce pour apprendre
+     COMBIEN. La règle part avec la classe — une décoration que plus rien ne pose
+     est un mensonge en puissance, et la garde des classes de `chantier.test.js`
+     ne regarde que le sens inverse.
 
-     ⚠ MAIS C'EST UN `outline`, PAS UN `border`, ET LA DIFFÉRENCE EST MESURABLE.
-     L'emplacement du raid porte DÉJÀ une bordure, dont ce fait ne change que la
-     couleur ; le jeton n'en a aucune, et lui en donner une rétrécirait la boîte
-     de PADDING — donc la surface où `background-image` peint le sprite, dont
-     `background-origin` vaut `padding-box`. Un pixel art recalé d'un pixel n'est
-     plus du pixel art. L'`outline` ne touche à aucune boîte, et c'est déjà pour
-     cette raison que `.case.legale` et `.case.choisie` l'emploient. */
-  .jeton.abimee { outline: 2px solid #E43E32; outline-offset: -1px; }
+     ⚠⚠ ET C'EST UN ENFANT ABSOLU, PAS UNE BORDURE — la raison qui faisait
+     employer un `outline` vaut toujours. Le jeton peint son sprite en
+     `background-image`, dont `background-origin` vaut `padding-box` : une
+     bordure rétrécirait la boîte de padding, donc la surface peinte, donc le
+     pixel art se recalerait d'un pixel. Le modèle est `.couche-tournante`.
+
+     ⚠ ELLE EST EN HAUT, PARCE QUE LE BAS EST PRIS. `.jeton .niveau` vit au coin
+     bas-droit depuis le lot ERGONOMIE ; deux nombres superposés ne se lisent
+     ni l'un ni l'autre.
+
+     ⚠ LES DEUX TEINTES SONT CELLES DE LA FICHE, ET AUCUNE N'EST NEUVE. Le fond
+     est le rouge sombre `#8A1E17` — la teinte de l'anti-véhicule, qui est déjà
+     celle des dégâts sur cet écran ; ce qui reste est le kaki clair `#8C9A72`,
+     la rampe du joueur, c'est-à-dire « ce qui est encore à moi ».
+
+     ⚠ `pointer-events: none` N'EST PAS COSMÉTIQUE : la barre couvre le haut du
+     jeton, et sans lui elle avalerait le toucher qui vise la pièce. */
+  .jeton .barre-vie {
+    position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    pointer-events: none; background: #8A1E17;
+  }
+  .jeton .barre-vie i { display: block; height: 100%; background: #8C9A72; }
+  /* ⚠⚠ LE REBOURS D'UNE PIÈCE, SOUS SA BARRE — Ethan, 12/09. La tête de bande
+     annonce « 7 pièces en retour, la première dans 39 min » ; elle ne dit pas
+     LAQUELLE, et c'est tout ce que ce nœud ajoute.
+
+     ⚠⚠ LA TAILLE EST MESURÉE, PAS CHOISIE — ET LA PREMIÈRE MESURE ÉTAIT FAUSSE.
+     Elle avait été prise sur un texte de graisse 400, quand ce nœud est en 700 :
+     le gras est plus large, et « 18 min » passe de 31,3 px à 35,61. À 9 px il ne
+     restait donc que 0,39 px de mou dans une case de 36 — une coïncidence, pas
+     une marge. Une largeur se mesure DANS le nœud réel, avec sa graisse.
+
+     Relevé dans Chromium sur le livrable, EN ÉCRIVANT CHAQUE CHAÎNE DANS LE VRAI
+     NŒUD, case au plancher (36 px CSS — neuf colonnes sur 360, la demi-case du
+     mur comprise), 8 px graisse 700, mou restant sur 36 : « 9 s » 22,34 ·
+     « 45 s » 16,59 · « 4 min » 9,97 · « 17 min », « 18 min », « 39 min » 4,22 ·
+     « jamais » 5,53 · « 1.3 h », « 3.8 h » 12,44 · « 18.9 h », « 24.7 h » 6,69.
+     Les six chaînes que le barème d'Ethan produit tiennent donc toutes, avec une
+     marge et non une coïncidence.
+
+     ⚠ LA SEULE QUI DÉBORDE EST « 1000.0 h » — 40,8 px, donc 4,8 de trop —, et
+     seul un Complexe à 0 ‰ la produit. `overflow: hidden` la coupe au lieu de la
+     laisser courir sur la case voisine, et elle tient dès qu'on zoome d'un
+     cheveu : le mou croît avec la case.
+
+     ⚠ LA GRAISSE 600 EST INUTILE : la pile de polices n'a pas de fonte
+     demi-grasse, et 600 mesure EXACTEMENT comme 700 — mesuré sur les douze
+     chaînes. Écrire 600 donnerait l'illusion d'un réglage.
+
+     ⚠ ET IL SUIT LA CASE, COMME `.niveau`. Un nombre en pixels fixes reste
+     minuscule dès qu'on zoome — la case va de 36 px à 128 — et un nombre
+     purement proportionnel deviendrait illisible au plancher. `max()` prend le
+     plus grand : 8 px tant que la case est petite, puis le cinquième de la case,
+     si bien que la marge CROÎT avec le zoom au lieu de se maintenir.
+
+     ⚠ « JAMAIS » N'EST PAS « BIENTÔT », ET LA TEINTE LE DIT. Une pièce sans
+     Complexe ne revient PAS ; lui laisser la couleur d'une attente ferait
+     attendre le joueur. `#E43E32` est le rouge vif des refus de cet écran. */
+  .jeton .rebours {
+    position: absolute; left: 0; right: 0; top: 3px;
+    pointer-events: none; overflow: hidden; white-space: nowrap;
+    text-align: center; line-height: 1.1;
+    font-size: max(8px, calc(var(--case-cote) / 5)); font-weight: 700;
+    color: #F5F3E8; text-shadow: 0 1px 0 #161914;
+  }
+  .jeton .rebours.sans-retour { color: #E43E32; }
   /* ⚠⚠ LE NIVEAU SE LIT — Ethan, 04/09 : « Les nombres qui montrent les niveaux
      des bâtiments et unités sont trop petits et peu lisibles. » Il valait 8 px
      en graisse 400, sur un sprite chargé, sous une ombre d'un pixel.
@@ -1475,6 +1536,19 @@
      « une classe sans style se réécrit sans qu'on s'aperçoive qu'elle ne fait
      rien ». Elle a attrapé celle-ci à la première écriture du lot. */
   .panneau-detail .section.depliable h3 { color: #8C9A72; }
+  /* ⚠⚠ LE CODE COULEUR DU JOURNAL — ETHAN, 11/09, POINT 9. Deux axes, deux
+     endroits : le TITRE dit d'où vient le raid, la ligne « Issue » dit comment
+     il finit. Les confondre en une seule teinte ferait lire « Raid subi » en
+     rouge comme une défaite, alors qu'une attaque repoussée est une bonne
+     nouvelle.
+     ⚠ CES DEUX RÈGLES PASSENT APRÈS `.depliable h3` DÉLIBÉRÉMENT : les trois
+     sélecteurs ont la MÊME spécificité (0,3,1) et une section du journal porte
+     les deux classes. C'est l'ordre qui tranche, et il est écrit ici pour qu'on
+     ne le défasse pas en rangeant la feuille.
+     ⚠ AUCUNE TEINTE NEUVE. `#8C9A72` est le kaki clair du joueur, `#E43E32` la
+     teinte que le dépôt réserve à ce qui l'ATTAQUE — un raid subi EST cela. */
+  .panneau-detail .section.raid-mene h3 { color: #8C9A72; }
+  .panneau-detail .section.raid-subi h3 { color: #E43E32; }
   .panneau-detail h3 {
     margin: 0 0 2px; font-size: 8px; font-weight: 400;
     letter-spacing: 0.12em; text-transform: uppercase; color: #68727E;
@@ -1505,6 +1579,12 @@
      évite qu'on la prenne pour un chiffre courant. */
   .panneau-detail .ligne .fleche { color: #68727E; }
   .panneau-detail .ligne b.apres { color: #8C9A72; }
+  /* ⚠ L'ISSUE, SECONDE MOITIÉ DU POINT 9 — et elle se lit sur la VALEUR, pas sur
+     le libellé : c'est le mot du verdict qu'Ethan a mal lu, pas le mot
+     « Issue ». `issueEstBonne` la DÉRIVE du verdict dans `ui/rapport.js` ; la
+     feuille ne connaît que deux classes. */
+  .panneau-detail .ligne.issue-bonne b { color: #8C9A72; }
+  .panneau-detail .ligne.issue-mauvaise b { color: #E43E32; }
   /* Le détail du détail — production propre, apport de chaque type de voisin.
      Décalé et plus petit : c'est ce qui EXPLIQUE la ligne au-dessus. */
   .panneau-detail .ligne.mineure { padding-left: 10px; font-size: 9px; color: #68727E; }
@@ -1600,7 +1680,12 @@
      d'Ethan : « tu compresses tout dans l'ui ». « Déplacer » s'ajoute entre
      Améliorer et Démolir ; ce sont le bloc de gauche et les écarts qui cèdent
      la place, jamais la hauteur de la barre ni une seconde rangée. */
+  /* ⚠ `position: relative` EST LE BLOC ENGLOBANT DE `#chantier-reparation` —
+     lot VITESSE. Sans lui, la barre posée `bottom: 100%` se calerait sur le
+     premier ancêtre positionné, donc sur l'écran entier, et paraîtrait en haut
+     de la page. Ne pas le retirer sans déplacer la barre. */
   #chantier-contexte {
+    position: relative;
     flex: 0 0 46px; display: flex; align-items: center; gap: 3px;
     padding: 0 4px; background: #343A2C; border-top: 1px solid #161914;
   }
@@ -1608,7 +1693,14 @@
   #chantier-contexte .qui b { display: block; font-size: 10px; color: #F5F3E8; }
   #chantier-contexte .qui span { display: block; font-size: 7px; color: #68727E; }
   #chantier-contexte .qui b, #chantier-contexte .qui span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #chantier-contexte button {
+  /* ⚠⚠ `>` N'EST PAS DÉCORATIF DEPUIS LE LOT VITESSE. `#chantier-reparation` est
+     devenue l'ENFANT de cette barre pour pouvoir se poser `bottom: 100%` d'elle,
+     et son bouton « Tout réparer » est donc un DESCENDANT : sans le `>`, cette
+     règle-ci l'emportait sur `#chantier-tout-reparer` — qui a une spécificité
+     plus FAIBLE — et lui imposait ses 34 px, son fond ardoise et ses bordures.
+     Mesuré : le bouton passait de 22 à 34 px de haut et changeait de couleur.
+     Les quatre gestes de la barre, eux, sont bien ses enfants directs. */
+  #chantier-contexte > button {
     flex: 1; min-width: 0; height: 34px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; line-height: 1.1;
@@ -1815,7 +1907,8 @@
      corriger demande de lui réserver sa place d'avance, ce qui coûte cette
      hauteur en permanence : c'est un arbitrage, et il revient à Ethan. */
   #chantier-reparation {
-    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    position: absolute; left: 0; right: 0; bottom: 100%;
+    display: flex; align-items: center; justify-content: space-between;
     gap: 8px; padding: 3px 8px; background: #343A2C;
   }
   /* ⚠⚠ LES DEUX BARRES À BOUTON RÉSERVENT LEUR PLACE — Ethan, 10/09, point 5,
@@ -1839,15 +1932,21 @@
      ⚠ UNE RÈGLE, DEUX SÉLECTEURS : les deux barres font la même chose sur deux
      écrans, et une seconde déclaration se serait tue au premier réglage. C'est le
      motif du pointillé des emplacements, qu'`ÉD T12` garde déjà. */
-  /* ⚠⚠ LA RÈGLE S'EST DÉDOUBLÉE LE 11/09, ET LES DEUX BARRES NE FONT PLUS LA
-     MÊME CHOSE. Celle du Chantier est DANS le flux et le reste : elle porte deux
-     enfants, dont la réserve des bâtiments, et se poser sur la grille lui
-     demanderait la place que `#chantier-avis` et `#chantier-garnison` occupent
-     déjà en haut et en bas. Elle réserve donc ses 27 px, comme avant.
-     ⚠ CELLE DU RAID, ELLE, A QUITTÉ LE FLUX — voir sa règle plus haut —, et son
-     repli redevient donc un `display: none` : il n'y a plus de place à rendre,
-     puisqu'elle n'en prenait plus. */
-  #chantier-reparation.repliee { visibility: hidden; }
+  /* ⚠⚠ ET LES DEUX BARRES ONT FINI PAR QUITTER LE FLUX TOUTES LES DEUX — celle
+     du raid le 11/09, celle du Chantier au lot VITESSE, sur le point 15 d'Ethan.
+     Leur repli est donc un RETRAIT des deux côtés : il n'y a plus de place à
+     rendre, puisqu'aucune n'en prenait.
+     ⚠⚠ LE PARAGRAPHE CI-DESSUS DISAIT L'INVERSE, ET IL FAUT DIRE POURQUOI IL
+     AVAIT TORT. Il posait que celle du Chantier « ne peut PAS prendre le même
+     remède » parce qu'elle porte un BOUTON, donc doit recevoir le toucher. C'est
+     un raccourci, et le lot PENDULE-ET-TOUCHER l'a déjà défait pour le raid : ce
+     qui empêche un élément de recevoir le doigt est `pointer-events: none`, pas
+     `position: absolute`. Mesuré au lot VITESSE : `elementFromPoint` au centre
+     du bouton rend le bouton lui-même, armé comme désarmé.
+     ⚠ ET CE QU'ELLE RENDAIT EST MESURÉ : 22 px de vide permanent au-dessus de la
+     barre contextuelle, sur les DEUX bandes de la Base — c'est exactement ce
+     qu'Ethan nomme au point 15. */
+  #chantier-reparation.repliee { display: none; }
   #raid-tout-reparer.repliee { display: none; }
   #chantier-reserve { font-size: 9px; color: #F5F3E8; min-width: 0; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
@@ -2581,10 +2680,20 @@
     flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
     gap: 8px; padding: 3px 8px; background: #343A2C;
   }
+  /* ⚠⚠ LA LIGNE NE SE COUPE PLUS — ETHAN, 11/09, POINT 13. Elle était COMPLÈTE
+     et seulement TRONQUÉE : mesuré dans Chromium à la géométrie du S25 FE, elle
+     demande **345,91 px** et en recevait **235,48** — **110,42 px coupés**, soit
+     32 % de la phrase. Ethan lisait « Réparation, max 12.0 h — infanterie
+     40 min · véhi… » et croyait voir trois maxima là où il avait ses compteurs.
+     ⚠ ON LAISSE REVENIR À LA LIGNE, ON NE RAPETISSE PAS. Pour tenir sur une
+     ligne il faudrait 9 × 235,48 / 345,91 = **6,1 px**, illisible ; et abréger
+     « infanterie · véhicule · avion » mettrait au dépôt un second vocabulaire
+     là où `FAMILLE_DE_CHASSIS` porte les mots d'Ethan.
+     ⚠ LA BARRE EST `flex: 0 0 auto`, donc elle prend sa hauteur et n'entre pas
+     dans les 288 px de chrome FIXE que `chantier.test.js` somme. */
   #offense-reserve {
     margin: 0; font-size: 9px; color: #F5F3E8; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-variant-numeric: tabular-nums;
+    line-height: 1.25; font-variant-numeric: tabular-nums;
   }
   /* ⚠ MÊME BOUTON QUE `#chantier-tout-reparer` — même geste, même mot, même
      dessin. Aucune teinte neuve. */
@@ -2606,6 +2715,11 @@
     display: block; font-size: 8px; color: #68727E;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  /* ⚠ LE DEVIS DE RÉPARATION SE DISTINGUE DE LA LIGNE DE DÉTAIL PAR SA TEINTE,
+     pas par sa taille : trois lignes de tailles différentes dans 46 px se
+     liraient comme trois registres. `#8C9A72` est le kaki clair de la palette,
+     déjà employé par les boutons de cette même barre. */
+  #offense-contexte .qui span.cout { color: #8C9A72; }
   #offense-contexte button {
     flex: 0 0 auto; padding: 6px 6px; font-size: 9px;
     letter-spacing: 0.04em; text-transform: uppercase;
@@ -2827,22 +2941,31 @@
            que le mode Réparer armé, et au-dessus de la rangée »). Reprendre la
            discipline de l'autre écran vaut mieux que d'en inventer une seconde
            pour le même geste.
-           ⚠ ET IL N'EST PAS UNE SEPTIÈME BARRE FIXE. `flex: 0 0 auto` et
-           `hidden` par défaut : le chrome fixe reste à 288 px, et la garde de
-           `chantier.test.js` qui énumère les `flex: 0 0 Npx` ne le voit pas —
-           c'est voulu, il n'en est pas une. ⚠ Il POUSSE en revanche le champ
-           quand il paraît, ce que `#chantier-avis` ne fait plus depuis le lot
-           ÉCRAN-DÉFENSE : voir sa règle dans la feuille, l'écart y est mesuré
-           et déclaré.
+           ⚠ ET IL N'EST PAS UNE SEPTIÈME BARRE FIXE. Le chrome fixe reste à
+           288 px, et la garde de `chantier.test.js` qui énumère les
+           `flex: 0 0 Npx` ne le voit pas — c'est voulu, il n'en est pas une.
+           ⚠⚠ ET IL NE POUSSE PLUS LE CHAMP DEPUIS LE LOT VITESSE. Il le
+           poussait de 22 px quand il paraissait, et RÉSERVAIT ces 22 px même
+           replié depuis le 10/09 : c'est ce vide permanent qu'Ethan nomme au
+           point 15 du 12/09. Il est désormais POSÉ sur la barre contextuelle,
+           `bottom: 100%`, comme `#raid-tout-reparer` depuis le 11/09.
            ⚠ LA RÉSERVE EST LÀ PARCE QU'UN JOUEUR QUI NE LA VOIT PAS NE COMPREND
            PAS POURQUOI RÉPARER REFUSE. Elle est écrite par `ui/chantier.js`
            depuis `plafondDeLaReserveDesBatiments` ; rien n'est calculé ici. -->
-      <div id="chantier-reparation" class="repliee">
-        <span id="chantier-reserve">—</span>
-        <button type="button" id="chantier-tout-reparer">Tout réparer</button>
-      </div>
-
       <div id="chantier-contexte">
+        <!-- ⚠⚠ ELLE EST DANS LA BARRE CONTEXTUELLE ET POSÉE AU-DESSUS D'ELLE —
+             lot VITESSE, point 15 d'Ethan : « la barre vide au-dessus de la barre
+             contextuelle ». Elle en était la SŒUR, dans le flux, et réservait ses
+             22 px même désarmée : c'est cet espace vide que le point 15 nomme,
+             mesuré à l'écran sur les DEUX bandes de la Base. Pour se poser
+             `bottom: 100%` de la barre contextuelle, il faut que celle-ci soit
+             son bloc englobant — donc qu'elle en soit l'ENFANT.
+             ⚠ ET L'ORDRE DE LECTURE NE BOUGE PAS : elle reste avant les cinq
+             enfants de la barre, comme elle était avant la barre entière. -->
+        <div id="chantier-reparation" class="repliee">
+          <span id="chantier-reserve">—</span>
+          <button type="button" id="chantier-tout-reparer">Tout réparer</button>
+        </div>
         <div class="qui">
           <b id="chantier-selection-nom">—</b>
           <span id="chantier-selection-detail">aucun bâtiment sélectionné</span>
@@ -3015,6 +3138,9 @@
         <div class="qui">
           <b id="offense-selection-nom">—</b>
           <span id="offense-selection-detail">aucune unité sélectionnée</span>
+          <!-- ⚠ LE DEVIS DE RÉPARATION — point 8, 11/09. Troisième ligne et non
+               rallonge de la deuxième : celle-ci coupe à l'ellipse. -->
+          <span id="offense-selection-cout" class="cout"></span>
         </div>
         <button type="button" id="offense-reparer">Réparer</button>
         <button type="button" class="up" id="offense-ameliorer">Améliorer<em id="offense-ameliorer-cible"></em></button>

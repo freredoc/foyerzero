@@ -42,7 +42,7 @@ import { ATLAS } from '../src/data/atlas.js';
 import {
   initialiserEcranRecherche, lignesDeRecherche, lignesSpeciales, couchesDeLaPiece,
   descriptionDeLaPiece, cadresDeLaLigne, etatDuCadre, CLASSE_DE_L_ETAT,
-  PANNEAUX, LIBELLE_CONFIRMER,
+  PANNEAUX, LIBELLE_CONFIRMER, ligneDuModule,
 } from '../src/ui/recherche.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { aplatirSauvegarde } from './aplatir-sauvegarde.js';
@@ -4466,6 +4466,95 @@ test('BASES-2 T1 — la base supplémentaire s\'achète en deux touchers, et le 
     'la ligne peint une raison qui répète le manque de points');
   assert.ok(apres.classList.contains(CLASSE_DE_L_ETAT.bloque),
     'la ligne ne se voit pas éteinte alors qu\'elle ne peut plus être payée');
+});
+
+
+test('VIT T5 — un module verrouillé ne dit ni son prix ni ce qu\'il fait', () => {
+  // ⚠⚠ ETHAN, 11/09, POINT 2 : « masquer prix et description des modules non
+  // achetés ». `lignesDeRecherche` les rendait toujours, si bien que l'arbre
+  // livrait au joueur le catalogue complet des effets du jeu avant son premier
+  // achat.
+  //
+  // MONTAGE QUI LE FAIT TOMBER : rendre `MODULES[nom].description` sans regarder
+  // `estAcquise`, ou laisser `achat.prix` passer tel quel dans la ligne du
+  // module. Les deux sont la forme exacte du code d'avant le lot.
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  // ⚠ ASSEZ DE POINTS POUR QUE LE VERROU SOIT LE SEUL REFUS QUI RESTE : sans
+  // eux, `pointsInsuffisants` masquerait ce qu'on mesure.
+  const etat = partie('999999999000');
+  ecran.peindre(etat);
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const mods = modulesDuPanneau(doc, 'offense');
+  const moduleDe = (id) => mods[ids.indexOf(id)];
+
+  // ⚠ LE MONTAGE PROUVE D'ABORD QU'IL DISCRIMINE : le Bélier n'est pas acquis,
+  // et son module porte bien un libellé et une description dans la TABLE.
+  const nomModule = nomDuModule('offense', 'belier');
+  assert.ok(nomModule !== null, 'le montage vise une pièce sans module');
+  assert.ok(!estAcquise(etat, 'offense', 'belier'),
+    'le montage ne mesure rien : la pièce est déjà acquise');
+  assert.ok(MODULES[nomModule].description.length > 0,
+    'le montage ne mesure rien : ce module n\'a pas de description');
+
+  const verrouille = ligneDuModule(etat, 'offense', 'belier', nomModule);
+  assert.equal(verrouille.verrouille, true);
+  assert.equal(verrouille.description, '', 'la vue rend encore la description');
+  assert.equal(verrouille.prix, '', 'la vue rend encore le prix');
+  // ⚠ LE LIBELLÉ RESTE — le point 15 du 06/09 veut DEUX cadres, et un cadre sans
+  // titre ne se lirait plus comme un module.
+  assert.equal(verrouille.libelle, MODULES[nomModule].libelle);
+
+  // Et le DOM le suit : ni description peinte, ni prix au bouton.
+  const cadre = moduleDe('belier');
+  assert.equal(cadre.children.find((c) => c.className === 'description'), undefined,
+    'le cadre verrouillé peint encore sa description');
+  const bouton = boutonDe(rangeeDuCadre(cadre));
+  assert.equal(bouton.textContent, 'Verrouillé',
+    `le bouton d'un module verrouillé annonce « ${bouton.textContent} »`);
+  assert.doesNotMatch(bouton.textContent, /[0-9]/,
+    'le bouton d\'un module verrouillé porte encore un chiffre');
+
+  // ⚠⚠ AUCUNE SECONDE PHRASE DE REFUS N'EST ÉCRITE, ET C'EST LA MOITIÉ QUE LE
+  // BRIEF NOMME. `lignePourLAchat` rend déjà `raison`, du MOTEUR ; le cadre la
+  // peint, et l'écran n'en ajoute pas une.
+  const raison = cadre.children.find((c) => c.className === 'raison');
+  assert.ok(raison, 'le module verrouillé ne dit plus pourquoi');
+  assert.equal(raison.textContent,
+    problemesDeLAchat(etat, 'offense', 'belier', 'module')
+      .filter((p) => p.code !== 'dejaAcquise' && p.code !== 'pointsInsuffisants')
+      .map((p) => p.message).join(' ; '),
+    'l\'écran a écrit sa propre phrase de refus');
+
+  // ⚠ LES DEUX CADRES RESTENT — retirer le second referait le retrait que le
+  // point 15 du 06/09 a défait.
+  assert.equal(cadresDeLaLigne(lignesDeRecherche(etat, 'offense')[ids.indexOf('belier')]).length, 2,
+    'la ligne verrouillée a perdu son second cadre');
+});
+
+test('VIT T5 bis — la pièce acquise rend au module son prix et sa description', () => {
+  // ⚠ LE CONTRE-CAS, sans quoi « masquer » pourrait vouloir dire « masquer
+  // toujours » et le test passerait sur un module définitivement muet.
+  const doc = fauxDocument();
+  const ecran = initialiserEcranRecherche(doc);
+  const etat = partie('999999999000');
+  acheter(etat, 'offense', 'belier', 'unite');
+  assert.ok(estAcquise(etat, 'offense', 'belier'), 'l\'achat n\'a pas pris');
+  ecran.peindre(etat);
+
+  const nomModule = nomDuModule('offense', 'belier');
+  const ouverte = ligneDuModule(etat, 'offense', 'belier', nomModule);
+  assert.equal(ouverte.verrouille, false);
+  assert.equal(ouverte.description, MODULES[nomModule].description);
+  assert.equal(ouverte.prix, formaterPoints(coutMilli('offense', 'belier', 'module')));
+
+  const ids = Object.keys(ARBRE_RECHERCHE.offense);
+  const cadre = modulesDuPanneau(doc, 'offense')[ids.indexOf('belier')];
+  const description = cadre.children.find((c) => c.className === 'description');
+  assert.ok(description, 'le module ouvert ne dit plus ce qu\'il fait');
+  assert.equal(description.textContent, MODULES[nomModule].description);
+  assert.equal(boutonDe(rangeeDuCadre(cadre)).textContent, ouverte.prix);
 });
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import {
   SANS_COMMANDEMENT, messageEnMain, messageDeDepassement,
   ACTIONS_ARMEE, MESSAGES_MODE_ARMEE, messageDeDestinationDUnite, messageIndisponible,
   couchesDeLUniteDAssaut, initialiserEcranOffense, ligneDeLaReserveDArmee,
+  ligneDuCoutDeLaPiece, vueDuDevisDeReparation, TITRE_DEVIS,
 } from '../src/ui/offense.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
 import { couchesDeLEntite } from '../src/render/scene.js';
@@ -23,7 +24,9 @@ import {
   creerEtat, poser, poserEffectif, niveauDeCommandement, pointsEngages,
   problemesDeLaPoseDEffectif,
 } from '../src/sim/state.js';
-import { BASE_BATIMENTS, BATIMENT_DE_CHASSIS, messageSansBatiment } from '../src/data/base.js';
+import {
+  BASE_BATIMENTS, BATIMENT_DE_CHASSIS, messageSansBatiment, FAMILLE_DE_CHASSIS,
+} from '../src/data/base.js';
 import { acquisesDe } from '../src/sim/recherche.js';
 import { ligneAAfficher, posablesDeLaDefense } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
@@ -33,6 +36,7 @@ import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import {
   plafondDeLaReserve, plafondDeLaReserveDesBatiments, direLaDuree,
+  coutDeLaReparation, reservoirsDeLArmee,
 } from '../src/sim/reparation.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
@@ -1088,6 +1092,8 @@ function fauxDocumentOffense() {
   const IDS = [
     'offense-vagues', 'offense-palette', 'offense-avis', 'offense-champ',
     'offense-contexte', 'offense-selection-nom', 'offense-selection-detail',
+    // ⚠ LE DEVIS DE RÉPARATION DE LA PIÈCE SÉLECTIONNÉE — point 8, 11/09.
+    'offense-selection-cout',
     'offense-ameliorer-cible', 'offense-reparer', 'offense-ameliorer',
     'offense-deplacer', 'offense-retirer', 'offense-panneau',
     'offense-panneau-titre', 'offense-panneau-corps', 'offense-panneau-fermer',
@@ -1181,6 +1187,14 @@ function fauxDocumentOffense() {
     createTextNode: (texte) => ({ textContent: String(texte) }),
     defaultView: {
       getComputedStyle: () => ({ getPropertyValue: (nom) => `url("${nom}")` }),
+      // ⚠ LE TOAST POSE UNE MINUTERIE, ET LE FAUX N'EN AVAIT PAS — tout geste
+      // qui dit son bilan levait « fenetre.setTimeout is not a function » à des
+      // lieues de sa cause. Elle ne se DÉCLENCHE jamais ici : ce qu'on garde,
+      // c'est qu'un geste s'exécute, pas qu'un message s'efface quatre secondes
+      // plus tard. Faire échoir ce qui traîne est le travail de `PC T5`, sur un
+      // autre écran et avec une horloge à lui.
+      setTimeout: () => 0,
+      clearTimeout: () => {},
     },
   };
   for (const el of parId.values()) el.ownerDocument = doc;
@@ -1375,6 +1389,20 @@ function ecranOffenseMonte(etat) {
   return { doc, parId, ecran };
 }
 
+/**
+ * Le texte d'un nœud du faux document, enfants compris.
+ *
+ * ⚠ `peindreVueDuPanneau` COMPOSE SON TITRE, il ne l'écrit pas d'un trait :
+ * `textContent = ''` puis `append(createTextNode(...))`. Lire `textContent` sur
+ * l'hôte rend donc la chaîne VIDE, et une assertion écrite ainsi passerait au
+ * vert le jour où le panneau cesserait de peindre.
+ */
+function texteDe(el) {
+  if (el === null || el === undefined) return '';
+  const enfants = (el.children ?? []).map(texteDe).join('');
+  return `${el.textContent ?? ''}${enfants}`;
+}
+
 /** La feuille, commentaires ôtés — une garde ne lit pas sa propre prose. */
 function feuilleDecommentee() {
   return readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
@@ -1557,6 +1585,107 @@ test('RET T11 — une armée VIDE ne fige rien, et c\'est mesuré', () => {
   baseCourante(sansBatiment).disposition = [];
   assert.throws(() => plafondDeLaReserveDesBatiments(baseCourante(sansBatiment)),
     'le montage ne discrimine rien : les deux plafonds se comportent pareil');
+});
+
+// ---------------------------------------------------------------------------
+// VITESSE — le point 8 : l'écran Offense se repeint pendant qu'on le regarde
+// ---------------------------------------------------------------------------
+
+test('VIT T4 — `rafraichir` repeint la réserve d\'armée, qui monte toute seule', () => {
+  // ⚠⚠ ETHAN, 11/09, POINT 8 : « le bouton améliorer de l'onglet offense ne se
+  // met pas à jour ». La cause racine est plus large que le bouton :
+  // `rafraichir` s'écrivait `if (etatCourant === null) peindre(etat);` — donc
+  // l'écran ouvert restait figé sur l'image de son ouverture, indéfiniment.
+  // C'est aussi la cause du point 13, où la ligne de réserve ne bougeait jamais.
+  //
+  // ⚠ CE TEST EST UN ÉCART AU §7 DU BRIEF, DÉCLARÉ. Il annonce « aucun test sur
+  // le §4 — le dépôt n'a ni jsdom ni navigateur » : c'est vrai de cinq écrans et
+  // FAUX de celui-ci, qui porte un faux document écrit à la main depuis le lot
+  // RETOUR-DE-RAID. Un défaut de cycle de vie ne se lit pas dans une fonction
+  // pure ; il se monte.
+  const etat = partieAvecBudget();
+  const laBase = baseCourante(etat);
+  laBase.reserveReparation.escouade = 2 * TICKS_PAR_HEURE;
+
+  const { doc, ecran } = ecranOffenseMonte(etat);
+  const avant = doc.getElementById('offense-reserve').textContent;
+
+  // La réserve monte, comme le tick la fait monter — et on N'APPELLE PAS
+  // `peindre`, qui est le geste du joueur. Seul `rafraichir` passe.
+  laBase.reserveReparation.escouade = 9 * TICKS_PAR_HEURE;
+  ecran.rafraichir(etat);
+  const apres = doc.getElementById('offense-reserve').textContent;
+
+  assert.notEqual(apres, avant,
+    'la ligne de réserve n\'a pas suivi : `rafraichir` ne repeint rien');
+  assert.equal(apres, ligneDeLaReserveDArmee(etat),
+    'la ligne ne dit pas ce que le moteur rend');
+
+  // ⚠ ET `etatCourant` SUIT, ce qui est l'autre moitié : sans lui, la barre
+  // contextuelle lirait indéfiniment l'état de l'ouverture.
+  const neuf = partieAvecBudget();
+  baseCourante(neuf).reserveReparation.blinde = 6 * TICKS_PAR_HEURE;
+  ecran.rafraichir(neuf);
+  assert.equal(doc.getElementById('offense-reserve').textContent,
+    ligneDeLaReserveDArmee(neuf),
+    '`rafraichir` peint encore l\'ancien état : `etatCourant` n\'a pas été repris');
+});
+
+test('VIT T4 bis — la barre contextuelle dit le devis de la pièce sélectionnée', () => {
+  // ⚠⚠ LA LECTURE (a) DU POINT 8, ET ELLE EST DÉCLARÉE. « N'indique pas d'heure
+  // restante » a deux sens : (a) le temps de réparation de la pièce choisie,
+  // (b) une durée d'amélioration. **(b) n'existe pas** — `ameliorerEffectif` est
+  // instantané et se paie d'avance, donc annoncer une attente promettrait un
+  // mécanisme que le moteur n'a pas.
+  const etat = partieAvecBudget();
+  const laBase = baseCourante(etat);
+  poserLesBatimentsDeProduction(etat);
+  // ⚠ LA PIÈCE EST ABÎMÉE POUR DE BON, ET LE MONTAGE LE PROUVE AVANT
+  // D'ASSERTER : un devis nul ne distinguerait pas « lu » de « écrit en dur ».
+  //
+  // ⚠⚠ ET LE NIVEAU 12 N'EST PAS DÉCORATIF — « un montage qui tombe rond ne
+  // mesure pas un arrondi », et le dépôt l'a déjà payé trois fois. Au niveau 3
+  // la scorie d'une Meute vaut **0,0000245** : `Math.ceil` rend 1, `Math.round`
+  // rend 0, et les deux nombres se confondent avec les chiffres de la DURÉE dans
+  // la même phrase. À 12 et 50 000 milli-PV de dégâts, le devis vaut **62,355** —
+  // `ceil` 63, `round` 62, durée « 52 s » : les trois se distinguent.
+  laBase.armee[0].niveau = 12;
+  laBase.armee[0].degatsMilli = 50000;
+  const devis = coutDeLaReparation(etat, 0);
+  assert.ok(devis !== null && devis.ticks > 0 && devis.scorie > 0,
+    'le montage ne mesure rien : la pièce ne coûte ni temps ni scorie');
+  assert.notEqual(Math.ceil(devis.scorie), Math.round(devis.scorie),
+    'le montage ne mesure pas l\'arrondi : `ceil` et `round` rendent le même nombre');
+
+  const { doc, parId, ecran } = ecranOffenseMonte(etat);
+  assert.equal(doc.getElementById('offense-selection-cout').textContent, '',
+    'le devis s\'écrit sans sélection');
+
+  toucher(parId, laBase.armee[0].vague, laBase.armee[0].colonne);
+
+  const ligne = doc.getElementById('offense-selection-cout').textContent;
+  assert.equal(ligne, ligneDuCoutDeLaPiece(etat, 0),
+    'la barre n\'écrit pas ce que la fonction rend');
+  // ⚠ LE TEMPS ET LA SCORIE VIENNENT DU MOTEUR, ILS NE SE RECALCULENT PAS —
+  // et la scorie s'arrondit comme `reparerUnePiece` débite : `Math.ceil`.
+  assert.ok(ligne.includes(direLaDuree(devis.ticks)),
+    `le temps annoncé n'est pas celui du moteur : ${ligne}`);
+  // ⚠ LA SONDE PORTE LE MOT, PAS LE SEUL CHIFFRE. « includes('63') » se
+  // satisferait d'un 63 venu de la durée, qui est dans la même phrase.
+  assert.ok(ligne.includes(`${Math.ceil(devis.scorie)} scorie`),
+    `la scorie annoncée n'est pas celle que le moteur débitera : ${ligne}`);
+  assert.ok(!ligne.includes(`${Math.round(devis.scorie)} scorie`),
+    `la scorie est arrondie au plus proche, pas comme `
+    + `\`reparerUnePiece\` débite : ${ligne}`);
+
+  // ⚠ ET UNE PIÈCE INTACTE N'ÉCRIT RIEN — « réparer : 0 s · 0 scorie » sur
+  // quatorze unités saines serait quatorze fois la même absence d'information.
+  laBase.armee[0].degatsMilli = 0;
+  assert.equal(ligneDuCoutDeLaPiece(etat, 0), null,
+    'une pièce intacte porte encore un devis');
+  ecran.peindre(etat);
+  assert.equal(doc.getElementById('offense-selection-cout').textContent, '',
+    'le devis survit à la réparation');
 });
 
 // ---------------------------------------------------------------------------
@@ -1790,4 +1919,183 @@ test('EC T8 — le libellé de la palette de l\'Offense se lit, et les trois ét
   // distinction serait perdu au premier réglage de teinte.
   assert.match(regleCss('#offense-palette .unite.verrouillee'), /opacity/,
     'la vignette verrouillée a perdu son opacité : la teinte du libellé la porte seule');
+});
+
+test('VIT T9 — « Réparer » ouvre un dépliant qui dit le coût de chaque unité', () => {
+  // ⚠⚠ ETHAN, 11/09, POINT 13. `#offense-reserve` était COMPLÈTE et seulement
+  // TRONQUÉE par le bouton — mesuré dans Chromium à la géométrie du S25 FE :
+  // **345,91 px demandés pour 235,48 reçus, donc 110,42 px coupés, 32 % de la
+  // phrase**. Ethan lisait « Réparation, max 12.0 h — infanterie 43 min · véh… »
+  // et croyait voir trois maxima. Deux choses, et les deux sont gardées ici : la
+  // ligne ne se coupe plus, et « Réparer » ouvre le DÉTAIL.
+  //
+  // ⚠ ÉCART AU §7, DÉCLARÉ, comme `VIT T4` : le brief annonce « aucun test sur
+  // le §4 », ce qui est vrai de cinq écrans et FAUX de celui-ci, qui porte un
+  // faux document depuis le lot RETOUR-DE-RAID.
+  const etat = partieAvecBudget();
+  const laBase = baseCourante(etat);
+  poserLesBatimentsDeProduction(etat);
+  // ⚠⚠ TRENTE MINUTES ET UN TICK, ET NI LE « 30 » NI LE « + 1 » NE SONT
+  // DÉCORATIFS. « Un montage qui tombe rond ne mesure pas un arrondi » —
+  // quatrième fois du dépôt, et la première où le montage ROND était le mien :
+  // à trois heures pile, `Math.floor` et `Math.ceil` rendent « 3.0 h » tous les
+  // deux. ⚠ Et **au-delà de l'heure ils rendraient le même nombre QUOI QU'IL
+  // ARRIVE** : `direLaDuree` le dit en toutes lettres — passé 3 600 s, c'est la
+  // DÉCIMALE qui arrondit, et le paramètre cesse de mordre. L'assertion ne peut
+  // donc vivre que sous l'heure, et 30 min + 1 tick y rend 30 contre 31.
+  laBase.reserveReparation.escouade = Math.round(TICKS_PAR_HEURE / 2) + 1;
+
+  // ⚠⚠ DEUX PIÈCES ABÎMÉES, DE DEUX NIVEAUX DIFFÉRENTS ET DIFFÉRENTS DE 1. À
+  // niveau égal les deux lignes rendraient la même chaîne, et une boucle qui
+  // écrirait deux fois la PREMIÈRE pièce passerait le test.
+  laBase.armee[0].niveau = 12;
+  laBase.armee[0].degatsMilli = 50000;
+  laBase.armee[1].degatsMilli = 9000;
+
+  const devisA = coutDeLaReparation(etat, 0);
+  const devisB = coutDeLaReparation(etat, 1);
+  assert.ok(devisA !== null && devisB !== null, 'le montage n\'abîme rien');
+  assert.notEqual(direLaDuree(devisA.ticks), direLaDuree(devisB.ticks),
+    'le montage ne distingue pas les deux pièces : elles coûtent le même temps');
+
+  const vue = vueDuDevisDeReparation(etat);
+  assert.equal(vue.titre, TITRE_DEVIS);
+
+  const section = vue.sections.find((s) => s.lignes.length > 0);
+  assert.ok(section !== undefined, 'le dépliant ne porte aucune ligne');
+
+  // ⚠⚠ LE STOCK EN TÊTE — c'est ce qu'Ethan cherchait dans la ligne coupée, et
+  // c'est la SEULE chose que la ligne de la barre portait vraiment.
+  assert.equal(section.lignes[0].avant,
+    direLaDuree(laBase.reserveReparation.escouade, Math.floor),
+    'le stock du châssis n\'est pas en tête du dépliant');
+  // ⚠ ET IL S'ARRONDIT VERS LE BAS : c'est un STOCK, pas un manque. `Math.ceil`
+  // annoncerait « 4 h » sur 3 h 00 min 01 s de réserve, et le joueur tenterait
+  // une réparation que le moteur refuse.
+  assert.notEqual(section.lignes[0].avant,
+    direLaDuree(laBase.reserveReparation.escouade, Math.ceil),
+    'le montage ne mesure pas l\'arrondi : les deux sens rendent la même durée');
+
+  // ⚠⚠ AUCUN COÛT N'EST RECALCULÉ DANS L'UI — CONSIGNE DU BRIEF. Les deux
+  // nombres se confrontent à ce que le MOTEUR rend, et la scorie à l'arrondi
+  // EXACT que `reparerUnePiece` débite.
+  const texteDuDevis = vue.sections
+    .flatMap((s) => s.lignes).map((l) => `${l.libelle} ${l.avant}`).join('\n');
+  for (const devis of [devisA, devisB]) {
+    assert.ok(texteDuDevis.includes(
+      `${direLaDuree(devis.ticks)} · ${Math.ceil(devis.scorie)} scorie`),
+    `le dépliant n'annonce pas le coût du moteur : ${texteDuDevis}`);
+  }
+
+  // ⚠ ET UNE ARMÉE INTACTE NE REND PAS TROIS SECTIONS VIDES : une phrase.
+  laBase.armee[0].degatsMilli = 0;
+  laBase.armee[1].degatsMilli = 0;
+  const saine = vueDuDevisDeReparation(etat);
+  assert.equal(saine.sections.length, 1, 'une armée intacte rend plusieurs sections');
+  assert.equal(saine.sections[0].lignes.length, 0,
+    'la section du « rien à réparer » porte des lignes');
+});
+
+test('VIT T9 bis — le bouton de la barre OUVRE, celui du panneau répare', () => {
+  // ⚠⚠ LE GESTE A CHANGÉ DE PORTEUR, ET C'EST TOUT LE POINT 13. `Tout réparer`
+  // dépensait la scorie au premier toucher, sans que le joueur ait lu un prix ;
+  // il OUVRE désormais le dépliant, et c'est le bouton du panneau qui agit —
+  // sous les yeux de celui qui vient d'en lire le devis.
+  const etat = partieAvecBudget();
+  const laBase = baseCourante(etat);
+  poserLesBatimentsDeProduction(etat);
+  laBase.reserveReparation.escouade = 12 * TICKS_PAR_HEURE;
+  laBase.economie.ressources.scorie = 1e9;
+  laBase.armee[0].niveau = 12;
+  laBase.armee[0].degatsMilli = 50000;
+
+  const { doc, parId } = ecranOffenseMonte(etat);
+  assert.equal(doc.getElementById('offense-panneau').hidden, true,
+    'le panneau part ouvert');
+
+  parId.get('offense-tout-reparer').envoyer('click');
+
+  // ⚠ LE PREMIER TOUCHER N'A RIEN DÉPENSÉ. C'est la moitié qui compte : un
+  // bouton qui ouvrirait ET réparerait passerait l'assertion d'ouverture.
+  assert.equal(laBase.armee[0].degatsMilli, 50000,
+    'le bouton de la barre a réparé au lieu d\'ouvrir');
+  assert.equal(doc.getElementById('offense-panneau').hidden, false,
+    'le bouton de la barre n\'ouvre pas le dépliant');
+  assert.equal(texteDe(doc.getElementById('offense-panneau-titre')), TITRE_DEVIS,
+    'le panneau montre autre chose que le dépliant de réparation');
+
+  // ⚠ ET LE BOUTON DU PANNEAU RÉPARE POUR DE BON — il n'améliore pas, ce qui
+  // est l'autre faute possible : c'est le SEUL bouton d'action du panneau, et
+  // il porte deux gestes selon le mode.
+  const niveauAvant = laBase.armee[0].niveau;
+  parId.get('offense-panneau-ameliorer').envoyer('click');
+  assert.equal(laBase.armee[0].degatsMilli, 0,
+    'le bouton du dépliant n\'a pas réparé');
+  assert.equal(laBase.armee[0].niveau, niveauAvant,
+    'le bouton du dépliant a AMÉLIORÉ : le mode ne route pas le geste');
+});
+
+test('VIT T9 ter — la ligne de réserve d\'armée ne se coupe plus', () => {
+  // ⚠⚠ MESURÉ AVANT DE TOUCHER UNE LIGNE, ET C'EST CE QUI A DÉCIDÉ DU REMÈDE.
+  // Dans Chromium, à la géométrie du S25 FE (360 × 780, dpr 3), la phrase
+  // demandait **345,91 px** et sa boîte en faisait **235,48** : **110,42 px
+  // coupés**. Elle n'était pas incomplète, elle était TRONQUÉE — d'où un
+  // correctif de feuille et non de texte.
+  const regle = regleCss('#offense-reserve');
+  assert.doesNotMatch(regle, /white-space:\s*nowrap/,
+    'la ligne de réserve est encore tenue sur une seule ligne : elle se coupera');
+  assert.doesNotMatch(regle, /text-overflow:\s*ellipsis/,
+    'la ligne de réserve porte encore l\'ellipse qui cachait ses trois stocks');
+  assert.doesNotMatch(regle, /overflow:\s*hidden/,
+    'la ligne de réserve rogne encore ce qui dépasse');
+
+  // ⚠ ET LA GARDE N'EST PAS VACUEUSE : la règle existe, et elle porte bien la
+  // ligne dont on parle. Sans ces deux-là, le test passerait sur un sélecteur
+  // disparu — c'est `regleCss` qui lève, et il faut le dire.
+  assert.match(regle, /font-size/, 'la règle mesurée n\'est plus celle de la ligne');
+
+  // ⚠ LA LIGNE PORTE TOUJOURS SES TROIS STOCKS — le remède est d'AFFICHAGE, le
+  // texte n'a pas été raccourci pour tenir.
+  const etat = partieAvecBudget();
+  const texte = ligneDeLaReserveDArmee(etat);
+  for (const chassis of ORDRE_CHASSIS) {
+    assert.ok(texte.includes(FAMILLE_DE_CHASSIS[chassis]),
+      `la ligne a perdu le stock « ${chassis} » : ${texte}`);
+  }
+});
+
+test('VIT T4 ter — la boucle repeint l\'écran Offense, pas seulement la base', () => {
+  // ⚠⚠ LA CAUSE RACINE DU POINT 8 ÉTAIT DANS LA SESSION, PAS DANS L'ÉCRAN, ET
+  // `VIT T4` NE POUVAIT PAS LA VOIR. Il monte l'écran et appelle `rafraichir`
+  // lui-même : il garde que la fonction REPEINT, jamais qu'elle est APPELÉE.
+  // Mesuré au boot sans tête, onglet Offense ouvert huit secondes : la ligne de
+  // réserve restait à « 39 s » pendant que le moteur créditait quatre-vingts
+  // ticks — la boucle ne rafraîchissait que le Chantier et la carte.
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'session.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+  // ⚠ ON BORNE SUR LE BLOC DES 100 ms, ET ON PROUVE QUE LA TRANCHE EST BORNÉE :
+  // sans ça, le test trouverait l'appel de `rafraichirTousLesEcrans`, qui est
+  // le geste de la BASCULE et ne passe jamais dans la boucle.
+  const debut = source.indexOf('dernierAffichageMs >= 100');
+  assert.ok(debut > 0, 'le bloc d\'affichage de la boucle a changé de forme');
+  const fin = source.indexOf('PERIODE_SAUVEGARDE_MS', debut);
+  assert.ok(fin > debut, 'la borne du bloc d\'affichage a disparu');
+  const bloc = source.slice(debut, fin);
+  assert.ok(bloc.length > 40 && bloc.length < source.length / 4,
+    `la tranche mesurée n'est ni vide ni le fichier entier : ${bloc.length} octets`);
+
+  assert.ok(bloc.includes('ecranOffense.rafraichir('),
+    'la boucle ne rafraîchit pas l\'écran Offense : sa réserve restera figée');
+  // ⚠ ET ELLE NE LE REPEINT PAS : `peindre` refait les trente-six emplacements,
+  // dix fois par seconde. C'est l'autre moitié, et elle se garde ici parce que
+  // la faute serait invisible — l'écran serait JUSTE, et coûterait cent fois son
+  // prix.
+  assert.ok(!bloc.includes('ecranOffense.peindre('),
+    'la boucle REPEINT l\'écran Offense : trente-six emplacements dix fois par seconde');
+  // ⚠ L'APPÂT : la bascule, elle, repeint pour de bon — donc le motif que l'on
+  // cherche existe ailleurs dans le fichier, et la tranche l'a bien écarté.
+  assert.ok(source.includes('ecranOffense.peindre('),
+    'plus personne ne repeint l\'Offense : la bascule a perdu son appel');
 });

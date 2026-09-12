@@ -867,9 +867,57 @@ function dessinerBatiment(liste, x, y, t) {
 
 // --- la liste d'affichage ----------------------------------------------------
 
-/** Une entité se dessine si elle est vivante et encore sur la grille. */
+/**
+ * Une entité se dessine si elle est vivante et encore sur la grille.
+ *
+ * ⚠⚠ ET CE PRÉDICAT-CI NE S'ÉLARGIT PAS AUX RUINES, C'EST TOUT LE LOT VITESSE.
+ * Il a TROIS lecteurs qui doivent continuer de refuser ce qui est mort — la
+ * barre de PV, le trait de tir et la cible affichée — et DEUX qui doivent
+ * l'accepter, les positions et le dessin. Élargir celui-ci donnerait une barre
+ * de vie à un tas de gravats et ferait pointer les tourelles dessus.
+ */
 function visible(e) {
   return e.vivant && !e.sorti;
+}
+
+/**
+ * Ce qu'une entité morte laisse à l'écran — un tas, une planche, ou rien.
+ *
+ * ⚠⚠ LE LOT VITESSE, 12/09 : UN BÂTIMENT DE L'OUVRAGE TUÉ PAR LES UNITÉS
+ * DISPARAISSAIT. `visible` refusait tout ce qui n'est pas `vivant`, et
+ * `sim/combat.js` passe `vivant` à faux dès que `pvMilli` tombe à zéro : le seul
+ * chemin qui dessinait une ruine était l'EFFONDREMENT de fin de raid, et
+ * `ordreDeLEffondrement` ne prend que les SURVIVANTES. Les cinq planches
+ * `bat_o_*_detruit` étaient dans l'atlas depuis le lot BÂTIMENTS-QUATRE-ÉTATS,
+ * payées en octets et nommées par personne sur ce chemin-là.
+ *
+ * ⚠⚠ ELLE LIT LA TABLE, ELLE N'ÉCRIT PAS `=== 'batiment'`. C'est la même
+ * `RESTE_APRES_DESTRUCTION` que l'effondrement interroge, et pour la même
+ * raison : ce qu'une chose détruite laisse derrière elle est un RÉGLAGE, pas une
+ * règle de dessin. Le jour où Ethan passe `defense` à `'ruine'` — ce que la
+ * table annonce déjà — les structures mortes en laisseront une aussi, sans
+ * qu'une ligne d'ici ne bouge.
+ *
+ * ⚠ CÔTÉ JOUEUR, RIEN NE CHANGE, ET C'EST STRUCTUREL : `APRES_RAID.plancherPvMilli`
+ * vaut 1 000, donc ses bâtiments planchent à 1 PV et ne meurent jamais. `detruit`
+ * leur reste inatteignable, et ce n'est pas un plancher à retirer pour « voir des
+ * ruines chez soi ».
+ *
+ * ⚠ UN GENRE ABSENT DE LA TABLE LÈVE, comme dans la boucle de dessin : une
+ * entité qu'on oublierait de classer disparaîtrait en silence.
+ */
+function estUneRuine(e) {
+  if (e.vivant || e.sorti) return false;
+  const reste = RESTE_APRES_DESTRUCTION[e.genre];
+  if (reste === undefined) {
+    throw new Error(`scene : genre « ${e.genre} » sans reste après destruction`);
+  }
+  return reste !== 'rien';
+}
+
+/** Ce que la liste d'affichage pose : les vivantes, et ce que les mortes laissent. */
+function dessinee(e) {
+  return visible(e) || estUneRuine(e);
 }
 
 /**
@@ -969,7 +1017,10 @@ export function listeAffichage(
   // Positions affichées, calculées une fois : barres et traits les réutilisent.
   const positions = new Map();
   for (const e of etat.entites) {
-    if (visible(e)) positions.set(e.indice, positionAffichee(e, precedentes, alpha));
+    // ⚠ LES RUINES Y ENTRENT AUSSI — elles ne bougent pas, donc l'interpolation
+    // rend leur case, mais `positionDe` doit répondre pour tout ce que la boucle
+    // de dessin va poser. S'en remettre à son repli marcherait par accident.
+    if (dessinee(e)) positions.set(e.indice, positionAffichee(e, precedentes, alpha));
   }
   const positionDe = (e) => positions.get(e.indice)
     ?? { rangeeMilli: e.rangeeMilli, colonneMilli: e.colonneMilli };
@@ -1054,9 +1105,14 @@ export function listeAffichage(
   // 3. Bâtiments — 4. structures — 5. unités.
   for (const genreVoulu of ['batiment', 'defense', 'unite']) {
     for (const e of etat.entites) {
-      if (!visible(e) || e.genre !== genreVoulu) continue;
+      if (!dessinee(e) || e.genre !== genreVoulu) continue;
       const x = xDe(e);
       const y = yDe(e);
+      // ⚠⚠ DEUX CHEMINS MÈNENT AU MÊME DESSIN, ET C'EST VOULU. Une pièce
+      // EFFONDRÉE est vivante et tombe à la fin du raid ; une RUINE est morte au
+      // combat. Les deux laissent ce que `RESTE_APRES_DESTRUCTION` dit qu'elles
+      // laissent, et les distinguer plus bas ferait deux fois la même lecture.
+      const tombee = estTombee(e) || estUneRuine(e);
       // ⚠⚠ CE QU'UNE CHOSE DÉTRUITE LAISSE DERRIÈRE ELLE SE LIT DANS
       // `RESTE_APRES_DESTRUCTION`, IL NE SE DÉCIDE PAS ICI. Le premier jet
       // écrivait `if (genreVoulu === 'unite') continue;` — juste, et déjà une
@@ -1068,7 +1124,7 @@ export function listeAffichage(
       // entité qu'on oublierait de classer disparaîtrait en silence, et le
       // silence est ce qu'on ne veut pas d'un effet qu'on ne regarde qu'une fois
       // par raid.
-      if (estTombee(e)) {
+      if (tombee) {
         const reste = RESTE_APRES_DESTRUCTION[genreVoulu];
         if (reste === undefined) {
           throw new Error(`scene : genre « ${genreVoulu} » sans reste après destruction`);
@@ -1117,7 +1173,7 @@ export function listeAffichage(
           // `ordreDeLEffondrement` ne prend que les survivantes —, donc ses PV
           // diraient `intact` à l'instant où elle s'écroule.
           ...(e.genre === 'batiment'
-            ? { etat: estTombee(e) ? 'detruit' : etatDuBatiment(e.pvMilli, e.pvMaxMilli) }
+            ? { etat: tombee ? 'detruit' : etatDuBatiment(e.pvMilli, e.pvMaxMilli) }
             : {}),
           // ⚠ LA RANGÉE AFFICHÉE, INTERPOLÉE COMME CELLE DE LA CIBLE. Viser
           // juste depuis une case fausse rendrait le même décalage que viser

@@ -249,6 +249,48 @@ export function lignePourLAchat(etat, branche, id, quoi) {
  * @param {string} branche
  * @returns {object[]}
  */
+/**
+ * La ligne d'un module — et ce qu'elle TAIT tant que sa pièce n'est pas acquise.
+ *
+ * ⚠⚠ ETHAN, 11/09, POINT 2 : « masquer prix et description des modules non
+ * achetés ». La vue les rendait toujours, si bien que l'arbre livrait
+ * trente-et-une descriptions d'effets et trente-et-un prix pour des cases qu'on
+ * ne peut pas toucher — le joueur lisait le catalogue complet du jeu avant
+ * d'avoir acheté sa première pièce.
+ *
+ * ⚠ LES DEUX CADRES RESTENT, ET C'EST LA MOITIÉ QUI COMPTE. Le point 15 du
+ * 06/09 a séparé la pièce de son module en deux cases ; retirer la seconde
+ * quand elle est verrouillée referait le retrait qu'il a défait, et la ligne
+ * changerait de forme sous le doigt au moment de l'achat.
+ *
+ * ⚠⚠ ET LE MASQUAGE EST DANS LA VUE, PAS DANS LE DOM. Rendre `prix` et
+ * `description` puis compter sur l'écran pour ne pas les peindre laisserait la
+ * donnée à portée du prochain peintre — c'est la règle que ce fichier applique
+ * déjà à `raison`, qui vaut `''` quand il n'y a rien à dire.
+ *
+ * ⚠ AUCUNE SECONDE PHRASE DE REFUS N'EST ÉCRITE. `lignePourLAchat` rend déjà
+ * `raison` — « la pièce doit être débloquée avant son module », du MOTEUR —, et
+ * le cadre la peint. En ajouter une ici en ferait deux pour un seul fait.
+ *
+ * @param {object} etat
+ * @param {string} branche
+ * @param {string} id
+ * @param {string} nomModule
+ * @returns {object}
+ */
+export function ligneDuModule(etat, branche, id, nomModule) {
+  const achat = lignePourLAchat(etat, branche, id, 'module');
+  const verrouille = !estAcquise(etat, branche, id);
+  return {
+    nom: nomModule,
+    libelle: MODULES[nomModule].libelle,
+    description: verrouille ? '' : MODULES[nomModule].description,
+    ...achat,
+    verrouille,
+    prix: verrouille ? '' : achat.prix,
+  };
+}
+
 export function lignesDeRecherche(etat, branche) {
   const table = ARBRE_RECHERCHE[branche];
   if (table === undefined) throw new RangeError(`recherche : branche inconnue « ${branche} »`);
@@ -260,12 +302,7 @@ export function lignesDeRecherche(etat, branche) {
       description: descriptionDeLaPiece(id),
       couches: couchesDeLaPiece(id),
       unite: lignePourLAchat(etat, branche, id, 'unite'),
-      module: nomModule === null ? null : {
-        nom: nomModule,
-        libelle: MODULES[nomModule].libelle,
-        description: MODULES[nomModule].description,
-        ...lignePourLAchat(etat, branche, id, 'module'),
-      },
+      module: nomModule === null ? null : ligneDuModule(etat, branche, id, nomModule),
     };
   });
 }
@@ -510,7 +547,10 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
   function boutonDAchat(branche, id, quoi, vue) {
     return boutonADeuxTouchers({
       cle: `${branche}/${id}/${quoi}`,
-      libelle: vue.acquis ? 'Acquis' : vue.prix,
+      // ⚠ TROIS ÉTATS DEPUIS LE POINT 2 DU 11/09, PLUS DEUX. Un module dont la
+      // pièce n'est pas acquise n'a pas de prix à montrer, et un bouton vide se
+      // lirait comme un bouton cassé : il porte le mot du verrou.
+      libelle: vue.acquis ? 'Acquis' : (vue.verrouille === true ? 'Verrouillé' : vue.prix),
       acquis: vue.acquis,
       achetable: vue.achetable,
       verifier: () => problemesDeLAchat(etatCourant, branche, id, quoi),
@@ -557,10 +597,16 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
     rangee.append(ouverture, nom, boutonDAchat(branche, id, quoi, achat));
     bloc.appendChild(rangee);
 
-    const quoiDit = doc.createElement('div');
-    quoiDit.className = 'description';
-    quoiDit.textContent = description;
-    bloc.appendChild(quoiDit);
+    // ⚠ PAS DE `div.description` VIDE NON PLUS — même règle que le `div.raison`
+    // ci-dessous, et pour la même raison. Depuis le point 2 du 11/09, un module
+    // verrouillé rend une description VIDE : peindre le cadre quand même
+    // laisserait un blanc de neuf pixels que le joueur lirait comme un défaut.
+    if (description !== '') {
+      const quoiDit = doc.createElement('div');
+      quoiDit.className = 'description';
+      quoiDit.textContent = description;
+      bloc.appendChild(quoiDit);
+    }
 
     // ⚠ PAS DE `div.raison` VIDE. Depuis que le manque de points est écarté
     // (point 14), une ligne refusée peut n'avoir plus rien à dire : peindre le

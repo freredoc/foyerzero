@@ -50,6 +50,11 @@ import {
   // et `src/ui/raid.js` appelle ces quatre fonctions depuis le 01/09.
   problemesDeLaReparationDUnePiece, reparerUnePiece,
   problemesDeToutReparer, toutReparer,
+  // ⚠⚠ LE DEVIS SE DEMANDE, IL NE SE RECALCULE PAS — point 8, 11/09. C'est la
+  // règle que `detailDuBatiment` du Chantier applique déjà mot pour mot : le
+  // nombre annoncé doit être EXACTEMENT celui que `reparerUnePiece` débitera,
+  // sans quoi le joueur passe la garde et manque d'une unité de scorie.
+  coutDeLaReparation, reservoirsDeLArmee,
 } from '../sim/reparation.js';
 import { FAMILLE_DE_CHASSIS } from '../data/base.js';
 // ⚠⚠ LE MÊME POINT D'ENTRÉE QUE LA GRILLE DU CHANTIER ET QUE LE CHAMP DE
@@ -325,6 +330,145 @@ export function ligneDeLaReserveDArmee(etat) {
       + `${direLaDuree(laBase.reserveReparation[chassis] ?? 0, Math.floor)}`)
     .join(' · ');
   return `Réparation, max ${direLaDuree(plafond, Math.floor)} — ${parChassis}`;
+}
+
+/**
+ * Ce que coûte de remettre à neuf la pièce d'indice `index` — ou `null` si elle
+ * est intacte. Le devis qu'écrit la barre contextuelle de l'Offense.
+ *
+ * ⚠⚠ POINT 8 D'ETHAN, ET LA LECTURE EST DÉCLARÉE. « Le bouton améliorer
+ * n'indique pas d'heure restante » a DEUX lectures : (a) le temps de réparation
+ * de la pièce sélectionnée, (b) une durée d'amélioration. **(b) n'existe pas** —
+ * `ameliorerEffectif` est instantané et se paie d'avance, donc annoncer une
+ * attente promettrait un mécanisme que le moteur n'a pas. C'est (a) qui est
+ * écrite, et le rapport le dit.
+ *
+ * ⚠ AUCUN NOMBRE N'EST RECALCULÉ ICI. Le temps vient de `cout.ticks`, la scorie
+ * de `Math.ceil(cout.scorie)` — l'arrondi EXACT de `reparerUnePiece`. Un
+ * `Math.round` pris de ce côté-ci annoncerait une unité de moins que le débit.
+ *
+ * ⚠ ET SANS SON BÂTIMENT DE PRODUCTION, LA PIÈCE N'A PAS DE DURÉE, PAS UNE
+ * DURÉE NULLE. `coutDeLaReparation` rend alors `ticks: 0`, qui ne veut pas dire
+ * « instantané » mais « rien à calculer » : écrire « 0 s » ferait croire à une
+ * réparation gratuite là où `problemesDeLaReparationDUnePiece` refuse. On dit ce
+ * qui manque, avec la phrase que l'Arsenal écrit déjà.
+ *
+ * @param {object} etat
+ * @param {number} index indice dans `baseCourante(etat).armee`
+ * @returns {string|null}
+ */
+export function ligneDuCoutDeLaPiece(etat, index) {
+  const cout = coutDeLaReparation(etat, index);
+  if (cout === null) return null;
+  const scorie = `${formaterEntier(Math.ceil(cout.scorie))} scorie`;
+  if (cout.niveauBatiment === null) {
+    return `réparer : ${messageSansBatiment(BASE_BATIMENTS[cout.batiment].nom.joueur, cout.chassis)} · ${scorie}`;
+  }
+  return `réparer : ${direLaDuree(cout.ticks)} de réserve · ${scorie}`;
+}
+
+/** Le titre du dépliant, écrit une fois. */
+export const TITRE_DEVIS = 'Réparation de l\'armée';
+
+/**
+ * Le dépliant de réparation — ce que coûte chaque unité abîmée, châssis par
+ * châssis, avec le stock du réservoir en tête.
+ *
+ * ⚠⚠ ETHAN, 11/09, POINT 13. La ligne de réserve était COMPLÈTE et seulement
+ * TRONQUÉE — mesuré dans Chromium à la géométrie du S25 FE : elle demande
+ * **345,91 px** et en reçoit **235,48**, donc **110,42 px coupés**, soit 32 % de
+ * la phrase. Ethan lisait « Réparation, max 12.0 h — infanterie 40 min · véhi… »
+ * et croyait voir trois maxima. La ligne cesse d'être coupée (voir la feuille) ;
+ * ce dépliant-ci est la seconde moitié — le DÉTAIL, que la ligne ne portera
+ * jamais.
+ *
+ * ⚠⚠ AUCUN COÛT N'EST RECALCULÉ ICI, ET C'EST LA CONSIGNE DU BRIEF.
+ * `reservoirsDeLArmee` rend déjà le stock, le besoin et la liste des pièces
+ * avec leur coût ; `coutDeLaReparation` rend le détail d'une pièce. Cette
+ * fonction ne fait que RANGER et FORMATER.
+ *
+ * ⚠ LA SCORIE S'ARRONDIT COMME `reparerUnePiece` DÉBITE — `Math.ceil`, pièce par
+ * pièce. Sommer puis arrondir annoncerait un total que la boucle ne facturera
+ * pas ; c'est l'arbitrage écrit dans `devisDeLaReparationDesBatiments`, repris
+ * ici mot pour mot.
+ *
+ * ⚠ UN CHÂSSIS SANS PIÈCE ABÎMÉE N'A PAS DE SECTION. Trois sections dont deux
+ * vides sur une armée intacte seraient deux fois la même absence
+ * d'information — et le panneau le dit alors en une phrase.
+ *
+ * ⚠ ET UNE PIÈCE SANS SON BÂTIMENT N'EST PAS PERDUE : `reservoirsDeLArmee` ne la
+ * range dans aucun réservoir — elle n'a pas de temps calculable —, donc elle a
+ * sa propre section, qui dit ce qui manque.
+ *
+ * @param {object} etat
+ * @returns {{titre: string, sections: Array<object>, bouton: object}}
+ */
+export function vueDuDevisDeReparation(etat) {
+  const laBase = baseCourante(etat);
+  const reservoirs = reservoirsDeLArmee(etat);
+  const sections = [];
+  const sansBatiment = [];
+
+  for (let index = 0; index < laBase.armee.length; index += 1) {
+    const cout = coutDeLaReparation(etat, index);
+    if (cout !== null && cout.niveauBatiment === null) sansBatiment.push({ index, cout });
+  }
+
+  for (const chassis of CHASSIS_REPARABLES) {
+    const reservoir = reservoirs[chassis];
+    if (reservoir.pieces.length === 0) continue;
+    const lignes = [{
+      // ⚠ LE STOCK EN TÊTE — c'est ce qu'Ethan cherchait dans la ligne coupée.
+      libelle: `Réserve ${FAMILLE_DE_CHASSIS[chassis]}`,
+      avant: direLaDuree(laBase.reserveReparation[chassis] ?? 0, Math.floor),
+      apres: null,
+    }, {
+      libelle: 'Demandé',
+      avant: direLaDuree(reservoir.ticks),
+      apres: null,
+      mineur: true,
+    }];
+    for (const p of reservoir.pieces) {
+      const cout = coutDeLaReparation(etat, p.index);
+      lignes.push({
+        libelle: `${UNITES[laBase.armee[p.index].id].nom.joueur} · v${laBase.armee[p.index].vague}`,
+        avant: `${direLaDuree(cout.ticks)} · ${formaterEntier(Math.ceil(cout.scorie))} scorie`,
+        apres: null,
+        mineur: true,
+      });
+    }
+    sections.push({ titre: BASE_BATIMENTS[reservoir.batiment].nom.joueur, lignes });
+  }
+
+  if (sansBatiment.length > 0) {
+    sections.push({
+      titre: 'Sans bâtiment de production',
+      lignes: sansBatiment.map(({ index, cout }) => ({
+        libelle: UNITES[laBase.armee[index].id].nom.joueur,
+        avant: messageSansBatiment(BASE_BATIMENTS[cout.batiment].nom.joueur, cout.chassis),
+        apres: null,
+        mineur: true,
+      })),
+    });
+  }
+
+  if (sections.length === 0) {
+    sections.push({ titre: 'Rien à réparer', lignes: [] });
+  }
+
+  // ⚠ LE BOUTON DU PANNEAU RESTE VIF MÊME QUAND RIEN N'EST PAYABLE — « un indice
+  // n'est pas une interdiction » (§4). Le refus chiffré du moteur en apprend
+  // plus qu'un bouton mort, et `toutReparer` dit déjà son bilan.
+  const rien = problemesDeToutReparer(etat).find((p) => p.code === 'rien-a-reparer');
+  return {
+    titre: TITRE_DEVIS,
+    sections,
+    bouton: {
+      libelle: 'Tout réparer',
+      note: rien === undefined ? '' : 'rien à réparer',
+      possible: rien === undefined,
+    },
+  };
 }
 
 export const ACTIONS_ARMEE = {
@@ -1036,7 +1180,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     });
 
     peindrePalette(vue);
-    peindreContexte(vue);
+    peindreContexte();
     peindrePanneau();
     ecrireLaReserveDArmee();
 
@@ -1097,15 +1241,27 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   const panneau = $('offense-panneau');
   let panneauOuvert = false;
   let derniereVue = null;
+  // ⚠⚠ LE PANNEAU A DEUX MODES DEPUIS LE 11/09 — point 13 d'Ethan. Il montrait
+  // la fiche d'une PIÈCE ; il montre aussi le DEVIS de réparation de l'armée.
+  // Un second panneau aurait donné deux mises en page pour le même rendu
+  // partagé, et un second bouton dans une barre déjà pleine.
+  //
+  // ⚠ ET LE MODE ROUTE LE BOUTON, PAS SEULEMENT LE CORPS. `#offense-panneau-ameliorer`
+  // est le SEUL bouton d'action du panneau : lui laisser améliorer pendant que
+  // le corps annonce un devis de réparation ferait dépenser de la scorie pour
+  // un geste que le joueur n'a pas lu.
+  let modePanneau = 'piece';
 
-  function ouvrirPanneau() {
+  function ouvrirPanneau(mode = 'piece') {
     panneauOuvert = true;
+    modePanneau = mode;
     panneau.hidden = false;
     derniereVue = null;
   }
 
   function fermerPanneau() {
     panneauOuvert = false;
+    modePanneau = 'piece';
     panneau.hidden = true;
     derniereVue = null;
   }
@@ -1122,7 +1278,9 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   // Chantier : « armer puis toucher » existe parce que les boutons de la barre
   // n'ont pas de cible ; celui-ci en a une.
   $('offense-panneau-ameliorer').addEventListener('click', () => {
-    if (etatCourant === null || selection === null) return;
+    if (etatCourant === null) return;
+    if (modePanneau === 'devis') { toutReparerMaintenant(); return; }
+    if (selection === null) return;
     // ⚠ ON PASSE PAR LA TABLE, PAS PAR `appliquerAction` : celle-ci lit
     // `actionArmee`, qui vaut `null` ici — le panneau n'arme rien, il agit.
     const action = ACTIONS_ARMEE.ameliorer;
@@ -1137,8 +1295,11 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   });
 
   function peindrePanneau() {
-    if (!panneauOuvert || selection === null || etatCourant === null) return;
-    const vue = lignesDeLaPiece(apercuDeLaPiece(etatCourant, 'armee', selection));
+    if (!panneauOuvert || etatCourant === null) return;
+    if (modePanneau !== 'devis' && selection === null) return;
+    const vue = modePanneau === 'devis'
+      ? vueDuDevisDeReparation(etatCourant)
+      : lignesDeLaPiece(apercuDeLaPiece(etatCourant, 'armee', selection));
     const signature = JSON.stringify(vue);
     // ⚠ ON NE RECONSTRUIT PAS QUINZE ÉLÉMENTS DIX FOIS PAR SECONDE, et le
     // panneau suit quand même le temps : la note du bouton passe du refus au
@@ -1152,7 +1313,11 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     }, vue);
   }
 
-  function peindreContexte(vue) {
+  // ⚠ LE PARAMÈTRE `vue` ÉTAIT MORT, ET IL PART — il n'était lu par aucune des
+  // lignes de ce corps. Le garder aurait obligé `rafraichir` à fabriquer une
+  // `vueDeLOffense` complète, c'est-à-dire à balayer les trente-six
+  // emplacements dix fois par seconde pour trois `textContent`.
+  function peindreContexte() {
     const piece = selection === null ? null : baseCourante(etatCourant).armee[selection];
     $('offense-selection-nom').textContent = piece === null
       ? '—' : UNITES[piece.id].nom.joueur;
@@ -1182,16 +1347,57 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     $('offense-ameliorer-cible').textContent
       = (ACTIONS_ARMEE.ameliorer.agir === null || piece === null)
         ? '' : `vers niv. ${piece.niveau + 1}`;
+    // ⚠⚠ LE DEVIS DE RÉPARATION EST UNE TROISIÈME LIGNE, PAS UNE RALLONGE DE LA
+    // SECONDE — mesuré. `#offense-contexte .qui span` porte
+    // `white-space: nowrap` et `text-overflow: ellipsis` : appondre le devis à
+    // « vague 2 · niveau 3 · 6 pts » aurait coupé la phrase à l'ellipse dans le
+    // seul cas où elle sert. La barre fait 46 px pour 11 + 8 px de lignes ;
+    // une troisième ligne de 8 px y tient (mesure au §4 du rapport).
+    //
+    // ⚠ ET ELLE NE S'ÉCRIT QUE SUR UNE PIÈCE ABÎMÉE. « réparer : 0 s · 0
+    // scorie » sur les quatorze unités d'une armée intacte serait quatorze fois
+    // la même absence d'information — c'est la règle que `detailDuBatiment`
+    // applique déjà à l'avarie d'un bâtiment.
+    $('offense-selection-cout').textContent
+      = (piece === null || selection === null)
+        ? '' : (ligneDuCoutDeLaPiece(etatCourant, selection) ?? '');
     marquerBoutonsAction();
   }
 
   /**
-   * Ce qui change avec le temps : rien, ici. L'armée ne bouge que sous le doigt
-   * du joueur, et `peindre` suit chaque geste. La fonction existe pour que la
-   * session traite les trois écrans de la même façon.
+   * Ce qui change avec le temps sur cet écran : LA RÉSERVE DE RÉPARATION, et
+   * elle seule.
+   *
+   * ⚠⚠ CETTE FONCTION NE REPEIGNAIT RIEN, ET C'EST LE POINT 8 D'ETHAN. Elle
+   * s'écrivait `if (etatCourant === null) peindre(etat);` — donc l'écran ouvert
+   * restait figé sur l'image de son ouverture, indéfiniment. Son en-tête
+   * affirmait « ce qui change avec le temps : rien, ici » : c'était vrai le jour
+   * où elle a été écrite, et **`ligneDeLaReserveDArmee` est arrivée après**. La
+   * ligne de réserve du point 13 ne bougeait donc jamais, et le joueur voyait un
+   * compteur mort là où trois réservoirs se remplissent.
+   *
+   * ⚠ ON REPEINT CE QUI BOUGE, PAS LA GRILLE — c'est le contrat de
+   * `rafraichir` au Chantier, où la même fonction passe dix fois par seconde.
+   * Refaire les trente-six emplacements ferait clignoter les vignettes sous le
+   * doigt et jetterait l'aperçu de pose en cours.
+   *
+   * ⚠ ET `etatCourant` SE MET À JOUR ICI. Sans cette ligne, la barre
+   * contextuelle lirait l'état de l'ouverture : son devis de réparation
+   * survivrait à la réparation qui vient de l'annuler.
    */
   function rafraichir(etat) {
-    if (etatCourant === null) peindre(etat);
+    if (etatCourant === null) { peindre(etat); return; }
+    etatCourant = etat;
+    ecrireLaReserveDArmee();
+    // ⚠ LA BARRE CONTEXTUELLE SUIT, parce que son devis se lit dans l'ÉTAT :
+    // « Tout réparer » repeint déjà, mais la réserve qui monte peut rendre
+    // payable ce qui ne l'était pas, et le devis d'une pièce doit rester celui
+    // que le moteur facturera au tick où le doigt se pose.
+    peindreContexte();
+    // ⚠ ET LE DÉPLIANT SUIT, quand il est ouvert — il porte le stock du châssis
+    // en tête, qui est très exactement ce qui monte. `peindrePanneau` sort sur
+    // sa signature : rien n'est reconstruit tant que rien n'a changé.
+    peindrePanneau();
   }
 
   // ⚠⚠ « TOUT RÉPARER » EST UN BOUTON DIRECT, PAS UNE CINQUIÈME ENTRÉE
@@ -1200,39 +1406,66 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   // « armer puis toucher » : chacune de ses lignes attend un doigt sur une pièce.
   // Un geste GLOBAL n'a rien à y désigner, et l'y mettre lui donnerait un bouton
   // de bandeau contextuel, un mode et une ligne d'invite pour rien.
+  /**
+   * Le geste lui-même — appelé par le bouton du DEVIS, plus par celui de la
+   * barre de réserve.
+   *
+   * ⚠⚠ IL A CHANGÉ DE DÉCLENCHEUR LE 11/09, PAS DE CORPS. Point 13 d'Ethan :
+   * « qu'un toucher sur "Réparer" ouvre un panneau listant, pour chaque unité
+   * abîmée, son coût en temps et en scorie ». Le seul bouton de cette barre
+   * s'appelle « Tout réparer » ; c'est donc lui qui ouvre le devis, et c'est le
+   * bouton du panneau qui répare. Une dépense globale et irréversible gagne au
+   * passage son devis AVANT le geste, ce que `data/base.js` demande déjà pour
+   * la démolition.
+   *
+   * ⚠ ÉCART DÉCLARÉ : le brief écrit « Réparer », et la barre CONTEXTUELLE porte
+   * un bouton de ce nom. Lui donner le panneau aurait été impossible — il ARME
+   * un mode, et le panneau couvre les vagues que le second toucher vise. C'est
+   * la faute que le lot ÉCRAN-DÉFENSE a corrigée au Chantier, où armer FERME le
+   * panneau.
+   */
+  function toutReparerMaintenant() {
+    if (etatCourant === null) return;
+    // ⚠⚠ ON PASSE PAR `problemesDeToutReparer` POUR SON SEUL CODE
+    // `rien-a-reparer`, JAMAIS POUR SON VERDICT DE PRIX. Elle juge le devis
+    // TOTAL : elle refuserait les treize unités payables parce que la
+    // quatorzième est hors de portée, alors que `toutReparer` est écrite pour
+    // l'inverse — elle fait ce qu'elle peut et COMPTE le reste. C'est la
+    // lecture que `ui/chantier.js` et `ui/raid.js` appliquent déjà, mot pour
+    // mot ; en prendre une autre ici rendrait cet écran plus sévère que les
+    // deux autres pour la même mécanique.
+    const rien = problemesDeToutReparer(etatCourant)
+      .find((p) => p.code === 'rien-a-reparer');
+    if (rien !== undefined) { toast(rien.message); return; }
+
+    const bilan = toutReparer(etatCourant);
+    peindre(etatCourant);
+    if (apresPose) apresPose();
+    // ⚠ ET LE BILAN SE DIT, MÊME À ZÉRO RÉPARÉ. Sans lui, une réserve à sec
+    // rendrait un écran qui ne bouge pas : le joueur croirait le bouton mort.
+    // Les deux autres écrans disent déjà la même chose, dans la même forme.
+    if (bilan.reparees === 0) {
+      toast(`Aucune réparation payable : ${bilan.impayables} unité(s)`
+        + ' hors de portée de la réserve ou de la scorie.');
+    } else if (bilan.impayables === 0) {
+      toast(`${bilan.reparees} unité(s) réparée(s).`);
+    } else {
+      toast(`${bilan.reparees} réparée(s), ${bilan.impayables} hors de portée`
+        + ' de la réserve ou de la scorie.');
+    }
+  }
+
+  // ⚠ ET LE BOUTON DE LA BARRE N'AGIT PLUS : IL OUVRE. Le geste vit dans le
+  // panneau, sous les yeux du joueur qui vient d'en lire le prix.
   const toutReparerBouton = $('offense-tout-reparer');
   if (toutReparerBouton !== null) {
     toutReparerBouton.addEventListener('click', () => {
       if (etatCourant === null) return;
-      // ⚠⚠ ON PASSE PAR `problemesDeToutReparer` POUR SON SEUL CODE
-      // `rien-a-reparer`, JAMAIS POUR SON VERDICT DE PRIX. Elle juge le devis
-      // TOTAL : elle refuserait les treize unités payables parce que la
-      // quatorzième est hors de portée, alors que `toutReparer` est écrite pour
-      // l'inverse — elle fait ce qu'elle peut et COMPTE le reste. C'est la
-      // lecture que `ui/chantier.js` et `ui/raid.js` appliquent déjà, mot pour
-      // mot ; en prendre une autre ici rendrait cet écran plus sévère que les
-      // deux autres pour la même mécanique.
-      const rien = problemesDeToutReparer(etatCourant)
-        .find((p) => p.code === 'rien-a-reparer');
-      if (rien !== undefined) { toast(rien.message); return; }
-
-      const bilan = toutReparer(etatCourant);
-      peindre(etatCourant);
-      if (apresPose) apresPose();
-      // ⚠ ET LE BILAN SE DIT, MÊME À ZÉRO RÉPARÉ. Sans lui, une réserve à sec
-      // rendrait un écran qui ne bouge pas : le joueur croirait le bouton mort.
-      // Les deux autres écrans disent déjà la même chose, dans la même forme.
-      if (bilan.reparees === 0) {
-        toast(`Aucune réparation payable : ${bilan.impayables} unité(s)`
-          + ' hors de portée de la réserve ou de la scorie.');
-      } else if (bilan.impayables === 0) {
-        toast(`${bilan.reparees} unité(s) réparée(s).`);
-      } else {
-        toast(`${bilan.reparees} réparée(s), ${bilan.impayables} hors de portée`
-          + ' de la réserve ou de la scorie.');
-      }
+      ouvrirPanneau('devis');
+      peindrePanneau();
     });
   }
+
 
   // ⚠ LE PANNEAU CONTEXTUEL PART VIDE, EXPLICITEMENT. Comme celui du Chantier :
   // le balisage suffit aujourd'hui, mais il serait la SEULE chose à le tenir

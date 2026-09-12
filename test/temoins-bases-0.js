@@ -4304,3 +4304,69 @@ export const RAPPORTS_OUVRAGE_APPROCHE = {
   24: '8e262b7101355f72',
   25: '29fc853237ed8ecd',
 };
+
+// ---------------------------------------------------------------------------
+// VINGT-ET-UNIÈME COUCHE — lot VITESSE, 12/09
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ DEUX COUPLES SUR 350, ET LES DEUX SONT `sitesEntames`. C'est la couche la
+// plus étroite que ce témoin ait jamais reçue, et c'est l'attribution du lot :
+// une heure de retour est devenue une VITESSE, donc les défenses d'un site
+// RAIDÉ se relèvent plus vite entre deux passes. Rien d'autre ne bouge — ni la
+// disposition, ni l'économie, ni la garnison du joueur, ni `rapports`, ni un
+// seul des huit scalaires. Les ONZE PREMIÈRES PHASES sont identiques AU BIT :
+// elles précèdent le premier raid du scénario sur un site, et il n'y a rien à
+// relever avant.
+//
+// ⚠⚠ ET `rapports` NE BOUGE PAS, CE QUI EST LA MOITIÉ QUI PROUVE. Le lot ne
+// touche NI le combat NI son résultat : ce qui change est l'état du site APRÈS
+// coup, entre le raid et le suivant. Un lot qui aurait fui dans le moteur aurait
+// déplacé les deux rapports sur les vingt-cinq graines, comme APPROCHE.
+//
+// ⚠ ET LA GARNISON DU JOUEUR NE BOUGE PAS NON PLUS, alors que la règle sert les
+// DEUX camps : le scénario ne pose aucune pièce de garnison, donc la moitié
+// joueur de la règle n'y a rien à ramener. C'est `VIT T1` qui la mesure.
+export const DEPLACES_PAR_VITESSE = {
+  p12_veilleDuRaid: {
+    sitesEntames: 'b097d2da52422486',
+  },
+  p13_apresLeRaid: {
+    sitesEntames: 'a81d99a1721109bc',
+  },
+};
+
+/**
+ * Les empreintes par graine après le lot VITESSE — **vingt-deux sur
+ * vingt-cinq**.
+ *
+ * ⚠⚠ LES GRAINES 2, 3 ET 22 SONT IDENTIQUES AU BIT, et le `??` de
+ * `bases.test.js` est donc NÉCESSAIRE, pas une précaution : sans lui, ces
+ * trois-là seraient comparées à `undefined` et le test les dirait divergentes
+ * alors qu'elles ne bougent pas. Même leçon que le lot MUR, qui en laissait
+ * trois lui aussi. ⚠ Sur ces trois parties, le site raidé aux phases 12 et 13
+ * est rendu dans le même état par les deux règles.
+ */
+export const EMPREINTES_PAR_GRAINE_VITESSE = {
+  1: 'c2340809ff65de6a',
+  4: '52f5357ddc820317',
+  5: '32bb556ecad4727d',
+  6: 'a8a9b0d09258cf34',
+  7: '09665fec6927b917',
+  8: 'c9d73e5763c76fc7',
+  9: '26e94341011da2cf',
+  10: '32ba628695f24c1e',
+  11: '3fe2b6d8d882765d',
+  12: 'a0c16c8a0d644805',
+  13: '15eb9778a21cc815',
+  14: '1c220c4f0589c335',
+  15: '1dda2f8f53fcef03',
+  16: '6fa6d0ddd8b4706d',
+  17: '3e50c244ba2d5e7d',
+  18: '1aa99bfb84cb8cce',
+  19: '95b18da0c8c818e2',
+  20: '13b53ff1b6c09e12',
+  21: '8d1242519738fff8',
+  23: '244bbfdc6571a613',
+  24: '7704ee177b8d57c7',
+  25: 'efe9c8dff86be5f2',
+};
