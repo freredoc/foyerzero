@@ -2150,7 +2150,7 @@ function retirerLesMorts(etat) {
  * `peutAvancer` les retient et elles TIRENT, donc `nuit(e)`, c'est-à-dire
  * `aTire`, remet `ticksInutiles` à zéro et elles ne se replient pas. Ce qui a
  * changé pour elles est ailleurs : elles se RANGENT désormais sur leur case au
- * lieu de fluer dans le mur — voir `structureImmobileSur`, lu par les deux axes.
+ * lieu de fluer dans le mur — voir `chevauchementInterditSur`, lu par les deux axes.
  *
  * ⚠⚠ ET LE REPLI NE PEUT TOUJOURS PAS EMPIRER PAR CETTE FONCTION, PAR
  * CONSTRUCTION — vérifié explicitement au lot COLONNE plutôt que reconduit, et
@@ -2419,43 +2419,109 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
 }
 
 /**
- * La case VISÉE porte-t-elle une STRUCTURE IMMOBILE — celle qui empêche de
- * passer, et devant laquelle une unité doit se ranger plutôt que de fluer ?
+ * La case VISÉE porte-t-elle quelque chose qu'on ne doit pas CHEVAUCHER —
+ * c'est-à-dire devant quoi l'entité doit se ranger sur sa propre case plutôt que
+ * de fluer jusqu'au bord ?
  *
- * ⚠⚠ UNE SEULE ÉCRITURE, DEUX LECTEURS, ET C'EST LE SECOND GESTE DU LOT MUR.
- * Elle a servi `avancer` seule pendant un premier jet ; `seDecaler` porte le
- * MÊME défaut sur l'axe des COLONNES, et Ethan a demandé de le corriger le
- * 10/09 après l'avoir vu mesuré. Une seconde fonction « à côté » aurait été
- * deux lectures de la même grandeur, dont une seule recevrait la prochaine
- * correction. L'appelant nomme la case qu'il regarde — `caseDevant, colonne`
- * pour la verticale, `rangee, caseACote` pour la latérale — et rien d'autre ne
- * change.
+ * DEUX cas, et deux seulement :
+ *   — une STRUCTURE IMMOBILE, de n'importe quel camp : un mur, une barrière, une
+ *     tourelle, une artillerie, un bâtiment. C'est le périmètre du lot MUR ;
+ *   — une ALLIÉE, quelle que soit sa vitesse. C'est ce que le lot
+ *     BARÈME-ET-REJEU ajoute.
  *
- * ⚠⚠ « UNE STRUCTURE IMMOBILE », PAS « N'IMPORTE QUEL BLOCAGE », ET C'EST UNE
- * MESURE, PAS UN CHOIX D'ÉCRITURE. Ranger l'entité dès que la case devant est
- * occupée — alliée comprise — déplace 1 041 champs sur 1 600 et 198 combats sur
- * 200 : tout embouteillage de colonne se met à claquer, et ce n'est pas ce
- * qu'Ethan a nommé le 10/09. Restreint aux occupantes de `vitesseMilli === 0`
- * il en déplace 339. `MUR T4` garde ce périmètre par sa moitié utile — deux
- * alliées dans la même colonne, et la seconde GARDE sa position intermédiaire.
- * `MUR T6 bis` garde le même périmètre sur l'axe latéral, avec une alliée
- * mobile à côté au lieu d'un merlon.
+ * ⚠⚠ L'ALLIÉE EST UN ARBITRAGE D'ETHAN DU 12/09/2026, ET IL RENVERSE CELUI DU
+ * 10/09 QUE CE BLOC PORTAIT. Il avait vu, sur une vraie partie : « les véhicules
+ * étaient à 80 % sur l'infanterie, plutôt que d'attendre derrière », puis,
+ * mis devant la mesure : « pas de chevauchement allié ni horizontal ni vertical.
+ * Totalement interdit. » Le raisonnement d'hier — « devant une alliée MOBILE, la
+ * case se libérera d'elle-même, et ranger lui coûterait à chaque fois les
+ * millièmes qu'elle vient de gagner » — n'est pas faux : il est ÉCARTÉ. Ce qu'il
+ * coûtait est ce qu'Ethan a vu à l'écran, et `caseDepuisMilli` est un `floor`,
+ * si bien qu'une entité à 8 920 est en case 8 pour le moteur et DESSINÉE à 92 %
+ * sur la case 9.
  *
- * ⚠ LE DISCRIMINANT EST LA VITESSE, PAS LE GENRE, ET C'EST GRATUIT.
+ * ⚠⚠ L'ENNEMIE MOBILE GARDE LE COMPORTEMENT D'HIER, ET CE N'EST PAS UN OUBLI.
+ * Ethan dit « chevauchement ALLIÉ » : deux pièces d'un même camp ne doivent pas
+ * se superposer, et c'est une règle de LISIBILITÉ. Face à une ennemie, fluer
+ * jusqu'au contact EST le dessin juste — le corps à corps se joue au bord des
+ * cases, pas à un demi-pas. `T7` de `test/combat.test.js` le mesure depuis le lot
+ * 4A, Ratisseur figé à 2 960 derrière un Bélier défensif, et il reste vert SANS
+ * QU'UNE LIGNE Y SOIT TOUCHÉE : c'est la moitié qui dit que le lot n'a pas
+ * élargi au-delà de ce qu'Ethan a nommé.
+ *
+ * ⚠ LE DISCRIMINANT DE LA PREMIÈRE MOITIÉ RESTE LA VITESSE, PAS LE GENRE.
  * `profilDefense` et `profilBatiment` posent tous deux `vitesseMilli: 0` :
  * murs, barrières, tourelles, artilleries et bâtiments y tombent tous, sans
  * qu'une table de genres soit écrite une seconde fois. C'est la même lecture
  * que le `if (p.vitesseMilli === 0) continue;` de l'étape 7.
  *
+ * ⚠⚠ UNE SEULE ÉCRITURE, DEUX LECTEURS, ET C'EST L'ACQUIS DU LOT MUR QU'ON NE
+ * DÉFAIT PAS. `avancer` regarde `caseDevant, colonne`, `seDecaler` regarde
+ * `rangee, caseACote` — l'appelant nomme la case, la fonction porte la règle.
+ * Une seconde fonction « à côté » aurait été deux lectures de la même grandeur,
+ * dont une seule recevrait la prochaine correction ; ce lot-ci en est la preuve,
+ * il change UNE ligne et les deux axes suivent.
+ *
+ * ⚠ ELLE PREND `e` DEPUIS CE LOT : sans l'entité, elle ne peut pas connaître son
+ * camp, donc pas distinguer une alliée d'une ennemie. Le paramètre est le
+ * deuxième, à côté de `p`, comme partout ailleurs dans ce module.
+ *
  * ⚠ L'AVIATION N'EST JAMAIS RANGÉE : `!p.bloquant` sort en tête. Elle ignore
  * l'occupation partout ailleurs — `peutAvancer`, `avancer` et `seDecaler` —, et
  * la ranger devant un mur qu'elle survole serait un défaut neuf.
+ *
+ * ⚠ ET ELLE NE REGARDE PAS SI L'OCCUPANTE EST ÉCRASABLE, délibérément. Écraser
+ * est un fait de COMBAT que `peutAvancer` et `structureForcee` tranchent à leur
+ * place ; ranger est un fait de DESSIN. Une porteuse de l'Écraseur devant un mur
+ * se range ET force au même tick — `MUR T5` le mesure par différence — et
+ * l'ordre des deux n'a pas changé.
  */
-function structureImmobileSur(etat, p, occupation, rangee, colonne) {
+function chevauchementInterditSur(etat, e, p, occupation, rangee, colonne) {
   if (!p.bloquant) return false;
   const indice = occupantDe(occupation, rangee, colonne);
   if (indice === undefined) return false;
-  return profil(etat.entites[indice]).vitesseMilli === 0;
+  const occupante = etat.entites[indice];
+  if (occupante.camp === e.camp) return true;
+  return profil(occupante).vitesseMilli === 0;
+}
+
+/**
+ * La case VISÉE est-elle tenue par une ALLIÉE — c'est-à-dire par quelqu'un qui
+ * finira par s'en aller, et dont l'attente ne doit donc pas compter comme de
+ * l'inutilité ?
+ *
+ * ⚠⚠ ELLE NE SE DÉDUIT PAS DE `chevauchementInterditSur`, ET LE CONFONDRE
+ * FERAIT DISPARAÎTRE LE REPLI. Ce prédicat-là est vrai AUSSI devant une
+ * structure immobile ; or devant un mur, l'attente est éternelle — c'est très
+ * exactement le cas où `TICKS_AVANT_REPLI` doit mordre, et le lot ARRÊT l'a
+ * mesuré. Deux questions voisines, deux réponses, deux fonctions.
+ *
+ * ⚠⚠ LE GEL EST UN ARBITRAGE D'ETHAN DU 12/09/2026, ET IL VIENT DE CE QU'IL A
+ * VU : « puis ils ont disparu. Mais 0 détruit. » Ce sont ses véhicules qui se
+ * REPLIAIENT — `sorti = true`, donc comptés parmi les survivants et absents du
+ * décompte des pertes. Une unité bloquée derrière une alliée ne progresse pas,
+ * ne nuit pas — elle tire sur ce qu'elle a à portée, et une alliée devant elle
+ * n'est pas une cible — et ne force rien : au trentième tick elle rentrait à la
+ * base, PARCE QU'UNE DES SIENNES LUI BARRAIT LE PASSAGE.
+ *
+ * ⚠ ET C'EST LE MÊME RAISONNEMENT QUE LE GEL DE LA VOIE D'APPROCHE, ÉLARGI À
+ * TOUTE LA GRILLE. Le lot APPROCHE gelait le compteur sous `estEnApproche` pour
+ * exactement cette raison — « elle quitterait le raid SANS Y ÊTRE JAMAIS
+ * ENTRÉE » —, et il n'avait aucune raison de s'arrêter à la rangée 1. Les deux
+ * gels coexistent : l'approche couvre l'entrée, celui-ci couvre l'embouteillage.
+ *
+ * ⚠ DEVANT UNE STRUCTURE, ON NE GÈLE PAS. Un mur ne s'en va pas, et une unité
+ * qui ne sait pas l'abattre doit pouvoir rentrer : c'est ce que `MUR T3` et
+ * `ARRÊT T8` mesurent, et le gel les ferait tomber. Devant une ENNEMIE mobile
+ * non plus — elle est une cible, donc `nuit(e)` remet le compteur à zéro tout
+ * seul quand la pièce peut la frapper, et l'entité qui ne peut pas la frapper
+ * doit se replier.
+ */
+function allieeDevant(etat, e, p, occupation, rangee, colonne) {
+  if (!p.bloquant) return false;
+  const indice = occupantDe(occupation, rangee, colonne);
+  if (indice === undefined) return false;
+  return etat.entites[indice].camp === e.camp;
 }
 
 /**
@@ -2713,7 +2779,7 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   // milieu de case. *Un test qui ne peut tomber sur aucun état d'aujourd'hui se
   // déclare, il ne se compte pas.*
   const caseACote = colonne + sens;
-  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, rangee, caseACote);
+  const chevauchementInterdit = chevauchementInterditSur(etat, e, p, occupation, rangee, caseACote);
   // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
   // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
   // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
@@ -2753,7 +2819,7 @@ function seDecaler(etat, e, p, occupation, obstacles) {
     // structure » — les trois sont à `vitesseMilli === 0`. Devant une alliée
     // MOBILE, la case se libérera d'elle-même, et ranger lui coûterait à chaque
     // fois les millièmes qu'elle vient de gagner. `MUR T6 bis` mesure les deux.
-    if (bloqueeParUneStructure) {
+    if (chevauchementInterdit) {
       e.colonneMilli = milliDepuisCase(colonne);
       return;
     }
@@ -2822,7 +2888,8 @@ function avancer(etat, e, p, occupation, obstacles) {
   // SILENCE. `ARRÊT T7` tombe si on l'ignore, `MUR T5` le double côté « case
   // devant ».
   const caseDevant = rangee + 1;
-  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, caseDevant, colonne);
+  const chevauchementInterdit = chevauchementInterditSur(etat, e, p, occupation, caseDevant, colonne);
+  const gelParUneAlliee = allieeDevant(etat, e, p, occupation, caseDevant, colonne);
 
   // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
   // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`
@@ -2844,7 +2911,7 @@ function avancer(etat, e, p, occupation, obstacles) {
   // qu'elle fait toujours. `ARRÊT T8` le mesure sur les deux pièces — celle qui
   // force et celle qui ne fait que tirer.
   const arrete = doitSArreter(etat, e, p);
-  const progresse = !arrete && !bloqueeParUneStructure
+  const progresse = !arrete && !chevauchementInterdit
     && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
 
   // ÉCRASEUR — forcer la structure qui barre la colonne.
@@ -2892,9 +2959,34 @@ function avancer(etat, e, p, occupation, obstacles) {
   // ⚠ ON NE REMET PAS À ZÉRO, ON N'INCRÉMENTE PAS : le compteur est LAISSÉ TEL
   // QUEL, pour qu'une unité qui entre déjà bloquée reprenne son décompte là où
   // la grille commence, et non trente ticks plus tard.
+  //
+  // ⚠⚠ ET IL EST GELÉ DERRIÈRE UNE ALLIÉE, PARTOUT SUR LA GRILLE — LOT
+  // BARÈME-ET-REJEU, 12/09. C'est le SECOND gel, et il ne remplace pas celui de
+  // la voie d'approche : celui-là tient une case précise, celui-ci une RELATION.
+  // Ethan, sur une vraie partie : « les véhicules étaient à 80 % sur
+  // l'infanterie, plutôt que d'attendre derrière. Puis ils ont disparu. Mais 0
+  // détruit. » Les deux moitiés de la phrase sont deux règles distinctes — le
+  // chevauchement, corrigé par `chevauchementInterditSur` plus haut, et la DISPARITION,
+  // qui est ce gel-ci. Une unité qui attend derrière une alliée ne progresse pas,
+  // ne nuit pas et ne force rien : au trentième tick elle passait `sorti = true`
+  // et quittait le raid, ce qu'Ethan lisait « elles ont disparu, mais 0
+  // détruit ». **Attendre son tour n'est pas être inutile.**
+  //
+  // ⚠⚠ ET IL NE VAUT QUE DERRIÈRE UNE ALLIÉE, JAMAIS DEVANT UNE STRUCTURE. Les
+  // deux prédicats sont donc DEUX fonctions, et `allieeDevant` ne se dérive pas
+  // de `chevauchementInterditSur` : celle-ci est vraie aussi devant une structure
+  // immobile, et c'est très exactement le cas où `TICKS_AVANT_REPLI` DOIT mordre
+  // — une unité plantée devant un mur qu'elle ne sait pas ouvrir doit rentrer, et
+  // `MUR T6 bis` le garde. Deux questions voisines, deux fonctions ; les fondre
+  // rendrait le repli inatteignable devant un mur.
+  //
+  // ⚠ ET IL NE GÈLE PAS DEVANT UNE ENNEMIE NON PLUS : `allieeDevant` compare les
+  // CAMPS. Une attaquante bloquée par une défenseuse qu'elle ne peut pas viser
+  // rentre à la base comme avant — c'est le montage de `test/combat.test.js`, un
+  // Ratisseur derrière un Bélier, et il est resté vert sans qu'une ligne y change.
   if (progresse || nuit(e) || forcee !== undefined) {
     e.ticksInutiles = 0;
-  } else if (!estEnApproche(e.rangeeMilli)) {
+  } else if (!estEnApproche(e.rangeeMilli) && !gelParUneAlliee) {
     e.ticksInutiles += 1;
     if (e.ticksInutiles >= TICKS_AVANT_REPLI) {
       e.sorti = true;
@@ -2921,7 +3013,7 @@ function avancer(etat, e, p, occupation, obstacles) {
     // le multiple exact, donc l'entité repart de sa case entière dès que la
     // structure tombe. Rien n'est mémorisé, aucun champ n'entre dans l'état, et
     // `SAVE_VERSION` n'a pas à bouger.
-    if (bloqueeParUneStructure) {
+    if (chevauchementInterdit) {
       e.rangeeMilli = milliDepuisCase(rangee);
       return;
     }

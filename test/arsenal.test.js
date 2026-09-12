@@ -293,7 +293,7 @@ function tickDeSortie(vagues, id) {
   return null;
 }
 
-test('T7 — une unité rapide derrière une lente perd 70 ticks, et l\'Arsenal le dit', () => {
+test('T7 — une unité rapide derrière une lente perd 81 ticks, et l\'Arsenal le dit', () => {
   // ⚠ PRÉCISION SUR LE BRIEF. Le §6 parle d'« un Fendeur seul en colonne 5 [qui]
   // sort du champ au tick 257 ». Deux choses à corriger dans la formulation, les
   // NOMBRES étant justes : ce Fendeur est en vague 2 — la vague 1 partirait 50
@@ -304,9 +304,21 @@ test('T7 — une unité rapide derrière une lente perd 70 ticks, et l\'Arsenal 
   const derriere = tickDeSortie(
     [[{ rangee: DEPART, id: 'meute', colonne: 5 }], [{ rangee: DEPART, id: 'fendeur', colonne: 5 }]], 'fendeur',
   );
+  //
+  // ⚠⚠ LE COÛT DE LA FILE PASSE DE 70 À 81 TICKS AU LOT BARÈME-ET-REJEU, 12/09,
+  // ET C'EST LA MESURE LA PLUS DIRECTE DE CE QUE LE LOT CHANGE. Une unité
+  // bloquée par une ALLIÉE se range désormais sur sa case au lieu de fluer
+  // jusqu'à 999 millièmes dans celle de devant — Ethan : « pas de chevauchement
+  // allié ni horizontal ni vertical » — donc elle rend à chaque embouteillage
+  // les millièmes qu'elle avait grappillés, et elle les reparcourt une fois la
+  // voie libre. Onze ticks de plus, soit 1,1 seconde sur un plafond de
+  // quatre-vingt-dix.
+  // ⚠ LE TEMPS DE L'UNITÉ SEULE NE BOUGE PAS D'UN TICK — 257 avant comme après.
+  // C'est ce qui attribue les onze ticks à la FILE et non à la vitesse : sans
+  // cette moitié, un ralentissement général rendrait le même écart.
   assert.equal(seul, 257);
-  assert.equal(derriere, 327);
-  assert.equal(derriere - seul, 70, 'sept secondes sur un plafond de quatre-vingt-dix');
+  assert.equal(derriere, 338);
+  assert.equal(derriere - seul, 81, 'huit secondes sur un plafond de quatre-vingt-dix');
 
   // C'est bien la COLONNE qui décide : le même Fusilier en colonne 4 ne coûte
   // rien du tout.
@@ -641,7 +653,16 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // POINT DE DÉPART. Ce que ce test-ci mesure n'a toujours rien à voir avec la
   // durée — ce sont les trois assertions d'équivalence au-dessus, et elles n'ont
   // pas bougé ; les deux montages passent par le même point d'apparition.
-  assert.equal(r.nbTicks, 489);
+  //
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : 489 → 509, ET C'EST LA SEPTIÈME CAUSE — LE
+  // DÉROULÉ, COMME AU LOT MUR, ET NON LE FLUX NI LA POSITION NI LE POINT DE
+  // DÉPART. Le site est composé et disposé exactement comme hier. Ce qui change
+  // est qu'une unité bloquée par une ALLIÉE se range sur sa case au lieu de fluer
+  // — elle perd donc jusqu'à 999 millièmes par embouteillage — et que son
+  // compteur de repli est gelé, donc elle attend au lieu de rentrer. Vingt ticks
+  // de plus, et c'est exactement le nombre que `repli.test.js T6` mesure sur le
+  // même raid C. Ce que ce test-ci mesure n'a toujours rien à voir avec la durée.
+  assert.equal(r.nbTicks, 509);
   assert.equal(r.cause, 'attaquants');
 });
 

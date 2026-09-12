@@ -1010,6 +1010,58 @@ test('état — améliorer sans les ressources est REFUSÉ, et rien n\'est débi
   assert.deepEqual(problemesDeLAmelioration(etat, 1), []);
   ameliorer(etat, 1);
   assert.equal(baseCourante(etat).disposition[1].niveau, 2);
+
+  // ⚠⚠ ET UN BÂTIMENT ABÎMÉ EST REFUSÉ AUSSI — lot BARÈME-ET-REJEU, 12/09/2026,
+  // Ethan : « ça doit bloquer ». Le raisonnement complet est dans
+  // `problemesDeLAmelioration` ; ce qui se mesure ici est que le refus EXISTE,
+  // qu'il porte le même code des deux côtés, et qu'il S'AJOUTE au manque au lieu
+  // de le remplacer — sans quoi le joueur verrait disparaître le chiffre de ce
+  // qui lui manque dès qu'une tuile est entamée.
+  //
+  // ⚠ LE STOCK EST REGARNI D'ABORD, ET C'EST LE MONTAGE QUI L'A EXIGÉ : la
+  // montée ci-dessus a dépensé EXACTEMENT ce qu'il fallait pour le palier 2, si
+  // bien que le palier 3 manque déjà de quartz et d'électricité. Mesurer
+  // l'avarie SEULE demande donc un stock suffisant, sans quoi on mesure trois
+  // refus en croyant en mesurer un.
+  const pose = baseCourante(etat).disposition[1];
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    baseCourante(etat).economie.ressources[r] = 100_000_000;
+  }
+  assert.deepEqual(problemesDeLAmelioration(etat, 1), [],
+    'le stock regarni ne suffit pas : le montage ne peut pas isoler l\'avarie');
+  pose.degatsMilli = 250_000;
+  const avecAvarie = problemesDeLAmelioration(etat, 1);
+  assert.deepEqual(avecAvarie.map((p) => p.code), ['abimee'],
+    'le refus de l\'avarie manque, ou il n\'est pas seul sur un stock suffisant');
+  assert.match(avecAvarie[0].message, /abîmé/);
+
+  // Les DEUX refus ensemble : stock vidé, avarie conservée. C'est l'accumulation
+  // que le lot exige, et elle se mesure sur l'ORDRE autant que sur l'ensemble —
+  // le joueur lit l'avarie avant le manque.
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    baseCourante(etat).economie.ressources[r] = 0;
+  }
+  const codes = problemesDeLAmelioration(etat, 1).map((p) => p.code);
+  assert.ok(codes.includes('abimee') && codes.some((c) => c.startsWith('manque:')),
+    `les deux refus ne coexistent pas : ${codes.join(', ')}`);
+  assert.ok(codes.indexOf('abimee') < codes.findIndex((c) => c.startsWith('manque:')),
+    'l\'avarie doit être lue avant le manque');
+
+  // Et une levée ne mute toujours rien.
+  const avantLaLevee = { ...baseCourante(etat).economie.ressources };
+  assert.throws(() => ameliorer(etat, 1), /abîmé/);
+  assert.equal(pose.niveau, 2, 'un refus a quand même monté le bâtiment');
+  assert.equal(pose.degatsMilli, 250_000, 'l\'amélioration a soigné le bâtiment');
+  assert.deepEqual(baseCourante(etat).economie.ressources, avantLaLevee, 'un refus a débité');
+
+  // ⚠ LE MONTAGE PROUVE QU'IL MESURE : l'avarie effacée, il ne reste QUE le
+  // manque. Un moteur qui refuserait tout passerait les assertions ci-dessus.
+  pose.degatsMilli = 0;
+  const sansAvarie = problemesDeLAmelioration(etat, 1).map((p) => p.code);
+  assert.ok(!sansAvarie.includes('abimee'),
+    'le refus survit à la réparation : il ne porte pas sur l\'avarie');
+  assert.ok(sansAvarie.some((c) => c.startsWith('manque:')),
+    'le montage ne mesure plus le manque');
 });
 
 test('état — démolir rend 90 %, retire la ligne, et retire son résidu', () => {
@@ -1906,13 +1958,6 @@ test('AMÉLIORER-PIÈCE — le geste monte la pièce et débite le barème de SA
   poserEffectif(etat, 'garnison', caseLibrePour(etat, 'garnison', 'guetteur'));
   poserEffectif(etat, 'armee', caseLibrePour(etat, 'armee', 'guetteur'));
 
-  // ⚠ DES DÉGÂTS ÉCRITS AVANT LA MONTÉE. `degatsMilli` est un ABSOLU de
-  // milli-PV : l'amélioration monte les PV MAXIMUM et ne rend aucun PV. Les
-  // effacer ferait de l'amélioration un SOIN, c'est-à-dire un second mécanisme
-  // de réparation que personne n'a arbitré et qui court-circuiterait les trois
-  // réserves de `sim/reparation.js`.
-  base.armee[0].degatsMilli = 4_321;
-
   const pointsAvant = {
     garnison: pointsEngages(etat, 'garnison'), armee: pointsEngages(etat, 'armee'),
   };
@@ -1932,8 +1977,37 @@ test('AMÉLIORER-PIÈCE — le geste monte la pièce et débite le barème de SA
   assert.equal(base.armee[0].niveau, 2, 'l\'unité d\'assaut n\'est pas montée');
   assert.deepEqual(debitArmee, off, 'l\'armée n\'a pas payé le barème de l\'OFFENSE');
 
-  // Les dégâts survivent, à la milli-unité près.
+  // ⚠⚠ LES DÉGÂTS SONT ÉCRITS APRÈS LA MONTÉE, ET C'EST LE LOT BARÈME-ET-REJEU
+  // QUI L'IMPOSE. Ils l'étaient AVANT jusqu'au 12/09/2026 : la montée d'une
+  // pièce entamée est désormais REFUSÉE — Ethan, « ça doit bloquer » — donc le
+  // montage d'hier faisait lever `ameliorerEffectif` sur son propre sujet. **Ce
+  // n'est pas l'assertion qui change, c'est l'ORDRE du montage** : la propriété
+  // gardée reste « l'amélioration n'est pas un soin », et elle se mesure
+  // maintenant sur le REFUS plutôt que sur la réussite.
+  base.armee[0].degatsMilli = 4_321;
+
+  // Le refus NOMME l'avarie, et il s'AJOUTE : la pièce vient de monter au
+  // niveau 2, donc rien d'autre ne la refuse — c'est ce qui rend la mesure nette.
+  const abimee = problemesDeLAmeliorationDEffectif(etat, 'armee', 0);
+  assert.deepEqual(abimee.map((p) => p.code), ['abimee'],
+    'le refus de l\'avarie n\'est pas le seul, ou il ne porte pas ce code');
+  assert.match(abimee[0].message, /abîmée/);
+
+  // ⚠ ET UNE LEVÉE NE MUTE RIEN : ni le niveau, ni l'avarie, ni les stocks. Un
+  // refus qui débiterait à moitié serait la pire faute possible ici.
+  const avantLaLevee = { ...base.economie.ressources };
+  assert.throws(() => ameliorerEffectif(etat, 'armee', 0), /abîmée/);
+  assert.equal(base.armee[0].niveau, 2, 'un refus a quand même monté la pièce');
   assert.equal(base.armee[0].degatsMilli, 4_321, 'l\'amélioration a soigné la pièce');
+  assert.deepEqual(base.economie.ressources, avantLaLevee, 'un refus a débité');
+
+  // ⚠ LE MONTAGE PROUVE QU'IL MESURE : la MÊME pièce, l'avarie effacée, remonte
+  // sans rien dire. Sans cette contre-épreuve, un moteur qui refuserait TOUTE
+  // amélioration passerait les trois assertions ci-dessus.
+  base.armee[0].degatsMilli = 0;
+  assert.deepEqual(problemesDeLAmeliorationDEffectif(etat, 'armee', 0), [],
+    'la pièce réparée est encore refusée : le refus ne porte pas sur l\'avarie');
+  base.armee[0].degatsMilli = 4_321;
 
   // ⚠ ET LE BUDGET NE BOUGE PAS. Les points d'armée sont l'une des grandeurs que
   // `data/niveaux.js` ne met PAS à l'échelle — c'est écrit dans `pointsEngages`.

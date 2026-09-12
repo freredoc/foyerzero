@@ -42,7 +42,265 @@ Dernière révision : **11/09/2026**, version 0.99.51 · build 153.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 12/09/2026 (après le lot VITESSE), à confronter :**
+**Référence au 12/09/2026 (après le lot BARÈME-ET-REJEU), à confronter :**
+⚠⚠ **DEUX DES CINQ POINTS ÉTAIENT DES RÉGRESSIONS, ET ELLES ONT ÉTÉ REPRODUITES
+AVANT D'ÊTRE CORRIGÉES ; LE TROISIÈME S'EST ARRÊTÉ SUR SA PROPRE CONDITION
+D'ARRÊT.** `npm test` rend **1601 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1600 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09),
+et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 383 670 octets**, 0 référence externe. Coût **+521 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `f6fb04e` (**9 383 149**) :
+**JavaScript +521 · feuille +0 · balisage +0 · images +0 · audio +0**, la somme
+des cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI /
+307 lignes `data:` de part et d'autre**. Borne T10 **inchangée à 9 600 000**,
+marge **216 330 octets, 2,25 %**. Version et build passent à
+**0.99.53 · build 155** — et **les deux restent des CHAÎNES**, vérifié au type :
+`android/app/build.gradle.kts` les lit `as String`, et un nombre y fait tomber le
+job Android à la CONFIGURATION. Le lot touche `src/data/combat.js`,
+`src/sim/combat.js`, `src/sim/deplacement.js`, `src/sim/state.js`,
+`src/ui/defense.js`, `src/ui/monde.js`, `package.json`, **quatorze** fichiers de
+`test/` — dont `pictogramme.test.js`, RÉANCRÉ —, les DEUX témoins, et fait entrer
+`test/bareme-et-rejeu.test.js` et
+`rapports/RAPPORT-lotBAREME-ET-REJEU.md`. **Pas une ligne de `src/render/`,
+`src/son/`, `src/data/` hors `combat.js`, `tools/` ni `art/`** — vérifié au diff.
+⚠⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 32** — vérifié au diff. Aucun champ
+n'entre : trois valeurs de points sont du calibrage, un refus d'amélioration est
+une décision de geste, le chevauchement est une décision de tick, et le bilan de
+territoire est un affichage. **Et c'est le §4 qui aurait fait bouger ce
+numéro** : il ne l'a pas fait, voir plus bas.
+⚠⚠ **LE BARÈME DE DÉFENSE BOUGE DE TROIS VALEURS, ET LA PROVENANCE DU BRIEF EST
+RÉFUTÉE — MESURÉE, PAS SUPPOSÉE.** `merlon` 5 → **3**, `casemate` 8 → **10**,
+`faucheuse` 22 → **30**. Le brief les donne comme un relevé ; confronté à
+`RELEVE-TA-ARSENAL.md`, **aucune des trois n'y figure** — le relevé porte 0, 0 et
+30. La `faucheuse` DEVIENT donc conforme au relevé, et les deux autres sont des
+valeurs d'Ethan sans source antérieure. Le bloc de déclaration écrit les trois
+colonnes côte à côte — relevé, dépôt, arbitrage du 12/09 — pour qu'un lot futur ne
+défende pas un chiffre en croyant défendre une mesure.
+⚠ **ET LES BARRIÈRES NE SONT PAS DES MURS** : `ronce` et `herse` gardent 5. Le
+discriminant est `categorie`, jamais le nom — cinq autres pièces ne bougent pas.
+⚠⚠ **`points` A DEUX LECTEURS, ET LE SECOND EST CELUI QU'ON N'ATTEND PAS.**
+`pointsEngages` borne la composition ; **`forceDeLaDefense` note la puissance
+d'un site entamé**. Une garnison déjà posée qui dépasse son budget est donc
+TOLÉRÉE — Ethan : « on tolère » —, et c'est la discipline de `CODES_TOLERES_AU_CHARGEMENT` :
+on signale, le joueur purge, rien ne se retire en silence.
+⚠⚠ **ET `defense.test.js` T2(b) ÉTAIT UN PROXY QUI NE MESURAIT RIEN — TROUVÉ EN
+LE RÉANCRANT.** Il comparait `floor(290 / 5) = 58` à `NB_EMPLACEMENTS = 72`, un
+plafond **INATTEIGNABLE** : le vrai plafond est
+`NB_RANGEES × OCCUPANTS_MAX_PAR_RANGEE` = **48**. À 3 points le budget en paie
+**96**, donc la géométrie mord la première et le test cessait de distinguer quoi
+que ce soit. Il est **RETOURNÉ** : 26 Merlons payables au niveau 8 — **dérivés de
+`budgetDuNiveau`, jamais écrits** —, et il falsifie l'ancienne règle de face.
+⚠ **L'INVARIANT DOCUMENTÉ DE `src/ui/defense.js` ÉTAIT DONC DOUBLEMENT FAUX**, et
+il est réécrit avec les nombres mesurés : au niveau 50 la bande sature à
+**48 Merlons = 144 points sur 290**, soit **146 impossibles à dépenser** ; et
+`budgetDuNiveau(1)` valant 45, la PREMIÈRE Faucheuse à 30 passe, la SECONDE est
+refusée.
+⚠ **ET LE MONTAGE DE T7 A PERDU SA PRÉMISSE, PAS SON ASSERTION** : dix-huit
+Faucheuses à 30 coûtent 540 pour un budget de 290. Il pose les Casemates sur les
+seules rangées 3 à 5 et **calcule son coût** — 270 ≤ 290 —, plutôt que de
+l'écrire.
+⚠⚠ **UNE PIÈCE ABÎMÉE NE S'AMÉLIORE PLUS, ET LE REFUS S'ACCUMULE AU LIEU DE
+COURT-CIRCUITER.** Ethan : « ça doit bloquer ». Le code `abimee` entre dans
+`problemesDeLAmelioration` (bâtiments) **et** dans
+`problemesDeLAmeliorationDEffectif` (garnison et assaut) — deux portes, une règle.
+⚠ **IL EST POUSSÉ AVANT LA BOUCLE DES COÛTS ET NE REND PAS**, pour que le joueur
+lise les DEUX faits d'un coup : un test asserte `abimee` PUIS un `manque:` sur le
+même appel, là où un `return` hâtif aurait caché le second.
+⚠⚠ **ET LA RAISON EST ARITHMÉTIQUE, PAS UN GOÛT : AMÉLIORER DILUAIT LES DÉGÂTS ET
+RENCHÉRISSAIT LA RÉPARATION.** `degatsMilli` est un ABSOLU de milli-PV quand
+`pvMax` suit le niveau par `facteurMilli` : monter une pièce entamée la rend
+relativement plus saine sans lui rendre un PV, et le prix de sa remise en état
+monte avec son niveau. L'amélioration devenait un demi-soin payant.
+⚠ **AUCUNE PHRASE N'EST ÉCRITE DANS `src/ui/`** : les deux écrans reprennent le
+message du moteur mot pour mot, comme ils le font des huit autres refus.
+⚠ **ET `CH-F T8` N'A PAS EU À ÊTRE RÉÉCRIT — ÉCART AU BRIEF, DÉCLARÉ.** Il monte
+DÉJÀ le niveau dans son montage, donc sa prémisse tient. Ce qui a dû être réparé
+est `AMÉLIORER-PIÈCE` de `state.test.js`, qui abîmait sa pièce AVANT de
+l'améliorer.
+⚠⚠ **« LES VÉHICULES ÉTAIENT À 80 % SUR L'INFANTERIE, PUIS ILS ONT DISPARU. MAIS
+0 DÉTRUIT. » — DEUX RÈGLES, PAS UNE, ET C'EST TOUT LE §3.** Ethan, sur une vraie
+partie. La première moitié est un DESSIN : `caseDepuisMilli` est un `floor`, donc
+une unité à 17 960 est en case 17 pour le moteur et **peinte à 96 % sur la
+case 18** — `yDeRangeeMilli` projette la POSITION, pas l'indice. La seconde est le
+REPLI : bloquée derrière une alliée, l'unité comptait trente ticks inutiles et
+**rentrait à la base sans avoir été détruite**, d'où les zéro pertes.
+⚠⚠ **`structureImmobileSur` DEVIENT `chevauchementInterditSur`, ET ELLE NE
+S'ÉLARGIT QUE DU CÔTÉ ALLIÉ.** « Pas de chevauchement allié ni horizontal ni
+vertical. Totalement interdit. » Un bloqueur **ENNEMI** garde le comportement
+d'aujourd'hui — et c'est mesuré : le témoin de `test/combat.test.js`, un Ratisseur
+bloqué par un Bélier, reste figé à **2 960** et **VIVANT**, test vert sans une
+ligne de changée. L'élargir aux deux camps aurait renversé un arbitrage que
+personne n'a demandé.
+⚠⚠ **ET LE SECOND PRÉDICAT N'EST PAS DÉRIVÉ DU PREMIER, DÉLIBÉRÉMENT.**
+`allieeDevant` est une fonction À PART : `chevauchementInterditSur` est aussi
+vraie devant une STRUCTURE IMMOBILE, où `TICKS_AVANT_REPLI` **DOIT** mordre — une
+unité qui ne peut pas blesser un mur doit rentrer, et `MUR T6 bis` le garde depuis
+le lot MUR. Geler le repli devant une structure aurait fait de ce lot-ci un
+renversement silencieux de celui-là.
+⚠ **LA CONDITION EST NOMMÉE UNE FOIS, DEUX LECTEURS** — `gelParUneAlliee` sert la
+décision de rangement ET celle du repli, et `bloqueeParUneStructure` est renommée
+`chevauchementInterdit` à ses trois sites.
+⚠⚠ **LE DÉPLACEMENT DES CAUSES DE FIN VA DANS TROIS DIRECTIONS, ET NON DANS UNE
+— MESURÉ SUR LES DEUX CENTS TÉMOINS.** `souche` **25 → 27**, `attaquants`
+**173 → 171**, `duree` 2 → 2 ; **six combats changent de cause**, et les trois
+sens y sont : deux cessent de buter sur le plafond de 900 et concluent
+(900 → **429**), deux s'y mettent (523 → **900**), et **deux RASENT leur site**
+(485 → **727**, `attaquants` → `souche`) là où ils y perdaient toute leur armée.
+**182 ticks de fin sur 200 bougent — 135 plus longs, 47 plus courts** : un
+ralentissement uniforme n'aurait pas fait ça. **Aucun barème n'a été touché ; le
+calibrage revient à Ethan.**
+⚠⚠ **ET L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE.** En rendant `src/sim/combat.js`
+SEUL à son état pristine sous le reste du lot, les deux cents témoins rendent
+**0 écart sur 1 600 champs**. Confirmé structurellement : `DEFENSES[].points`
+n'est lu ni par `sim/generateur.js` ni par `sim/combat.js` — seul
+`UNITES[].points` l'est. **Le barème ne déplace donc aucun combat**, et tout
+l'écart vient du §3.
+⚠⚠ **LES TÉMOINS SONT SURCHARGÉS D'UNE COUCHE, JAMAIS RECAPTURÉS, ET LE MOTIF
+N'EST PAS LE COMPTE.** `COMBATS_DEPLACES_PAR_BAREME_ET_REJEU` porte **1 089
+champs sur 1 600, soit 68 %** — sous les 71 % qu'APPROCHE citait pour se
+recapturer — mais surtout : une recapture n'est légitime qu'APRÈS que
+`JOURNAL T1 bis` a prouvé le MOTEUR inchangé, et **le moteur est ce qui change
+ici**. On empile.
+⚠⚠ **ET C'EST L'INVARIANCE DE `T1 bis` QUI DIT CE QUE LE LOT TOUCHE : 1 064
+CHAMPS DÉPLACÉS POUR SEULEMENT DEUX NOUVEAUX À SURCHARGER** — 1 331 → **1 333**.
+Le lot bouge donc le MÊME axe qu'ARRÊT, COLONNE et MUR — la FILE — et pas le tir
+ni le ciblage : ceux-là auraient brisé les 269 causes qui tiennent encore.
+⚠ **`JOURNAL T8` EST RÉANCRÉ DE 2 À 3 ÉCRASÉES, ET CE N'EST PAS UN
+ASSOUPLISSEMENT** : mesuré avant/après sur un arbre pristine, le témoin propre de
+l'exception — la Carapace écrasée — est IDENTIQUE, et une contre-assertion
+`notEqual 2` refuse le retour de l'ancien nombre.
+⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGT-DEUXIÈME COUCHE** — 37 couples, phases
+p07 à p14 —, plus trois tables de rapport : 22 graines sur 25 (les **3, 9 et 15**
+sont identiques AU BIT), **9/25** côté proche et **14/25** côté Ouvrage, la forme
+INVERSE de celle du lot MUR. ⚠ **Aucun scalaire ne bouge** — 17 champs sur 25
+graines sur 25 — et **une seule position** se déplace, celle de la graine 17
+(200,16 → 220,16 en p13), qui **converge** à 280,16 en p14.
+⚠⚠ **LE REJEU D'UN RAID EST ARRÊTÉ, ET C'EST LE BRIEF LUI-MÊME QUI LE DEMANDE.**
+Son §4 écrit : « MESURER LE COÛT AVANT DE LE FAIRE, ET LE PUBLIER […] Si le
+surcoût d'une sauvegarde dépasse ce qui paraît raisonnable, s'arrêter et le dire à
+Ethan plutôt que de tailler dans le montage : un montage incomplet rejoue faux, et
+un rejeu faux est pire qu'aucun rejeu. » **Mesuré, et le script est rejouable** :
+ce qu'un rapport devrait porter en plus est la base du joueur TELLE QU'ELLE ÉTAIT —
+disposition, garnison, armée, dégâts de l'époque —, soit **7 780 o** sur une base
+neuve, **8 908 o** à moitié pleine et **10 312 o** sur une base pleine
+(40 bâtiments, 62 pièces de garnison, 36 d'armée, aux plafonds de budget). La borne
+est les DIX rapports gardés d'`APRES_RAID.rapportsGardes` : **77 800 à 103 120
+octets**, ce qui porte la sauvegarde à **×9,7 · ×9,3 · ×9,0**. Une sauvegarde qui
+décuple pour une fonction de consultation n'est pas « ce qui paraît raisonnable ».
+⚠⚠ **ET LE COÛT IRRÉDUCTIBLE EST LA BASE DU JOUEUR TELLE QU'ELLE ÉTAIT — PROUVÉ,
+PAS ESTIMÉ.** La vague ATTAQUANTE se reconstruit **bit pour bit** depuis le
+rapport déjà rangé : `IDENTIQUES ? true`, budget 46 == 46, graine 3 596 041 939 ==
+3 596 041 939. Il n'y a donc rien à tailler du côté de l'armée, et ce qui reste à
+ranger est exactement ce que le rejeu ne peut pas déduire. **Les options vont à
+Ethan dans le rapport ; aucune n'est prise ici.**
+⚠ **LE T2 DU §7 N'EXISTE DONC PAS, ET SA PLACE EST PRISE PAR LE §5** — deux tests
+entrent quand même, et la substitution est déclarée dans les deux fichiers.
+⚠⚠ **« SIMULATION DE TERRITOIRE EN CAS DE DÉPLACEMENT : ÉCHEC » — ET LA FONCTION
+N'AVAIT RIEN.** `bilanDuTerritoire` est écrite, câblée et testée ; mesuré, elle
+rend **1 305 bilans non nuls sur 1 305** sur cinq graines. Le défaut était que
+`demanderLeDeplacement` **SORTAIT par `refuserLeGeste` avant de peindre** : le
+bilan ne s'affichait donc que sur une case ACCEPTÉE. Or `casesAtteignables` rend
+**ZÉRO case pendant l'heure qui suit un déplacement**, et **0 sur 20 graines
+au-dessus de la rangée 272** — 261 à la rangée 295, 269,9 à la 290, 172,9 à la
+285, 83,2 à la 280, 13,4 à la 275. **Le joueur ne voyait la simulation qu'aux
+instants où il n'en avait pas besoin.**
+⚠⚠ **REPRODUIT DANS CHROMIUM AVANT DE TOUCHER UNE LIGNE, PUIS REVÉRIFIÉ APRÈS.**
+Géométrie du S25 FE, sauvegardes injectées, sur le livrable PRISTINE et sur celui
+du lot. Avant : les trois refus rendent un corps **VIDE**. Après : le refus de
+délai rend « Distance 2 cases · Immobilisée 1 h · Cases gagnées 10 · Cases
+perdues 10 · Solde 0 », celui du voisinage « Distance 3 cases · … · gagnées 1 ·
+perdues 1 », et **le refus géométrique reste VIDE**. Zéro erreur de page,
+débordement 0, accord fermé dans les trois cas.
+⚠⚠ **LE BILAN S'AFFICHE SOUS UN REFUS DE PERMISSION, JAMAIS SOUS UN REFUS DE
+GÉOMÉTRIE — ET LA PARTITION EST FORCÉE PAR LE MOTEUR, PAS CHOISIE.**
+`CODES_DE_GEOMETRIE` entre dans `sim/deplacement.js` : `delaiDuDeplacementVers`
+**LÈVE** sur `hors-carte`, `sur-place` et `trop-loin`, et sur eux seuls —
+`delaiPourLaBase` borne la distance à `[1, porteeMaxCases]`, et ces trois refus
+rendent des distances de 300, 0 et 40 sur une base neuve. Peindre sans ce partage
+remplacerait un fait de JEU par un fait de PROGRAMME.
+⚠ **ET LA CONFIRMATION N'EN REÇOIT PAS, DÉCISION ÉCRITE.** Elle relit les
+problèmes parce que le MONDE a pu bouger entre le toucher et l'accord ; son refus
+ne parle donc pas de la case, et le joueur a déjà vu le bilan un toucher plus tôt.
+**Une ligne suffit à le lui remettre si Ethan tranche autrement.** La FONDATION
+n'en reçoit pas non plus, et c'est l'arbitrage de BASES-2 : `bilanDuTerritoire`
+chiffre ce que gagne une base qui SE DÉPLACE, une base neuve est une autre
+grandeur.
+⚠⚠ **`PC T3` EST RESSERRÉ, PAS BUMPÉ — ET IL AVAIT RAISON DE TOMBER.** Il
+comptait `bilanDuTerritoire(` et exigeait **2** ; le lot en fait entrer un second
+dans la MÊME fonction, sur la branche du refus. Écrire `3` aurait été assouplir :
+un nombre nu autorise un appel n'importe où. Le total se **DÉRIVE** désormais de
+ce que `demanderLeDeplacement` porte, plus sa déclaration — un appel ajouté dans
+`dessiner`, dans `rafraichir` ou dans la confirmation fait tomber l'égalité sans
+qu'on ait eu à le prévoir.
+⚠⚠ **ET UNE ASSERTION DE COÛT A DÛ ÊTRE REFAITE DEUX FOIS AVANT DE MESURER LA
+RÈGLE — C'EST LA LEÇON DU LOT.** La première comparait un compte ABSOLU (2) :
+relevé 11, parce qu'un toucher arme, désarme et repeint. La seconde exigeait
+`coutGeometrie + unBilan === coutPermission` en mesurant `unBilan` par un appel
+direct : relevé **5 + 2 contre 16**, et l'écart n'est pas une faute du code, c'est
+le **MÉMO** — `territoireDeLaFenetre` partage une entrée par graine depuis
+MÉMO-DES-TOURS, donc le premier bilan d'une fenêtre la peuple (onze lectures) et
+le second la relit (deux). Asserter cette égalité aurait mesuré le mémo et non la
+règle. Ce qui est asserté est le ZÉRO : **un refus de géométrie coûte EXACTEMENT
+un repeint nu — 5 contre 5 — donc il ne calcule RIEN**, et un refus de permission
+coûte strictement plus — 16.
+⚠⚠ **DEUX TESTS ENTRENT — `BR T1` ET `BR T2` — ET LE COMPTE PASSE DE 1 599 À
+1 601.** `BR T1` monte le chevauchement et le repli dans `test/bareme-et-rejeu.test.js`,
+et **chaque assertion NOMME sa moitié** pour qu'un lot qui n'en défait qu'une
+sache laquelle ; `BR T2` garde le §5 dans `test/monde.test.js`, **là où vit le
+faux document** — le recopier en aurait fait deux, dont un seul aurait reçu la
+prochaine correction. **Aucune assertion n'a été retirée ni assouplie** ; **trois
+gardes sont RETOURNÉES** (`defense.test.js` T2, `MUR T4`, `MUR T6 bis`) et
+**douze réancrées en écrivant le nombre d'avant à côté de celui d'après**.
+⚠⚠ **LE DOUZIÈME EST `PIC T7`, ET LA RELECTURE HOSTILE L'A TROUVÉ APRÈS COUP.**
+Son ancre écrivait **9 383 149** — juste, c'est le pristine que ce lot mesure
+contre — quand le disque en rend **9 383 670** : les 521 octets du lot, donc un
+centième de la tolérance de 50 000, donc **VERT et faux**. Ce fichier-ci annonçait
+déjà **216 330 octets, 2,25 %** pendant que le test écrivait 216 851 et 2,26 : les
+deux documents se contredisaient. **Second réancrage de `PIC T7` dans la même
+journée**, après VITESSE, et c'est ce qu'on lui demande — « la tolérance garde
+contre la dérive LENTE, pas contre un lot qui sait ce qu'il déplace ».
+⚠ **ET `MUR T4` N'EST PAS AU BRIEF — ÉCART DÉCLARÉ.** Il ne nomme que
+`MUR T6 bis`, la moitié LATÉRALE ; `MUR T4` est la moitié VERTICALE, et elle
+figeait exactement la règle que ce lot renverse. En laisser une des deux aurait
+laissé `main` rouge.
+⚠⚠ **ET LE `sorti = true` DU BRIEF EST AU TICK 38, PAS AU TICK 30 — MESURÉ.**
+Il annonce trente ; l'unité AVANCE réellement pendant les huit premiers ticks
+avant d'être bloquée, donc son compteur ne part pas de zéro au tick zéro. `BR T1`
+porte le nombre mesuré et déclare l'écart.
+⚠⚠ **ONZE FALSIFICATIONS JOUÉES, ONZE CHUTES, ET UNE DOUZIÈME NE MORD PAS ET SE
+DÉCLARE.** Les trois valeurs de barème mordent chacune séparément — le Merlon sur
+`T2` et lui seul, la Faucheuse et la Casemate sur `T7` —, le refus `abimee` mord
+des DEUX côtés (bâtiment puis effectif), et les deux moitiés du §3 se
+DISTINGUENT : le chevauchement rouvert aux alliées fait tomber cinq tests dont
+`MUR T6 bis`, le gel du repli retiré en fait tomber quatre SANS lui. Les quatre du
+§5 nomment chacune sa moitié : le `return` d'avant le lot fait tomber `BR T2`
+**et** `PC T3` ; le partage retiré fait **LEVER** `BR T2` (`distance « 0 »`),
+exactement comme le code l'annonce ; le bilan calculé AVANT le partage fait tomber
+l'assertion de coût **par son nom** ; un appel dans `dessiner` ne fait tomber que
+`PC T3`.
+⚠⚠ **ET DEUX D'ENTRE ELLES ONT DÛ ÊTRE REJOUÉES PARCE QUE LE PATCH N'AVAIT JAMAIS
+ÉTÉ APPLIQUÉ — C'EST LA LEÇON DU LOT.** Un `sed` sur `points: 3, categorie: 'mur'`
+et un autre sur la ligne du repli n'ont rien remplacé : les champs ne sont pas sur
+la ligne que je croyais, et la suite est restée VERTE. Lue sans vérifier, la
+conclusion aurait été « le barème n'est gardé par personne » — faux, `T2` porte le
+pin ET le nombre dérivé. **Une falsification s'ASSERTE appliquée avant que son
+verdict ne soit cru** ; les onze le sont désormais, chacune derrière un
+`assert s.count(v) == 1`.
+⚠ **LA DOUZIÈME EST LA LECTURE « EST-CE LE PREMIER PROBLÈME »** : mesuré sur quatre
+montages, elle rend le MÊME mot que le `some`, parce que `problemesDuDeplacement`
+pousse les trois codes de géométrie EN TÊTE et sans condition. On écrit `some`
+quand même — c'est ce que la ligne VEUT dire —, et *un test qui ne peut tomber sur
+aucun état d'aujourd'hui se déclare, il ne se compte pas*.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/bareme-et-rejeu` ; l'environnement d'exécution épingle la session
+à `claude/new-session-ae87x9` et interdit de pousser ailleurs sans autorisation
+explicite. Le lot y est poussé d'un seul tenant.
+
+**Auparavant, après le lot VITESSE :**
 ⚠⚠ **« UNE HEURE » N'EST PLUS UNE DURÉE, C'EST UNE VITESSE — ET `heuresAuPlancher`
 DISPARAÎT.** Ethan : une pièce à peine égratignée revenait en une heure comme une
 pièce rasée. `ticksDeRetour` prend désormais les PV PERDUS : palier instantané de
@@ -11470,7 +11728,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   70 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   71 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -11482,6 +11740,7 @@ test/                   70 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
+  bareme-et-rejeu
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

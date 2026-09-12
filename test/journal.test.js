@@ -27,6 +27,8 @@ import {
   COMBATS_DEPLACES_PAR_CIBLES_RANGEES,
   COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE,
   COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_BAREME_ET_REJEU,
+  COMBATS_DEPLACES_PAR_BAREME_ET_REJEU_AVANT_PAQUETS,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -152,16 +154,35 @@ function ligneDeTemoin(nom, montage) {
 //
 // ⚠ ET LA CONSIGNE NE CHANGE PAS : **le prochain lot qui touchera au combat
 // devra EMPILER une couche, jamais recapturer.**
+//
+// ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : LA CONSIGNE EST SUIVIE — UNE COUCHE EST
+// POSÉE, LA TABLE N'EST PAS RECAPTURÉE. Le chevauchement allié est interdit et
+// le compteur de repli gelé derrière une alliée : les deux cents combats
+// bougent, et `COMBATS_DEPLACES_PAR_BAREME_ET_REJEU` porte **1 089 champs sur
+// 1 600**, donc **511 restent adossés à la capture d'APPROCHE**. Sous les 71 %
+// qui avaient rendu la recapture inévitable ce jour-là.
+//
+// ⚠⚠ ET UNE RECAPTURE SERAIT ILLÉGITIME ICI QUEL QUE SOIT LE COMPTE : elle ne
+// s'autorise qu'APRÈS que `T1 bis` ait prouvé que le MOTEUR n'a pas bougé, et
+// c'est très exactement le moteur que ce lot change. La preuve ne peut pas être
+// produite ; on empile.
 test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APPROCHE (falsification n° 1)', () => {
   let i = 0;
   let champs = 0;
+  let surcharges = 0;
   for (const [nom, montage] of montagesTemoins(genererSite)) {
     const vu = ligneDeTemoin(nom, montage);
     const attendu = TEMOINS_COMBAT[i];
     assert.ok(attendu !== undefined, `le témoin n'a que ${TEMOINS_COMBAT.length} lignes`);
     assert.equal(vu[0], attendu[0], `le témoin ${i} n'est pas dans l'ordre`);
+    const deplaces = COMBATS_DEPLACES_PAR_BAREME_ET_REJEU[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
-      assert.equal(vu[c], attendu[c],
+      let reference = attendu[c];
+      if (Object.prototype.hasOwnProperty.call(deplaces, c)) {
+        reference = deplaces[c];
+        surcharges += 1;
+      }
+      assert.equal(vu[c], reference,
         `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot APPROCHE`);
       champs += 1;
     }
@@ -170,11 +191,18 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
   assert.equal(i, TEMOINS_COMBAT.length, 'le nombre de combats joués a changé');
   assert.equal(i, 200);
   assert.equal(champs, 200 * 8, 'le nombre de champs comparés a changé');
-  // ⚠ LA CAPTURE REPART DE ZÉRO, DONC IL N'Y A PLUS DE SURCHARGE À COMPTER ICI.
-  // La garde qui comptait les champs couverts descend avec sa couche dans
-  // `T1 bis` ; ce qui reste est la comparaison nue, qui est le cas le plus fort.
-  // Le prochain lot qui déplacera le combat rouvrira une couche, et rouvrira le
-  // compte avec elle.
+  // ⚠⚠ ET LA SURCHARGE SE COMPTE, SINON ELLE POURRAIT TOUT COUVRIR SANS QU'ON LE
+  // VOIE. Le lot APPROCHE avait recapturé, donc il n'y avait plus rien à compter
+  // ici ; le lot BARÈME-ET-REJEU rouvre une couche, et rouvre le compte avec
+  // elle, exactement comme cette ligne l'annonçait. **1 089 champs surchargés,
+  // 511 encore adossés à la capture d'APPROCHE**, et pas un combat intact.
+  //
+  // ⚠ ET LES DEUX MOITIÉS SE TIENNENT : un lot qui grossirait la couche sans le
+  // déclarer fait tomber la première assertion, un lot qui la viderait — donc
+  // qui rouvrirait le chevauchement allié — fait tomber la seconde.
+  assert.equal(surcharges, 1089, `champs surchargés : ${surcharges}`);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU).length, 200);
+  assert.equal(champs - surcharges, 511, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -189,7 +217,7 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
 // couches empilées depuis JOURNAL-DE-COMBAT : 1 331 surchargés, 269 gardés,
 // exactement le compte d'avant le lot. Si ce test tombe un jour, c'est le
 // moteur ou la copie qui a bougé, pas le placement.
-test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre couches d\'avant PAQUETS et celle de MUR', () => {
+test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les six couches empilées', () => {
   let i = 0;
   let champs = 0;
   let surcharges = 0;
@@ -229,6 +257,12 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
           // aussi ce que l'ANCIEN placement rend — c'est mesuré, pas supposé :
           // 127 combats, 686 champs.
           const deplacesMur = COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS[i] ?? {};
+          // ⚠⚠ ET LE LOT BARÈME-ET-REJEU EN AJOUTE UNE SIXIÈME. Même doctrine,
+          // sixième fois : on empile, on ne remplace pas. ⚠ Elle déplace 1 064
+          // champs et n'en ajoute que **DEUX** à la surcharge — 1 062 étaient
+          // déjà couverts par l'une des cinq d'avant. C'est la mesure qui dit
+          // que ce lot déplace le même axe qu'ARRÊT, COLONNE et MUR : la FILE.
+          const deplacesBareme = COMBATS_DEPLACES_PAR_BAREME_ET_REJEU_AVANT_PAQUETS[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
@@ -244,6 +278,9 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
             if (Object.prototype.hasOwnProperty.call(deplacesMur, c)) {
               reference = deplacesMur[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesBareme, c)) {
+              reference = deplacesBareme[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
@@ -251,7 +288,8 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
               || Object.prototype.hasOwnProperty.call(deplacesColonne, c)
               || Object.prototype.hasOwnProperty.call(deplacesRangees, c)
               || Object.prototype.hasOwnProperty.call(deplacesFlottant, c)
-              || Object.prototype.hasOwnProperty.call(deplacesMur, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesMur, c)
+              || Object.prototype.hasOwnProperty.call(deplacesBareme, c)) surcharges += 1;
           }
           i += 1;
     }
@@ -297,13 +335,23 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les quatre 
   // quatre d'avant : le compte est l'UNION des cinq, pas leur somme. Les 269
   // restants sont pour l'essentiel des CAUSES de fin, et l'ancien placement n'en
   // fait basculer aucune ici.
-  assert.equal(surcharges, 1331, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : LA SIXIÈME COUCHE TOUCHE LES DEUX CENTS
+  // COMBATS ET DÉPLACE 1 064 CHAMPS, ET LA SURCHARGE NE MONTE QUE DE **DEUX** —
+  // de **1 331 à 1 333**, les gardés de 269 à **267**. Les 1 062 autres étaient
+  // DÉJÀ surchargés par l'une des cinq d'avant : le compte est l'UNION des six,
+  // pas leur somme. ⚠ Et c'est cette invariance-là qui vaut la mesure : elle dit
+  // que le chevauchement allié déplace le MÊME axe qu'ARRÊT, COLONNE et MUR — la
+  // FILE. Un lot qui aurait touché au tir ou au ciblage aurait fait sauter les
+  // 269, qui sont pour l'essentiel des CAUSES de fin ; quatre seulement bougent.
+  assert.equal(surcharges, 1333, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_DISPOSITION_OUVRAGE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS).length, 127);
-  assert.ok(champs - surcharges === 269, 'le compte des champs encore gardés a changé');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU_AVANT_PAQUETS).length, 200);
+  assert.ok(champs - surcharges === 267, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -575,9 +623,35 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   assert.ok(vus > 500, `montage : ${vus} impacts, trop peu pour mesurer`);
   // ⚠ ET L'EXCEPTION N'EST PAS UNE PORTE OUVERTE : le montage doit vraiment
   // écraser quelqu'un, sinon la garde ci-dessus se relâcherait sans qu'on le
-  // sache. Mesuré : deux pièces écrasées dans la fenêtre de quatre cents ticks.
-  assert.equal(etat.entites.filter((e) => e.ecrase === true).length, 2,
+  // sache.
+  //
+  // ⚠⚠ LE COMPTE PASSE DE DEUX À TROIS AU LOT BARÈME-ET-REJEU, ET CE N'EST PAS
+  // UNE PERTE DE PRÉMISSE — C'EST LA MÊME PRÉMISSE, MESURÉE PLUS LARGE. Le
+  // chevauchement allié est interdit depuis ce lot-là : une attaquante ne flue
+  // plus dans la sous-case de son alliée, ni à la verticale ni à la latérale,
+  // et son compteur de repli est GELÉ tant qu'une alliée la bloque. Les vagues
+  // se rangent donc en file au lieu de se superposer, et elles restent sur le
+  // champ au lieu d'en sortir par le repli : plus d'attaquantes atteignent la
+  // défense, donc plus de pièces se font écraser. Mesuré sur ce montage-ci,
+  // contre le livrable pristine de `main` = `f6fb04e` :
+  //
+  //                          AVANT     APRÈS
+  //   pièces écrasées        2         3
+  //   impacts publiés        1 170     1 243
+  //   ticks de combat        265       304
+  //
+  // ⚠⚠ ET LE TÉMOIN DE L'EXCEPTION ELLE-MÊME NE BOUGE PAS D'UN MILLIÈME : la
+  // Carapace attaquante écrasée est au MÊME endroit des deux côtés — rangée
+  // 3 780, colonne 2 000. Ce qui entre est un SECOND Guetteur de garnison, en
+  // rangée 3 000, et le premier change de colonne (2 800 → 2 440) parce qu'il
+  // ne flue plus latéralement. Le cas « touchée ET écrasée dans le même tick »
+  // reste donc mesuré par la pièce qui le mesurait déjà.
+  assert.equal(etat.entites.filter((e) => e.ecrase === true).length, 3,
     'le montage n\'écrase plus personne : l\'exception ci-dessus ne se mesure plus');
+  // ⚠ ET LE CHIFFRE D'AVANT EST REFUSÉ DE FACE, sans quoi un lot qui rouvrirait
+  // le chevauchement allié repasserait au vert en silence.
+  assert.notEqual(etat.entites.filter((e) => e.ecrase === true).length, 2,
+    'le compte d\'avant le lot BARÈME-ET-REJEU est revenu : le chevauchement allié est rouvert');
   // ⚠⚠ ET LA PART EST BORNÉE, CE QUE LE MONTANT N'EST PAS. C'est la mesure qui
   // justifie `IMPACT_LOURD_MILLIEMES` : un seuil ABSOLU serait ininterprétable,
   // `facteurMilli` mettant dégâts et PV à l'échelle ensemble.

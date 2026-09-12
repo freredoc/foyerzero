@@ -25,13 +25,31 @@ export const NB_RANGEES = DERNIERE_RANGEE - PREMIERE_RANGEE + 1;
 export const NB_COLONNES = GRILLE.largeur;
 
 /**
- * Emplacements totaux : 72.
+ * Emplacements totaux : 72 — et le plafond ATTEIGNABLE en vaut 48.
  *
- * ⚠ CONTRAIREMENT À L'ARSENAL, ils ne plafonnent JAMAIS le budget. Le calcul
- * s'inverse : budget maximal 40 + 5 × 50 = 290, défenseur le moins cher 5
- * points, donc 58 pièces au plus pour 72 emplacements. Ne pas recopier ici
- * l'avertissement de l'Arsenal, il serait faux. Un test verrouille l'invariant
- * pour qu'un futur relèvement du budget le réveille.
+ * ⚠⚠ CE BLOC A AFFIRMÉ LE CONTRAIRE JUSQU'AU 12/09/2026, ET IL ÉTAIT FAUX DEUX
+ * FOIS. Il écrivait « ils ne plafonnent JAMAIS le budget » et en tirait
+ * « 58 pièces au plus pour 72 emplacements » : les 72 ne sont pas atteignables,
+ * `poser` refusant la septième pose d'une rangée par `OCCUPANTS_MAX_PAR_RANGEE`.
+ * Le vrai plafond est `NB_RANGEES × OCCUPANTS_MAX_PAR_RANGEE` = 8 × 6 = **48**.
+ *
+ * ⚠⚠ ET C'EST LA GÉOMÉTRIE QUI MORD LA PREMIÈRE, MESURÉ AVANT LE BARÈME DU
+ * 12/09 : au niveau 50, la bande sature à 48 Merlons à 5 points, soit 240 pour
+ * un budget de 290 — **50 points que rien ne peut dépenser**. L'affirmation
+ * était donc déjà démentie par le code d'à côté, et personne ne l'avait mesurée.
+ * Depuis le barème (Merlon à 3), c'est 144 pour 290, soit 146 inemployables : le
+ * barème ne crée pas le défaut, il le rend bruyant.
+ *
+ * ⚠ LE BUDGET MORD QUAND MÊME, ET C'EST POURQUOI LES DEUX RÈGLES RESTENT.
+ * `budgetDuNiveau(1)` vaut 45 : mesuré, la PREMIÈRE Faucheuse à 30 passe et la
+ * SECONDE est refusée — « 60 points dépasseraient le budget de 45 ». À bas
+ * niveau c'est donc le budget qui refuse, à haut niveau la géométrie. Écrire que
+ * l'une des deux ne sert jamais est ce qui a produit le mensonge ci-dessus.
+ *
+ * ⚠ `T2` de `test/defense.test.js` garde les DEUX bouts et DÉRIVE ses nombres
+ * de `budgetDuNiveau` et de `DEFENSES`, jamais en dur : sa version d'avant
+ * comparait `floor(290 / 5) = 58` à un `NB_EMPLACEMENTS` inatteignable, donc
+ * elle mesurait un proxy et restait verte quoi qu'il arrive.
  */
 export const NB_EMPLACEMENTS = NB_RANGEES * NB_COLONNES;
 

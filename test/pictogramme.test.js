@@ -719,11 +719,23 @@ test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 e
   // la somme des cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et
   // **306 URI / 307 lignes `data:` de part et d'autre**. Le lot ne fait entrer
   // ni une image ni un son : la borne NE BOUGE PAS.
+  // ⚠⚠ ET LE LOT BARÈME-ET-REJEU LE RÉANCRE À SON TOUR, MÊME JOUR, POUR LA MÊME
+  // RAISON. Il coûte **+521 octets**, soit un centième de la tolérance de
+  // 50 000 : la laisser tomberait très exactement sous la dérive LENTE que la
+  // dernière assertion de ce test existe pour refuser, et le pourcentage annoncé
+  // par `CLAUDE.md` cesserait d'être celui du disque. **Deux réancrages le même
+  // jour, et c'est ce qu'on lui demande** — un lot qui sait ce qu'il déplace le
+  // réécrit, quelle que soit la marge qui lui reste.
+  // ⚠ VENTILÉ POSTE PAR POSTE contre le livrable rebâti dans un `git worktree`
+  // sur l'arbre pristine de `main` = `f6fb04e` (**9 383 149**) : **JavaScript
+  // +521 · feuille +0 · balisage +0 · images +0 · audio +0**, la somme des cinq
+  // postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI / 307
+  // lignes `data:` de part et d'autre**.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_383_149;          // remesuré au lot VITESSE, base `87153e3`
-  const MARGE = BORNE - MESURE;      // 216 851 octets — 222 579 avant ce lot
-  assert.equal(MARGE, 216_851);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.26);
+  const MESURE = 9_383_670;          // remesuré au lot BARÈME-ET-REJEU, base `f6fb04e`
+  const MARGE = BORNE - MESURE;      // 216 330 octets — 216 851 avant ce lot
+  assert.equal(MARGE, 216_330);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.25);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

@@ -440,7 +440,16 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // propriété tient toujours, et c'est la seule que ce test mesure : UNE seule
   // durée, sur neuf niveaux** — le lot ne l'a pas rompue, ce qu'il aurait fait
   // si l'arrêt dépendait d'une grandeur qui monte avec le niveau.
-  assert.deepEqual([...ticks], [162], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : 162 → 193, SECOND RÉANCRAGE PAR LE DÉROULÉ
+  // SEUL. L'avant-poste de la graine 99 est composé et disposé exactement comme
+  // hier ; ce qui change est qu'une unité bloquée par une alliée se range sur sa
+  // case et que son compteur de repli est gelé. **La propriété tient toujours, et
+  // c'est la seule que ce test mesure : UNE seule durée, sur neuf niveaux** — le
+  // lot ne l'a pas rompue, ce qu'il aurait fait si le rangement ou le gel
+  // dépendaient d'une grandeur qui monte avec le niveau. Ni la vitesse, ni la
+  // masse, ni le camp n'en dépendent : le gel ne lit que `camp`, le rangement
+  // `camp` et `vitesseMilli`.
+  assert.deepEqual([...ticks], [193], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -542,15 +551,35 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // ASSUMÉ — Ethan a écarté l'option qui aurait décalé l'horloge des vagues
     // pour que l'équilibre ne bouge pas. Rien n'est compensé ; le calibrage
     // revient à Ethan.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 326, butin: { quartz: 0, scorie: 0 }, survivants: 1 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 309, butin: { quartz: 25_179, scorie: 8_393 }, survivants: 6 },
+    //
+    // ⚠⚠ LOT BARÈME-ET-REJEU (12/09) : LES TROIS BOUGENT, ET LE CONTRASTE ENTRE
+    // EUX EST CE QUI ATTRIBUE LE DÉPLACEMENT. Deux règles neuves, sur le
+    // DÉROULÉ seul — ni le flux, ni la position, ni l'entrée : une unité bloquée
+    // par une ALLIÉE se range sur sa case au lieu de fluer jusqu'au contact, et
+    // son compteur de repli est gelé tant que l'alliée tient la case devant.
+    //   A : 326 → 351 ticks, butin toujours nul, et son DERNIER survivant
+    //       disparaît — 1 → 0. Le gel le garde sur le terrain vingt-cinq ticks de
+    //       plus, et il y meurt au lieu de rentrer.
+    //   B : le tick NE BOUGE PAS — 309 des deux côtés — et son butin monte de
+    //       25 179 / 8 393 à 25 200 / 8 400, six survivants des deux côtés. C'est
+    //       l'assaut `blindeLourd`, NEUF unités seulement : peu de files, donc
+    //       presque rien à ranger. **C'est le contraste qui compte** : un
+    //       ralentissement général aurait déplacé B comme les deux autres.
+    //   C : 489 → 509, et son butin passe de 36 / 12 à 1 541 / 513 — quarante-deux
+    //       fois. Les survivants tombent de 5 à 3, et les trois sont RENTRÉS :
+    //       même mécanique vue par l'autre bout, on reste plus longtemps donc on
+    //       tire plus ET on meurt davantage.
+    // ⚠ LES TROIS CAUSES NE BOUGENT PAS, et aucun barème n'a été touché : le
+    // calibrage revient à Ethan.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 351, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 309, butin: { quartz: 25_200, scorie: 8_400 }, survivants: 6 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 489, butin: { quartz: 36, scorie: 12 }, survivants: 5 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 509, butin: { quartz: 1_541, scorie: 513 }, survivants: 3 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

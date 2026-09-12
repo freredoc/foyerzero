@@ -71,6 +71,7 @@ import {
 import {
   problemesDuDeplacement, deplacerLaBase, casesAtteignables,
   ticksAvantProchainDeplacement, delaiDuDeplacementVers, enDuree,
+  CODES_DE_GEOMETRIE,
 } from '../sim/deplacement.js';
 import {
   blocsDeLaDalle, geometrieDuCran, profilDuBloc, COTE_SOURCE, NOMS_DU_SOL,
@@ -3400,10 +3401,27 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * ⚠⚠ ET ELLE SERT LES DEUX GESTES DEPUIS LE LOT BASES-2, avec le titre pour
    * seule différence. Une jumelle aurait été la copie littérale de celle-ci —
    * `CLAUDE.md` §4 le refuse —, et c'est la TABLE qui porte le mot.
+   *
+   * ⚠⚠ ET UN REFUS PEUT PORTER UN CORPS DEPUIS LE LOT BARÈME-ET-REJEU — point 5
+   * d'Ethan, 12/09 : « Simulation de territoire en cas de déplacement : échec ».
+   * Le défaut n'était PAS dans `bilanDuTerritoire`, qui est écrite, câblée et
+   * testée, mais dans le fait que `demanderLeDeplacement` SORTAIT par ici avant
+   * de la peindre : le bilan ne s'affichait donc que sur une case ACCEPTÉE, et
+   * `casesAtteignables` rend ZÉRO case pendant l'heure qui suit un déplacement
+   * et sur toute la carte au-dessus de la rangée 272 — mesuré sur vingt graines.
+   * Le joueur ne pouvait voir la simulation qu'aux instants où il n'en avait pas
+   * besoin.
+   *
+   * ⚠ LE CORPS EST UN ARGUMENT, IL NE SE CALCULE PAS ICI. Cette fonction dit un
+   * refus ; décider ce qui reste affichable sous ce refus appartient à
+   * l'appelant, qui seul sait POURQUOI le geste est refusé. À défaut le corps se
+   * vide, donc les deux autres sites d'appel — la fondation et les deux
+   * confirmations — ne changent pas d'un pixel.
    */
-  function refuserLeGeste(quoi, problemes) {
+  function refuserLeGeste(quoi, problemes, lignes = []) {
     panneauTitre.textContent = TITRE_DU_GESTE[quoi];
     panneauCorps.textContent = '';
+    if (lignes.length > 0) peindreLesLignes(lignes);
     panneauConfirmation.hidden = true;
     panneauRefus.hidden = false;
     panneauRefus.textContent = problemes.map((p) => p.message).join(' ; ');
@@ -3436,7 +3454,53 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     if (etatCourant === null) return;
     const problemes = problemesDuDeplacement(etatCourant, cible);
     if (problemes.length > 0) {
-      refuserLeGeste('deplacement', problemes);
+      // ⚠⚠ LE REFUS GARDE LE DÉLAI ET LE BILAN, SAUF SI LA GÉOMÉTRIE LE REFUSE —
+      // point 5 d'Ethan, 12/09, « Simulation de territoire en cas de
+      // déplacement : échec ». C'est ICI qu'était le défaut : on sortait avant
+      // `peindreLesLignes`, donc la simulation ne s'affichait que sur une case
+      // ACCEPTÉE — et `casesAtteignables` en rend ZÉRO pendant l'heure qui suit
+      // un déplacement comme au-dessus de la rangée 272, mesuré sur vingt
+      // graines. **Rien n'est réécrit** : `bilanDuTerritoire` et
+      // `delaiDuDeplacementVers` sont appelées telles quelles, aux mêmes
+      // arguments, par le même peintre et en UN seul appel — la discipline que
+      // `PC T3` mesure ne bouge pas d'une ligne.
+      //
+      // ⚠⚠ ET LA PARTITION N'EST PAS UN GOÛT, ELLE EST FORCÉE PAR LE MOTEUR.
+      // `delaiDuDeplacementVers` **LÈVE** sur les trois codes de
+      // `CODES_DE_GEOMETRIE` et sur eux seuls — `delaiPourLaBase` borne la
+      // distance à `[1, porteeMaxCases]`, et mesuré sur une base neuve en
+      // rangée 295 ces trois refus rendent des distances de 300, 0 et 40. Les
+      // refus de PERMISSION — `delai`, `voisinage`, `territoire-ennemi` —
+      // laissent passer le délai comme le bilan. Peindre sans ce partage
+      // remplacerait le refus par une levée, c'est-à-dire ferait d'un fait de
+      // JEU un fait de PROGRAMME, ce que l'en-tête de cette fonction interdit
+      // deux paragraphes plus haut.
+      //
+      // ⚠⚠ ON DEMANDE « Y EN A-T-IL UN », ET LA LECTURE « EST-CE LE PREMIER »
+      // RENDRAIT LE MÊME MOT SUR TOUT ÉTAT D'AUJOURD'HUI — mesuré, pas supposé,
+      // et la falsification NE MORD PAS. `problemesDuDeplacement` pousse les
+      // trois codes de géométrie EN TÊTE et sans condition, avant le voisinage,
+      // le territoire et le délai : `codes[0]` géométrique y est donc
+      // rigoureusement équivalent au `some`. Relevé sur les quatre montages —
+      // `sur-place` seul, `hors-carte`, `trop-loin` accompagné de trois refus de
+      // permission, `delai` seul — les deux lectures s'accordent quatre fois sur
+      // quatre. On écrit `some` quand même : c'est ce que la ligne VEUT dire, et
+      // c'est ce qui restera juste le jour où un refus de permission passera
+      // devant. *Un test qui ne peut tomber sur aucun état d'aujourd'hui se
+      // déclare, il ne se compte pas* — celui-ci est donc inscrit ici et n'entre
+      // pas au compte des falsifications du lot.
+      //
+      // ⚠ ET LA CONFIRMATION N'EN REÇOIT PAS, DÉCISION ÉCRITE. Elle relit les
+      // problèmes parce que le MONDE a pu bouger entre le toucher et l'accord —
+      // un raid qui rase déplace la base de vingt rangées — donc son refus ne
+      // parle pas de la case : le joueur a déjà vu le bilan de celle-ci un
+      // toucher plus tôt. Une ligne suffit à le lui remettre si Ethan tranche
+      // autrement.
+      const geometrique = problemes.some((p) => CODES_DE_GEOMETRIE.includes(p.code));
+      refuserLeGeste('deplacement', problemes, geometrique ? [] : [
+        ...lignesDeLAttente(delaiDuDeplacementVers(etatCourant, cible)),
+        ...lignesDuBilan(bilanDuTerritoire(etatCourant, cible)),
+      ]);
       return;
     }
     gesteEnAttente = { quoi: 'deplacement', cible };

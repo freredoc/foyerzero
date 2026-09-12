@@ -3474,6 +3474,134 @@ test('DÉ T9 — un déplacement REFUSÉ ne demande pas d\'accord', () => {
     'la base a bougé malgré le refus');
 });
 
+test('BR T2 — un déplacement REFUSÉ garde son bilan, sauf si la géométrie le refuse', () => {
+  // ⚠⚠ C'EST LE POINT 5 D'ETHAN, 12/09 : « Simulation de territoire en cas de
+  // déplacement : **échec** ». Le défaut n'était NI dans `bilanDuTerritoire`, qui
+  // est écrite, câblée et testée depuis le lot RÈGLES-DE-CARTE, NI dans
+  // `territoireDeLaFenetre` : il était que `demanderLeDeplacement` sortait par
+  // `refuserLeGeste` AVANT de peindre ses lignes. Le bilan ne s'affichait donc
+  // que sur une case ACCEPTÉE — et `casesAtteignables` rend ZÉRO case pendant
+  // l'heure qui suit un déplacement, comme au-dessus de la rangée 272 sur vingt
+  // graines sur vingt. Le joueur ne pouvait voir la simulation qu'aux instants
+  // où il n'en avait pas besoin.
+  //
+  // ⚠⚠ ET C'EST `DÉ T9` QUI AVAIT LA PRÉMISSE SANS L'ASSERTION. Ce test-là monte
+  // exactement le même refus — un vrai déplacement, puis un toucher pendant le
+  // délai — et il asserte le refus, la confirmation fermée et la base immobile,
+  // jamais le CORPS. On reprend son montage et on mesure ce qu'il ne mesurait
+  // pas ; le sien n'est pas touché.
+  //
+  // MONTAGE QUI LE FAIT TOMBER : rendre à `demanderLeDeplacement` son `return`
+  // d'avant le lot — `refuserLeGeste('deplacement', problemes); return;` — fait
+  // tomber la première moitié ; retirer le partage `CODES_DE_GEOMETRIE` fait
+  // LEVER la seconde, `delaiDuDeplacementVers` refusant une distance nulle.
+  const etat = partiePeuplee();
+  const premier = armerEtViser(etat);
+  premier.parId.get('monde-panneau-confirmer').envoyer('click', {});
+  assert.ok(ticksAvantProchainDeplacement(etat) > 0,
+    'montage : le délai n\'a pas été consommé, le refus ne se produira pas');
+  assert.deepEqual(casesAtteignables(etat), [],
+    'montage : des cases restent atteignables, le délai ne mord pas');
+
+  const apres = { ...baseCourante(etat).position };
+  const visee = { rangee: apres.rangee - 1, colonne: apres.colonne };
+  assert.deepEqual(problemesDuDeplacement(etat, visee).map((x) => x.code), ['delai'],
+    'montage : la case visée est refusée pour autre chose qu\'une PERMISSION');
+  // ⚠ ET LES DEUX LECTURES DOIVENT ÊTRE POSSIBLES SUR CETTE CASE, sans quoi le
+  // test mesurerait une absence de donnée et non une absence d'affichage.
+  assert.doesNotThrow(() => delaiDuDeplacementVers(etat, visee),
+    'montage : le délai n\'est pas lisible, il n\'y a rien à afficher');
+  const attendu = bilanDuTerritoire(etat, visee);
+
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const ecran = initialiserEcranMonde(doc);
+  const canvas = doc.getElementById('monde-canvas');
+  ecran.peindre(etat);
+  const halo = cadreDuHalo(appels);
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  toucher(canvas, halo, dpr, ECHELLE_MAX, apres, visee);
+
+  // (1) LE REFUS DE PERMISSION GARDE SON CORPS — les cinq lignes, par la même
+  // porte que sur une case acceptée.
+  assert.equal(parId.get('monde-panneau-refus').hidden, false,
+    'montage : le refus ne se dit plus, ce n\'est pas le cas qu\'on mesure');
+  assert.equal(parId.get('monde-panneau-confirmation').hidden, true,
+    'une confirmation s\'est ouverte sur un déplacement refusé');
+  const lignes = lignesDuCorps(parId);
+  assert.deepEqual(lignes.map((l) => l.quoi),
+    ['Distance', 'Immobilisée', 'Cases gagnées', 'Cases perdues', 'Solde'],
+    'le bilan ne s\'affiche pas sous un refus de permission : c\'est le point 5');
+  assert.equal(lignes[2].valeur, String(attendu.gagnees), 'le bilan affiché n\'est pas celui du moteur');
+  assert.equal(lignes[3].valeur, String(attendu.perdues), 'le bilan affiché n\'est pas celui du moteur');
+
+  // (2) LE REFUS DE GÉOMÉTRIE, LUI, N'EN A PAS — et il ne lève pas. Toucher sa
+  // propre case rend `sur-place`, sur lequel `delaiDuDeplacementVers` LÈVE :
+  // peindre sans le partage ferait d'un fait de JEU un fait de PROGRAMME.
+  assert.deepEqual(problemesDuDeplacement(etat, apres).map((x) => x.code), ['sur-place'],
+    'montage : sa propre case n\'est plus refusée par la géométrie');
+  assert.throws(() => delaiDuDeplacementVers(etat, apres),
+    'montage : le délai ne lève plus sur `sur-place`, la partition ne mesure rien');
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  toucher(canvas, halo, dpr, ECHELLE_MAX, apres, apres);
+  assert.equal(parId.get('monde-panneau-refus').hidden, false, 'le refus géométrique ne se dit pas');
+  assert.deepEqual(lignesDuCorps(parId), [],
+    'un refus de géométrie peint un corps : le partage `CODES_DE_GEOMETRIE` est tombé');
+
+  // (3) ET LE PARTAGE SE MESURE AUSSI EN COÛT, PAS SEULEMENT EN AFFICHAGE. La
+  // mesure est un ÉCART entre deux touchers pris dans les MÊMES conditions —
+  // l'idiome que `PC T3` écrit en toutes lettres, « la mesure est un ÉCART, pas
+  // un compte absolu » : un toucher arme le mode, désarme, et repeint dans les
+  // deux cas, donc tout ce qui n'est pas le bilan se simplifie. La sonde est
+  // `etat.graine`, lue une fois par appel à `forcesDeLOuvrage`, donc DEUX fois
+  // par bilan.
+  //
+  // ⚠ ET C'EST CE QUI INTERDIT DE PEINDRE « LES DEUX BRANCHES » : un toucher
+  // refusé par la géométrie ne doit rien calculer du tout, un toucher refusé par
+  // une permission doit calculer UN bilan, jamais deux.
+  const valeur = etat.graine;
+  let lectures = 0;
+  Object.defineProperty(etat, 'graine', {
+    configurable: true, enumerable: true, get() { lectures += 1; return valeur; },
+  });
+
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  const avantGeometrie = lectures;
+  toucher(canvas, halo, dpr, ECHELLE_MAX, apres, apres);
+  const coutGeometrie = lectures - avantGeometrie;
+  assert.ok(coutGeometrie > 0, 'montage : la sonde ne voit aucune lecture');
+
+  parId.get('monde-panneau-deplacer').envoyer('click', {});
+  const avantPermission = lectures;
+  toucher(canvas, halo, dpr, ECHELLE_MAX, apres, visee);
+  const coutPermission = lectures - avantPermission;
+
+  // ⚠⚠ CE QUI S'ASSERTE EST LE ZÉRO, PAS LE COÛT D'UN BILAN — ET C'EST UNE MESURE
+  // QUI A CORRIGÉ MA PREMIÈRE ÉCRITURE. Elle exigeait
+  // `coutGeometrie + unBilan === coutPermission`, en mesurant `unBilan` par un
+  // appel direct : relevé 5 + 2 contre 16. L'écart n'est pas une faute du code,
+  // c'est le MÉMO — `territoireDeLaFenetre` partage une entrée par graine depuis
+  // le lot MÉMO-DES-TOURS, donc le premier bilan d'une fenêtre la peuple (onze
+  // lectures) et le second la relit (deux). Un appel direct pris APRÈS le toucher
+  // mesure donc un mémo chaud, et asserter cette égalité aurait mesuré le mémo et
+  // non la règle.
+  //
+  // ⚠ CE QUI EST STABLE, ET CE QUI PORTE LA RÈGLE : un refus de GÉOMÉTRIE coûte
+  // EXACTEMENT ce que coûte un repeint nu — il ne calcule donc RIEN —, et un refus
+  // de PERMISSION coûte strictement plus. Relevé : repeint 5, géométrie 5,
+  // permission 16. Une falsification qui calculerait le bilan AVANT de consulter
+  // `CODES_DE_GEOMETRIE`, ou qui peindrait les deux branches, fait tomber la
+  // première des deux.
+  const avantRepeintNu = lectures;
+  ecran.peindre(etat);
+  const repeintNu = lectures - avantRepeintNu;
+  assert.ok(repeintNu > 0, 'montage : un repeint ne coûte rien à la sonde, elle ne mesure rien');
+
+  assert.equal(coutGeometrie, repeintNu,
+    'un refus de géométrie calcule un bilan : il est calculé avant le partage, donc il LÈVERA');
+  assert.ok(coutPermission > coutGeometrie,
+    'un refus de permission ne calcule aucun bilan : il n\'y a rien à afficher sous le refus');
+});
+
 test('DÉ T10 — le compte annoncé est celui de la case VISÉE, pas de la position actuelle', () => {
   // ⚠⚠ UN MONTAGE À COMPTES ÉGAUX NE DISTINGUERAIT PAS LES DEUX LECTURES, et
   // c'est tout l'enjeu de ce test. On cherche donc une base et une case
@@ -3746,16 +3874,30 @@ test('PC T3 — le bilan se calcule UNE fois, à l\'ouverture, et pas à chaque 
   assert.equal(lectures - avantDix, 10 * sansConfirmation,
     'la confirmation ouverte recalcule son bilan à chaque image');
 
-  // ⚠ ET LA SOURCE LE DIT AUSSI : le bilan n'est appelé qu'à un seul endroit, et
-  // ce n'est pas la boucle de dessin. Une falsification qui le recalculerait dans
-  // `dessiner` fait tomber les deux moitiés.
+  // ⚠ ET LA SOURCE LE DIT AUSSI : le bilan n'est appelé QUE depuis la fonction du
+  // toucher, et jamais depuis la boucle de dessin. Une falsification qui le
+  // recalculerait dans `dessiner` fait tomber les deux moitiés.
+  //
+  // ⚠⚠ ET LE COMPTE NE S'ÉCRIT PLUS À LA MAIN, IL SE DÉRIVE — lot
+  // BARÈME-ET-REJEU, 12/09. Il valait `2` en dur, c'est-à-dire la déclaration
+  // plus UN appel ; le point 5 d'Ethan en fait entrer un SECOND dans la même
+  // fonction, sur la branche du refus, et les deux branches sont EXCLUSIVES — un
+  // toucher prend l'une ou l'autre, jamais les deux, ce que la moitié
+  // comportementale de `BR T2` mesure. Écrire `3` aurait été assouplir : le
+  // nombre nu autorise un appel N'IMPORTE OÙ. Le total se compare donc à ce que
+  // `demanderLeDeplacement` porte, plus sa déclaration : un appel ajouté ailleurs
+  // — dans `dessiner`, dans `rafraichir`, dans la confirmation — fait tomber
+  // l'égalité sans qu'on ait à le prévoir.
   const source = sansCommentaires(lire('src', 'ui', 'monde.js'));
-  assert.equal((source.match(/bilanDuTerritoire\(/g) ?? []).length, 2,
-    '`bilanDuTerritoire` n\'a plus exactement un appelant (sa déclaration comprise)');
+  const total = (source.match(/bilanDuTerritoire\(/g) ?? []).length;
+  const dansLeToucher = (extraireFonction(source, 'demanderLeDeplacement')
+    .match(/bilanDuTerritoire\(/g) ?? []).length;
+  assert.equal(dansLeToucher, 2,
+    '`demanderLeDeplacement` ne porte plus les DEUX appels — l\'accepté et le refusé');
+  assert.equal(total, dansLeToucher + 1,
+    '`bilanDuTerritoire` a un appelant hors de `demanderLeDeplacement` (sa déclaration comprise)');
   assert.doesNotMatch(extraireFonction(source, 'dessiner'), /bilanDuTerritoire/,
     'la boucle de dessin recalcule le bilan de territoire');
-  assert.match(extraireFonction(source, 'demanderLeDeplacement'), /bilanDuTerritoire\(/,
-    'le bilan ne se calcule plus au moment où la case est visée');
 });
 
 test('PC T4 — la phrase de menace n\'a pas bougé d\'un mot', () => {
