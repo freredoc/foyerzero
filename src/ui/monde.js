@@ -40,7 +40,7 @@
 
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, ETIQUETTE_CARTE, POI,
-  palierDeNiveau, DEPLACEMENT, TYPES_SITE, ORIGINE_DU_NIVEAU,
+  palierDeNiveau, DEPLACEMENT, FONDATION, TYPES_SITE, ORIGINE_DU_NIVEAU,
 } from '../data/sites.js';
 import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
@@ -58,6 +58,16 @@ import { distanceCarreeCases, casesArrondiesAuSuperieur } from '../sim/points-at
 import { coutDUnRaid } from '../sim/prix-du-raid.js';
 import { problemesDuRaid } from '../sim/raid.js';
 import { nombreDAttaquantes } from '../sim/raid-ouvrage.js';
+// ⚠⚠ LE MOTEUR DE LA FONDATION ÉTAIT ÉCRIT ET TESTÉ SANS QU'AUCUN ÉCRAN NE
+// L'APPELLE — lot BASES-1, 02/09, et c'est le premier trou que son rapport
+// nomme. Ce lot-ci ne décide donc RIEN : il demande (`problemesDeLaFondation`),
+// il annonce (`butinDeLaFondation`, `casesFondables`) et il agit
+// (`fonderUneBase`). Une seconde lecture des règles ici finirait par montrer une
+// case que le geste refuse — c'est exactement ce que `casesAtteignables` évite
+// déjà pour le déplacement, avec le même commentaire.
+import {
+  problemesDeLaFondation, butinDeLaFondation, fonderUneBase, casesFondables,
+} from '../sim/fondation.js';
 import {
   problemesDuDeplacement, deplacerLaBase, casesAtteignables,
   ticksAvantProchainDeplacement, delaiDuDeplacementVers, enDuree,
@@ -1552,6 +1562,60 @@ export function lignesDeLAttente(attente) {
   ];
 }
 
+/**
+ * Les DEUX gestes armés de la carte, et ce que chacun écrit dans le panneau.
+ *
+ * ⚠⚠ UNE TABLE, PAS DEUX CHAÎNES ÉCRITES TROIS FOIS CHACUNE — lot BASES-2,
+ * 11/09. « Déplacer la base » apparaissait déjà à TROIS endroits de ce fichier
+ * (l'armement, la demande, le refus) ; y ajouter « Fonder une base » aux trois
+ * mêmes endroits en aurait fait six, et le premier renommage n'en aurait changé
+ * qu'une partie.
+ *
+ * ⚠⚠ ET LE LIBELLÉ DU BOUTON DE CONFIRMATION EN FAIT PARTIE, PARCE QUE LE
+ * PANNEAU EST PARTAGÉ. `#monde-panneau-confirmer` porte « Déplacer ici » dans le
+ * balisage : réutiliser le bloc sans le reposer ferait dire « Déplacer ici » à
+ * une confirmation de fondation. Le balisage garde sa valeur de DÉPART, et les
+ * deux chemins écrivent la leur.
+ */
+export const TITRE_DU_GESTE = {
+  deplacement: 'Déplacer la base',
+  fondation: 'Fonder une base',
+};
+
+/** Ce que dit le bouton qui engage, selon le geste armé. */
+export const LIBELLE_DU_GESTE = {
+  deplacement: 'Déplacer ici',
+  fondation: 'Fonder ici',
+};
+
+/**
+ * Ce qu'une fondation rapporterait — aucune ligne quand il n'y a rien à écraser.
+ *
+ * ⚠⚠ LE CHIFFRE VIENT DE `butinDeLaFondation`, QUI EST LA FONCTION ÉCRITE POUR
+ * ÇA : elle ANNONCE ce que `fonderUneBase` REFAIT au moment d'agir, par le même
+ * chemin. Le recomposer ici donnerait un second barème, et le panneau finirait
+ * par promettre autre chose que ce que le geste verse — c'est la faute que
+ * `butinSiToutTombe` porte déjà en garde dans son propre commentaire.
+ *
+ * ⚠ `null` NE DONNE AUCUNE LIGNE, jamais une ligne à zéro. Fonder sur une case
+ * vide ne rapporte rien, et « 0 quartz » se lirait comme une promesse ratée
+ * plutôt que comme l'absence de promesse.
+ *
+ * ⚠ ET LA FORME EST CELLE DU PANNEAU D'UNE CIBLE, mot pour mot — « N quartz »
+ * puis « dont scorie ». Deux façons d'écrire le même butin à deux endroits de la
+ * même carte apprendraient deux vocabulaires pour une seule grandeur.
+ *
+ * @param {{quartz: number, scorie: number}|null} butin
+ * @returns {Array<{quoi: string, valeur: string}>}
+ */
+export function lignesDuButinFonde(butin) {
+  if (butin === null) return [];
+  return [
+    { quoi: 'Butin si tout tombe', valeur: `${butin.quartz} quartz` },
+    { quoi: 'dont scorie', valeur: `${butin.scorie} scorie` },
+  ];
+}
+
 export function lignesDuBilan(bilan) {
   return [
     { quoi: 'Cases gagnées', valeur: String(bilan.gagnees) },
@@ -1852,6 +1916,13 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // l'application a été tuée serait la pire façon de perdre la confiance du
   // joueur. L'écran ne sait pas sauvegarder ; il le demande.
   const apresDeplacement = crochets.apresDeplacement ?? (() => {});
+  // ⚠⚠ FONDER SE SAUVEGARDE AUSSI TOUT DE SUITE, ET IL DEMANDE PLUS QUE ÇA —
+  // lot BASES-2. C'est la même irréversibilité qu'un déplacement : une base
+  // posée ne se dépose pas. Mais `fonderUneBase` change EN PLUS la base
+  // COURANTE, donc ce n'est pas l'écran de la base seul qu'il faut rafraîchir —
+  // c'est le traitement d'`apresBascule`, et pour la même raison exactement.
+  // La session décide ; l'écran nomme le geste.
+  const apresFondation = crochets.apresFondation ?? (() => {});
   // ⚠ MÊME PARTAGE POUR LA BASCULE : l'écran écrit l'indice — c'est du jeu —,
   // la session sauvegarde et repeint les autres écrans. Sans ce crochet, un
   // joueur qui bascule depuis la carte reviendrait sur un Chantier montrant
@@ -1875,6 +1946,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   const panneauCorps = $('monde-panneau-corps');
   const panneauRefus = $('monde-panneau-refus');
   const panneauDeplacer = $('monde-panneau-deplacer');
+  const panneauFonder = $('monde-panneau-fonder');
   const panneauConfirmation = $('monde-panneau-confirmation');
   const panneauMenace = $('monde-panneau-menace');
   const panneauConfirmer = $('monde-panneau-confirmer');
@@ -1922,12 +1994,28 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // CHANTIER, et pas un autre : on arme au bouton, on touche une case, et
   // toucher ailleurs désarme sans rien dire. Le joueur n'a qu'une grammaire à
   // apprendre pour les deux écrans.
+  //
+  // ⚠⚠ ET IL Y EN A DEUX DEPUIS LE LOT BASES-2, 11/09 — DÉPLACER ET FONDER —,
+  // MAIS JAMAIS DEUX ARMÉS ENSEMBLE. Le toucher d'une case ne peut pas savoir
+  // lequel des deux gestes il sert : deux modes armés seraient un bogue
+  // SILENCIEUX, où le joueur croirait déplacer sa base et en fonderait une
+  // seconde. `desarmerLesModes` est le SEUL endroit qui les remette à faux, et
+  // les deux armements commencent par l'appeler — armer l'un désarme l'autre,
+  // par construction et non par espérance.
   let modeDeplacement = false;
-  let casesDuDeplacement = [];
-  // ⚠ LA CASE VISÉE, RETENUE ENTRE LE TOUCHER ET L'ACCORD. Elle vaut `null`
-  // partout ailleurs, et c'est ce qui rend `confirmerLeDeplacement` inerte hors
-  // de son moment : un bouton laissé vif par un lot futur ne déplacerait rien.
-  let deplacementEnAttente = null;
+  let modeFondation = false;
+  // ⚠⚠ UNE SEULE LISTE POUR LES DEUX, parce qu'il n'y a jamais qu'un geste armé.
+  // Deux listes seraient deux écritures de la même grandeur — celle que §4 de
+  // `CLAUDE.md` interdit — et la seconde serait la première à rester pleine
+  // derrière un mode désarmé.
+  let casesDuGeste = [];
+  // ⚠ LA CASE VISÉE, RETENUE ENTRE LE TOUCHER ET L'ACCORD, **avec le geste qui
+  // l'a retenue**. Elle vaut `null` partout ailleurs, et c'est ce qui rend les
+  // deux confirmations inertes hors de leur moment : un bouton laissé vif par un
+  // lot futur ne déplacerait et ne fonderait rien. Le champ `quoi` est ce qui
+  // empêche l'accord d'un geste de servir l'autre — le panneau de confirmation
+  // est PARTAGÉ, donc c'est le seul discriminant qui reste.
+  let gesteEnAttente = null;
 
   let etatCourant = null;
   // Les huit planches du sol, une fois décodées, et ce qu'on en dérive par cran.
@@ -2827,24 +2915,31 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   }
 
   /**
-   * Les cases où la base peut aller, tant que le mode est armé.
+   * Les cases que le geste armé peut prendre — déplacement OU fondation.
    *
-   * ⚠ ELLES VIENNENT DE `casesAtteignables`, QUI INTERROGE LA RÈGLE. Les
-   * recalculer ici ferait une seconde liste de règles, et l'écran finirait par
-   * montrer une case que le geste refuse — c'est ce que `casesPosables` de
-   * l'écran Chantier évite déjà, avec le même commentaire.
+   * ⚠ ELLES VIENNENT DE `casesAtteignables` ET DE `casesFondables`, QUI
+   * INTERROGENT LA RÈGLE. Les recalculer ici ferait une seconde liste de règles,
+   * et l'écran finirait par montrer une case que le geste refuse — c'est ce que
+   * `casesPosables` de l'écran Chantier évite déjà, avec le même commentaire.
    *
-   * ⚠ UN LISERÉ, PAS UN APLAT. La carte est déjà pleine ; un aplat sur 316
-   * cases cacherait le terrain et les sites qu'on essaie justement de viser.
+   * ⚠⚠ UN SEUL PEINTRE POUR LES DEUX GESTES, ET LA MÊME TEINTE. Ils s'excluent,
+   * donc il n'y a jamais deux liserés à l'écran en même temps et rien à
+   * distinguer ; une seconde teinte demanderait d'élargir une palette close pour
+   * un cas qui ne peut pas se produire, et un second peintre aurait divergé du
+   * premier au premier réglage d'épaisseur.
+   *
+   * ⚠ UN LISERÉ, PAS UN APLAT. La carte est déjà pleine ; un aplat sur trois
+   * cents cases cacherait le terrain et les sites qu'on essaie justement de
+   * viser.
    */
-  function dessinerCasesDuDeplacement(ox, oy, pas) {
-    if (!modeDeplacement || casesDuDeplacement.length === 0) return;
+  function dessinerCasesDuGeste(ox, oy, pas) {
+    if (casesDuGeste.length === 0) return;
     const epaisseur = Math.max(1, Math.round(pas * EPAISSEUR_HALO));
     ctx.lineWidth = epaisseur;
     ctx.strokeStyle = TEINTES_TERRITOIRE[JOUEUR];
     const demi = epaisseur / 2;
     ctx.beginPath();
-    for (const k of casesDuDeplacement) {
+    for (const k of casesDuGeste) {
       const x = (k.colonne - 1) * pas - ox;
       const y = (k.rangee - 1) * pas - oy;
       if (x < -pas || y < -pas || x > canvas.width || y > canvas.height) continue;
@@ -2899,7 +2994,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // dire.
     dessinerHalo(ox, oy, pas);
     dessinerFleche(ox, oy, pas);
-    dessinerCasesDuDeplacement(ox, oy, pas);
+    dessinerCasesDuGeste(ox, oy, pas);
 
     // ⚠ ON NE RELANCE PAS D'IMAGE TANT QU'UNE PLANCHE MANQUE. Sans elles, aucune
     // dalle ne peut se calculer : la boucle tournerait à vide soixante fois par
@@ -3048,6 +3143,16 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       demanderLeDeplacement({ rangee, colonne });
       return;
     }
+    // ⚠⚠ ET LA FONDATION EN FAIT AUTANT, DANS SA PROPRE BRANCHE — lot BASES-2.
+    // Deux `if` successifs avec `return`, jamais un `if` imbriqué : c'est la
+    // forme du dessus, et les deux modes s'excluent de toute façon par
+    // `desarmerLesModes`. Une case porteuse d'un camp est justement celle qu'on
+    // veut écraser en fondant : sans cette branche, le toucher ouvrirait sa
+    // fiche au lieu de proposer la fondation.
+    if (modeFondation) {
+      demanderLaFondation({ rangee, colonne });
+      return;
+    }
     // Le dernier dessiné est celui du dessus : on le cherche donc à l'envers.
     for (let i = sitesAffiches.length - 1; i >= 0; i -= 1) {
       const site = sitesAffiches[i];
@@ -3189,8 +3294,9 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    */
   function armerLeDeplacement() {
     if (etatCourant === null) return;
+    desarmerLesModes();
     modeDeplacement = true;
-    casesDuDeplacement = casesAtteignables(etatCourant);
+    casesDuGeste = casesAtteignables(etatCourant);
     fermerPanneau();
     // ⚠ LE MOT DIT CE QUI EST VRAI, ET IL SE LIT SUR `casesAtteignables`. Zéro
     // case atteignable signifie que quelque chose s'y oppose — le délai le plus
@@ -3198,40 +3304,112 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // demande sur une case VOISINE, qui est à portée par construction : ce qui
     // reste alors dans la liste est ce qui ne dépend pas de la case.
     panneauRefus.hidden = false;
-    panneauRefus.textContent = casesDuDeplacement.length > 0
+    panneauRefus.textContent = casesDuGeste.length > 0
       ? `Touchez une case à ${DEPLACEMENT.porteeMaxCases} cases au plus.`
       : problemesDuDeplacement(etatCourant, {
         rangee: baseCourante(etatCourant).position.rangee,
         colonne: baseCourante(etatCourant).position.colonne + 1,
       }).map((p) => p.message).join(' ; ');
-    panneauTitre.textContent = 'Déplacer la base';
+    panneauTitre.textContent = TITRE_DU_GESTE.deplacement;
     panneauCorps.textContent = '';
     panneau.hidden = false;
     dessiner();
   }
 
-  function desarmerLeDeplacement() {
-    modeDeplacement = false;
-    casesDuDeplacement = [];
+  /**
+   * Arme le mode de fondation — la jumelle du précédent, au mot près.
+   *
+   * ⚠⚠ ELLE DÉSARME L'AUTRE AVANT DE S'ARMER, et c'est la seule chose qui
+   * empêche deux modes de coexister. Le toucher d'une case ne saurait pas lequel
+   * des deux il sert : le joueur croirait déplacer sa base et en fonderait une
+   * seconde, ou l'inverse — un bogue qui ne dirait rien, ni à l'écran ni au
+   * diff.
+   *
+   * ⚠ ON ARME MÊME QUAND C'EST IMPOSSIBLE, comme au déplacement : « un indice
+   * n'est pas une interdiction » (§4 de CLAUDE.md). C'est en appuyant que le
+   * joueur lit qu'il lui faut d'abord acheter son rang — et le refus le CHIFFRE,
+   * puisque `problemesDeLaFondation` dit aussi s'il a de quoi le payer.
+   *
+   * ⚠⚠ ET LE MOT DU VIDE SE DEMANDE SUR UNE CASE SONDE, à DEUX cases de la base
+   * courante : elle est à portée par construction, donc ce qui reste dans la
+   * liste est ce qui NE DÉPEND PAS de la case — le rang manquant, typiquement.
+   * C'est le seul endroit de la carte où un refus d'ACHAT se lit, et c'est le
+   * moteur qui le veut ainsi : le code `points-insuffisants` de
+   * `problemesDeLaFondation` existe pour dire si le rang manquant est seulement
+   * à portée de bourse.
+   *
+   * ⚠⚠ DEUX CASES, PAS UNE, ET C'EST MESURÉ. Le jumeau du déplacement sonde la
+   * case D'À CÔTÉ ; ici elle tombe dans le 3 × 3 que `problemesDeLaFondation`
+   * refuse, et le message traînait une TROISIÈME phrase — « il faut au moins une
+   * case libre entre deux bases » — qui ne parle que de la sonde et pas du
+   * joueur. Relevé sur deux cents graines : à une case, les 200 portent ce
+   * troisième refus ; à DEUX cases, les 200 rendent exactement les deux clauses
+   * utiles, le rang et son prix. La sonde change de côté près du bord est,
+   * faute de quoi elle sortirait de la carte et le message dirait « hors carte ».
+   */
+  function armerLaFondation() {
+    if (etatCourant === null) return;
+    desarmerLesModes();
+    modeFondation = true;
+    casesDuGeste = casesFondables(etatCourant);
+    fermerPanneau();
+    const ici = baseCourante(etatCourant).position;
+    const sonde = {
+      rangee: ici.rangee,
+      colonne: ici.colonne + 2 <= GEOGRAPHIE.carte.largeur ? ici.colonne + 2 : ici.colonne - 2,
+    };
+    panneauRefus.hidden = false;
+    panneauRefus.textContent = casesDuGeste.length > 0
+      ? `Touchez une case à ${FONDATION.porteeMaxCases} cases au plus.`
+      : problemesDeLaFondation(etatCourant, sonde).map((p) => p.message).join(' ; ');
+    panneauTitre.textContent = TITRE_DU_GESTE.fondation;
+    panneauCorps.textContent = '';
+    panneau.hidden = false;
     dessiner();
   }
 
   /**
-   * Le refus d'un déplacement, dit dans le panneau — et le mode se désarme.
+   * Désarme LES DEUX modes — et c'est le seul endroit qui les remette à faux.
+   *
+   * ⚠⚠ ELLE REMPLACE `desarmerLeDeplacement` PARTOUT, ET LES SEPT SITES D'APPEL
+   * ONT SUIVI — lot BASES-2. Chacun protège la même chose : qu'un mode ne reste
+   * pas armé sous un panneau fermé, derrière la liste des gisements ou sous la
+   * mini-carte, où le prochain toucher sur la carte agirait sans que rien ne
+   * l'ait annoncé. En oublier un rouvrirait, pour la fondation, le défaut que
+   * ces appels ont fermé DEUX FOIS pour le déplacement.
+   *
+   * ⚠ ELLE NE TOUCHE PAS À `gesteEnAttente`, et c'est voulu : un accord en
+   * attente se vide là où il a été pris — `refuserLeGeste`, `renoncerAuGeste`,
+   * les deux confirmations et `fermerPanneau`. Les mélanger ferait disparaître
+   * la case retenue à chaque fermeture de mini-carte.
+   */
+  function desarmerLesModes() {
+    modeDeplacement = false;
+    modeFondation = false;
+    casesDuGeste = [];
+    dessiner();
+  }
+
+  /**
+   * Le refus d'un geste, dit dans le panneau — et les modes se désarment.
    *
    * ⚠ ELLE EXISTE PARCE QUE DEUX CHEMINS Y MÈNENT depuis la confirmation : le
    * toucher de la case, et l'accord donné. Écrire le refus deux fois aurait
    * donné deux formulations du même fait au premier ajustement.
+   *
+   * ⚠⚠ ET ELLE SERT LES DEUX GESTES DEPUIS LE LOT BASES-2, avec le titre pour
+   * seule différence. Une jumelle aurait été la copie littérale de celle-ci —
+   * `CLAUDE.md` §4 le refuse —, et c'est la TABLE qui porte le mot.
    */
-  function refuserLeDeplacement(problemes) {
-    panneauTitre.textContent = 'Déplacer la base';
+  function refuserLeGeste(quoi, problemes) {
+    panneauTitre.textContent = TITRE_DU_GESTE[quoi];
     panneauCorps.textContent = '';
     panneauConfirmation.hidden = true;
     panneauRefus.hidden = false;
     panneauRefus.textContent = problemes.map((p) => p.message).join(' ; ');
     panneau.hidden = false;
-    deplacementEnAttente = null;
-    desarmerLeDeplacement();
+    gesteEnAttente = null;
+    desarmerLesModes();
   }
 
   /**
@@ -3258,11 +3436,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     if (etatCourant === null) return;
     const problemes = problemesDuDeplacement(etatCourant, cible);
     if (problemes.length > 0) {
-      refuserLeDeplacement(problemes);
+      refuserLeGeste('deplacement', problemes);
       return;
     }
-    deplacementEnAttente = cible;
-    panneauTitre.textContent = 'Déplacer la base';
+    gesteEnAttente = { quoi: 'deplacement', cible };
+    panneauTitre.textContent = TITRE_DU_GESTE.deplacement;
     // ⚠⚠ LE BILAN SE CALCULE ICI, UNE FOIS, ET IL SE RETIENT DANS LE DOM —
     // point 5 d'Ethan, 08/09 : « lorsqu'on déplace une base, faire une simulation
     // de territoire ». `territoireDeLaFenetre` peint quelques milliers de cases,
@@ -3294,6 +3472,55 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauMenace.textContent = phraseDesAttaquantes(
       nombreDAttaquantes(etatCourant, cible),
     );
+    // ⚠⚠ LE LIBELLÉ SE POSE À CHAQUE OUVERTURE, ET LES DEUX CHEMINS LE FONT.
+    // Le bloc de confirmation est PARTAGÉ avec la fondation depuis le lot
+    // BASES-2 ; le balisage porte « Déplacer ici » comme valeur de DÉPART, donc
+    // un chemin qui ne l'écrirait pas laisserait le mot de l'autre geste.
+    panneauConfirmer.textContent = LIBELLE_DU_GESTE.deplacement;
+    panneauConfirmation.hidden = false;
+    panneau.hidden = false;
+    dessiner();
+  }
+
+  /**
+   * Le second temps de la fondation : la case touchée est SOUMISE, pas prise.
+   *
+   * ⚠ ON DEMANDE, PUIS ON FONDE — jamais un `try` autour de `fonderUneBase`.
+   * `problemesDeLaFondation` rend une LISTE, `fonderUneBase` LÈVE, et la
+   * différence est la règle du dépôt : une fondation refusée est un fait de JEU
+   * qu'on montre au joueur, une levée est un fait de PROGRAMME.
+   *
+   * ⚠⚠ ET LE CORPS N'ANNONCE PAS LES MÊMES CHOSES QUE LE DÉPLACEMENT. Fonder
+   * n'a **aucun délai** dans le moteur — `fonderUneBase` n'écrit ni
+   * `dernierDeplacementTick` ni son jumeau —, donc lui en inventer un serait
+   * promettre une attente que rien n'applique. Et le BILAN DE TERRITOIRE n'y
+   * entre pas non plus : `bilanDuTerritoire` chiffre ce que gagne une base qui
+   * SE DÉPLACE, c'est-à-dire une influence qui s'en va d'un endroit pour aller à
+   * un autre ; une base NEUVE qui s'AJOUTE est une autre grandeur, et la
+   * réutiliser afficherait un nombre plausible et faux.
+   *
+   * ⚠ CE QUI ENTRE À LA PLACE : le BUTIN, par la fonction écrite pour cela — un
+   * camp ou un avant-poste écrasé rapporte ce qu'il aurait rapporté au raid —,
+   * et la phrase des attaquantes, qui dépend de la CASE et non du geste.
+   */
+  function demanderLaFondation(cible) {
+    if (etatCourant === null) return;
+    const problemes = problemesDeLaFondation(etatCourant, cible);
+    if (problemes.length > 0) {
+      refuserLeGeste('fondation', problemes);
+      return;
+    }
+    gesteEnAttente = { quoi: 'fondation', cible };
+    panneauTitre.textContent = TITRE_DU_GESTE.fondation;
+    // ⚠ UN SEUL APPEL AU PEINTRE, comme au déplacement : c'est la discipline que
+    // `PC T3` mesure — le corps se calcule au TOUCHER, pas à chaque image.
+    peindreLesLignes(lignesDuButinFonde(butinDeLaFondation(etatCourant, cible)));
+    panneauRefus.hidden = true;
+    panneauRefus.textContent = '';
+    panneauMenace.textContent = phraseDesAttaquantes(
+      nombreDAttaquantes(etatCourant, cible),
+    );
+    panneauConfirmer.textContent = LIBELLE_DU_GESTE.fondation;
     panneauConfirmation.hidden = false;
     panneau.hidden = false;
     dessiner();
@@ -3302,14 +3529,22 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   /**
    * Renoncer : on revient à l'état d'avant le toucher.
    *
-   * ⚠ LE MODE SE DÉSARME, la base ne bouge pas, et rien n'a été engagé — un
-   * déplacement ne coûte aucune ressource, et il n'a pas encore consommé son
-   * délai, qui s'écrit dans `deplacerLaBase` et nulle part ailleurs.
+   * ⚠ LE MODE SE DÉSARME, rien ne bouge, et rien n'a été engagé — ni le
+   * déplacement, qui n'a pas encore consommé son délai (il s'écrit dans
+   * `deplacerLaBase` et nulle part ailleurs), ni la fondation, qui ne coûte
+   * aucune ressource et dont le droit reste acheté.
+   *
+   * ⚠⚠ UNE SEULE FONCTION POUR LES DEUX GESTES, ET C'EST UN ÉCART DÉCLARÉ AU
+   * BRIEF, qui en demandait deux. Elle ne fait RIEN qui dépende du geste : vider
+   * l'accord, fermer la confirmation, désarmer, fermer le panneau. Une jumelle
+   * aurait été la copie littérale de celle-ci — la seconde écriture que §4 de
+   * `CLAUDE.md` interdit —, et la première à diverger le jour où renoncer
+   * coûterait quelque chose d'un seul côté.
    */
-  function renoncerAuDeplacement() {
-    deplacementEnAttente = null;
+  function renoncerAuGeste() {
+    gesteEnAttente = null;
     panneauConfirmation.hidden = true;
-    desarmerLeDeplacement();
+    desarmerLesModes();
     fermerPanneau();
   }
 
@@ -3323,25 +3558,62 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    * se trouve déjà. Sans cette relecture, `deplacerLaBase` LÈVERAIT au milieu
    * d'un geste légal au moment où le joueur l'a commencé.
    *
-   * ⚠ ET IL EST INERTE SANS CASE RETENUE. `deplacementEnAttente` vaut `null`
-   * partout ailleurs : un bouton qu'un lot futur laisserait vif ne déplacerait
-   * rien.
+   * ⚠ ET IL EST INERTE SANS CASE RETENUE, **NI SI L'ACCORD PORTE SUR L'AUTRE
+   * GESTE**. `gesteEnAttente` vaut `null` partout ailleurs, et son champ `quoi`
+   * dit lequel des deux l'a retenue : un bouton qu'un lot futur laisserait vif
+   * ne déplacerait rien, et l'accord d'une fondation ne peut pas déplacer la
+   * base par le bouton qu'ils partagent.
    */
   function confirmerLeDeplacement() {
-    if (etatCourant === null || deplacementEnAttente === null) return;
-    const cible = deplacementEnAttente;
-    deplacementEnAttente = null;
+    if (etatCourant === null || gesteEnAttente?.quoi !== 'deplacement') return;
+    const { cible } = gesteEnAttente;
+    gesteEnAttente = null;
     panneauConfirmation.hidden = true;
     const problemes = problemesDuDeplacement(etatCourant, cible);
     if (problemes.length > 0) {
-      refuserLeDeplacement(problemes);
+      refuserLeGeste('deplacement', problemes);
       return;
     }
     deplacerLaBase(etatCourant, cible);
-    desarmerLeDeplacement();
+    desarmerLesModes();
     fermerPanneau();
     centrerSur(baseCourante(etatCourant).position);
     apresDeplacement();
+    dessiner();
+  }
+
+  /**
+   * L'accord donné : la case retenue porte une base de plus.
+   *
+   * ⚠⚠ ON REDEMANDE LES PROBLÈMES, ET LE MOTIF VAUT MOT POUR MOT CELUI DU
+   * DÉPLACEMENT. Entre le toucher et l'accord, la session continue de tourner :
+   * un raid de l'Ouvrage peut se résoudre, et `raserLaBase` DÉPLACE la base de
+   * vingt rangées — la case visée devient alors hors de portée. Sans cette
+   * relecture, `fonderUneBase` LÈVERAIT au milieu d'un geste que le joueur avait
+   * commencé légalement.
+   *
+   * ⚠⚠ ET LA BASCULE EST DANS LE MOTEUR, PAS ICI. `fonderUneBase` fait de la
+   * base neuve la COURANTE et rend son indice ; écrire `etat.baseCourante` dans
+   * l'écran en ferait une seconde écriture de la même grandeur, celle que
+   * `session.js` signale déjà à `surEntreeBase`. On se contente de recentrer sur
+   * la base que le moteur vient de rendre courante — sans quoi le joueur
+   * resterait à regarder l'ancienne.
+   */
+  function confirmerLaFondation() {
+    if (etatCourant === null || gesteEnAttente?.quoi !== 'fondation') return;
+    const { cible } = gesteEnAttente;
+    gesteEnAttente = null;
+    panneauConfirmation.hidden = true;
+    const problemes = problemesDeLaFondation(etatCourant, cible);
+    if (problemes.length > 0) {
+      refuserLeGeste('fondation', problemes);
+      return;
+    }
+    fonderUneBase(etatCourant, cible);
+    desarmerLesModes();
+    fermerPanneau();
+    centrerSur(baseCourante(etatCourant).position);
+    apresFondation();
     dessiner();
   }
 
@@ -3424,6 +3696,13 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     // l'Ouvrage il n'aurait aucun sens, et le panneau retomberait dans la faute
     // qu'il combat depuis le 27/08 : promettre un geste qui n'existe pas là.
     panneauDeplacer.hidden = gesteDuSecondToucher(site) !== 'base';
+    // ⚠⚠ LE MÊME DISCRIMINANT QUE SON JUMEAU, ET PAS UN SECOND — lot BASES-2.
+    // La base qui fonde est la COURANTE, et le panneau de sa propre base est le
+    // seul endroit où le geste a un sens : sur un camp ou une base de l'Ouvrage
+    // il retomberait dans la faute que ce panneau combat depuis le 27/08,
+    // promettre un geste qui n'existe pas là. En écrire une seconde lecture ici
+    // donnerait deux boutons frères qui n'apparaîtraient pas au même endroit.
+    panneauFonder.hidden = gesteDuSecondToucher(site) !== 'base';
     // ⚠⚠ LE DISCRIMINANT N'EST PAS INVENTÉ : C'EST CELUI DE LA FLÈCHE. Le bouton
     // ne doit exister que là où `entrerDansLaCible` a un sens, et l'écran le sait
     // déjà — `ciblageDuSite` rend `null` sur sa propre base comme sur une case
@@ -3568,7 +3847,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
    */
   function ouvrirLaMiniCarte() {
     if (etatCourant === null) return;
-    desarmerLeDeplacement();
+    desarmerLesModes();
     fermerPanneau();
     if (empreinteMiniCarte !== empreinteDeLaMiniCarte(etatCourant)) dessinerLaMiniCarte();
     miniPanneau.hidden = false;
@@ -3615,7 +3894,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     siteOuvert = null;
     ciblageOuvert = null;
     ruineOuverte = null;
-    deplacementEnAttente = null;
+    gesteEnAttente = null;
     const vue = vueDesPois(etatCourant.graine, etatCourant.poisAcquis, selection);
     panneauTitre.textContent = annonce === null ? vue.titre : `${annonce} ${vue.titre}`;
     peindreLesLignes(vue.lignes);
@@ -3624,6 +3903,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauRefus.textContent = '';
     panneauConfirmation.hidden = true;
     panneauDeplacer.hidden = true;
+    panneauFonder.hidden = true;
     panneauAttaquer.hidden = true;
     panneau.hidden = false;
     dessiner();
@@ -3632,7 +3912,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   function ouvrirRuine(ruine) {
     siteOuvert = null;
     ciblageOuvert = null;
-    deplacementEnAttente = null;
+    gesteEnAttente = null;
     ruineOuverte = {
       rangee: ruine.rangee,
       colonne: ruine.colonne,
@@ -3645,6 +3925,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauRefus.textContent = '';
     panneauConfirmation.hidden = true;
     panneauDeplacer.hidden = true;
+    panneauFonder.hidden = true;
     panneauAttaquer.hidden = true;
     panneau.hidden = false;
     dessiner();
@@ -3688,6 +3969,11 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   function fermerPanneau() {
     panneau.hidden = true;
     panneauDeplacer.hidden = true;
+    // ⚠ SON JUMEAU PART AVEC LUI — lot BASES-2. Les deux boutons de geste sont
+    // frères dans le balisage et se montrent au même endroit ; en cacher un seul
+    // laisserait « Fonder une base » sous un panneau fermé, c'est-à-dire le
+    // défaut que la ligne du dessus garde depuis CARTE-C.
+    panneauFonder.hidden = true;
     // ⚠ MÊME MOTIF QUE LA LIGNE AU-DESSUS : il est DANS le panneau aujourd'hui,
     // donc le cacher ne se voit pas — mais le premier lot qui le sortirait de là
     // hériterait d'un bouton d'attaque orphelin, pointant sur une case fermée.
@@ -3698,10 +3984,10 @@ export function initialiserEcranMonde(doc, crochets = {}) {
     panneauPrix.hidden = true;
     // ⚠⚠ ET LA CONFIRMATION PART AVEC, ACCORD EN ATTENTE COMPRIS. Le bouton
     // « Fermer » est une porte de sortie comme une autre : la laisser fermer le
-    // panneau en gardant `deplacementEnAttente` armé rendrait le déplacement
-    // exécutable par un bouton que plus personne ne voit.
+    // panneau en gardant `gesteEnAttente` armé rendrait le déplacement — ou la
+    // fondation — exécutable par un bouton que plus personne ne voit.
     panneauConfirmation.hidden = true;
-    deplacementEnAttente = null;
+    gesteEnAttente = null;
     siteOuvert = null;
     ciblageOuvert = null;
     // ⚠ LA RUINE OUVERTE PART AVEC LE RESTE, ET C'EST CE QUI ARRÊTE SON COMPTE À
@@ -3742,7 +4028,7 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   // ci-dessous garde déjà.
   $('monde-poi').addEventListener('click', () => {
     if (etatCourant === null) return;
-    desarmerLeDeplacement();
+    desarmerLesModes();
     ouvrirLesPois();
   });
 
@@ -3755,14 +4041,24 @@ export function initialiserEcranMonde(doc, crochets = {}) {
 
   $('monde-panneau-fermer').addEventListener('click', () => {
     // ⚠ FERMER DÉSARME AUSSI. Sans ça, le mode resterait armé sous un panneau
-    // fermé, et le prochain toucher sur la carte déplacerait la base sans que
-    // rien ne l'ait annoncé.
-    desarmerLeDeplacement();
+    // fermé, et le prochain toucher sur la carte déplacerait la base — ou en
+    // fonderait une — sans que rien ne l'ait annoncé.
+    desarmerLesModes();
     fermerPanneau();
   });
   panneauDeplacer.addEventListener('click', armerLeDeplacement);
-  panneauConfirmer.addEventListener('click', confirmerLeDeplacement);
-  panneauRenoncer.addEventListener('click', renoncerAuDeplacement);
+  panneauFonder.addEventListener('click', armerLaFondation);
+  // ⚠⚠ UN SEUL BOUTON QUI ENGAGE, DEUX GESTES, ET C'EST `gesteEnAttente` QUI
+  // TRANCHE — lot BASES-2. Le bloc de confirmation est partagé : router sur le
+  // MODE armé serait presque juste et faux au bord, puisqu'un refus désarme
+  // avant que l'accord ne soit donné. Ce qui décide, c'est la case retenue et le
+  // geste qui l'a retenue, et les deux confirmations sont inertes hors du leur.
+  panneauConfirmer.addEventListener('click', () => {
+    if (gesteEnAttente === null) return;
+    if (gesteEnAttente.quoi === 'fondation') confirmerLaFondation();
+    else confirmerLeDeplacement();
+  });
+  panneauRenoncer.addEventListener('click', renoncerAuGeste);
   // ⚠⚠ LE MÊME CHEMIN QUE LE SECOND TOUCHER, PAS UN SECOND. `entrerDansLaCible`
   // garde déjà l'entrée par `problemesDuRaid` et écrit le refus ; un bouton qui
   // appellerait `surEntreeRaid` lui-même contournerait la garde, et le joueur

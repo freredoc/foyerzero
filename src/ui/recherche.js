@@ -26,10 +26,20 @@
 
 import { UNITES, DEFENSES } from '../data/combat.js';
 import { MODULES } from '../data/modules.js';
-import { ARBRE_RECHERCHE, BRANCHES, SPECIAL } from '../data/recherche.js';
+import {
+  ARBRE_RECHERCHE, BRANCHES, SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE,
+} from '../data/recherche.js';
 import {
   nomDuModule, coutMilli, estAcquise, moduleEstAcquis,
   problemesDeLAchat, acheter, formaterPoints,
+  // ⚠⚠ LE NŒUD RÉPÉTABLE PASSE PAR SES PROPRES FONCTIONS, ET C'EST TOUT LE
+  // POINT — lot BASES-2, 11/09. Il n'est PAS dans `ARBRE_RECHERCHE` : lui faire
+  // avaler `acheter` demanderait de changer la signature d'une fonction que
+  // trente et une lignes emploient, et `problemesDeLAchat` le refuserait de
+  // toute façon par le code `inconnue`. Le prix, le rang et le refus se lisent
+  // donc là où `sim/recherche.js` les écrit, et nulle part ailleurs.
+  rangDeLaBaseSuivante, coutDeLaBaseSuivanteMilli,
+  problemesDeLAchatDUneBase, acheterUneBaseDePlus,
 } from '../sim/recherche.js';
 // ⚠ IMPORTÉS, PAS RECOPIÉS. `poserCouches` porte l'inversion d'ordre entre le
 // canevas et `background-image` ; `nomDeLaPieceDeDefense` lit le nom joueur
@@ -189,14 +199,35 @@ export function descriptionDeLaPiece(id) {
  * @param {'unite'|'module'} quoi
  * @returns {{prix: string, acquis: boolean, achetable: boolean, raison: string}}
  */
+/**
+ * Ce qui reste à ÉCRIRE d'une liste de refus — les deux codes que l'écran tait.
+ *
+ * ⚠⚠ LE FILTRE EST ÉCRIT UNE FOIS, ET IL SERT DEUX LIGNES DEPUIS LE LOT BASES-2.
+ * Une pièce de l'arbre et le nœud répétable de l'onglet Spécial taisent les
+ * mêmes deux choses, et pour les mêmes raisons : « Acquis » est un ÉTAT que la
+ * ligne dit déjà autrement, et le manque de points est dit par la COULEUR du
+ * bouton et par le compteur du haut. Deux filtres voisins auraient divergé au
+ * premier code ajouté.
+ *
+ * ⚠ ET IL PORTE SUR LE `code`, JAMAIS SUR LE TEXTE. Une comparaison sur la
+ * phrase se casserait à la première reformulation du moteur, et personne ne
+ * saurait pourquoi la raison est revenue — `RECH-É T4` garde les deux moitiés.
+ *
+ * @param {Array<{code: string, message: string}>} problemes
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function raisonsAffichables(problemes) {
+  return problemes.filter(
+    (p) => p.code !== 'dejaAcquise' && p.code !== 'pointsInsuffisants',
+  );
+}
+
 export function lignePourLAchat(etat, branche, id, quoi) {
   const acquis = quoi === 'unite'
     ? estAcquise(etat, branche, id)
     : moduleEstAcquis(etat, branche, id);
   const problemes = problemesDeLAchat(etat, branche, id, quoi);
-  const restants = problemes.filter(
-    (p) => p.code !== 'dejaAcquise' && p.code !== 'pointsInsuffisants',
-  );
+  const restants = raisonsAffichables(problemes);
   return {
     prix: formaterPoints(coutMilli(branche, id, quoi)),
     acquis,
@@ -306,22 +337,65 @@ export function etatDuCadre(achat) {
   return achat.achetable ? 'achetable' : 'bloque';
 }
 
+/** Ce que porte une ligne de l'onglet Spécial qui n'a pas encore de moteur. */
+export const SANS_MOTEUR = 'pas encore de moteur en jeu';
+
 /**
  * Les quatre lignes de l'onglet Spécial.
  *
- * ⚠ AUCUNE NE S'ACHÈTE, ET C'EST DIT DANS LA LIGNE. Elles n'ont pas de moteur —
- * la deuxième base n'existe pas, les trois soutiens n'ont même pas de prix
- * retenu. Leur donner un bouton prendrait les points du joueur contre rien.
+ * ⚠⚠ UNE SEULE DES QUATRE S'ACHÈTE, ET C'EST UN RENVERSEMENT — lot BASES-2,
+ * 11/09. Ce commentaire disait « aucune ne s'achète […] la deuxième base
+ * n'existe pas » : c'était vrai le 06/09 et faux depuis BASES-1, qui a écrit et
+ * testé `acheterUneBaseDePlus` sans qu'aucun écran ne l'appelle. Le nœud
+ * répétable porte donc désormais son rang, son prix et son bouton ; les TROIS
+ * soutiens n'ont toujours ni moteur, ni prix retenu, ni bouton, et leur donner
+ * l'un des trois prendrait les points du joueur contre rien.
  *
- * @returns {{id: string, libelle: string, prix: string, raison: string}[]}
+ * ⚠⚠ LE RANG SE DEMANDE, IL NE SE RECOMPTE PAS SUR `etat.bases.length`.
+ * `sim/recherche.js` le dit de face : il se compte sur ce qui est ACHETÉ, pas
+ * sur ce qui est FONDÉ — le joueur peut payer son droit et attendre pour
+ * choisir sa case, et un second comptage lui referait payer le rang 2.
+ *
+ * ⚠⚠ ET LE PRIX VIENT DE `coutDeLaBaseSuivanteMilli`, JAMAIS DE `SPECIAL.cout`.
+ * Ce champ est le prix du PREMIER rachat ; le formater à la main afficherait
+ * 2,00 M pour toujours, alors que le nœud est répétable et que chaque rang
+ * coûte cinq demis du précédent. C'est la faute que §4 de `CLAUDE.md` interdit,
+ * vue par le bout de l'affichage : deux lectures de la même grandeur, dont une
+ * seule suit la règle.
+ *
+ * ⚠ LA RAISON PASSE PAR LE MÊME FILTRE QUE L'ARBRE, donc il ne reste RIEN à
+ * écrire sous le prix : `problemesDeLAchatDUneBase` ne rend que
+ * `pointsInsuffisants`, et c'est le bouton ÉTEINT qui le dit — point 14 d'Ethan
+ * du 06/09, appliqué ici comme sur les trente et une autres lignes.
+ *
+ * @param {object} etat
+ * @returns {{id: string, libelle: string, prix: string,
+ *   achetable: boolean, raison: string}[]}
  */
-export function lignesSpeciales() {
-  return Object.keys(SPECIAL).map((id) => ({
-    id,
-    libelle: SPECIAL[id].libelle,
-    prix: SPECIAL[id].cout === null ? '—' : formaterPoints(BigInt(SPECIAL[id].cout) * 1000n),
-    raison: 'pas encore de moteur en jeu',
-  }));
+export function lignesSpeciales(etat) {
+  return Object.keys(SPECIAL).map((id) => {
+    if (id !== NOEUD_BASE_SUPPLEMENTAIRE) {
+      return {
+        id,
+        libelle: SPECIAL[id].libelle,
+        // ⚠ LES TROIS SOUTIENS N'ONT PAS DE PRIX RETENU : un tiret, jamais un
+        // zéro qui se lirait « gratuit ». La branche qui formate un `cout` non
+        // nul reste écrite — elle dira le prix d'un cinquième nœud le jour où
+        // Ethan en arbitrera un, sans lui donner de bouton pour autant.
+        prix: SPECIAL[id].cout === null ? '—' : formaterPoints(BigInt(SPECIAL[id].cout) * 1000n),
+        achetable: false,
+        raison: SANS_MOTEUR,
+      };
+    }
+    const problemes = problemesDeLAchatDUneBase(etat);
+    return {
+      id,
+      libelle: `${SPECIAL[id].libelle} (rang ${rangDeLaBaseSuivante(etat)})`,
+      prix: formaterPoints(coutDeLaBaseSuivanteMilli(etat)),
+      achetable: problemes.length === 0,
+      raison: raisonsAffichables(problemes).map((p) => p.message).join(' ; '),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -385,28 +459,40 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
   });
   marquerPastille(0);
 
-  /** Le bouton d'une ligne : son libellé, son état, et les deux touchers. */
-  function boutonDAchat(branche, id, quoi, vue) {
+  /**
+   * UN bouton, DEUX touchers — le mécanisme, et lui seul.
+   *
+   * ⚠⚠ IL EST EXTRAIT PARCE QUE DEUX BOUTONS L'EMPLOIENT DEPUIS LE LOT BASES-2,
+   * ET IL NE SE DÉDOUBLE PAS. Écrire « un second bouton comme celui-là » à côté
+   * donnerait deux grammaires du même geste, et la première divergence serait
+   * la plus discrète : toucher l'un ne désarmerait pas l'autre, donc DEUX
+   * boutons resteraient armés et le joueur paierait celui qu'il ne regarde pas.
+   *
+   * ⚠ CE QUI CHANGE SE PASSE EN ARGUMENT, ET C'EST TOUT : la clé d'armement, le
+   * libellé au repos, le droit d'acheter, la relecture des refus, et le geste.
+   * `arme` reste UNE variable de la fermeture, `desarmer` reste appelé par les
+   * pastilles du rail, et les deux boutons partagent donc l'un et l'autre.
+   *
+   * ⚠ ON REDEMANDE AVANT D'AGIR. Les points ont pu monter — ou être dépensés
+   * sur un autre panneau — entre les deux touchers ; les deux fonctions d'achat
+   * LÈVENT sur un refus, et une exception non attrapée figerait l'écran.
+   */
+  function boutonADeuxTouchers({ cle, libelle, achetable, acquis = false, verifier, agir }) {
     const bouton = doc.createElement('button');
     bouton.type = 'button';
     bouton.className = 'acheter';
-    const libelle = vue.acquis ? 'Acquis' : vue.prix;
     bouton.textContent = libelle;
-    bouton.classList.toggle('acquis', vue.acquis);
-    bouton.disabled = !vue.achetable;
-    if (vue.achetable) {
+    bouton.classList.toggle('acquis', acquis);
+    bouton.disabled = !achetable;
+    if (achetable) {
       bouton.addEventListener('click', () => {
-        const cle = `${branche}/${id}/${quoi}`;
         if (arme !== null && arme.cle === cle) {
           desarmer();
-          // ⚠ ON REDEMANDE AVANT D'AGIR. Les points ont pu monter — ou être
-          // dépensés sur l'autre panneau — entre les deux touchers ; `acheter`
-          // lève sur un refus, et une exception non attrapée figerait l'écran.
-          if (problemesDeLAchat(etatCourant, branche, id, quoi).length > 0) {
+          if (verifier().length > 0) {
             peindre(etatCourant);
             return;
           }
-          acheter(etatCourant, branche, id, quoi);
+          agir();
           if (apresAchat !== undefined) apresAchat();
           peindre(etatCourant);
           return;
@@ -418,6 +504,35 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
       });
     }
     return bouton;
+  }
+
+  /** Le bouton d'une ligne de l'arbre — un appelant mince du mécanisme. */
+  function boutonDAchat(branche, id, quoi, vue) {
+    return boutonADeuxTouchers({
+      cle: `${branche}/${id}/${quoi}`,
+      libelle: vue.acquis ? 'Acquis' : vue.prix,
+      acquis: vue.acquis,
+      achetable: vue.achetable,
+      verifier: () => problemesDeLAchat(etatCourant, branche, id, quoi),
+      agir: () => acheter(etatCourant, branche, id, quoi),
+    });
+  }
+
+  /**
+   * Le bouton du nœud répétable — l'autre appelant, et le seul de l'onglet.
+   *
+   * ⚠ SA CLÉ SE DÉRIVE DE L'IDENTIFIANT, elle ne se retape pas : `special/` plus
+   * le nom du nœud. Deux boutons ne peuvent pas porter la même clé, sans quoi
+   * armer l'un armerait l'autre.
+   */
+  function boutonDeLaBase(ligne) {
+    return boutonADeuxTouchers({
+      cle: `special/${ligne.id}`,
+      libelle: ligne.prix,
+      achetable: ligne.achetable,
+      verifier: () => problemesDeLAchatDUneBase(etatCourant),
+      agir: () => acheterUneBaseDePlus(etatCourant),
+    });
   }
 
   /**
@@ -506,9 +621,21 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
     }
     const special = corps.special;
     special.textContent = '';
-    for (const ligne of lignesSpeciales()) {
+    for (const ligne of lignesSpeciales(etat)) {
       const bloc = doc.createElement('div');
       bloc.className = 'piece';
+      // ⚠⚠ LE MÊME VOCABULAIRE D'ÉTAT QUE LES DEUX AUTRES PANNEAUX, ET PAS UNE
+      // RÈGLE CSS DE PLUS — lot BASES-2. `#recherche-special` n'a aucun style
+      // propre ; en lui écrivant une classe à lui, il aurait fallu peindre une
+      // seconde fois les trois codes visuels du point 16, qui auraient divergé
+      // au premier réglage de teinte.
+      //
+      // ⚠ ET « ACQUIS » N'EXISTE PAS ICI : le nœud est RÉPÉTABLE, donc il n'est
+      // jamais acquis — il est achetable ou il ne l'est pas. Les trois soutiens
+      // tombent sur `bloque`, ce qu'ils sont de fait.
+      bloc.classList.add(CLASSE_DE_L_ETAT[etatDuCadre({
+        acquis: false, achetable: ligne.achetable,
+      })]);
       const rangee = doc.createElement('div');
       rangee.className = 'rangee';
       const pastille = doc.createElement('span');
@@ -516,14 +643,32 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
       pastille.textContent = '★';
       const nom = doc.createElement('b');
       nom.textContent = ligne.libelle;
-      const prix = doc.createElement('span');
-      prix.className = 'prix';
-      prix.textContent = ligne.prix;
-      rangee.append(pastille, nom, prix);
-      const raison = doc.createElement('div');
-      raison.className = 'raison';
-      raison.textContent = ligne.raison;
-      bloc.append(rangee, raison);
+      // ⚠⚠ LE BOUTON PORTE LE PRIX, ET IL REMPLACE LE `span.prix` — jamais les
+      // deux. C'est ce que les trente et une lignes de l'arbre font déjà : un
+      // prix écrit deux fois dans la même rangée serait le premier à diverger,
+      // et le joueur lirait le rang 2 à côté du prix du rang 3.
+      //
+      // ⚠ UNE LIGNE SANS MOTEUR GARDE SON PRIX EN TEXTE, sans bouton : elle
+      // ANNONCE, elle ne propose pas.
+      rangee.append(pastille, nom);
+      if (ligne.id === NOEUD_BASE_SUPPLEMENTAIRE) {
+        rangee.appendChild(boutonDeLaBase(ligne));
+      } else {
+        const prix = doc.createElement('span');
+        prix.className = 'prix';
+        prix.textContent = ligne.prix;
+        rangee.appendChild(prix);
+      }
+      bloc.appendChild(rangee);
+      // ⚠ PAS DE `div.raison` VIDE, comme dans `cadreDOM` : depuis que le manque
+      // de points est écarté, la ligne du nœud n'a plus rien à dire, et peindre
+      // le cadre quand même laisserait un blanc lu comme un défaut.
+      if (ligne.raison !== '') {
+        const raison = doc.createElement('div');
+        raison.className = 'raison';
+        raison.textContent = ligne.raison;
+        bloc.appendChild(raison);
+      }
       special.appendChild(bloc);
     }
   }

@@ -30,7 +30,7 @@ import { rosterDefensif } from '../src/data/couts-militaires.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
   problemesDeLAchat, problemesDeLAchatDUneBase, acheter, acquisesDe,
-  modulesDebloquesDuJoueur, formaterPoints,
+  modulesDebloquesDuJoueur, formaterPoints, coutDeLaBaseSuivanteMilli,
 } from '../src/sim/recherche.js';
 import {
   creerEtat, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION, niveauDeCommandement,
@@ -4339,27 +4339,133 @@ test('T15 — l\'en-tête montre les points, et une peinture désarme tout', () 
   assert.ok(!estAcquise(etat, 'offense', 'belier'), 'le premier toucher a payé après une peinture');
 });
 
-test('T15 — l\'onglet Spécial s\'affiche et ne s\'achète pas', () => {
+// ⚠⚠ `T15` EST RETOURNÉ, PAS RETIRÉ — lot BASES-2, 11/09. Il s'appelait
+// « l'onglet Spécial s'affiche et NE S'ACHÈTE PAS », et son propre montage de
+// falsification était écrit en toutes lettres : « réutiliser `boutonDAchat` pour
+// la deuxième base ». C'est exactement ce que ce lot fait, et sur demande
+// d'Ethan. La garde exigeait ZÉRO bouton sur les quatre lignes ; elle en exige
+// désormais **exactement un**, et elle FALSIFIE L'ANCIENNE RÈGLE DE FACE en
+// nommant la ligne qui doit le porter — sans quoi un lot futur qui retirerait le
+// bouton de la base repasserait au vert sans que rien ne le dise.
+//
+// ⚠ CE QU'IL GARDAIT DE VRAI RESTE, MOT POUR MOT : les trois soutiens n'ont ni
+// bouton ni prix retenu — un tiret, jamais un zéro qui se lirait « gratuit » —
+// et leur raison dit qu'il n'y a pas encore de moteur. Ce sont les seules
+// lignes du dépôt dont l'écran ANNONCE un prix sans le proposer.
+test('T15 — l\'onglet Spécial : une ligne s\'achète, trois annoncent sans moteur', () => {
   const doc = fauxDocument();
   const ecran = initialiserEcranRecherche(doc);
-  ecran.peindre(partie(String(10n ** 15n)));
-  // ⚠ AUCUN BOUTON, MÊME AVEC DE QUOI PAYER MILLE FOIS. Les quatre lignes n'ont
-  // pas de moteur ; leur donner un bouton prendrait les points contre rien.
-  // MONTAGE QUI LE FAIT TOMBER : réutiliser `boutonDAchat` pour la deuxième
-  // base, dont le classeur donne pourtant un prix.
-  for (const bloc of piecesDuPanneau(doc, 'special')) {
+  const etat = partie(String(10n ** 15n));
+  ecran.peindre(etat);
+
+  const blocs = piecesDuPanneau(doc, 'special');
+  assert.equal(blocs.length, 4, 'le panneau Spécial n\'a plus quatre lignes');
+
+  // ⚠ LE PARTAGE SE COMPTE, IL NE S'ÉNUMÈRE PAS PAR UN NOM ÉCRIT À LA MAIN : une
+  // liste de trois identifiants recopiée ici vieillirait au cinquième nœud.
+  const avecBouton = blocs.filter(
+    (b) => rangeeDuCadre(b).children.some((c) => c.tagName === 'BUTTON'),
+  );
+  assert.equal(avecBouton.length, 1,
+    `${avecBouton.length} lignes du panneau Spécial portent un bouton, 1 attendue`);
+
+  for (const bloc of blocs) {
     const rangee = rangeeDuCadre(bloc);
-    assert.ok(!rangee.children.some((c) => c.tagName === 'BUTTON'),
-      'une ligne du panneau Spécial porte un bouton d\'achat');
     const raison = bloc.children.find((c) => c.className === 'raison');
-    assert.match(raison.textContent, /pas encore de moteur/);
+    if (rangee.children.some((c) => c.tagName === 'BUTTON')) {
+      // La ligne qui s'achète : le bouton PORTE le prix — jamais un second
+      // `span.prix` à côté, qui divergerait au premier changement de rang.
+      assert.ok(!rangee.children.some((c) => c.className === 'prix'),
+        'la ligne qui s\'achète porte son prix DEUX fois');
+      assert.match(boutonDe(rangee).textContent, /M$/,
+        'le bouton de la base n\'annonce pas un prix');
+      // Et avec de quoi payer mille fois, elle n'a RIEN à reprocher au joueur.
+      assert.equal(raison, undefined,
+        'la ligne achetable peint une raison alors qu\'elle est achetable');
+    } else {
+      assert.match(raison.textContent, /pas encore de moteur/);
+    }
   }
+
   // Trois lignes sur quatre n'ont même pas de prix retenu : elles affichent un
   // tiret, jamais un zéro qui se lirait « gratuit ».
-  const prix = lignesSpeciales().map((l) => l.prix);
+  const prix = lignesSpeciales(etat).map((l) => l.prix);
   assert.equal(prix.filter((p) => p === '—').length, 3);
   assert.equal(prix.filter((p) => p !== '—').length, 1);
-  assert.ok(prix.includes('2,00M'), 'la deuxième base a perdu son prix');
+  assert.ok(prix.includes('2,00M'), 'la base supplémentaire a perdu son prix');
+});
+
+// ---------------------------------------------------------------------------
+// Lot BASES-2 — le droit de fonder s'achète pour de bon
+// ---------------------------------------------------------------------------
+
+test('BASES-2 T1 — la base supplémentaire s\'achète en deux touchers, et le rang suit', () => {
+  const doc = fauxDocument();
+  const etat = partie('0');
+
+  // ⚠⚠ LE MONTAGE DEMANDE SON PRIX AU MOTEUR, IL NE LE RETAPE PAS. Écrire
+  // « 2 000 000 000 » ici ferait tomber ce test le jour où Ethan arbitre un
+  // autre prix de départ — pour une raison qui ne le regarde pas —, et surtout
+  // il cesserait de mesurer ce qu'il mesure : que l'écran DEMANDE le prix au
+  // lieu de lire `SPECIAL[id].cout`, qui est celui du rang 2 et de lui seul.
+  const duRang2 = coutDeLaBaseSuivanteMilli(etat);
+  // ⚠ ASSEZ POUR LE RANG 2, PAS POUR LE RANG 3 : c'est cet écart qui rend
+  // l'assertion (e) falsifiable. Sans lui, le bouton resterait vif après
+  // l'achat et « il s'éteint faute de points » ne dirait rien.
+  etat.recherche.pointsMilli = (duRang2 * 2n).toString();
+  assert.ok(problemesDeLAchatDUneBase(etat).length === 0,
+    'le montage ne peut même pas payer le rang 2');
+
+  const ecran = initialiserEcranRecherche(doc);
+  ecran.peindre(etat);
+
+  // (a) La ligne porte un bouton, les trois soutiens n'en ont pas.
+  const cadres = piecesDuPanneau(doc, 'special');
+  const ids = Object.keys(SPECIAL);
+  const cadreDeLaBase = cadres[ids.indexOf(NOEUD_BASE_SUPPLEMENTAIRE)];
+  const bouton = boutonDe(rangeeDuCadre(cadreDeLaBase));
+  assert.equal(
+    cadres.filter((c) => rangeeDuCadre(c).children.some((x) => x.tagName === 'BUTTON')).length,
+    1, 'un soutien a gagné un bouton');
+  assert.match(rangeeDuCadre(cadreDeLaBase).children.find((c) => c.tagName === 'B').textContent,
+    /rang 2/, 'le libellé n\'annonce pas le rang que l\'achat ouvrirait');
+
+  // (b) UN SEUL TOUCHER N'ACHÈTE RIEN. Deux milliards de points ne partent pas
+  // sur un frôlement — c'est la grammaire des trente et une autres lignes.
+  bouton.click();
+  assert.equal(bouton.textContent, LIBELLE_CONFIRMER);
+  assert.equal(etat.recherche.basesAutorisees, 1, 'le premier toucher a acheté');
+  assert.equal(etat.recherche.pointsMilli, (duRang2 * 2n).toString(),
+    'le premier toucher a débité');
+
+  // (c) Le second ouvre le rang et débite EXACTEMENT le prix d'avant l'achat.
+  bouton.click();
+  assert.equal(etat.recherche.basesAutorisees, 2, 'le second toucher n\'a pas ouvert le rang');
+  assert.equal(BigInt(etat.recherche.pointsMilli), duRang2 * 2n - duRang2,
+    'le débit n\'est pas celui qui était annoncé');
+
+  // (d) Le rang suivant est le 3, et son prix vaut ×5 ÷2 — jamais ×2,5 en
+  // flottant, ce que `BASES-1 T3` garde côté moteur et que l'écran doit SUIVRE.
+  const lignes = lignesSpeciales(etat);
+  const ligne = lignes.find((l) => l.id === NOEUD_BASE_SUPPLEMENTAIRE);
+  assert.match(ligne.libelle, /rang 3/, 'le libellé est resté au rang qu\'on vient d\'acheter');
+  assert.equal(coutDeLaBaseSuivanteMilli(etat), (duRang2 * 5n + 1n) / 2n);
+  assert.equal(ligne.prix, formaterPoints(coutDeLaBaseSuivanteMilli(etat)),
+    'le prix affiché n\'est pas celui du rang suivant');
+
+  // (e) Le bouton s'éteint faute de points, et AUCUNE raison ne répète le
+  // manque : le prix est déjà là, et le compteur du haut aussi. C'est le
+  // filtre que `RECH-É T4` garde pour les trente et une autres lignes.
+  assert.equal(ligne.achetable, false, 'la ligne reste achetable sans les points');
+  assert.equal(ligne.raison, '', `raison répétée : « ${ligne.raison} »`);
+  assert.ok(problemesDeLAchatDUneBase(etat)[0].code === 'pointsInsuffisants',
+    'le montage ne mesure plus le manque : le moteur accepte encore');
+  ecran.peindre(etat);
+  const apres = piecesDuPanneau(doc, 'special')[ids.indexOf(NOEUD_BASE_SUPPLEMENTAIRE)];
+  assert.equal(apres.children.find((c) => c.className === 'raison'), undefined,
+    'la ligne peint une raison qui répète le manque de points');
+  assert.ok(apres.classList.contains(CLASSE_DE_L_ETAT.bloque),
+    'la ligne ne se voit pas éteinte alors qu\'elle ne peut plus être payée');
 });
 
 // ---------------------------------------------------------------------------

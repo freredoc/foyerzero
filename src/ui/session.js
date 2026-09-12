@@ -1572,6 +1572,26 @@ export function initialiserSession(doc) {
       sauvegarder();
       rafraichirLaBase();
     },
+    // ⚠⚠ FONDER SE SAUVEGARDE TOUT DE SUITE, COMME UNE POSE — lot BASES-2. C'est
+    // une action irréversible du joueur : la perdre parce que le système a tué
+    // l'application serait la pire façon de perdre sa confiance, et c'est mot
+    // pour mot ce que `CLAUDE.md` §6 dit de la pose.
+    //
+    // ⚠⚠ ET C'EST `rafraichirTousLesEcrans`, PAS `rafraichirLaBase` : la base
+    // courante a CHANGÉ. `fonderUneBase` fait de la neuve la courante, donc le
+    // Chantier, l'Offense et la barre du bas parlent tous d'une autre base qu'à
+    // l'image d'avant — c'est le traitement d'`apresBascule` juste au-dessus,
+    // pour la même raison.
+    //
+    // ⚠ ET IL N'Y A PAS DE SON, CE QUI EST UN MANQUE DÉCLARÉ, PAS UN CHOIX.
+    // `order_player_move` appartient au DÉPLACEMENT — c'est écrit deux lignes
+    // plus haut — et en détourner un autre de sa famille est exactement ce que
+    // ce fichier s'interdit là. Le pack n'a pas de son de fondation ; en faire
+    // un demande un master, donc un lot d'assets.
+    apresFondation: () => {
+      sauvegarder();
+      rafraichirTousLesEcrans();
+    },
     // ⚠ TOUCHER UNE AUTRE DE SES BASES SUR LA CARTE LA REND COURANTE : c'est le
     // même geste que les flèches de bascule, donc le même traitement.
     apresBascule: () => {

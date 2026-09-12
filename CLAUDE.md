@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **11/09/2026**, version 0.99.50 · build 152.
+Dernière révision : **11/09/2026**, version 0.99.51 · build 153.
 
 ---
 
@@ -42,7 +42,155 @@ Dernière révision : **11/09/2026**, version 0.99.50 · build 152.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 11/09/2026 (après le lot RAPPORTS-ET-PLEIN), à confronter :**
+**Référence au 11/09/2026 (après le lot BASES-2), à confronter :**
+⚠⚠ **LE MOTEUR DE FONDATION EXISTAIT DEPUIS BASES-1 ET AUCUN ÉCRAN NE
+L'APPELAIT — C'EST LE PREMIER TROU QUE SON PROPRE RAPPORT NOMMAIT.**
+`problemesDeLaFondation`, `butinDeLaFondation` et `fonderUneBase` sont écrits et
+testés depuis le 02/09 ; le droit de fonder, lui, ne s'achetait pas non plus —
+`T15` de `test/recherche.test.js` s'appelait « l'onglet Spécial s'affiche et
+**ne s'achète pas** ». `npm test` rend **1581 pass / 0 fail** au sens de la garde
+de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict
+mesuré est **1580 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 377 421 octets**, 0 référence externe. Coût **+5 235 octets, SANS UN OCTET
+D'IMAGE NI DE SON**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `5d654d8` (**9 372 186**) :
+**JavaScript +5 105 · balisage +104 · feuille +26 · images +0 · audio +0**, la
+somme des cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et **306
+URI de part et d'autre**. Borne T10 **inchangée à 9 600 000**, marge **222 579
+octets, 2,32 %**. Version et build passent à **0.99.51 · build 153**. Le lot
+touche `src/index.src.html`, `src/sim/fondation.js`, `src/ui/monde.js`,
+`src/ui/recherche.js`, `src/ui/session.js`, `package.json`, trois fichiers de
+`test/`, et fait entrer `rapports/RAPPORT-lotBASES-2.md`. **Pas une ligne de
+`src/data/`, `src/render/`, `src/son/`, `src/sim/` hors `fondation.js`, `tools/`
+ni `art/`** — vérifié au diff.
+⚠⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 32** — vérifié au diff : `bases`,
+`baseCourante` et `recherche.basesAutorisees` sont dans la sauvegarde depuis la
+v24, et ce lot ne fait que les ATTEINDRE. Un écran qui ouvre un moteur n'ajoute
+aucun champ.
+⚠⚠ **`T15` EST RETOURNÉ, PAS RETIRÉ, ET SON PROPRE MONTAGE DE FALSIFICATION ÉTAIT
+CE LOT.** Il écrivait en toutes lettres « MONTAGE QUI LE FAIT TOMBER : réutiliser
+`boutonDAchat` pour la deuxième base, dont le classeur donne pourtant un prix ».
+Il exigeait ZÉRO bouton sur les quatre lignes du Spécial ; il en exige
+**exactement un**, nomme la ligne qui doit le porter — sans quoi un lot futur qui
+le retirerait repasserait au vert —, et garde ce qu'il gardait de vrai : les
+trois soutiens n'ont ni bouton ni prix retenu, un tiret jamais un zéro, et leur
+raison dit qu'il n'y a **pas encore de moteur**.
+⚠⚠ **LE PRIX ET LE RANG SE DEMANDENT AU MOTEUR, JAMAIS À `SPECIAL[id].cout`.**
+Cette valeur est celle du rang 2 et de lui seul ; le nœud est RÉPÉTABLE et son
+prix vaut ×5 ÷2 par rachat. `lignesSpeciales` prend donc l'ÉTAT et lit
+`rangDeLaBaseSuivante` et `coutDeLaBaseSuivanteMilli` — et **jamais
+`etat.bases.length + 1`**, qui coïncide tant que le joueur n'a pas de rang
+d'avance et ment dès qu'il en a un. Les deux falsifications tombent, et sur
+`BASES-2 T1` seul.
+⚠⚠ **LE MÉCANISME À DEUX TOUCHERS EST EXTRAIT, PAS RECOPIÉ.**
+`boutonADeuxTouchers({cle, libelle, achetable, verifier, agir})` porte tout ce
+que `boutonDAchat` portait ; `boutonDAchat` et `boutonDeLaBase` en sont deux
+appelants MINCES, et `arme` reste UNE variable — deux boutons ne peuvent pas être
+armés ensemble. La clé du nœud se DÉRIVE de son identifiant (`special/…`), elle
+ne se retape pas. **Mesuré : le premier toucher qui achèterait fait tomber
+QUATRE tests, dont trois antérieurs au lot.**
+⚠ **ET LE MANQUE DE POINTS NE SE RÉPÈTE PAS SOUS LA LIGNE** : `raisonsAffichables`
+est le filtre que `RECH-É T4` garde pour les trente et une lignes de l'arbre, et
+le nœud y passe comme les autres. Le prix est déjà là, et le compteur du haut
+aussi ; **aucun `div.raison` vide n'est peint**, comme dans `cadreDOM`.
+⚠⚠ **DEUX MODES ARMÉS SERAIENT UN BOGUE SILENCIEUX, ET C'EST TOUTE LA FORME DU
+VOLET B.** Le toucher d'une case ne peut pas savoir lequel des deux gestes il
+sert : le joueur croirait déplacer sa base et en fonderait une seconde.
+`desarmerLesModes` est le **SEUL** endroit qui remette les deux drapeaux à faux —
+vérifié au grep, deux écritures chacun — et les deux armements commencent par
+l'appeler. Les sept sites d'appel de `desarmerLeDeplacement` ont suivi.
+⚠ **UNE SEULE LISTE, UN SEUL PEINTRE, UNE SEULE TEINTE.** Les modes s'excluent,
+donc il n'y a jamais deux liserés à l'écran : une seconde teinte demanderait
+d'élargir une palette close pour un cas qui ne peut pas se produire.
+`dessinerCasesDuGeste` ne se garde plus que sur `casesDuGeste.length`, et
+**c'est la liste qui est le rempart** — `BASES-2 T2` compte les `rect` peints
+avant et après le renoncement, sans quoi une désarmée qui ne viderait pas la
+liste laisserait trois cents cases cerclées sous un mode éteint.
+⚠⚠ **LE BOUTON D'ACCORD EST PARTAGÉ, DONC LES DEUX CHEMINS ÉCRIVENT SON
+LIBELLÉ.** `#monde-panneau-confirmer` porte « Déplacer ici » dans le balisage :
+c'est une valeur de DÉPART, et un chemin qui ne poserait pas la sienne ferait
+dire « Déplacer ici » à une confirmation de FONDATION. C'est la faute la plus
+silencieuse du lot, et `LIBELLE_DU_GESTE` la ferme des deux côtés. ⚠ Et ce qui
+route l'accord est `gesteEnAttente.quoi`, **jamais le mode armé** : un refus
+désarme avant que l'accord ne soit donné, donc le mode serait faux au bord.
+⚠⚠ **`casesFondables` EST LA SEULE LIGNE DE `src/sim/` QUE LE LOT AJOUTE, ET
+ELLE NE RÉÉCRIT AUCUNE RÈGLE.** Elle balaie un carré de côté
+`2 × porteeMaxCases + 1` autour de **CHAQUE** base — pas la courante — et
+INTERROGE `problemesDeLaFondation` : c'est le motif de `casesAtteignables` et de
+`casesPosables`, mot pour mot. ⚠ **La déduplication n'est pas décorative,
+mesuré** : deux bases à cinq rangées et cinq colonnes l'une de l'autre rendent
+**296 cases distinctes** là où le balayage naïf en compte **522**.
+⚠⚠ **ET LE POINT D'ARRÊT SUR SON COÛT N'A PAS ÉTÉ ATTEINT — MESURÉ, PAS
+SUPPOSÉ.** Une base : **253 cases en 2,97 ms**, contre `casesAtteignables` à
+**261 cases en 2,76 ms**, qui est le modèle déjà accepté. Deux bases : 296 cases,
+**10,98 ms**. Elle n'est appelée **qu'à l'armement**, jamais dans `dessiner`.
+⚠⚠ **LA SONDE DU MESSAGE DE VIDE EST À DEUX CASES, ET C'EST UNE MESURE.** Le
+jumeau du déplacement interroge la case D'À CÔTÉ ; ici elle tombe dans le 3 × 3
+que `problemesDeLaFondation` refuse, et le message traînait une troisième phrase
+— « il faut au moins une case libre entre deux bases » — qui ne parle que de la
+sonde. **Relevé sur deux cents graines : à une case, les 200 portent ce troisième
+refus ; à DEUX cases, les 200 rendent exactement les deux clauses utiles**, le
+rang manquant et son prix. La sonde change de côté près du bord est.
+⚠ **ET C'EST L'ÉTAT QUE LE JOUEUR RENCONTRE EN PREMIER** : sans rang acheté,
+`casesFondables` rend **0 case sur toute la carte** — mesuré — et le bouton
+s'arme quand même, « un indice n'est pas une interdiction ».
+⚠⚠ **LE BILAN DE TERRITOIRE N'ENTRE PAS, ET CE N'EST PAS UN OUBLI.**
+`bilanDuTerritoire` chiffre ce que gagne une base qui SE DÉPLACE — une influence
+qui quitte un endroit pour un autre ; une base NEUVE qui s'AJOUTE est une autre
+grandeur, et la réutiliser afficherait un nombre plausible et faux. Ce qui entre
+à la place est le BUTIN, par `butinDeLaFondation`, et `null` ne donne **aucune
+ligne** plutôt qu'une ligne à zéro. **Aucun délai non plus** : `fonderUneBase`
+n'en écrit aucun, et en annoncer un promettrait une attente que rien n'applique.
+⚠⚠ **LA BASCULE EST DANS LE MOTEUR, ET L'ÉCRAN N'ÉCRIT JAMAIS
+`etat.baseCourante`.** `fonderUneBase` fait de la neuve la courante ; l'écran se
+contente de recentrer sur ce qu'il vient de rendre courant. D'où
+`apresFondation` → `rafraichirTousLesEcrans()` et **non** `rafraichirLaBase()` :
+le Chantier, l'Offense et la barre du bas parlent tous d'une autre base qu'à
+l'image d'avant — c'est le traitement d'`apresBascule`, pour la même raison.
+⚠⚠ **IL N'Y A PAS DE SON, ET C'EST UN MANQUE DÉCLARÉ, PAS UN CHOIX.**
+`order_player_move` appartient au DÉPLACEMENT, et détourner un son de sa famille
+est ce que `ui/session.js` s'interdit en toutes lettres. Le pack n'a pas de son
+de fondation ; en faire un demande un master, donc un lot d'assets. **Ethan
+tranche.**
+⚠⚠ **DEUX TESTS ENTRENT — `BASES-2 T1` ET `T2` — ET LE COMPTE PASSE DE 1 579 À
+1 581.** **Aucune assertion n'a été retirée ni assouplie** ; **une garde est
+RETOURNÉE** (`T15`, ci-dessus), **deux se RESSERRENT d'une assertion chacune**
+(`CARTE-C T11` exige le bouton de fondation VISIBLE sur sa propre base, la garde
+de la ruine l'exige CACHÉ), et **`PIC T7` est réancré** — son ancre écrivait
+9 367 456 quand le disque en rend 9 377 421, soit **9 965 octets de dérive** sous
+une tolérance de 50 000 : quatre lots sont passés dessus sans la toucher.
+⚠⚠ **TREIZE FALSIFICATIONS JOUÉES, ONZE CHUTES, ET LES DEUX MUETTES SE
+DÉCLARENT.** Celles qui mordent sont le prix relu dans `SPECIAL[id].cout`, le premier toucher
+qui achète, le manque de points non filtré, le rang recompté sur
+`etat.bases.length`, la branche du mode retirée de `relacher`, le libellé
+d'accord non écrit, le refus qui ne passe plus avant la demande, l'accord qui ne
+désarme pas, le bouton de fondation toujours caché, la sonde ramenée à une case,
+et le peintre rendu inerte. ⚠ **Les deux muettes portent sur le masquage du
+bouton dans `ouvrirRuine`** — le retirer ne fait tomber aucun test —, **et la
+contre-épreuve dit que c'est ANTÉRIEUR AU LOT** : retirer la ligne JUMELLE de
+« Déplacer la base », écrite au lot CONQUÊTE-24H, ne fait tomber aucun test non
+plus. Le panneau est déjà fermé quand `ouvrirRuine` s'exécute. L'assertion
+ajoutée est donc exactement aussi forte que sa jumelle, ni plus ni moins.
+⚠ **`SAVE_VERSION`, LES DEUX CENTS TÉMOINS DE COMBAT ET CELUI DE BASES-0 NE
+BOUGENT PAS D'UN BIT** : `src/sim/combat.js`, `src/sim/generateur.js` et
+`src/data/` n'ont pas une ligne de changée, et `casesFondables` ne fait que LIRE.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, NI SUR APPAREIL NI DANS UN NAVIGATEUR, ET SE
+DÉCLARE NON EXÉCUTÉ.** Le bouton de fondation, le liseré des cases fondables et
+le panneau de confirmation sont mesurés par le FAUX DOCUMENT et par les appels de
+canevas, jamais à l'écran. **À regarder au premier essai** : que « Fonder une
+base » tienne à côté de « Déplacer la base » sans pousser le panneau, et que les
+253 cases cerclées ne noient pas la carte au cran le plus large.
+⚠⚠ **ET LE BUTIN D'UNE FONDATION VA À LA BASE QUI FONDE — DÉCISION À ROUVRIR PAR
+ETHAN.** `fonderUneBase` le verse à `etat.bases[etat.baseCourante]`, c'est-à-dire
+à l'ANCIENNE base, et le motif écrit au lot BASES-1 — « une base neuve
+déborderait en entier » — a cessé d'être valide au lot TRANSFERT, qui autorise le
+butin à dépasser le plafond. Ce lot-ci ne fait que le CÂBLER tel quel ; le
+panneau annonce donc un butin que le joueur ne verra pas dans sa base neuve.
+
+**Auparavant, après le lot RAPPORTS-ET-PLEIN :**
 ⚠⚠ **DEUX DEMANDES D'ETHAN : OUVRIR UN RAPPORT DU JOURNAL, ET SAVOIR QUAND UN
 STOCK SERA PLEIN.** `npm test` rend **1579 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré

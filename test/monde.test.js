@@ -68,6 +68,7 @@ import {
   casesAtteignables, ticksAvantProchainDeplacement, problemesDuDeplacement,
   delaiDuDeplacementVers,
 } from '../src/sim/deplacement.js';
+import { problemesDeLaFondation, casesFondables } from '../src/sim/fondation.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss, creerAvaleurDeClic } from '../src/ui/session.js';
@@ -2331,6 +2332,11 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     'monde-panneau', 'monde-panneau-titre', 'monde-panneau-prix',
     'monde-panneau-prix-cout', 'monde-panneau-prix-solde', 'monde-panneau-corps',
     'monde-panneau-refus', 'monde-panneau-deplacer', 'monde-panneau-fermer',
+    // ⚠ LE BOUTON DE FONDATION — lot BASES-2, 11/09. Il est frère de
+    // « Déplacer la base » dans le balisage, et la confrontation ci-dessous le
+    // cherche AUSSI dans la page : la liste et le balisage se tiennent l'un
+    // l'autre, dans les deux sens.
+    'monde-panneau-fonder',
     'monde-panneau-attaquer',
     'monde-panneau-confirmation', 'monde-panneau-menace',
     'monde-panneau-confirmer', 'monde-panneau-renoncer',
@@ -3015,6 +3021,12 @@ test('CARTE-C T11 — pas de bouton actif sur sa propre base', () => {
   // Falsifiable : c'est bien le panneau de SA base — l'autre bouton y est.
   assert.equal(parId.get('monde-panneau-deplacer').hidden, false,
     'montage : ce n\'est pas le panneau de la base du joueur');
+  // ⚠ ET LE BOUTON DE FONDATION AUSSI — lot BASES-2, 11/09. Les deux gestes
+  // partent du MÊME panneau et du MÊME discriminant, `gesteDuSecondToucher`
+  // valant « base » : une assertion de plus ici, plutôt qu'un test de plus, dit
+  // que le second suit le premier. Le pendant négatif est sur la ruine, plus bas.
+  assert.equal(parId.get('monde-panneau-fonder').hidden, false,
+    'le panneau de sa propre base ne propose pas de fonder');
 });
 
 test('CARTE-C T12 — hors de portée, le bouton se voit et ne se touche pas', () => {
@@ -4134,6 +4146,11 @@ test('PC T8 — et elle n\'est PAS attaquable', () => {
     'le panneau d\'une ruine porte un bouton d\'attaque');
   assert.equal(m.parId.get('monde-panneau-deplacer').hidden, true,
     'le panneau d\'une ruine porte le bouton « Déplacer la base »');
+  // ⚠ LE PENDANT NÉGATIF DU BOUTON DE FONDATION — lot BASES-2. `ouvrirRuine` ne
+  // passe pas par `ouvrirPanneau` : elle a son propre masquage, et sans cette
+  // ligne-ci le bouton survivrait d'un panneau à l'autre.
+  assert.equal(m.parId.get('monde-panneau-fonder').hidden, true,
+    'le panneau d\'une ruine porte le bouton « Fonder une base »');
   assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
     'le panneau d\'une ruine porte la confirmation d\'un déplacement');
   assert.equal(m.parId.get('monde-panneau-prix').hidden, true,
@@ -4666,4 +4683,202 @@ test('RP T1 — la carte se rouvre sur la cible du raid, une fois et une seule',
     corps.indexOf('viserAuProchainAffichage') < corps.indexOf("montrerEcran('monde')"),
     'la session bascule avant de viser : la demande serait consommée une ouverture trop tard',
   );
+});
+
+// ---------------------------------------------------------------------------
+// Lot BASES-2 — fonder au doigt
+//
+// ⚠⚠ LE MOTEUR DE FONDATION EXISTE DEPUIS BASES-1 ET AUCUN ÉCRAN NE L'APPELAIT.
+// Ce test-ci est le seul du dépôt qui passe par le GESTE — armer, viser,
+// accorder — plutôt que par `fonderUneBase` appelée à la main. Ce que
+// `bases.test.js` garde est la RÈGLE ; ce qu'il garde ici est le CHEMIN.
+// ---------------------------------------------------------------------------
+
+/**
+ * Une partie où le droit de fonder est déjà acheté, jusqu'au rang demandé.
+ *
+ * ⚠ ON OUVRE LE RANG, ON NE POSE PAS LA BASE. `basesAutorisees` est ce
+ * qu'`acheterUneBaseDePlus` écrit ; le poser ici évite de faire dépendre ce
+ * test-ci du prix, que `BASES-2 T1` mesure de son côté.
+ */
+function partieAvecDroitDeFonder(autorisees = 2, graine = 20260906) {
+  const etat = partiePeuplee(graine);
+  etat.recherche.basesAutorisees = autorisees;
+  return etat;
+}
+
+/**
+ * Le DERNIER halo peint — le repère de la vue telle qu'elle est MAINTENANT.
+ *
+ * ⚠ `cadreDuHalo` exige qu'il n'y en ait qu'un dans toute la trace, ce qui est
+ * juste quand la scène n'a été peinte qu'une fois. Dès qu'un geste redessine,
+ * c'est le dernier qui dit où la vue est posée.
+ */
+function dernierHalo(appels) {
+  const traces = appels.filter((a) => a.nom === 'strokeRect');
+  assert.ok(traces.length > 0, 'aucun halo peint : le montage ne mesure rien');
+  const [x, y, cote] = traces[traces.length - 1].args;
+  return { x, y, cote };
+}
+
+/** Arme la fondation et rend de quoi toucher la carte. */
+function armerLaFondationEtViser(etat) {
+  const { doc, appels, dpr, parId } = fauxDocumentMonde();
+  const fondations = [];
+  const ecran = initialiserEcranMonde(doc, { apresFondation: () => fondations.push(1) });
+  const canvas = doc.getElementById('monde-canvas');
+  ecran.peindre(etat);
+  const base = { ...baseCourante(etat).position };
+  const halo = cadreDuHalo(appels);
+  parId.get('monde-panneau-fonder').envoyer('click', {});
+  return {
+    doc, parId, canvas, halo, dpr, base, fondations, ecran, appels,
+  };
+}
+
+test('BASES-2 T2 — fonder au doigt : refus, accord, et renoncement', () => {
+  // --- (0) sans le rang, armer DIT POURQUOI et ce que ça coûte ----------------
+  // ⚠⚠ C'EST LE PREMIER ÉTAT QUE LE JOUEUR RENCONTRE — il n'a rien acheté — et
+  // `casesFondables` y est VIDE : le bouton s'arme quand même (« un indice n'est
+  // pas une interdiction »), et c'est ce message-là qui lui apprend où aller.
+  // ⚠ LA SONDE EST À DEUX CASES, ET CETTE ASSERTION-CI EST CE QUI LE TIENT : à
+  // une case, elle tombe dans le 3 × 3 de `problemesDeLaFondation` et le message
+  // traîne une phrase sur le voisinage qui ne parle que de la sonde.
+  {
+    const etat = partiePeuplee();
+    assert.deepEqual(casesFondables(etat), [],
+      'montage : le rang est déjà ouvert, le message du vide ne se mesure plus');
+    const m = armerLaFondationEtViser(etat);
+    const dit = m.parId.get('monde-panneau-refus').textContent;
+    assert.equal(m.parId.get('monde-panneau-refus').hidden, false,
+      'armer sans le rang ne dit rien');
+    assert.match(dit, /Base supplémentaire/, 'le message ne dit pas ce qu\'il faut acheter');
+    assert.match(dit, /il manque/, 'le message ne chiffre pas ce qui manque pour l\'acheter');
+    assert.ok(!dit.includes('case libre'),
+      `la sonde parle d'elle-même et non du joueur : « ${dit} »`);
+  }
+
+  // --- (a) le refus se dit, et rien n'est fondé -------------------------------
+  {
+    const etat = partieAvecDroitDeFonder(2);
+    const m = armerLaFondationEtViser(etat);
+    // ⚠⚠ LA CASE VISÉE EST À PORTÉE ET REFUSÉE — c'est ce couple qui rend le
+    // montage falsifiable. Une case hors de portée serait refusée par la
+    // DISTANCE, et l'assertion passerait sur un écran qui ne lirait jamais la
+    // règle du voisinage. Le montage l'asserte avant de toucher.
+    const visee = { rangee: m.base.rangee - 1, colonne: m.base.colonne };
+    const refus = problemesDeLaFondation(etat, visee);
+    assert.deepEqual(refus.map((p) => p.code), ['voisinage'],
+      `montage : la case visée est refusée pour autre chose — ${JSON.stringify(refus)}`);
+
+    toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, visee);
+    assert.equal(etat.bases.length, 1, 'une base a été fondée sur une case refusée');
+    assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
+      'un accord est demandé pour un geste qui sera refusé');
+    // ⚠ LE MESSAGE EST CELUI DU MOTEUR, MOT POUR MOT : le reformuler dans
+    // l'écran ferait une seconde formulation qui dirait un jour autre chose.
+    assert.equal(m.parId.get('monde-panneau-refus').textContent,
+      refus.map((p) => p.message).join(' '));
+    assert.equal(m.parId.get('monde-panneau-titre').textContent, 'Fonder une base');
+    assert.deepEqual(m.fondations, [], '`apresFondation` a été appelé sur un refus');
+  }
+
+  // --- (b) sur une case légale, on demande d'abord ----------------------------
+  // ⚠⚠ DEUX RANGS OUVERTS, ET C'EST CE QUI REND (c) MESURABLE. À un seul rang,
+  // la base neuve épuise le droit : `casesFondables` devient VIDE, et « un
+  // toucher de plus ne fonde pas » serait vrai quel que soit l'état du mode —
+  // le moteur refuserait à la place de l'écran. Mesuré : 0 case fondable après
+  // la fondation avec `basesAutorisees` à 2.
+  const etat = partieAvecDroitDeFonder(3);
+  const m = armerLaFondationEtViser(etat);
+  const fondables = casesFondables(etat).filter(
+    (k) => Math.abs(k.rangee - m.base.rangee) <= 6 && Math.abs(k.colonne - m.base.colonne) <= 6,
+  );
+  assert.ok(fondables.length > 0, 'montage : aucune case fondable près de la base');
+  const cible = fondables[0];
+
+  toucher(m.canvas, m.halo, m.dpr, ECHELLE_MAX, m.base, cible);
+  assert.equal(etat.bases.length, 1, 'le premier toucher a fondé sans demander');
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, false,
+    'la confirmation ne s\'ouvre pas sur une case fondable');
+  // ⚠⚠ LE LIBELLÉ DU BOUTON EST ÉCRIT PAR LE CHEMIN, PAS PAR LE BALISAGE. La
+  // page naît sur « Déplacer ici » — un seul bouton sert les deux gestes —, donc
+  // un chemin qui n'écrirait pas le sien ferait dire « Déplacer ici » à un
+  // accord qui FONDE. C'est la faute la plus silencieuse du lot.
+  assert.equal(m.parId.get('monde-panneau-confirmer').textContent, 'Fonder ici');
+  assert.deepEqual(m.fondations, [], '`apresFondation` a été appelé sans accord');
+
+  // --- (c) l'accord fonde, et la base courante suit ---------------------------
+  m.parId.get('monde-panneau-confirmer').envoyer('click', {});
+  assert.equal(etat.bases.length, 2, 'l\'accord n\'a pas fondé');
+  assert.equal(etat.baseCourante, 1, 'la base courante n\'est pas la neuve');
+  assert.deepEqual(baseCourante(etat).position, { rangee: cible.rangee, colonne: cible.colonne },
+    'la base neuve n\'est pas sur la case visée');
+  assert.deepEqual(m.fondations, [1], '`apresFondation` n\'a pas été prévenu');
+  assert.equal(m.parId.get('monde-panneau').hidden, true, 'le panneau reste ouvert après l\'accord');
+
+  // ⚠⚠ ET LE MODE EST DÉSARMÉ, MESURÉ PAR LE COMPORTEMENT. L'écran n'expose pas
+  // ses drapeaux — leur ouvrir un accesseur mettrait dans `src/` une porte que
+  // la production n'emploie pas. Un toucher de plus doit donc OUVRIR un panneau
+  // de site, pas fonder une troisième base.
+  //
+  // ⚠ ET LE REPÈRE SE RELIT : la carte s'est RECENTRÉE sur la base neuve, donc
+  // le halo du premier dessin ne désigne plus rien. On prend le DERNIER — celui
+  // que `centrerSur` vient de peindre —, et la base courante avec lui.
+  const apres = { ...baseCourante(etat).position };
+  const encore = casesFondables(etat).filter(
+    (k) => Math.abs(k.rangee - apres.rangee) <= 6 && Math.abs(k.colonne - apres.colonne) <= 6,
+  );
+  assert.ok(encore.length > 0,
+    'montage : plus une case fondable, le désarmement ne se mesure plus');
+  toucher(m.canvas, dernierHalo(m.appels), m.dpr, ECHELLE_MAX, apres, encore[0]);
+  assert.equal(m.parId.get('monde-panneau-confirmation').hidden, true,
+    'un toucher redemande un accord de fondation : le mode est resté armé');
+  assert.equal(etat.bases.length, 2,
+    'un toucher a fondé une troisième base : le mode est resté armé après l\'accord');
+  assert.deepEqual(m.fondations, [1], '`apresFondation` a été appelé une seconde fois');
+
+  // --- (d) renoncer ne fonde rien, et désarme aussi ---------------------------
+  // ⚠ SUR UNE PARTIE NEUVE, sans quoi l'état comparé porterait déjà la base de
+  // (c) et l'égalité des sérialisations ne dirait rien.
+  const vierge = partieAvecDroitDeFonder(2);
+  const avant = serialiser(vierge, 0);
+  const r = armerLaFondationEtViser(vierge);
+  const autres = casesFondables(vierge).filter(
+    (k) => Math.abs(k.rangee - r.base.rangee) <= 6 && Math.abs(k.colonne - r.base.colonne) <= 6,
+  );
+  assert.ok(autres.length > 0, 'montage : aucune case fondable près de la base');
+  toucher(r.canvas, r.halo, r.dpr, ECHELLE_MAX, r.base, autres[0]);
+  assert.equal(r.parId.get('monde-panneau-confirmation').hidden, false,
+    'montage : la confirmation ne s\'est pas ouverte');
+
+  // ⚠⚠ ON COMPTE LES CASES PEINTES AVANT ET APRÈS, et c'est la seule chose qui
+  // dise que le LISERÉ s'en va. `dessinerCasesDuGeste` ne se garde plus sur un
+  // drapeau de mode mais sur `casesDuGeste.length` : la liste est donc le seul
+  // rempart, et une désarmée qui ne la viderait pas laisserait trois cents
+  // cases cerclées sur une carte où plus rien n'est armé.
+  const rectsArme = r.appels.filter((x) => x.nom === 'rect').length;
+  assert.ok(rectsArme > 0, 'armer ne cercle aucune case : le liseré ne se mesure pas');
+  const avantRenoncement = r.appels.length;
+
+  r.parId.get('monde-panneau-renoncer').envoyer('click', {});
+  assert.equal(
+    r.appels.slice(avantRenoncement).filter((x) => x.nom === 'rect').length, 0,
+    'le liseré des cases fondables survit au renoncement',
+  );
+  assert.equal(vierge.bases.length, 1, 'le renoncement a fondé');
+  assert.equal(serialiser(vierge, 0), avant, 'l\'état a changé après un renoncement');
+  assert.deepEqual(r.fondations, [], '`apresFondation` a été appelé après un renoncement');
+  assert.equal(r.parId.get('monde-panneau-confirmation').hidden, true,
+    'la confirmation reste ouverte après un renoncement');
+
+  // ⚠ LE MODE EST DÉSARMÉ LÀ AUSSI : le toucher suivant ouvre le panneau d'un
+  // site, il ne fonde pas. Même mesure que `DÉ T7`, par le COMPORTEMENT — et la
+  // base n'a pas bougé, donc le halo du premier dessin désigne encore la vue.
+  const site = baseCourante(vierge).satellites.presents[0];
+  toucher(r.canvas, r.halo, r.dpr, ECHELLE_MAX, r.base, site);
+  assert.equal(vierge.bases.length, 1,
+    'un toucher a fondé : le mode est resté armé après le renoncement');
+  assert.equal(r.parId.get('monde-panneau-titre').textContent, nomDuSite(site),
+    'le toucher suivant n\'ouvre pas le panneau du site : le mode est resté armé');
 });
