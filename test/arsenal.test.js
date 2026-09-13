@@ -316,9 +316,20 @@ test('T7 — une unité rapide derrière une lente perd 81 ticks, et l\'Arsenal 
   // ⚠ LE TEMPS DE L'UNITÉ SEULE NE BOUGE PAS D'UN TICK — 257 avant comme après.
   // C'est ce qui attribue les onze ticks à la FILE et non à la vitesse : sans
   // cette moitié, un ralentissement général rendrait le même écart.
+  //
+  // ⚠⚠⚠ ET IL REVIENT À 70 AU LOT CONTACT, 13/09 — LES ONZE TICKS SONT RENDUS, AU
+  // TICK PRÈS. C'est la mesure la plus directe de ce que ce lot-ci change, et
+  // elle referme celle du bloc ci-dessus : le rangement d'hier faisait rendre à
+  // l'unité bloquée les millièmes qu'elle avait grappillés, et il lui en coûtait
+  // onze ticks ; son pas est désormais BORNÉ au contact, donc elle ne rend plus
+  // rien — elle colle à son alliée et repart de là. 81 → **70**, c'est-à-dire
+  // exactement le nombre d'avant BARÈME-ET-REJEU.
+  // ⚠ ET `seul` NE BOUGE TOUJOURS PAS D'UN TICK — 257 aux trois lots. C'est ce
+  // qui attribue l'écart à la FILE et non à la vitesse : sans cette moitié, un
+  // ralentissement ou une accélération générale rendrait le même écart.
   assert.equal(seul, 257);
-  assert.equal(derriere, 338);
-  assert.equal(derriere - seul, 81, 'huit secondes sur un plafond de quatre-vingt-dix');
+  assert.equal(derriere, 327);
+  assert.equal(derriere - seul, 70, 'sept secondes sur un plafond de quatre-vingt-dix');
 
   // C'est bien la COLONNE qui décide : le même Fusilier en colonne 4 ne coûte
   // rien du tout.
@@ -662,7 +673,9 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // compteur de repli est gelé, donc elle attend au lieu de rentrer. Vingt ticks
   // de plus, et c'est exactement le nombre que `repli.test.js T6` mesure sur le
   // même raid C. Ce que ce test-ci mesure n'a toujours rien à voir avec la durée.
-  assert.equal(r.nbTicks, 509);
+  // ⚠ LOT CONTACT : 509 → 501. Le pas borné au contact rend à chaque file la case
+  // de vide que le rangement lui faisait abandonner ; le raid va donc plus vite.
+  assert.equal(r.nbTicks, 501);
   assert.equal(r.cause, 'attaquants');
 });
 

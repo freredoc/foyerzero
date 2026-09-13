@@ -466,6 +466,17 @@ test('T6 — A, B et C, mesurés après conversion', () => {
   // terme avec les préréglages figés du lot 3A est le T7 du lot 4B, dans
   // `assaut.test.js` — c'est là qu'elle a sa place, pas dupliquée ici.
   const cas = [
+    // ⚠⚠ LOT CONTACT (13/09) : LES TROIS RAIDS BOUGENT, ET DANS TROIS SENS
+    // DIFFÉRENTS — **A raccourcit de 41 ticks, B s'allonge de 48, C raccourcit de
+    // 8**. Un ralentissement ou une accélération uniforme n'aurait pas fait ça, et
+    // c'est la seule chose qui distingue un changement de DÉROULÉ d'un changement
+    // de vitesse. Le pas est désormais BORNÉ au contact : plus de rangement sur la
+    // case, donc plus de case de vide rendue derrière chaque bloqueuse — mais une
+    // file qui avance amène aussi plus de monde sur la défense, où l'on meurt.
+    // ⚠ LES TROIS CAUSES NE BOUGENT PAS, et A ne rapporte toujours RIEN et ne
+    // laisse toujours aucun survivant : ce qui change est le déroulé, pas l'issue.
+    // ⚠ LE BUTIN DE C EST MULTIPLIÉ PAR 4,2 — 1 541 → 6 471 — et celui de B ne
+    // gagne que 1,6 %. Aucun barème n'a été touché ; le calibrage revient à Ethan.
     // ⚠ LOT CARTE (29/08) : les trois butins et deux des trois ticks bougent, et
     // dans les DEUX sens — A perd 26 % de butin, B en gagne 6 %. Un allongement
     // uniforme n'aurait pas fait ça. Les obstacles cantonnés à la bande de
@@ -571,15 +582,15 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     //       tire plus ET on meurt davantage.
     // ⚠ LES TROIS CAUSES NE BOUGENT PAS, et aucun barème n'a été touché : le
     // calibrage revient à Ethan.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 351, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 309, butin: { quartz: 25_200, scorie: 8_400 }, survivants: 6 },
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 310, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 357, butin: { quartz: 25_614, scorie: 8_538 }, survivants: 7 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 509, butin: { quartz: 1_541, scorie: 513 }, survivants: 3 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 501, butin: { quartz: 6_471, scorie: 2_157 }, survivants: 4 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

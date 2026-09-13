@@ -4750,3 +4750,135 @@ export const RAPPORTS_OUVRAGE_REJEU = {
   24: '07792d0560f1a0d2',
   25: '6c426bd17ba16f21',
 };
+
+
+/**
+ * ⚠⚠ LA VINGT-QUATRIÈME COUCHE — LOT CONTACT, 13/09. Le pas s'arrête AU
+ * CONTACT : plus de rangement sur la case, plus de fluage dans la case d'autrui.
+ * **Trente-six couples sur 350**, sur SIX champs — `armee`, `disposition`,
+ * `economie`, `rapports`, `recherche`, `sitesEntames` — et à partir de la
+ * **phase 7**, qui est le premier raid.
+ *
+ * ⚠⚠ LES SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT, et c'est l'attribution du
+ * lot : le scénario ne combat pas avant son premier raid, et tout ce que la
+ * règle change est DANS le combat. Construction, économie, pose, déplacement et
+ * montée de niveau ne bougent pas d'un octet.
+ *
+ * ⚠⚠ ET AUCUN DES DIX-SEPT SCALAIRES NE BOUGE — gestes de construction, gestes
+ * d'armement, taille de la sauvegarde, cases atteignables, déplacement, bases
+ * attaquantes, nombre de cibles, cible retenue, non-fuite et exactitude de la
+ * simulation, équivalence des deux chemins. C'est cette moitié-là qui dit que le
+ * lot ne touche ni la carte, ni l'économie, ni la pose, ni le choix de cible :
+ * seul le DÉROULÉ du combat a changé.
+ *
+ * ⚠ VINGT-TROIS GRAINES SUR VINGT-CINQ DIVERGENT — **les 9 et 18 tombent à
+ * l'octet** sur la couche REJEU. Sur ces deux parties-là, aucune unité ne fluait
+ * dans la case d'une autre au cours des deux raids du scénario : le `??` de
+ * chaînage reste donc NÉCESSAIRE, comme aux lots MUR, VITESSE et
+ * BARÈME-ET-REJEU.
+ *
+ * ⚠⚠ ET LES DEUX TABLES DE RAPPORT SONT CREUSES — **20 sur 25 côté proximité,
+ * 16 sur 25 côté Ouvrage** —, ce qui est la forme du lot MUR et non celle de
+ * REJEU. C'est ce qu'on attend d'une règle de DÉROULÉ : elle ne mord que là où
+ * deux pièces se rencontrent vraiment. ⚠ Et l'écart entre les deux côtés se
+ * lit : le raid de proximité frappe un site GÉNÉRÉ, dont la garnison est dense
+ * et les files longues ; le raid de l'Ouvrage frappe la base du JOUEUR, que le
+ * scénario peuple à la main et beaucoup plus clairsemée. **Une table pleine
+ * voudrait dire que la règle mord partout, donc qu'elle ne dit rien du contact.**
+ */
+export const DEPLACES_PAR_CONTACT = {
+  p07_raidProcheApres: { sitesEntames: "64475214491f73bb", rapports: "40cbec744822d531", armee: "8e7a0ba46b4aea9f", economie: "e448f2e23de2755d" },
+  p08_100ticks: { sitesEntames: "64475214491f73bb", rapports: "40cbec744822d531", armee: "8e7a0ba46b4aea9f", economie: "f004282977236c49" },
+  p09_deplace: { sitesEntames: "64475214491f73bb", rapports: "40cbec744822d531", armee: "8e7a0ba46b4aea9f", economie: "f004282977236c49" },
+  p10_montee: { sitesEntames: "64475214491f73bb", rapports: "40cbec744822d531", armee: "8e7a0ba46b4aea9f", economie: "f004282977236c49" },
+  p11_raidOuvrageApres: { recherche: "051056a11ea099b3", sitesEntames: "0728bb06a050c500", rapports: "ce9a90fd85b81082", armee: "de745f51df6fd772", economie: "f004282977236c49" },
+  p12_veilleDuRaid: { recherche: "051056a11ea099b3", sitesEntames: "0678ec46b14d5c2a", rapports: "ce9a90fd85b81082", armee: "de745f51df6fd772", economie: "f004282977236c49" },
+  p13_apresLeRaid: { recherche: "051056a11ea099b3", sitesEntames: "e4350d9c5a64b2cb", rapports: "a5f0f7c30e3551b6", disposition: "e323d90cae41d925", armee: "de745f51df6fd772", economie: "18b80bd2832a5e73" },
+  p14_sousLeFeu: { recherche: "051056a11ea099b3", sitesEntames: "3409975016fcd532", rapports: "a9dafbd15eccfb7a", armee: "de745f51df6fd772" },
+};
+
+/** Les empreintes par graine, lot CONTACT — 23 sur 25 ; les 9 et 18 ne bougent pas. */
+export const EMPREINTES_PAR_GRAINE_CONTACT = {
+  1: "468edd6597d645ed",
+  2: "c652efbd9f5ae500",
+  3: "ce1171713c76b2a8",
+  4: "c619f992f3c7fe88",
+  5: "c0c1db6eb6e53143",
+  6: "a634d07ceefbf3cb",
+  7: "9a0d177ef2a03aed",
+  8: "b6eea47f22bcce0d",
+  10: "a8ac3547e762fcc0",
+  11: "1085616c548b78eb",
+  12: "fbb0307b69852164",
+  13: "15adf55ebca6b94f",
+  14: "d1873f98c2621619",
+  15: "4061ecfc6e049b3f",
+  16: "0a7586789e2f1508",
+  17: "bf9e244f4b1147df",
+  19: "238930f682c0cac8",
+  20: "a505187feae461c3",
+  21: "40f74a4d38f40fca",
+  22: "3539565cee93f934",
+  23: "888d45e4dc1362c2",
+  24: "ed77b3c3a1c3e1d4",
+  25: "84c1793d65c8b3e9",
+};
+
+/**
+ * Le rapport du raid de PROXIMITÉ, lot CONTACT — **20 graines sur 25**.
+ *
+ * ⚠ LES CINQ AUTRES TOMBENT À L'OCTET sur la couche REJEU : sur ces
+ * parties-là, aucune attaquante ne fluait dans la case d'une autre au cours de
+ * ce raid. Le `??` de chaînage reste donc NÉCESSAIRE.
+ */
+export const RAPPORTS_PROCHE_CONTACT = {
+  1: "aff1769e1002d9aa",
+  3: "9e4127674ee5e283",
+  4: "4884e07dc8567859",
+  5: "d7b17ed848a4b02a",
+  6: "f820c79b9e8d82b3",
+  7: "348da2960b79dd38",
+  8: "8f5876f553758d0e",
+  10: "f513d88357ffb209",
+  11: "f2767826a6d7e99e",
+  12: "ad75fff62466a775",
+  13: "2df6ceafb0d8b06a",
+  14: "bed7feec831ef482",
+  15: "4b86956359cb6195",
+  17: "3f0f5ca789a7f3a5",
+  19: "9a0e984ae4f34c13",
+  21: "a640486efe79dc6a",
+  22: "a377bdc08f26bed3",
+  23: "72bb9eaa2a8cd424",
+  24: "5dc35915f027c71d",
+  25: "321c7c3a5d2d2065",
+};
+
+/**
+ * Le rapport du raid de l'OUVRAGE, lot CONTACT — **16 graines sur 25**.
+ *
+ * ⚠⚠ ET LA TABLE EST PLUS CREUSE QUE CELLE DE PROXIMITÉ — 16 contre 20 —, ce
+ * qui est la forme du lot MUR et non celle de REJEU. La raison est mesurable :
+ * le raid de proximité frappe un site GÉNÉRÉ, dont la garnison est dense et les
+ * files longues ; le raid de l'Ouvrage frappe la base du JOUEUR, que le scénario
+ * peuple à la main et beaucoup plus clairsemée. Une règle qui borne le pas au
+ * contact ne mord que là où deux pièces se rencontrent, et il y en a moins ici.
+ */
+export const RAPPORTS_OUVRAGE_CONTACT = {
+  1: "6abc4a77334d1bab",
+  3: "6f638b0b7983e010",
+  4: "70afeff75ff9a708",
+  5: "d5ffd20f8f750fe5",
+  6: "eec59a1d2ef0754d",
+  7: "0dc65e5c170b6aeb",
+  8: "ac82892ea30fe6ef",
+  10: "8f61e4011c4f21a4",
+  11: "893b825fb59fdebd",
+  13: "d3dfa7bf538e9ab3",
+  15: "8a8c9084d57b603c",
+  17: "6577820c2463db9a",
+  19: "f851bcddc4f3efc6",
+  23: "ac76ac67587d8659",
+  24: "fee951aef31b3dcc",
+  25: "b9c6362336e02cfe",
+};

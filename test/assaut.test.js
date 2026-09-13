@@ -413,6 +413,20 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   //             TICK.
   //   Budgétés: `A 326 → 351`, `B 309 → 309` — B NE BOUGE PAS D'UN TICK —,
   //             `C 489 → 509`.
+  //
+  // ⚠⚠ LOT CONTACT (13/09) : CINQ DES SIX BOUGENT ENCORE, ET LES SENS SE
+  // MÉLANGENT — C'EST CE QUI ATTRIBUE LE DÉPLACEMENT AU DÉROULÉ. Le pas est
+  // désormais BORNÉ au contact : plus de rangement, donc plus de case de vide
+  // rendue derrière chaque bloqueuse, donc les files avancent — mais une file qui
+  // avance amène aussi plus de monde sur la défense, où l'on meurt.
+  //   Figés   : `A 745 → 871`, `B 738 → 725`, `C 478 → 478` — C NE BOUGE
+  //             TOUJOURS PAS D'UN TICK, aux deux lots de suite.
+  //   Budgétés: `A 351 → 310`, `B 309 → 357`, `C 509 → 501`.
+  // ⚠⚠ TROIS SENS DIFFÉRENTS DANS LA SÉRIE BUDGÉTÉE — A raccourcit de 41, B
+  // s'allonge de 48, C raccourcit de 8. **Un ralentissement ou une accélération
+  // uniforme n'aurait pas fait ça**, et c'est la seule chose qui distingue un
+  // changement de DÉROULÉ d'un changement de vitesse. Aucun barème n'a été
+  // touché : `src/data/` n'a pas une ligne au diff.
   // ⚠ LES DEUX IMMOBILES NE SONT PAS LES MÊMES D'UNE SÉRIE À L'AUTRE, et c'est
   // ce qui rend la mesure lisible : ce n'est pas une propriété du SITE ni de
   // l'ASSAUT, c'est une propriété de la FILE. Un embouteillage allié doit se
@@ -421,9 +435,9 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // ⚠ LES TROIS CAUSES NE BOUGENT PAS, des deux côtés, et le contraste que ce
   // test garde est intact : les deux séries ne rendent pas les mêmes durées.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 745);
+  assert.equal(figes[0].tick, 871);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
-  assert.equal(figes[1].tick, 738);
+  assert.equal(figes[1].tick, 725);
   assert.equal(figes[2].cause, 'attaquants');
   assert.equal(figes[2].tick, 478);
 
@@ -445,7 +459,7 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // précèdent s'arrêtent devant la défense au lieu de la longer. Le butin reste à
   // ZERO, et c'est toujours du calibrage à trancher par Ethan, pas un défaut.
   // ⚠ LOT BARÈME-ET-REJEU : 326 → 351, voir le bloc des six ticks ci-dessus.
-  assert.equal(budgetes[0].nbTicks, 351);
+  assert.equal(budgetes[0].nbTicks, 310);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -488,10 +502,11 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // parce qu'il s'arrête dessus, l'assaut d'infanterie de C se traîne parce qu'il
   // bute sur ce qu'il ne peut pas percer. Les trois causes ne bougent pas.
   // ⚠ SECOND GESTE DU LOT MUR : **B SEUL BOUGE, 244 → 287**, A et C intacts.
-  assert.equal(budgetes[1].nbTicks, 309);
+  assert.equal(budgetes[1].nbTicks, 357);
   assert.equal(budgetes[2].cause, 'attaquants');
-  // ⚠ LOT BARÈME-ET-REJEU : 489 → 509, voir le bloc des six ticks ci-dessus.
-  assert.equal(budgetes[2].nbTicks, 509);
+  // ⚠ LOT BARÈME-ET-REJEU : 489 → 509, puis LOT CONTACT : 509 → 501. Voir le
+  // bloc des six ticks ci-dessus.
+  assert.equal(budgetes[2].nbTicks, 501);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -526,7 +541,11 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // et continuent de tirer sur les bâtiments. Le même nombre se lit dans
   // `repli.test.js T6` et dans `roster.test.js T6`, sur le même raid C. C'est du
   // CALIBRAGE, pas un défaut, et le rapport le porte pour Ethan.
-  assert.equal(budgetes[2].butin.quartz, 1_541);
+  // ⚠⚠ LOT CONTACT : 1 541 → 6 471, soit ×4,2. Le raid dure huit ticks de MOINS
+  // et rapporte quatre fois plus : les files n'abandonnent plus une case de vide
+  // derrière chaque bloqueuse, donc l'infanterie arrive plus tôt et plus nombreuse
+  // sur les bâtiments. Le calibrage revient à Ethan ; rien n'a été compensé.
+  assert.equal(budgetes[2].butin.quartz, 6_471);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

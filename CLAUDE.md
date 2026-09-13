@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **12/09/2026**, version 0.99.54 · build 156.
+Dernière révision : **13/09/2026**, version 0.99.55 · build 157.
 
 ---
 
@@ -42,7 +42,210 @@ Dernière révision : **12/09/2026**, version 0.99.54 · build 156.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 12/09/2026 (après le lot REJEU), à confronter :**
+**Référence au 13/09/2026 (après le lot CONTACT), à confronter :**
+⚠⚠ **LE PAS S'ARRÊTE AU CONTACT — PLUS DE RANGEMENT SUR LA CASE, PLUS DE
+CHEVAUCHEMENT.** Ethan, 13/09 : « Quand deux unités défensives se déplacent,
+elles semblent entrer en collision, puis une ou l'autre est poussée très
+rapidement », puis l'arbitrage : « **Je ne veux pas de saut, ni de
+chevauchement.** » `npm test` rend **1603 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1602 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 385 049 octets**, 0 référence externe. Coût **+274 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `48827c8` (**9 384 775**, le
+nombre que la §0 précédente annonçait, retrouvé à l'octet) : **JavaScript +274 ·
+feuille +0 · balisage +0 · images +0 · audio +0**, la somme des cinq postes
+tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI / 307 lignes
+`data:` de part et d'autre**. Borne T10 **inchangée à 9 600 000**, marge
+**214 951 octets, 2,24 %**. Version et build passent à **0.99.55 · build 157** —
+et **les deux restent des CHAÎNES**, vérifié au type. Le lot touche
+`src/sim/combat.js`, `package.json`, **quatorze** fichiers de `test/`, les DEUX
+témoins, et fait entrer `test/contact.test.js` et
+`rapports/RAPPORT-lotCONTACT.md`. **Pas une ligne de `src/data/`,
+`src/render/`, `src/ui/`, `src/son/`, `tools/` ni `art/`** — vérifié au diff.
+⚠⚠ **LE RANGEMENT DU LOT MUR DISPARAÎT, ET SON DIAGNOSTIC ÉTAIT JUSTE — C'EST
+SON REMÈDE QUI ÉTAIT UN SAUT.** Le 10/09, une unité bloquée fluait jusqu'à 999
+millièmes DANS la case de ce qui la bloque ; le rangement la ramenait sur
+`rangee × 1 000`. Vers l'AVANT, ce rangement RECULE ; vers la GAUCHE en latéral,
+`milliDepuisCase` rendant toujours le bord gauche, il PROJETTE EN AVANT.
+**Mesuré sur le montage du §1 du brief — deux Éclaireurs en rangée 6, colonnes 3
+et 9, une infanterie en colonne 6 : 920 millièmes en un tick contre un pas
+nominal de 80, ×11,5.** `CONTACT T1` le nomme au millième sur l'arbre d'avant.
+⚠⚠ **CE QUI LE REMPLACE EST UNE MARGE, ET ELLE SE LIT EN MILLI-CASES, JAMAIS EN
+INDEX.** `margeDeContact` rend `max(0, sens × (position du bloqueur − la
+mienne) − MILLI_PAR_CASE)` ; `pas = min(vitesse, marge)`. L'entité COLLE à ce
+qui la bloque au lieu de s'arrêter au bord de sa case, et elle ne recule jamais.
+⚠ **ET L'ARITHMÉTIQUE EST SIMPLIFIÉE PAR RAPPORT AU BRIEF — ÉCART DÉCLARÉ.** Il
+écrit `borne = mo − sens × MILLI_PAR_CASE` puis `marge = max(0, sens × (borne −
+m))` ; `sens × sens` valant 1 pour les deux sens, les deux formes rendent le même
+entier, et celle du dépôt dit ce qu'elle mesure — « l'écart signé, moins une
+case ». ⚠ Et le paramètre `axe` du brief, une CHAÎNE comparée à chaque appel,
+est remplacé par deux constantes de module, `AXE_RANGEE` et `AXE_COLONNE` : le
+chemin chaud n'alloue rien et aucun `axe === 'rangee'` n'existe.
+⚠⚠ **ELLE BALAIE DEUX CASES, PAS UNE, ET C'EST DÉMONTRÉ ET NON CHOISI.** Une
+entité à une position fractionnaire est à cheval sur DEUX index de case : la
+bloqueuse peut être à `rangee + 2` alors que son pavé mord déjà sur `rangee + 1`.
+Le lot DÉPEND de l'invariant « aucune vitesse n'atteint 1 000 millièmes par
+tick » — la plus rapide vaut 240, 300 sous Booster — sans quoi deux cases ne
+suffiraient plus.
+⚠⚠ **ET `progresse` LIT `bloqueeAuContact = marge === 0`, JAMAIS LA MARGE.**
+C'est la leçon du lot MUR reprise telle quelle : `progresse` ne commande pas que
+l'avance, il commande l'ÉCRASEUR et le REPLI. Une pièce qui FERME encore l'écart
+progresse pour de vrai ; une pièce AU CONTACT ne progresse plus. Substituer la
+marge elle-même rendrait `progresse` vrai pour toujours devant un mur, le
+forçage ne serait JAMAIS calculé, et la brèche ne s'ouvrirait plus — **en
+silence**. `ARRÊT T8` et `MUR T5` tombent tous deux si cette garde descend d'un
+cran. ⚠ `allieeDevant` et `gelParUneAlliee` ne sont pas touchées.
+⚠⚠ **`chevauchementInterditSur` DEVIENT `bloqueuseSur` ET REND L'ENTITÉ, PLUS UN
+BOOLÉEN** — la marge a besoin de la POSITION du bloqueur, qu'un booléen ne porte
+pas. ⚠ Et elle rend `null` sur une occupante ÉCRASABLE, donc transparente :
+sans quoi l'écrasement mourrait en silence, la marge bornant le pas avant que
+`peutEcraser` ne soit seulement atteint.
+⚠⚠ **DEUX TESTS ENTRENT — `CONTACT T1` ET `CONTACT T2` — ET LE COMPTE PASSE DE
+1 601 À 1 603.** Les deux ont été **vus ROUGES sur l'arbre intact** avant d'être
+écrits : `T1` sur « convergence (§1), tick 27 : ratisseur a sauté de 920
+millièmes en colonne (6 920 → 6 000), son pas vaut 80 », `T2` sur « tick 84 :
+ratisseur et meute se recouvrent (Δrangée 960, Δcolonne 0) ». ⚠ Le montage
+**interdit le Booster nommément** : son ×10 porterait la borne de l'Éclaireur de
+240 à 2 400, et le saut de 920 y passerait sans être vu.
+⚠⚠⚠ **ET `CONTACT T2` A TROUVÉ CE QUE LE BRIEF AVAIT PRÉVU SANS Y CROIRE : DEUX
+FAMILLES DE CHEVAUCHEMENT RESTENT, ET ELLES SONT ANTÉRIEURES AU LOT.** Son §8
+posait que l'invariant « devrait tenir par construction, les pièces étant posées
+sur des multiples exacts et **l'écrasement tuant dans le même pas** », et
+ordonnait : « si un montage le contredit, c'est une découverte du lot, elle va
+dans le rapport, et l'arbitrage revient à Ethan ». **Mesuré sur les quatre raids
+réels du test, 1 981 774 paires comparées, avant contre après : 735 → 91
+chevauchements, −87,6 %.** Ils se partagent en deux :
+⚠⚠ **A — L'ÉCRASEMENT DIFFÉRÉ, 144 → 69.** `bloqueuseSur` rend `null` sur une
+occupante écrasable — c'est l'exigence ci-dessus — donc la marge est infinie et
+l'écraseuse entre dans le pavé de sa victime ; mais `avancer` ne TUE qu'au
+franchissement de l'INDEX de case. Relevé : un Bélier à 9 048 sous une Meute à
+10 000, Δ 952, sur huit ticks. **L'écrasement ne tue PAS dans le même pas.**
+Fermer cette famille demanderait d'écraser au CONTACT et non au franchissement,
+donc de déplacer l'instant de la mort — une règle de jeu. **Ethan tranche.**
+⚠⚠ **B — LE CROISEMENT À CHEVAL SUR DEUX INDEX, 591 → 22.** Les deux axes se
+scannent SÉPARÉMENT, chacun sur son propre index : `avancer` regarde les rangées
+devant DANS SA COLONNE, `seDecaler` les colonnes à côté DANS SA RANGÉE. Une
+entité fractionnaire est à cheval sur deux index de son axe, et l'autre ne
+scanne pas celui-là. Relevé : une Meute décalée en colonne 1 720 et une Carapace
+montée en rangée 7 020, **masses ÉGALES donc aucun écrasement**. Les 22 qui
+restent sont **tous dans `avantPoste/n20/g2`**. Le fermer demande quatre cases
+balayées par axe au lieu de deux, donc un changement de coût du tick. **Ethan
+tranche.**
+⚠⚠ **ET `CONTACT T2` NE SE DESSERRE PAS POUR AUTANT — C'EST L'IDIOME DE
+`DETTES_ACCENT`.** Les trois montages du brief sont tenus en ABSOLU, sans une
+exception ; sur les quatre raids réels, les deux familles sont **NOMMÉES**,
+leurs comptes **EXACTS** (69 et 22, plus la répartition par montage), et chacune
+porte une caractérisation POSITIVE qui peut tomber — pour B, « au moins une des
+quatre coordonnées n'est pas un multiple de `MILLI_PAR_CASE` », **mesuré à zéro
+contre-exemple sur 22**. Un chevauchement d'une troisième nature tombe par son
+nom. **Le jour où l'une des deux se ferme, ce test tombe : c'est ce qu'on lui
+demande.**
+⚠⚠ **CINQ TESTS DU DÉPÔT SONT RÉANCRÉS, ET DEUX NOMBRES DU BRIEF SONT FAUX.**
+`ARRÊT T7` 5 060 → **5 000** ; `BR T1` 17 000 → **17 960** ; `T4` de
+`repli.test.js` 17 000 → **17 060** ; `T7 b` de `combat.test.js` → **2 000** ;
+`T6` de `repli.test.js` 509 → **501** ticks. ⚠ Le brief annonçait pour `ARRÊT T7`
+que « le commentaire des ticks 34/35 » et « la fenêtre `bloques = 16` » se
+décaleraient d'un tick : **mesuré, ni l'un ni l'autre ne bouge** — le premier
+forçage reste au tick 35. ⚠ Et il donnait `T7 b` comme assertant `2960`, « 960
+millièmes de recouvrement assertés au dépôt » : **il assertait `2000` depuis le
+lot COLONNE**, qui l'avait déjà figé par l'arrêt sur prédilection. Le 2 960 est
+de l'histoire, pas un état du jour.
+⚠⚠ **ET QUATORZE FICHIERS DE `test/` SONT TOUCHÉS, PAS HUIT — LE BRIEF LE DISAIT
+LUI-MÊME.** « Mon relevé porte sur huit fichiers de test du moteur […] **La base
+réelle est à établir au §0, pas à me croire.** » S'y ajoutent
+`generateur.test.js`, `recherche.test.js`, `journal.test.js`, `mur.test.js`,
+`arsenal.test.js`, `assaut.test.js`, `cible.test.js`, `roster.test.js`,
+`bases.test.js` et les deux témoins.
+⚠⚠ **`MUR T4` ET `MUR T5` SONT RATTACHÉS À LA RÈGLE NEUVE, `MUR T6` ET
+`MUR T6 bis` SONT DÉCLARÉS INERTES.** Le brief avertissait que les deux derniers
+restent verts « par accident de montage » — leur décaleuse part exactement de
+`4 × MILLI_PAR_CASE`, donc la marge y vaut zéro dès le premier tick. **Mesuré :
+latéralement, les deux règles rendent la MÊME position à CHAQUE tick**, parce
+que le rangement collait au début de case, qui EST le contact dès que le
+bloqueur est sur un multiple — et le pas latéral de la Meute vaut 40, qui DIVISE
+1 000, donc elle ne peut pas dépasser depuis un multiple. Balayé sur le roster :
+aucune unité de garnison n'a de pas latéral qui fasse coïncider autre chose. Les
+deux gagnent une garde d'écart par tick et un pavé qui le DIT. ⚠ `MUR T4`, lui,
+discrimine : son suiveur remonté en rangée 1 entre pour de bon dans la case de
+son alliée sur l'ancien moteur — « tick 17 : 2 020 contre 3 000 ». ⚠ Et `MUR T5`
+aussi : son titre « dès le tick où il se range » devient « dès le tick où il bute
+au contact », et son `% MILLI_PAR_CASE === 0` — vrai des DEUX côtés, le Merlon
+étant sur une case pleine — cède la place à l'ÉCART AU MUR, qui tombe sur
+l'ancien moteur au tick 56, à **5 040 contre 6 000**.
+⚠⚠ **`JOURNAL T8` EST COMPRIS AVANT D'ÊTRE RÉPARÉ, ET C'EST LE §7 DU BRIEF —
+« réparer d'abord et expliquer ensuite, c'est masquer ».** Il comptait TROIS
+écrasées, il en compte **DEUX** : celle qui disparaît est le Guetteur d'indice 24,
+qui fluait jusqu'à la colonne 3 360 sous l'ancienne règle et s'y faisait écraser
+au tick 216 ; il s'immobilise désormais à 4 000 exactement, du tick 200 au 217,
+si bien que l'attaquant traverse la colonne 3 sans l'y trouver. ⚠ **La Carapace
+qui MESURE l'exception, indice 79, est identique au bit** — tick 64, rangée
+3 780, colonne 2 000 —, et l'assertion nomme désormais les DEUX indices au lieu
+de compter.
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.**
+`COMBATS_DEPLACES_PAR_CONTACT` porte **1 086 champs sur 1 600** — exactement le
+nombre du brief — dont 36 neufs, ce qui porte l'union à **1 125 surchargés /
+475 gardés** contre la capture d'APPROCHE, 5 causes de fin déplacées, et
+**aucun des deux cents combats n'est intact**. ⚠⚠ **ET LE « 514 GARDÉS » DU
+BRIEF EST FAUX** : c'est `1 600 − 1 086`, une soustraction naïve qui ignore
+l'empilement des couches. Le nombre mesuré est **475**.
+⚠⚠ **ET C'EST L'INVARIANCE DE `T1 bis` QUI DIT CE QUE LE LOT TOUCHE : 1 051
+CHAMPS DÉPLACÉS POUR UN SEUL NOUVEAU À SURCHARGER** — 1 333 → **1 334**, 266
+gardés. Moins encore que les deux de BARÈME-ET-REJEU. Le lot bouge donc le MÊME
+axe qu'ARRÊT, COLONNE, MUR et BARÈME-ET-REJEU — **la FILE** — et ni le tir ni le
+ciblage : ceux-là auraient brisé les causes qui tiennent encore.
+⚠⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGT-QUATRIÈME COUCHE, ET ELLE EST ÉTROITE :
+36 COUPLES SUR 350**, six champs, phases p07 à p14 — **les six premières phases
+sont identiques AU BIT**, et **aucun scalaire ne bouge**, la taille de la
+sauvegarde comprise. ⚠ Les trois tables de rapport sont CREUSES — **23 graines
+sur 25** pour l'empreinte d'état (les **9** et **18** sont identiques au bit),
+**20/25** côté proche, **16/25** côté Ouvrage : la forme du lot MUR, pas celle de
+REJEU. C'est juste — ce qui bouge est le DÉROULÉ d'un combat, et il ne mord que
+là où une pièce en bloquait une autre.
+⚠⚠ **ET UNE ERREUR DE CLÉ A FAILLI FAIRE ÉCRIRE 25/25 : LE RELEVÉ RENDAIT LA
+MÊME EMPREINTE POUR LES VINGT-CINQ GRAINES.** Le dépouillement lisait
+`x['raidProcheRapport']` quand la boucle du témoin range sous
+`x['p07_raidProcheRapport']` : `JSON.stringify(undefined)` rend `undefined`,
+donc un seul et même hachage, `eb045d78d2731073`, répété vingt-cinq fois. **C'est
+la répétition qui l'a dit, pas la relecture.** Les deux tables et la prose de
+`bases.test.js` sont réécrites sur les nombres mesurés.
+⚠⚠ **`generateur.test.js T12` BASCULE POUR LA QUATRIÈME FOIS, ET L'ÉCART RESTE
+D'UNE UNITÉ.** `ecartMax` 0 → **1**, sur **UNE cellule des 500** — la colonne
+`camp` de la graine 37, montage `mixte/17`, niveau 2, 675 contre 674 —, médiane
+0, écart relatif maximal **0,148 %** (MUR mesurait 0,173 %) et
+`entitesQuiBasculent` toujours à **0**. Une contre-assertion `notEqual 0` refuse
+le retour du zéro : un miroir qui cesserait d'échantillonner l'arrondi repasserait
+au vert sans rien garder.
+⚠⚠ **`NEUT T3` ET `MODULES-F T14` ONT PERDU LEUR PRÉMISSE, ET C'EST LE MONTAGE
+QU'ON RÉPARE.** Le premier mesurait une défenseuse neutralisée contre une
+défenseuse libre ; la libre fluait jusqu'à **4 960** et s'arrête désormais au
+contact, à **4 000** — le montage relève donc le contact au lieu de l'écrire, et
+une assertion exige que la gelée (3 560) soit STRICTEMENT en deçà, sans quoi le
+test cesserait de distinguer la neutralisation de l'arrêt. Le second balayait les
+graines `[7, 9, 24]` ; la **9** s'inverse au niveau 50 — canal armé 59,09 G contre
+56,13 G à vide —, et le balayage de 1 à 60 en rend **dix** qui tiennent les trois
+niveaux. Elle passe à **18**. **Sixième fois que ce montage-là perd sa prémisse.**
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — démontré et non supposé :
+`src/sim/state.js` n'apparaît pas au diff, une partie neuve se sérialise en 1 212
+octets sous `"version":33` et se recharge identique à l'octet. Une position en
+milli-cases portait DÉJÀ des valeurs non multiples de `MILLI_PAR_CASE` — c'est
+tout le sujet du lot.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
+est précisément ce qu'Ethan REGARDE — deux unités qui se rejoignent d'un coup —
+et rien n'a été ouvert dans un navigateur : tout est mesuré sur `rangeeMilli` et
+`colonneMilli`. **À regarder au premier essai** : que les défenseuses viennent se
+coller au lieu de se téléporter, et qu'une écraseuse traverse encore le pavé de
+sa victime pendant quelques ticks avant de la tuer — c'est la famille A ci-dessus,
+et elle se VOIT.
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/contact-pas-borne` ; l'environnement d'exécution épingle la
+session à `claude/new-session-b3ddpp` et interdit de pousser ailleurs sans
+autorisation explicite.
+
+**Auparavant, après le lot REJEU :**
 ⚠⚠ **DEUX DEMANDES D'ETHAN, ET LA SECONDE EST CELLE QUE LE LOT PRÉCÉDENT AVAIT
 ARRÊTÉE.** « juste enlever le plafond imposer par le chantier de construction qui
 limite le niv max des bâtiments. Il y reste sur qg def et centre commandement »,
@@ -11930,7 +12133,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   71 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   72 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -11942,7 +12145,7 @@ test/                   71 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
-  bareme-et-rejeu
+  bareme-et-rejeu  contact
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

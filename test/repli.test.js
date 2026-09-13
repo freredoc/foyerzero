@@ -287,15 +287,27 @@ test('T4 — derrière une alliée, B ne flue pas et son compteur est GELÉ', ()
   const bloqueur = etat.entites.find((e) => e.id === 'meute');
   const bloque = etat.entites.find((e) => e.id === 'fendeur');
 
-  // ⚠ B NE BOUGE PAS D'UN MILLIÈME, DÈS LE PREMIER TICK. Avant le lot il partait
-  // à 17 090, 17 180… jusqu'à 17 990 ; il est désormais rangé sur sa case, et le
-  // multiple exact est ce qui le dit.
+  // ⚠⚠ B COLLE À SON ALLIÉ, IL NE SE RANGE PLUS — LOT CONTACT, 13/09/2026. Le lot
+  // BARÈME-ET-REJEU le RANGEAIT sur sa case (17 000 pile) et mesurait le multiple
+  // exact ; c'est le rangement qu'Ethan a refusé — « je ne veux pas de saut ». Son
+  // pas est désormais BORNÉ au contact, donc il suit A au millième près. Mesuré :
+  // A n'est pas immobile — au fond de la grille, personne ne le bornant, il flue
+  // dans sa propre case de 60 millièmes par tick — et B le suit à 17 060 dès le
+  // premier tick au lieu de rester cloué à 17 000.
+  //
+  // ⚠⚠ CE QUI SE MESURE EST DONC L'ÉCART, PLUS LE MULTIPLE. Le multiple passait
+  // ici par ACCIDENT DE MONTAGE — A est posé sur un multiple exact — et serait
+  // resté vert sur un code qui n'aurait borné aucun pas. L'écart, lui, vaut une
+  // case pleine quel que soit l'endroit où A se trouve.
+  const ecartDe = () => bloqueur.rangeeMilli - bloque.rangeeMilli;
   jouer(etat, 1);
-  assert.equal(bloque.rangeeMilli, 17 * 1000, 'il flue encore dans la case de son alliée');
-  assert.equal(bloque.rangeeMilli % 1000, 0, 'sa position n\'est pas un multiple de case');
+  assert.equal(ecartDe(), 1000,
+    `il flue dans la case de son allié (écart ${ecartDe()}, attendu 1000)`);
 
   jouer(etat, 29);
-  assert.equal(bloque.rangeeMilli, 17 * 1000, 'et pas d\'un milli-case de plus');
+  assert.equal(ecartDe(), 1000, 'et pas d\'un milli-case de plus : l\'écart tient');
+  assert.ok(bloque.rangeeMilli > 17 * 1000,
+    'B est resté cloué sur sa case : il se range au lieu de coller à son allié');
   assert.equal(bloque.ticksInutiles, 0,
     'son compteur monte derrière une ALLIÉE : il doit être gelé');
   assert.equal(bloque.sorti, false, 'il n\'est pas rentré');
@@ -312,15 +324,23 @@ test('T4 — derrière une alliée, B ne flue pas et son compteur est GELÉ', ()
   jouer(etat, 30);
   assert.equal(bloqueur.sorti, true);
   assert.equal(bloque.ticksInutiles, 0, 'le compteur est remis à zéro');
-  assert.equal(bloque.rangeeMilli, 17_090, 'et B a repris sa marche dès ce tick');
+  // ⚠⚠ 18 050, ET NON 17 090 — LOT CONTACT. B ne repart pas de sa case, il repart
+  // D'OÙ IL EST : il avait suivi A jusqu'à 17 960, il fait son pas de 90 et passe
+  // à 18 050. Sous l'ancien rangement il repartait de 17 000, c'est-à-dire qu'il
+  // avait **jeté 960 millièmes de terrain réel** en attendant.
+  assert.equal(bloque.rangeeMilli, 18_050, 'et B a repris sa marche dès ce tick');
   assert.equal(bloque.sorti, false);
 
-  // ⚠⚠ LE 17 990 D'HIER, DIX TICKS PLUS TARD. C'est la contre-épreuve du
-  // réancrage : B a bien rendu les 990 millièmes qu'il gardait, et il les
-  // reparcourt une fois la voie libre. Un rangement qui aurait perdu de la
-  // distance ne retomberait pas sur ce nombre.
+  // ⚠⚠ ET LA CONTRE-ÉPREUVE A CHANGÉ DE SENS AVEC ELLE. Elle disait « le 17 990
+  // d'hier, dix ticks plus tard : B a bien rendu les 990 millièmes qu'il gardait
+  // et il les reparcourt ». Il ne les rend plus : il ne les a jamais perdus. Ce
+  // qui se mesure ici est donc qu'il monte JUSQU'AU BOUT de la grille — 18 950,
+  // le dernier pas de 90 dont la destination reste dans la rangée 18 — au lieu de
+  // se figer où que ce soit en chemin.
   jouer(etat, 40);
-  assert.equal(bloque.rangeeMilli, 17_990, '17 000 + 10 × 90, la voie libérée');
+  assert.equal(bloque.rangeeMilli, 18_950, 'la voie libérée, B monte jusqu\'au fond');
+  assert.ok(bloque.rangeeMilli > 17_990,
+    'B plafonne sous le fluage d\'hier : il a perdu du terrain en attendant');
 
   // ⚠ ET UNE FOIS AU FOND, SANS PERSONNE DEVANT, IL SE REPLIE COMME A. Le gel
   // est une propriété du BLOCAGE ALLIÉ, pas une immunité de l'unité : sans cette
@@ -456,7 +476,20 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // la base restent sur le terrain et continuent de tirer. Les survivants
   // tombent de 5 à 3, et les TROIS sont rentrés : c'est la même mécanique vue
   // par l'autre bout, on reste plus longtemps donc on meurt davantage.
-  assert.equal(r.nbTicks, 509);
+  //
+  // ⚠⚠ LOT CONTACT (13/09) : 509 → 501, ET C'EST LE PREMIER LOT À RACCOURCIR CE
+  // RAID PAR LE DÉROULÉ SEUL. Huit ticks de MOINS, et c'est l'exacte contrepartie
+  // du lot précédent : il rangeait une unité bloquée sur sa case, donc elle
+  // perdait jusqu'à 999 millièmes par embouteillage ; son pas est désormais borné
+  // au CONTACT, donc elle ne perd plus rien — elle colle à ce qui la bloque et
+  // repart de là. Un raid où l'on ne rend plus la case de vide derrière chaque
+  // bloqueuse va plus vite. Ni la disposition, ni la garnison, ni un barème ne
+  // bougent d'un identifiant : `src/data/` n'a pas une ligne au diff.
+  //
+  // ⚠ CE NOMBRE EST UNE EMPREINTE, PAS UN INVARIANT — et ce que ce test existe
+  // pour tenir ne bouge pas : le raid ne se traîne pas jusqu'au plafond de 900,
+  // et au moins une unité rentre à la base.
+  assert.equal(r.nbTicks, 501);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -494,8 +527,13 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // l'effet d'équilibrage déclaré, et il est ici mesuré, pas cherché.
   // ⚠ LOT BARÈME-ET-REJEU : voir le bloc du tick ci-dessus — 36 → 1 541 et
   // 12 → 513, cinq survivants → trois.
-  assert.deepEqual(r.butin, { quartz: 1541, scorie: 513 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
+  // ⚠⚠ LOT CONTACT : 1 541 → 6 471 ET 513 → 2 157, SOIT ×4,2 — ET LE BRIEF DU
+  // LOT N'ANNONÇAIT QUE LE TICK. Le sens est le même que celui des huit ticks
+  // gagnés, pris par l'autre bout : une file qui ne rend plus une case de vide
+  // derrière chaque bloqueuse arrive plus tôt ET plus nombreuse sur les
+  // bâtiments. Aucun barème n'a été touché ; le calibrage revient à Ethan.
+  assert.deepEqual(r.butin, { quartz: 6471, scorie: 2157 });
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
