@@ -573,7 +573,17 @@ test('DO T8 — un site entamé retrouve ses dégâts sur les mêmes bâtiments'
   // ses brèches va plus loin. Balayage des mêmes graines 99 à 140 : dix-sept
   // conviennent, la **106** en laisse **dix touchés dont six détruits**, donc
   // quatre survivants abîmés — la marge la plus large des dix-sept.
-  const etat = creerEtat(106);
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : 106 → 189, ET LE MOTIF EST CELUI DU LOT MUR,
+  // PRIS D'UN CRAN PLUS LOIN. Sur la 106, le raid RASE désormais le site —
+  // `enregistrerLeRaid` en retire l'entrée, et il n'y a plus rien à relire :
+  // « le raid n'a rien laissé à ranger ». L'écrasement se paie au contact et les
+  // files voient la bloqueuse à cheval sur la colonne voisine, donc l'assaut va
+  // plus loin qu'hier. Balaé sur les graines 99 à 200 : **vingt-neuf
+  // conviennent**, et la **189** en laisse **treize touchés dont sept
+  // détruits**, donc **six survivants abîmés** — la marge la plus large des
+  // vingt-neuf, et la plus large que ce montage ait jamais eue.
+  const etat = creerEtat(189);
   const vagues = [Array.from({ length: GRILLE.largeur }, (_, k) => ({
     id: ['belier', 'pilon', 'broyeur', 'crecelle'][k % 4], colonne: k + 1, niveau: 25,
   }))];

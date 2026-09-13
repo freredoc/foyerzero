@@ -434,10 +434,26 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // déroulés. Un ralentissement général aurait déplacé les six.
   // ⚠ LES TROIS CAUSES NE BOUGENT PAS, des deux côtés, et le contraste que ce
   // test garde est intact : les deux séries ne rendent pas les mêmes durées.
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : **UN SEUL DES SIX BOUGE CÔTÉ FIGÉ, ET TROIS
+  // CÔTÉ BUDGÉTÉ** — et c'est ce contraste-là qui attribue le lot. Deux gestes
+  // indépendants : la fenêtre de `margeDeContact` passe de deux à six cellules
+  // (famille B), et l'écrasement se paie au CONTACT en quatre ticks au quart de
+  // vitesse au lieu de tuer en un au franchissement de l'index.
+  //   Figés   : `A 871 → 871`, `B 725 → 700`, `C 478 → 478` — **C NE BOUGE PAS
+  //             D'UN TICK, AUX TROIS LOTS DE SUITE**, et A cesse de bouger pour la
+  //             première fois depuis PAQUETS.
+  //   Budgétés: `A 310 → 322`, `B 357 → 439`, `C 501 → 501`.
+  // ⚠ L'attribution se mesure geste par geste, en neutralisant chacun séparément :
+  // à fenêtre de deux, B figé rend 702 ; à écrasement instantané, 697. Les deux
+  // moitiés y pèsent quelques ticks chacune, ce qui est attendu d'un préréglage
+  // où les unités ne s'alignent pas en files serrées.
+  // ⚠ LES TROIS CAUSES NE BOUGENT PAS, des deux côtés, et le contraste que ce
+  // test garde est intact : les deux séries ne rendent pas les mêmes durées.
   assert.equal(figes[0].cause, 'attaquants');
   assert.equal(figes[0].tick, 871);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
-  assert.equal(figes[1].tick, 725);
+  assert.equal(figes[1].tick, 700);
   assert.equal(figes[2].cause, 'attaquants');
   assert.equal(figes[2].tick, 478);
 
@@ -459,7 +475,10 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // précèdent s'arrêtent devant la défense au lieu de la longer. Le butin reste à
   // ZERO, et c'est toujours du calibrage à trancher par Ethan, pas un défaut.
   // ⚠ LOT BARÈME-ET-REJEU : 326 → 351, voir le bloc des six ticks ci-dessus.
-  assert.equal(budgetes[0].nbTicks, 310);
+  // ⚠ LOT CONTACT-2 : 310 → 322, et les douze ticks sont la FENÊTRE élargie —
+  // à balayage perpendiculaire réduit à la seule colonne du milieu, ce raid rend
+  // exactement ses 310. Le butin reste à ZERO, huitième lot de suite.
+  assert.equal(budgetes[0].nbTicks, 322);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -502,7 +521,12 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // parce qu'il s'arrête dessus, l'assaut d'infanterie de C se traîne parce qu'il
   // bute sur ce qu'il ne peut pas percer. Les trois causes ne bougent pas.
   // ⚠ SECOND GESTE DU LOT MUR : **B SEUL BOUGE, 244 → 287**, A et C intacts.
-  assert.equal(budgetes[1].nbTicks, 357);
+  // ⚠⚠ LOT CONTACT-2 : 357 → 439, ET C'EST LE PLUS GROS DÉPLACEMENT DU LOT.
+  // Il vient de l'ÉCRASEMENT, et plus précisément du déplacement de l'INSTANT de
+  // la mort : à fenêtre de deux ce raid rend 446, à écrasement instantané 439.
+  // C'est l'assaut lourd, neuf unités de masse 10 et 20 — il n'y a que là que
+  // l'écrasement pèse, et c'est pourquoi A et C ne le suivent pas.
+  assert.equal(budgetes[1].nbTicks, 439);
   assert.equal(budgetes[2].cause, 'attaquants');
   // ⚠ LOT BARÈME-ET-REJEU : 489 → 509, puis LOT CONTACT : 509 → 501. Voir le
   // bloc des six ticks ci-dessus.
@@ -545,7 +569,15 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // et rapporte quatre fois plus : les files n'abandonnent plus une case de vide
   // derrière chaque bloqueuse, donc l'infanterie arrive plus tôt et plus nombreuse
   // sur les bâtiments. Le calibrage revient à Ethan ; rien n'a été compensé.
-  assert.equal(budgetes[2].butin.quartz, 6_471);
+  // ⚠⚠ LOT CONTACT-2 : 6 471 → 150, soit 2,3 % de ce que le raid rapportait —
+  // et le tick NE BOUGE PAS, 501 des deux côtés. Tout vient de la FENÊTRE : à
+  // balayage perpendiculaire réduit, ce raid rend exactement 6 471, et les quatre
+  // combinaisons de `ECRASEMENT_TICKS` × `ECRASEMENT_FREIN` rendent toutes 150.
+  // Une file qui voit désormais la bloqueuse à cheval sur la colonne voisine
+  // s'arrête là où elle la traversait. Le même nombre se lit dans
+  // `repli.test.js T6` et dans `roster.test.js T6`, sur le même raid C.
+  // Le calibrage revient à Ethan ; rien n'a été compensé.
+  assert.equal(budgetes[2].butin.quartz, 150);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

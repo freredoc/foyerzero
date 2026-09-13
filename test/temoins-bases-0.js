@@ -4882,3 +4882,73 @@ export const RAPPORTS_OUVRAGE_CONTACT = {
   24: "fee951aef31b3dcc",
   25: "b9c6362336e02cfe",
 };
+
+/**
+ * LA VINGT-CINQUIÈME COUCHE — LOT CONTACT-2, 13/09/2026.
+ *
+ * ⚠⚠ **TRENTE ET UN COUPLES SUR 350**, sur CINQ champs, phases p07 à p14 — les
+ * SIX PREMIÈRES PHASES sont identiques AU BIT, le scénario ne combattant pas avant
+ * son premier raid. Le lot ferme le chevauchement en travers et étale
+ * l'écrasement sur quatre ticks : ce qui bouge est le DÉROULÉ d'un combat, et il
+ * ne mord que là où deux pièces se croisaient ou s'écrasaient.
+ *
+ * ⚠⚠ ET AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
+ * de la sauvegarde comprise. C'est ce qui dit que le lot ne touche ni la carte,
+ * ni l'économie, ni la pose, ni le choix de cible : un champ de plus dans l'état
+ * aurait déplacé `tailleSauvegarde` sur les vingt-cinq.
+ */
+export const DEPLACES_PAR_CONTACT_2 = {
+  p07_raidProcheApres: { sitesEntames: "18795b1d6db90b8f", rapports: "31b956fbd2a9d347", armee: "4157a471940f9b96", economie: "d4742ded64803a2b" },
+  p08_100ticks: { sitesEntames: "18795b1d6db90b8f", rapports: "31b956fbd2a9d347", armee: "4157a471940f9b96", economie: "ef504b58f3e4ade1" },
+  p09_deplace: { sitesEntames: "18795b1d6db90b8f", rapports: "31b956fbd2a9d347", armee: "4157a471940f9b96", economie: "ef504b58f3e4ade1" },
+  p10_montee: { sitesEntames: "18795b1d6db90b8f", rapports: "31b956fbd2a9d347", armee: "4157a471940f9b96", economie: "ef504b58f3e4ade1" },
+  p11_raidOuvrageApres: { recherche: "05cd915183539e66", sitesEntames: "31d515530500cca2", rapports: "cb8e4f5fc7e68883", economie: "ef504b58f3e4ade1" },
+  p12_veilleDuRaid: { recherche: "05cd915183539e66", sitesEntames: "6cd3a83d7bf33e12", rapports: "cb8e4f5fc7e68883", economie: "ef504b58f3e4ade1" },
+  p13_apresLeRaid: { recherche: "05cd915183539e66", sitesEntames: "8a7f7cf26bd5c410", rapports: "29b6ea9b7248725b", economie: "79b77da9bd277345" },
+  p14_sousLeFeu: { recherche: "05cd915183539e66", sitesEntames: "d51d5a261d81d677", rapports: "81ec6093985fd009" },
+};
+
+
+/**
+ * Les empreintes par graine, lot CONTACT-2 — **6 sur 25 seulement**.
+ *
+ * ⚠⚠ C'EST LA TABLE LA PLUS CREUSE DE L'HISTOIRE DE CE TÉMOIN, ET C'EST LA
+ * MESURE QUI COMPTE. CONTACT en déplaçait 23, REJEU les 25 ; ici dix-neuf parties
+ * sur vingt-cinq tombent à l'octet sur la couche d'avant. Sur celles-là, aucune
+ * pièce ne mordait sur deux index en travers au cours des deux raids du scénario,
+ * et aucune écraseuse n'avait de victime : la règle neuve n'y a rien à changer.
+ * Le `??` reste donc NÉCESSAIRE pour les couches d'avant, qu'il chaîne.
+ */
+export const EMPREINTES_PAR_GRAINE_CONTACT_2 = {
+  2: "a1c41a12d221bbcc",
+  4: "8da0ad50e21eb85f",
+  12: "157b3b963ad9d644",
+  14: "eb820ad5b5de036c",
+  16: "855eee9de8a1089b",
+  19: "93c0929bf4e23730",
+};
+
+
+/** Les rapports du raid de proximité, lot CONTACT-2 — **5 sur 25**. */
+export const RAPPORTS_PROCHE_CONTACT_2 = {
+  2: "865d68345eb90cc5",
+  4: "99b634f05f7c4695",
+  14: "b0032024f9e5fceb",
+  16: "9e7431b223c0e593",
+  19: "ecccb7e3eba23e8a",
+};
+
+
+/**
+ * Les rapports du raid de l'Ouvrage, lot CONTACT-2 — **2 sur 25**.
+ *
+ * ⚠ L'écart entre les deux côtés se lit, et c'est le même qu'au lot CONTACT : le
+ * raid de proximité frappe un site GÉNÉRÉ, dont la garnison est dense et les
+ * files longues ; celui de l'Ouvrage frappe la base du JOUEUR, que le scénario
+ * peuple à la main et bien plus clairsemée — donc bien moins d'occasions de se
+ * croiser en travers.
+ */
+export const RAPPORTS_OUVRAGE_CONTACT_2 = {
+  4: "c142e9cae1094221",
+  19: "8f3fa68b8523837a",
+};

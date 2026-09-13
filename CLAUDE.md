@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **13/09/2026**, version 0.99.55 · build 157.
+Dernière révision : **13/09/2026**, version 0.99.56 · build 158.
 
 ---
 
@@ -42,7 +42,196 @@ Dernière révision : **13/09/2026**, version 0.99.55 · build 157.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 13/09/2026 (après le lot CONTACT), à confronter :**
+**Référence au 13/09/2026 (après le lot CONTACT-2), à confronter :**
+⚠⚠ **LA FAMILLE B EST FERMÉE, ET L'ÉCRASEMENT PREND QUATRE TICKS À QUART DE
+VITESSE.** Ethan, 13/09, sur le §9 de `rapports/RAPPORT-lotCONTACT.md` : « **A :
+garder — B : à corriger.** », puis « **On prend c plus vitesse divisée par
+quatre.** » `npm test` rend **1604 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1603 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 385 408 octets**, 0 référence externe. Coût **+359 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `f21ba4e` (**9 385 049**) :
+**JavaScript +359 · feuille +0 · balisage +0 · images +0 · audio +0**, la somme
+des cinq postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI /
+307 lignes `data:` de part et d'autre**. Borne T10 **inchangée à 9 600 000**,
+marge **214 592 octets, 2,24 %**. Version et build passent à
+**0.99.56 · build 158** — et **les deux restent des CHAÎNES**, vérifié au type.
+Le lot touche `src/sim/combat.js`, `package.json`, **treize** fichiers de
+`test/`, les DEUX témoins, et fait entrer `rapports/RAPPORT-lotCONTACT-2.md`.
+**Pas une ligne de `src/data/`, `src/render/`, `src/ui/`, `src/son/`, `tools/`
+ni `art/`** — vérifié au diff : `src/sim/combat.js` est le SEUL fichier de
+`src/` qui bouge.
+⚠⚠ **LA FENÊTRE PASSE DE DEUX CELLULES À SIX, ET LE SIX SE DÉDUIT — LE BRIEF EN
+ANNONÇAIT HUIT.** Son §1.2 pose que « quatre cases par axe » est une première
+approximation et que la fenêtre **se déduit, elle ne se choisit pas** ; la
+déduction rend **trois colonnes en travers × deux rangées dans le sens du pas**.
+Le brief y ajoutait la rangée `rM` elle-même, « le cas le moins intuitif » : une
+bloqueuse de cet index-là est bien à moins de mille millièmes devant, mais son
+écart signé moins une case est **NÉGATIF**, donc la marge vaudrait zéro et
+l'entité serait figée pour toujours dans un chevauchement hérité qu'elle était
+en train de quitter. Le `Math.max(0, …)` existe pour ne JAMAIS repousser
+personne ; l'inclure changerait ce plancher en prison. **Écart déclaré, et la
+mesure tranche : B tombe à zéro avec six cellules.**
+⚠⚠ **B PASSE DE 22 À ZÉRO, A DE 69 À 26, LE TOTAL DE 91 À 26 — −71,4 %.**
+Mesuré sur les quatre raids réels de `CONTACT-2 T2`, même filtre des deux côtés
+(actives ET bloquantes — un aéronef traversant survole, il ne recouvre pas).
+Répartition de A : `camp/n5/g1` **4**, `avantPoste/n20/g2` **15**,
+`base/n35/g3` **4**, `base/n50/g4` **3**. ⚠ Les 22 paires de B vivaient TOUTES
+dans `avantPoste/n20/g2`, et c'est là que le lot rend le plus.
+⚠⚠ **ET LA BRANCHE QUI LES COMPTAIT EST DEVENUE UN `assert.fail`.** `CONTACT T2`
+devient `CONTACT-2 T2`, **privé de son exception B** — il n'y en a pas un second
+à côté, le dépôt aurait deux vérités sur le même invariant. Il n'y a plus de clé
+`B` : la famille est fermée, donc son exception est RETIRÉE et non mise à zéro —
+un zéro laisserait une place où la reposer. La famille A garde sa
+caractérisation POSITIVE qui peut tomber — camps opposés, masses strictement
+différentes — et son compte EXACT, par montage. **Le jour où A se ferme à son
+tour, ce test tombe : c'est ce qu'on lui demande.**
+⚠⚠ **A EST GARDÉE SUR ARBITRAGE, ET ELLE MAIGRIT QUAND MÊME DE 62 %.**
+`bloqueuseSur` rend `null` sur une occupante ÉCRASABLE — sinon la marge bornerait
+le pas avant que `peutEcraser` ne soit atteint et l'écrasement mourrait en
+silence —, donc l'écraseuse entre dans le pavé de sa victime. Ce que CONTACT-2
+change est la DURÉE de l'épisode, pas son existence. **Mesuré : profondeur
+maximale 930 → 138 millièmes, durée maximale 22 → 4 ticks.** ⚠ Le brief
+annonçait « 952 millièmes et huit ticks » avant : **les deux sont faux, et le
+second l'est du simple au double** — le 11 qu'il cite est le pire d'un SEUL
+montage, le pire des quatre vaut **22**.
+⚠⚠ **L'ÉCRASEMENT COÛTE `ceil(pvMax / 4)` PAR TICK DE CONTACT, ET C'EST AU
+CONTACT, PLUS AU FRANCHISSEMENT DE L'INDEX.** C'est la troisième moitié du lot,
+et **elle n'est pas commutable** : elle ne s'isole par aucune constante, donc
+elle se mesure en résidu. `ECRASEMENT_TICKS` et `ECRASEMENT_FREIN` valent 4 et
+sont EXPORTÉES — `JOURNAL T8` lit la première pour dériver son quantum plutôt
+que d'écrire 4.
+⚠⚠ **ET `ECRASEUR_PCT_PAR_TICK` NE BOUGE PAS D'UN POINT — LE BRIEF L'INTERDIT
+NOMMÉMENT.** Le forçage de l'Écraseur, `doitSArreter`, `ciblage`, `progresse`,
+`allieeDevant` et le repli n'ont pas une ligne de changée ; les masses non plus.
+⚠⚠ **LE ÷4 EST COMMANDÉ PAR LE MÊME PRÉDICAT, ÉVALUÉ UNE FOIS.** `margeDeContact`
+range dans un paramètre de sortie `ecrasees` les victimes AU CONTACT ;
+`avancer` et `seDecaler` en tirent `const frein = ecrasees.length > 0 ?
+ECRASEMENT_FREIN : 1;`, passé à `vitesseDuTick` / `vitesseLaterale`. Deux
+lectures séparées dériveraient au premier réglage, et le symptôme serait une
+écraseuse qui ralentit sans mordre, ou qui mord sans ralentir — **indiscernable
+d'un défaut d'équilibrage**.
+⚠ **ET LE FREIN EST LE DERNIER FACTEUR DE LA CHAÎNE DE VITESSE**, après la
+réduction d'obstacle et après le Booster : `vitesseBruteDuTick` est extraite pour
+que les trois écritures de la vitesse ne puissent pas diverger. Posé avant le
+Booster, le ×10 aurait annulé le ÷4.
+⚠⚠ **LES ÉCRASEMENTS ABOUTIS PASSENT DE 5 À 8 SUR LES QUATRE RAIDS RÉELS**, et
+le gain est ENTIÈREMENT dans `avantPoste/n20/g2` (**2 → 5**) — le montage où la
+famille B vivait. ⚠ **Attribution mesurée par isolation** : fenêtre 2 seule rend
+**11**, écrasement instantané rend **9**, le lot complet **8**. Les trois
+configurations ne se composent pas additivement, et c'est normal sur une
+simulation non linéaire : ce qui est affirmé est le classement, pas une somme.
+⚠⚠ **LE COÛT DU TICK N'EST PAS MESURABLE SUR CETTE MACHINE À CETTE PRÉCISION, ET
+C'EST LA LEÇON D'ART-90 REPRISE.** Trois exécutions A/B **ALTERNÉES**, les deux
+moteurs chargés dans le même processus, médiane sur dix couples : **+1,4 %,
++5,2 %, −1,8 %** — **le signe change d'une exécution à l'autre**, et les étendues
+se recouvrent sur les trois. Ce qu'on peut en dire est que le coût **ne se
+dégrade pas d'un ordre de grandeur**, et rien de plus. ⚠⚠ **ET LE PREMIER RELEVÉ,
+EN SÉRIES SÉPARÉES, ANNONÇAIT +7,2 % — IL MESURAIT LA MACHINE.** « Deux séries à
+la suite mesurent la machine autant que le livrable » : le chiffre est retiré, pas
+corrigé. ⚠ Six cellules au lieu de deux ne triplent pas le coût parce que le
+balayage sort à la première bloqueuse et que la plupart des cellules sont vides.
+⚠⚠ **`generateur.test.js T12` EST RÉPARÉ DANS SON MONTAGE, PAS DANS SON
+ASSERTION — ET C'EST LE POINT LE PLUS DÉLICAT DU LOT.** Il compare deux combats
+miroirs case par case ; un combat TRONQUÉ au plafond de 900 ticks comparé à un
+autre mesure le PLAFOND, pas le miroir. Le lot allonge les combats, donc le
+nombre de combats coupés monte : **21 au plafond contre 15 sur l'arbre fusionné,
+44 paires sautées contre 30**. Les paires dont un des deux côtés est tronqué sont
+désormais SAUTÉES, et le partage du sort des entités suit la même règle.
+⚠ **CE QUI EST PERDU EST ASSERTÉ EXACTEMENT** — `ecarts.length === 456` (470
+avant), `pairesSautees === 44`, `combatsAuPlafond === 21` — **plus un plancher
+`>= 450`** : sans lui, des lots successifs éroderaient la couverture un réancrage
+défendable à la fois. ⚠ La propriété du miroir, elle, NE BOUGE PAS : `ecartMax`
+**1**, médiane **0**, quatre cellules au-dessus de zéro, `entitesQuiBasculent`
+**0**. L'écart relatif maximal passe de **0,148 % à 0,211 %**, et la cellule qui
+le porte se déplace de `camp g37 mixte/17` à **`camp g53 infanterie/5`** —
+niveau 2 dans les deux cas, 475 contre 476.
+⚠⚠ **`JOURNAL T8` CHANGE DE CARACTÉRISATION, ET C'EST L'ÉCRASEMENT PROGRESSIF QUI
+L'A EXIGÉ.** Il reconnaissait une victime à son drapeau `ecrase`, qui n'est posé
+qu'à la MORT : sous un écrasement en quatre ticks, une pièce encaisse plus que ce
+que le journal publie pendant trois ticks sans être encore marquée. Il asserte
+désormais une propriété POSITIVE et falsifiable : **tout excédent non publié vaut
+au plus UN quantum d'écrasement**, `ceil(pvMax / ECRASEMENT_TICKS)` — la constante
+est IMPORTÉE, jamais retapée —, **toute entité en écart finit écrasée**, et le
+compte est EXACT. Mesuré : écrasées `[10, 20, 21, 28]` contre `[28, 79]` sur
+l'arbre fusionné, **5 écarts** sur les indices `[10, 28]`, la Carapace 10 sur les
+ticks 219 à 222 (excédent exactement le quantum 13 252 800 trois fois, puis le
+reste 8 973 481). **1 314 impacts en 303 ticks contre 1 324 en 281.**
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.**
+`COMBATS_DEPLACES_PAR_CONTACT_2` porte **907 champs sur 1 600**, 177 combats
+touchés, **23 intacts** ; l'union passe à **1 153 surchargés / 447 gardés**
+contre la capture d'APPROCHE. `COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS`
+porte **764 champs**, 149 combats, 51 intacts, et `T1 bis` rend **1 335
+surchargés / 265 gardés**. ⚠ Les deux tables portent les 200 clés, `{ }` là où
+rien ne bouge : une clé absente se lirait « ce combat n'existe plus ».
+⚠⚠ **ET L'INVARIANCE DE `T1 bis` DIT CE QUE LE LOT TOUCHE : 1 334 → 1 335, UN
+SEUL CHAMP NEUF À SURCHARGER.** Le lot bouge donc le MÊME axe que CONTACT, ARRÊT,
+COLONNE, MUR et BARÈME-ET-REJEU — **la FILE** — et ni le tir ni le ciblage.
+⚠⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGT-CINQUIÈME COUCHE, ET C'EST LA PLUS
+ÉTROITE DE SON HISTOIRE : 31 COUPLES SUR 350**, cinq champs, phases p07 à p14 —
+**les six premières phases sont identiques AU BIT**, et **aucun scalaire ne
+bouge**, la taille de la sauvegarde comprise. ⚠ Les trois tables de rapport sont
+CREUSES — **6 graines sur 25** pour l'empreinte d'état, **5/25** côté proche,
+**2/25** côté Ouvrage, contre 23/20/16 au lot CONTACT. C'est juste : ce qui bouge
+est le déroulé d'un combat, et il ne mord que là où une pièce en croisait une
+autre à cheval sur deux index — un cas rare.
+⚠⚠ **`POI T18` EST RÉANCRÉ, ET L'ÉCART QU'IL MESURE SE CREUSE.** Butin sans POI
+**69/23 → 62/20**, avec POI **92/30 → 87/29**, durée **451** ticks des deux
+côtés. L'écart relatif que le test garde passe de **+33,3 % à +40,3 %** —
+la majoration de POI mord davantage sur un butin plus petit. ⚠ **Attribution
+mesurée : la fenêtre SEULE reproduit 69/23 et 92/30 exactement** — c'est donc
+l'écrasement progressif qui déplace ce butin, pas le balayage.
+⚠ **`MODULES-D T4` ET `MODULES-E T7` PASSENT DE 120 À 121 TICKS, ET LEURS CINQ
+VALEURS DE POINTS NE BOUGENT PAS D'UNE UNITÉ** (2 059 722 trois fois,
+2 106 166 deux fois). Attribution : la fenêtre 2 seule rend 121 aussi,
+l'écrasement instantané rend 120 — c'est le quatre-ticks.
+⚠⚠ **`MODULES-F T14` GARDE SES GRAINES `[7, 18, 24]`, ET C'EST LA TROISIÈME FOIS
+QUE SA PRÉMISSE TIENT.** Le balayage de 1 à 60 en rend **douze** qui discriminent
+aux trois niveaux (7, 18, 24, 33, 34, 36, 39, 45, 51, 52, 56, 57) contre dix au
+lot CONTACT. **Trois des neuf valeurs ne bougent pas.** ⚠⚠ **ET UN CONSTAT À
+REMONTER : sur la graine 24 au niveau 50, l'écart entre canal armé et canal vide
+s'effondre de 57,7 % à 0,8 %.** Le test garde le SIGNE, qui tient ; le calibrage
+revient à Ethan.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — démontré et non supposé :
+`src/sim/state.js` n'apparaît pas au diff, une partie neuve se sérialise en
+**1 207 octets** sous `"version":33` et se recharge identique à l'octet.
+⚠⚠ **`PIC T7` EST RÉANCRÉ POUR LA QUATRIÈME FOIS, ET LE LOT CONTACT NE L'AVAIT
+PAS FAIT.** Il écrivait encore **9 384 775**, la mesure du lot REJEU, quand le
+disque en rendait 9 385 049 : la §0 annonçait 214 951 de marge et le test 215 225
+— **les deux documents se contredisaient**, et la suite était VERTE, 274 octets
+valant un cent-quatre-vingt-deuxième de la tolérance de 50 000 et les deux marges
+s'arrondissant à 2,24 %. C'est très exactement la dérive LENTE que la dernière
+assertion de ce test existe pour refuser, commise par le lot précédent. Une
+contre-assertion `notEqual` refuse le retour de l'ancienne ancre.
+⚠⚠ **UN FAUX ROUGE A COÛTÉ UNE HEURE, ET LA CAUSE ÉTAIT DANS L'OUTILLAGE DE
+MESURE.** `CONTACT-2 T2` est tombé sur `avantPoste/n20/g2, tick 118` — une paire
+en diagonale, Δrangée 940 et Δcolonne 920 — après une suite complète VERTE.
+L'arbre de travail portait alors la configuration « fenêtre 2 seule » : le script
+d'isolation restaure `src/sim/combat.js` à sa DERNIÈRE ligne, sous `set -e`, donc
+**toute sortie non nulle l'abandonne dans la configuration du dernier patch
+écrit**. Corrigé par un `trap … EXIT`. **Vérifier l'arbre avant de croire un
+rouge** : `git diff` sur le moteur l'aurait dit en dix secondes.
+⚠⚠ **AUCUNE ASSERTION N'A ÉTÉ RETIRÉE NI ASSOUPLIE, ET C'EST COMPTÉ FICHIER PAR
+FICHIER : 2 135 → 2 176, +41, ET PAS UN DES TREIZE FICHIERS N'EN PERD.** Les
+réancrages remplacent une valeur, ils ne retirent pas une ligne ; les tests
+réparés en GAGNENT — `contact` dix-huit, `journal` neuf, `generateur` et `repli`
+trois chacun.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
+se VOIT — une écraseuse qui traverse le pavé de sa victime pendant quatre ticks
+au lieu de onze, et à quart de vitesse — et rien n'a été ouvert dans un
+navigateur : tout est mesuré sur `rangeeMilli` et `colonneMilli`. **À regarder au
+premier essai** : que l'écrasement se lise comme un broyage et non comme une
+disparition, et que la famille A, qui reste ouverte, ne saute plus aux yeux.
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/[descriptive]` ; l'environnement d'exécution épingle la session à
+`claude/new-session-b3ddpp` et interdit de pousser ailleurs sans autorisation
+explicite.
+
+**Auparavant, après le lot CONTACT :**
 ⚠⚠ **LE PAS S'ARRÊTE AU CONTACT — PLUS DE RANGEMENT SUR LA CASE, PLUS DE
 CHEVAUCHEMENT.** Ethan, 13/09 : « Quand deux unités défensives se déplacent,
 elles semblent entrer en collision, puis une ou l'autre est poussée très

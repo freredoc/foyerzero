@@ -2393,6 +2393,47 @@ function masseEffective(etat, e, p, po) {
 const ECRASEUR_PCT_PAR_TICK = 1;
 
 /**
+ * En combien de ticks de CONTACT un écrasement tue une victime intacte, et par
+ * combien la vitesse de l'écraseuse est divisée pendant qu'il dure.
+ *
+ * Ethan, 13/09/2026, sur le §9 du rapport CONTACT : « On prend c plus vitesse
+ * divisée par quatre. » Une victime perdait TOUS ses PV en un tick, au
+ * franchissement de l'index de case ; elle en perd désormais
+ * `ceil(pvMax / ECRASEMENT_TICKS)` par tick de contact.
+ *
+ * ⚠⚠ LE QUART SE PREND SUR LES PV MAXIMAUX, JAMAIS SUR LES COURANTS. Sur les
+ * courants la suite serait géométrique et ne tuerait **jamais** — trois quarts
+ * de trois quarts de trois quarts ne valent pas zéro. Sur les maximaux, c'est
+ * exactement quatre ticks quel que soit le niveau de la victime, ses PV maximaux
+ * croissant avec lui. Une victime déjà entamée meurt plus tôt, ce qui est le
+ * comportement voulu.
+ *
+ * ⚠⚠ ET CE SONT DEUX CONSTANTES POUR DEUX GRANDEURS, MÊME SI ELLES VALENT LE
+ * MÊME NOMBRE. L'une est une fraction de PV, l'autre une fraction de VITESSE :
+ * les fondre en une seule ferait qu'un réglage de l'une déplacerait l'autre sans
+ * que personne l'ait demandé. Ce qui doit rester UNIQUE est le PRÉDICAT qui les
+ * déclenche toutes les deux, et il l'est — voir `margeDeContact`.
+ *
+ * ⚠⚠⚠ ET `ECRASEUR_PCT_PAR_TICK` NE BOUGE PAS — §6 du brief, hors lot. Le
+ * forçage d'une STRUCTURE par l'Écraseur reste à 1 % des PV max par tick, soit
+ * 100 ticks, 10 s sur les 90 du combat. Le ÷4 d'Ethan porte sur l'écrasement
+ * d'une UNITÉ ; l'appliquer aussi au forçage porterait la brèche à 40 s, 44 % du
+ * combat, ce qui n'a pas été demandé.
+ *
+ * ⚠ ELLES VIVENT ICI ET NON DANS `src/data/`, comme `ECRASEUR_PCT_PAR_TICK`
+ * au-dessus et pour la même raison : ce sont des constantes de MOTEUR — la forme
+ * d'une règle de tick —, pas du calibrage que le jeu se règle en changeant un
+ * nombre. Le §6 du brief l'écrit de face : « Aucune ligne de `src/data/`. »
+ *
+ * ⚠ LES DEUX SONT EXPORTÉES, ET C'EST L'IDIOME DE `TICKS_AVANT_REPLI` :
+ * `CONTACT-2 T1` dérive de là le nombre de ticks qu'un écrasement prend et le
+ * pas freiné qu'il coûte, au lieu de retaper 4 — une seule table fait foi par
+ * grandeur, et un test qui recopie un nombre ne garde plus que lui-même.
+ */
+export const ECRASEMENT_TICKS = 4;
+export const ECRASEMENT_FREIN = 4;
+
+/**
  * L'entité qu'une unité à Écraseur est en train de FORCER — ou `undefined`.
  *
  * ⚠ SUR LES PV MAXIMAUX, PAS SUR LES PV RESTANTS. Sur les restants, une
@@ -2419,8 +2460,7 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
 }
 
 /**
- * Qui BORNE le pas sur cette case — l'entité devant laquelle il faudra s'arrêter,
- * ou `null` si rien n'arrête ici ?
+ * Qui OCCUPE cette case — l'entité qui y est enregistrée, ou `null` ?
  *
  * ⚠⚠ ELLE REMPLACE `chevauchementInterditSur`, ET LE CHANGEMENT EST DE NATURE.
  * Celle-là rendait un BOOLÉEN — « range-toi sur ta case » — et c'est très
@@ -2441,18 +2481,20 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
  * **960 millièmes de recouvrement**, assertés au dépôt depuis le lot 4A. Le
  * corps à corps se joue maintenant au contact POUR DE BON, à 1 000 d'écart.
  *
- * ⚠⚠⚠ `peutEcraser` REND LA BLOQUEUSE TRANSPARENTE, ET C'EST CE QUI SAUVE
- * L'ÉCRASEMENT. Une occupante qui va céder n'est PAS un obstacle : en rendant
- * `null`, la borne ne se pose pas, la destination entre dans sa case, et la
- * branche d'écrasement de `seDecaler` / `avancer` tue comme hier. Écrire ce test
- * dans l'autre sens supprimerait l'écrasement EN SILENCE — la pièce s'arrêterait
- * au contact de ce qu'elle est censée broyer, et aucun test du dépôt ne le dirait
- * avant `JOURNAL T1`, deux cents combats plus tard.
+ * ⚠⚠⚠ ET ELLE NE JUGE PLUS DE L'ÉCRASEMENT — LOT CONTACT-2, 13/09/2026. Elle
+ * appelait `peutEcraser` et rendait `null` sur une occupante écrasable, « ce qui
+ * sauve l'écrasement » : la borne ne se posait pas, la destination entrait dans
+ * la case de la victime, et la branche de franchissement tuait. **Cette règle-là
+ * n'a pas changé ; c'est l'ENDROIT où elle se lit qui a changé.** Le §2.3 du
+ * brief l'exige : le ÷4 de dégâts et le ÷4 de vitesse doivent être commandés par
+ * le MÊME prédicat, évalué UNE FOIS — et cette fonction-ci « calcule
+ * `peutEcraser` puis JETTE l'information en rendant `null` ». Elle rend donc
+ * l'occupante telle quelle, et `margeDeContact` — qui est la seule appelante —
+ * pose la question une fois et en tire ses DEUX conséquences.
  *
- * ⚠ UNE ALLIÉE N'EST JAMAIS ÉCRASABLE — `peutEcraser` commence par
- * `occupante.camp !== e.camp`. Le `return occupante` sur le camp est donc
- * redondant avec la ligne qui suit, et il RESTE : il dit l'intention à sa place,
- * et il tient si `peutEcraser` change un jour.
+ * ⚠ CE QU'ELLE A PERDU N'EST PAS UNE RÈGLE, C'EST UNE DÉCISION : elle ne répond
+ * plus « qui borne le pas » mais « qui occupe cette case ». Le camp et
+ * l'écrasabilité se lisent chez son appelante, où ils servent DEUX fois.
  *
  * ⚠ L'AVIATION N'EST NI BLOQUÉE NI BLOQUANTE : `!p.bloquant` sort en tête, comme
  * dans `peutAvancer`, `avancer` et `seDecaler`. Masse nulle, elle survole.
@@ -2467,10 +2509,49 @@ function bloqueuseSur(etat, e, p, occupation, rangee, colonne) {
   if (!p.bloquant) return null;
   const indice = occupantDe(occupation, rangee, colonne);
   if (indice === undefined) return null;
-  const occupante = etat.entites[indice];
-  if (occupante.camp === e.camp) return occupante;
-  if (peutEcraser(etat, e, p, occupante, profil(occupante))) return null;
-  return occupante;
+  return etat.entites[indice];
+}
+
+/**
+ * Retire à une victime son quart de PV, et la tue si elle tombe à zéro.
+ *
+ * ⚠⚠⚠ C'EST LE SEUL ÉCRIVAIN DE LA MORT PAR ÉCRASEMENT, ET IL A REMPLACÉ DEUX
+ * SITES — lot CONTACT-2. `seDecaler` et `avancer` portaient chacun leur
+ * `occupante.pvMilli = 0` au franchissement de l'index de case ; les deux sont
+ * partis. Le §2.2 du brief l'interdit nommément : « Ne pas laisser subsister un
+ * `pvMilli = 0` de secours "au cas où" : ce serait la quatrième mort du moteur,
+ * et personne ne la verrait. »
+ *
+ * ⚠⚠ LE JOURNAL S'ACCROCHE ICI, ET C'EST LA LEÇON DE JOURNAL-DE-COMBAT PAYÉE
+ * UNE FOIS. Un écrasement tue à l'étape 7, donc APRÈS `retirerLesMorts` : sans
+ * ce `push`, une pièce sur vingt-trois manquait au journal sur la graine 9, et
+ * rien d'autre ne l'aurait dit.
+ *
+ * ⚠ ET LA POSITION ENREGISTRÉE EST CELLE DE L'ÉCRASÉE AU TICK QUI LA TUE —
+ * `faitDeLEntite` lit sa position COURANTE. « Elle meurt là où elle était » ;
+ * avec quatre ticks de contact elle a pu se décaler entre-temps, et c'est la
+ * dernière position qui compte, pas celle du premier contact.
+ *
+ * ⚠⚠ SA CASE SE LIBÈRE DANS LE MÊME GESTE, ET C'EST CE QUI FAIT DU
+ * FRANCHISSEMENT UN NON-ÉVÉNEMENT. `construireOccupation` DÉRIVE la carte des
+ * positions à chaque tick, mais on est au milieu de l'étape 7 : la carte du tick
+ * courant est déjà construite, et `poser` est un `Map.set` qui ÉCRASE EN
+ * SILENCE. Deux vivantes enregistrées dans la même cellule perdraient l'une des
+ * deux sans qu'aucune erreur ne le dise.
+ *
+ * ⚠ ELLE NE FAIT RIEN SUR UNE VICTIME DÉJÀ MORTE : deux écraseuses peuvent
+ * toucher la même victime au même tick, et la seconde ne doit ni la retuer ni la
+ * repousser dans le journal.
+ */
+function ecraserAuContact(etat, occupation, victime) {
+  if (victime.pvMilli <= 0) return;
+  const degats = Math.ceil(victime.pvMaxMilli / ECRASEMENT_TICKS);
+  victime.pvMilli = Math.max(0, victime.pvMilli - degats);
+  if (victime.pvMilli > 0) return;
+  victime.vivant = false;
+  victime.ecrase = true;
+  etat.journal.destructions.push(faitDeLEntite(victime));
+  retirer(occupation, caseDepuisMilli(victime.rangeeMilli), caseColonne(victime));
 }
 
 /**
@@ -2485,12 +2566,24 @@ function bloqueuseSur(etat, e, p, occupation, rangee, colonne) {
  * chaque entité à chaque tick, et deux fermetures allouées par appel y seraient
  * deux allocations par entité et par tick, pour deux fonctions constantes.
  */
-const AXE_RANGEE = { dRangee: 1, dColonne: 0, milliDe: (x) => x.rangeeMilli };
-const AXE_COLONNE = { dRangee: 0, dColonne: 1, milliDe: (x) => x.colonneMilli };
+const AXE_RANGEE = {
+  dRangee: 1, dColonne: 0, milliDe: (x) => x.rangeeMilli, perpDe: (x) => x.colonneMilli,
+};
+const AXE_COLONNE = {
+  dRangee: 0, dColonne: 1, milliDe: (x) => x.colonneMilli, perpDe: (x) => x.rangeeMilli,
+};
 
 /**
  * De combien de millièmes le pas peut-il avancer AVANT le contact — `Infinity`
- * si rien ne borne ?
+ * si rien ne borne ? Et, dans le même balayage, QUI l'écraseuse touche.
+ *
+ * ⚠⚠ `ecrasees` EST UN PARAMÈTRE DE SORTIE, ET C'EST DÉLIBÉRÉ. Le §2.3 du brief
+ * exige que les dégâts et le frein de vitesse soient commandés par le même
+ * prédicat évalué UNE FOIS ; un second balayage recalculerait `peutEcraser` sur
+ * chacune des six cellules, et un objet `{ marge, ecrasees }` rendu en retour
+ * ferait DEUX allocations par entité et par tick là où le tableau de l'appelante
+ * en fait une. Ce que la fonction REND est toujours la marge ; ce qu'elle
+ * REMPLIT est la liste des victimes au contact.
  *
  * Une entité en position `m` occupe l'intervalle `[m, m + MILLI_PAR_CASE)` :
  * `yDeRangeeMilli` le dit en toutes lettres (« la position m d'une entité est le
@@ -2505,16 +2598,54 @@ const AXE_COLONNE = { dRangee: 0, dColonne: 1, milliDe: (x) => x.colonneMilli };
  * un pas NÉGATIF — c'est-à-dire le saut d'aujourd'hui, réintroduit par l'autre
  * bout, et cette fois sans qu'aucun rangement ne le nomme.
  *
- * ⚠⚠⚠ DEUX CASES, ET C'EST DÉMONTRÉ, PAS CHOISI. Écrite sur la SEULE case
- * voisine, cette fonction rouvre le défaut qu'elle corrige : mesuré sur `ARRÊT
- * T7`, le Broyeur part de 4 970 — case 4 —, la case 5 est LIBRE, le merlon est en
- * case 6 ; la marge vaut `Infinity`, le pas complet passe, et il atterrit à
- * **5 060, soit 60 millièmes DANS la case du mur**. Au tick suivant la marge vaut
- * zéro : trop tard, il est dedans. La borne vient de la bloqueuse la plus proche
- * DEVANT, et « devant » n'est pas « dans la case voisine ». Comme un pas fait
- * toujours moins de `MILLI_PAR_CASE` millièmes, une bloqueuse en `mo` ne peut
- * borner le pas en cours que si `mo < m + 2 × MILLI_PAR_CASE` : son index est donc
- * `case + sens` **ou** `case + 2 × sens`, jamais au-delà.
+ * ⚠⚠⚠ DEUX CASES DANS LE SENS DU PAS, ET C'EST DÉMONTRÉ, PAS CHOISI. Écrite sur
+ * la SEULE case voisine, cette fonction rouvre le défaut qu'elle corrige :
+ * mesuré sur `ARRÊT T7`, le Broyeur part de 4 970 — case 4 —, la case 5 est
+ * LIBRE, le merlon est en case 6 ; la marge vaut `Infinity`, le pas complet
+ * passe, et il atterrit à **5 060, soit 60 millièmes DANS la case du mur**. Au
+ * tick suivant la marge vaut zéro : trop tard, il est dedans. La borne vient de
+ * la bloqueuse la plus proche DEVANT, et « devant » n'est pas « dans la case
+ * voisine ». Comme un pas fait toujours moins de `MILLI_PAR_CASE` millièmes, une
+ * bloqueuse en `mo` ne peut borner le pas en cours que si
+ * `mo < m + 2 × MILLI_PAR_CASE` : son index est donc `case + sens` **ou**
+ * `case + 2 × sens`, jamais au-delà.
+ *
+ * ⚠⚠⚠ ET TROIS CASES EN TRAVERS, CE QUI FAIT **SIX** CELLULES ET NON DEUX — LOT
+ * CONTACT-2. C'est la famille B du §9 du rapport CONTACT : « les deux axes se
+ * scannent SÉPARÉMENT, chacun sur son propre index ». Une entité à une position
+ * fractionnaire est à cheval sur deux index de l'axe PERPENDICULAIRE aussi, et
+ * l'ancienne fenêtre ne regardait que la sienne. Relevé : une Meute décalée en
+ * colonne **1 720** et une Carapace montée en rangée **7 020**, masses égales
+ * donc aucun écrasement, chacune hors de l'index que l'autre inspecte — **22
+ * paires, toutes dans `avantPoste/n20/g2`**.
+ *
+ * La déduction, et elle ne se devine pas. Soit `M` en `(mr, mc)` qui avance d'un
+ * pas `< MILLI_PAR_CASE` sur l'axe des rangées, et `B` en `(br, bc)`. `B` borne
+ * `M` si et seulement si les deux intervalles se recouvrent :
+ *
+ *   - **en travers** : `|mc − bc| < MILLI_PAR_CASE`, donc
+ *     `floor(bc) ∈ { cM − 1, cM, cM + 1 }` — **trois** colonnes ;
+ *   - **dans le sens du pas** : `mr < br < mr + 2 × MILLI_PAR_CASE`, donc
+ *     `floor(br) ∈ { rM + 1, rM + 2 }` — **deux** rangées.
+ *
+ * ⚠⚠ LE BRIEF EN ANNONÇAIT HUIT, ET IL AVAIT TORT DE DEUX : il ajoutait la
+ * rangée `rM` elle-même, « le cas le moins intuitif », en écrivant qu'une
+ * bloqueuse enregistrée dans la MÊME rangée-index peut être devant `M` de moins
+ * de mille millièmes. Elle le peut ; elle ne la BORNE pas pour autant. Une
+ * bloqueuse d'index `rM` a `br < (rM + 1) × MILLI_PAR_CASE ≤ mr + MILLI_PAR_CASE`,
+ * donc `br − mr < MILLI_PAR_CASE`, donc son écart signé moins une case est
+ * NÉGATIF : la marge vaudrait **zéro**, et `M` serait figée pour toujours dans un
+ * chevauchement hérité qu'elle était en train de quitter. Le `Math.max(0, …)`
+ * ci-dessous existe précisément pour ne jamais REPOUSSER personne ; l'inclure
+ * reviendrait à changer ce plancher en prison. Et un chevauchement NEUF
+ * demande `br ≥ mr + MILLI_PAR_CASE`, ce qui place `B` en `rM + 1` ou `rM + 2`
+ * — jamais en `rM`. Six cellules, et la mesure du §1.3 le confirme : B tombe à
+ * zéro.
+ *
+ * ⚠ LES DEUX DÉPLACEMENTS SE COMPOSENT PAR ÉCHANGE DES DELTAS, ET C'EST CE QUI
+ * ÉVITE UNE SECONDE TABLE D'AXES : l'un des deux `d*` vaut 1, l'autre 0, donc les
+ * échanger donne la perpendiculaire. Écrire quatre offsets en dur aurait été la
+ * seconde vérité que `AXE_RANGEE` / `AXE_COLONNE` existent pour empêcher.
  *
  * ⚠⚠⚠ ET CE LOT DÉPEND DE L'INVARIANT « AUCUNE VITESSE N'ATTEINT 1 000 MILLIÈMES
  * PAR TICK », IL NE L'AJOUTE PAS. Il est écrit dans `peutAvancer` (« 300 au plus,
@@ -2523,17 +2654,47 @@ const AXE_COLONNE = { dRangee: 0, dColonne: 1, milliDe: (x) => x.colonneMilli };
  * millier, la fenêtre de deux cases deviendrait fausse **en silence** : une
  * bloqueuse en troisième case borne alors le pas, et personne ne la regarde.
  */
-function margeDeContact(etat, e, p, occupation, rangee, colonne, axe, sens) {
+function margeDeContact(etat, e, p, occupation, rangee, colonne, axe, sens, ecrasees) {
   const m = axe.milliDe(e);
+  const perp = axe.perpDe(e);
   let marge = Infinity;
   for (let k = 1; k <= 2; k += 1) {
-    const b = bloqueuseSur(
-      etat, e, p, occupation,
-      rangee + k * axe.dRangee * sens,
-      colonne + k * axe.dColonne * sens,
-    );
-    if (b === null) continue;
-    marge = Math.min(marge, Math.max(0, sens * (axe.milliDe(b) - m) - MILLI_PAR_CASE));
+    for (let j = -1; j <= 1; j += 1) {
+      const b = bloqueuseSur(
+        etat, e, p, occupation,
+        rangee + k * axe.dRangee * sens + j * axe.dColonne,
+        colonne + k * axe.dColonne * sens + j * axe.dRangee,
+      );
+      if (b === null) continue;
+      // ⚠ L'AXE PERPENDICULAIRE SÉPARE, OU IL NE SÉPARE PAS. Deux pavés d'une
+      // case ne se recouvrent que si les DEUX intervalles se recouvrent : une
+      // bloqueuse dont la colonne est à une case pleine de la mienne ne me borne
+      // jamais, quelle que soit sa rangée. À `j === 0` ce test est TOUJOURS vrai
+      // — les deux positions sont dans la même bande de mille millièmes —, donc
+      // la fenêtre élargie ne peut qu'AJOUTER des bornes, jamais en retirer.
+      if (Math.abs(axe.perpDe(b) - perp) >= MILLI_PAR_CASE) continue;
+      const ecart = Math.max(0, sens * (axe.milliDe(b) - m) - MILLI_PAR_CASE);
+      // ⚠⚠⚠ LE PRÉDICAT UNIQUE, ET SES DEUX CONSÉQUENCES. Une occupante
+      // écrasable est TRANSPARENTE à la marge — c'est la règle du lot CONTACT,
+      // inchangée, « sinon l'écrasement meurt en silence » — et c'est la MÊME
+      // lecture qui dit qu'elle prend des dégâts quand elle est au contact.
+      // Écrites séparément, les deux dériveraient au premier réglage, et le
+      // symptôme serait une écraseuse qui ralentit sans mordre, ou qui mord sans
+      // ralentir — indiscernable d'un défaut d'équilibrage (§2.3 du brief).
+      if (b.camp !== e.camp && peutEcraser(etat, e, p, b, profil(b))) {
+        // ⚠ « AU CONTACT » EST `ecart === 0`, ET C'EST LA MÊME ARITHMÉTIQUE QUE
+        // LA MARGE, PAS UNE SECONDE. Elle vaut zéro dès que l'écart signé tombe
+        // à une case ou moins, c'est-à-dire dès que les deux pavés se touchent.
+        // ⚠⚠ ET LE TOUCHER COMPTE, IL N'EST PAS EXCLU. Avec un `< MILLI_PAR_CASE`
+        // strict, l'écraseuse ferait un pas PLEIN dans le pavé de sa victime
+        // avant de freiner — mesuré sur le Bélier de référence, 120 millièmes de
+        // pénétration au premier tick au lieu de 30, soit la profondeur que le
+        // §4 du brief prédit pour QUATRE ticks atteinte dès le premier.
+        if (ecart === 0) ecrasees.push(b);
+        continue;
+      }
+      if (ecart < marge) marge = ecart;
+    }
   }
   return marge;
 }
@@ -2692,8 +2853,12 @@ function deplacement(etat) {
 }
 
 /**
- * La vitesse d'un tick, obstacle et Booster appliqués — la valeur d'où PART le
- * déplacement, quel que soit son axe.
+ * La vitesse BRUTE d'un tick, obstacle et Booster appliqués — la valeur d'où
+ * PARTENT les deux axes, avant le ×2/3 latéral et avant le frein d'écrasement.
+ *
+ * ⚠ ELLE A ÉTÉ EXTRAITE DE `vitesseDuTick` AU LOT CONTACT-2, et le motif est
+ * arithmétique : les deux axes doivent appliquer LEUR facteur et le frein dans
+ * le même quotient, sous un `Math.floor` unique. Voir `vitesseLaterale`.
  *
  * ⚠ L'OBSTACLE SE LIT SUR LA CASE OÙ L'ENTITÉ EST, jamais sur celle où elle va :
  * c'est le terrain qu'elle traverse qui la ralentit.
@@ -2712,7 +2877,7 @@ function deplacement(etat) {
  * sans qu'aucun test n'échoue. Un test de données garde ce seuil
  * (`recherche.test.js`, MODULES-A T6), et `COL T14` le garde LATÉRALEMENT.
  */
-function vitesseDuTick(etat, e, p, obstacles, rangee) {
+function vitesseBruteDuTick(etat, e, p, obstacles, rangee) {
   let vitesse = p.vitesseMilli;
   const type = typeObstacleSur(obstacles, rangee, caseColonne(e));
   if (type !== undefined && obstacleConcerne(type, p.chassis)) {
@@ -2720,6 +2885,24 @@ function vitesseDuTick(etat, e, p, obstacles, rangee) {
   }
   if (boosterActif(e)) vitesse *= BOOSTER_FACTEUR;
   return vitesse;
+}
+
+/**
+ * La vitesse VERTICALE d'un tick : la brute, freinée.
+ *
+ * ⚠⚠ LE FREIN VIENT EN DERNIER, APRÈS L'OBSTACLE ET APRÈS LE BOOSTER, ET C'EST
+ * LE MÊME ORDRE QUE LE ×2/3 LATÉRAL — lot CONTACT-2. Posé avant l'obstacle, il
+ * ferait cesser l'obstacle de ralentir une écraseuse ; posé avant le Booster,
+ * il rendrait le rapport des deux faux. En dernier, TOUS les rapports d'amont
+ * sont gardés : 120 → 30 en écrasement, 48 sous obstacle → 12, 1 200 boosté
+ * → 300.
+ *
+ * ⚠ `frein` VAUT 1 QUAND RIEN N'ÉCRASE, et la division rend alors la valeur
+ * d'hier au caractère près — `Math.floor(x / 1) === x` sur un entier. C'est ce
+ * qui rend ce lot NEUTRE sur tout ce qui n'écrase pas.
+ */
+function vitesseDuTick(etat, e, p, obstacles, rangee, frein) {
+  return Math.floor(vitesseBruteDuTick(etat, e, p, obstacles, rangee) / frein);
 }
 
 /**
@@ -2731,6 +2914,17 @@ function vitesseDuTick(etat, e, p, obstacles, rangee) {
  * il rendrait le rapport des deux faux. En dernier, TOUS les rapports sont
  * gardés : 60 → 40, 24 sous obstacle → 16, 600 boosté → 400.
  *
+ * ⚠⚠⚠ ET LE FREIN D'ÉCRASEMENT ENTRE DANS LE MÊME QUOTIENT, PAS APRÈS LUI —
+ * LOT CONTACT-2. C'est la consigne « un seul `Math.floor`, en bout de chaîne »
+ * du §3.2 du brief, et elle n'est pas décorative : arrondir au milieu perdrait
+ * la fraction que le ×2/3 vient d'introduire. Mesuré sur le Percheron, dont la
+ * vitesse brute vaut 90 — `floor(90 / 4) = 22` puis `floor(22 × 2 / 3) = 14`,
+ * quand `floor(90 × 2 / (3 × 4)) = 15`. La table du §3.2 annonce **15** : c'est
+ * la seconde forme qui la rend, et c'est pourquoi cette fonction repart de la
+ * vitesse BRUTE au lieu d'appeler `vitesseDuTick`. Les quatre lignes de cette
+ * table sont reproduites au millième — Pionnier 80 → 20, Percheron 60 → 15,
+ * Fusiliers 40 → 10, Foudre 160 → 40.
+ *
  * ⚠ LE QUOTIENT EST ENTIER PAR CONSTRUCTION, ET `COL T13` LE GARDE. Les quatre
  * vitesses du relevé sont divisibles par 3, et les deux transformations d'amont
  * conservent cette divisibilité — l'obstacle divise par 2,5 en multipliant par
@@ -2739,9 +2933,11 @@ function vitesseDuTick(etat, e, p, obstacles, rangee) {
  * une vitesse indivisible entrerait, le moteur reste entier et le TEST de
  * données le dise, plutôt qu'un flottant ne se glisse dans `colonneMilli`.
  */
-function vitesseLaterale(etat, e, p, obstacles, rangee) {
+function vitesseLaterale(etat, e, p, obstacles, rangee, frein) {
   const { numerateur, denominateur } = GRILLE.lateral;
-  return Math.floor((vitesseDuTick(etat, e, p, obstacles, rangee) * numerateur) / denominateur);
+  return Math.floor(
+    (vitesseBruteDuTick(etat, e, p, obstacles, rangee) * numerateur) / (denominateur * frein),
+  );
 }
 
 /**
@@ -2833,7 +3029,19 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   //
   // ⚠ HORS GRILLE, `occupantDe` REND `undefined` ET LA BORNE NE SE POSE PAS — la
   // sortie latérale reste gardée par `estSortiParLeCote`, comme hier.
-  const marge = margeDeContact(etat, e, p, occupation, rangee, colonne, AXE_COLONNE, sens);
+  // ⚠⚠⚠ LE BALAYAGE VIENT AVANT LA VITESSE, ET C'EST UNE CONTRAINTE — LOT
+  // CONTACT-2. C'est lui qui dit s'il y a un écrasement en cours, donc lui qui
+  // décide du frein, donc il ne peut pas venir après la vitesse qu'il freine.
+  const ecrasees = [];
+  const marge = margeDeContact(
+    etat, e, p, occupation, rangee, colonne, AXE_COLONNE, sens, ecrasees,
+  );
+  const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
+  // ⚠⚠ LES DÉGÂTS SE PAIENT ICI, AVANT TOUT `return`, PARCE QUE LE CONTACT EST UN
+  // FAIT DE POSITION ET NON UNE CONSÉQUENCE DU DÉPLACEMENT. Une décaleuse qui ne
+  // bougera pas ce tick-ci — cible atteinte, pas nul, sortie latérale refusée —
+  // touche quand même ce qu'elle broie.
+  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
   // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
   // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
   // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
@@ -2847,7 +3055,7 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   // MODÈLE. Les deux naissent du même fait — la colonne a cessé d'être
   // monotone — et le lot doit les corriger toutes les deux.
   const ecart = Math.abs(cible.colonneMilli - e.colonneMilli);
-  const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee), ecart, marge);
+  const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee, frein), ecart, marge);
   const destinationMilli = e.colonneMilli + sens * pas;
   if (estSortiParLeCote(destinationMilli)) return;
 
@@ -2882,21 +3090,34 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   }
   const occupante = etat.entites[indiceOccupante];
   const po = profil(occupante);
-  if (peutEcraser(etat, e, p, occupante, po)) {
-    occupante.pvMilli = 0;
-    occupante.vivant = false;
-    occupante.ecrase = true;
-    // ⚠ LA TROISIÈME MORT DU MOTEUR, ET ELLE EST DU MÊME GENRE QUE LA DEUXIÈME :
-    // un écrasement tue à l'étape 7, donc APRÈS `retirerLesMorts`. Le journal
-    // s'y accroche ici comme il s'y accroche dans `avancer`, faute de quoi une
-    // mort latérale manquerait au relevé — c'est la faute que le lot
-    // JOURNAL-DE-COMBAT a payée une fois.
-    etat.journal.destructions.push(faitDeLEntite(occupante));
-    retirer(occupation, rangee, caseDestination);
-    retirer(occupation, rangee, colonne);
-    poser(occupation, rangee, caseDestination, e.indice);
-    e.colonneMilli = destinationMilli;
+  if (peutEcraser(etat, e, p, occupante, po) && !ecrasees.includes(occupante)) {
+    // ⚠⚠⚠ LA VICTIME DE DERNIÈRE MINUTE — §2.2 du brief, et le seul chemin qui
+    // reste au franchissement. Une écrasable peut PARAÎTRE dans la case visée
+    // sans avoir jamais été au contact : une vague qui entre, une passagère qui
+    // débarque, une voisine qui arrive par le côté. Elle prend son quart comme
+    // les autres, **et l'écraseuse n'entre pas ce tick-là** : elle entrera quand
+    // la cellule sera libre.
+    //
+    // ⚠⚠ LE `includes` N'EST PAS UNE PRÉCAUTION, IL EMPÊCHE UN DOUBLE COUP. La
+    // case visée est `colonne + sens`, donc elle EST dans la fenêtre du
+    // balayage : une occupante déjà au contact y a déjà payé son quart quinze
+    // lignes plus haut. Sans ce test, une écraseuse assez rapide pour franchir
+    // depuis le contact tuerait en DEUX ticks au lieu de quatre.
+    ecraserAuContact(etat, occupation, occupante);
   }
+  // ⚠⚠⚠ ET PLUS AUCUN DÉPLACEMENT ICI — LOT CONTACT-2. Cette branche portait la
+  // TROISIÈME mort du moteur : `occupante.pvMilli = 0`, puis l'échange de cases
+  // dans la foulée. Elle est partie avec sa jumelle d'`avancer` ; `ecraserAuContact`
+  // est désormais le seul écrivain, et il ne déplace personne. Le franchissement
+  // devient un NON-ÉVÉNEMENT : quand la victime meurt, sa cellule se libère dans
+  // le même geste, `occupantDe` rend `undefined` au tick suivant, et l'écraseuse
+  // entre par la branche ordinaire quinze lignes plus haut.
+  //
+  // ⚠⚠ ENTRER MALGRÉ UNE OCCUPANTE VIVANTE CORROMPRAIT LA CARTE D'OCCUPATION, ET
+  // EN SILENCE : `poser` est un `Map.set`, donc la seconde entrée ÉCRASE la
+  // première, et l'entité perdue cesse de border qui que ce soit sans qu'aucune
+  // erreur ne le dise.
+  //
   // Masse égale ou inférieure : blocage, aucun décalage. « Peu importe si elle
   // se bloque » — Ethan, 06/09. Elle reste où elle est et retentera au tick
   // suivant.
@@ -2912,7 +3133,6 @@ function seDecaler(etat, e, p, occupation, obstacles) {
 function avancer(etat, e, p, occupation, obstacles) {
   const rangee = caseDepuisMilli(e.rangeeMilli);
   const colonne = caseColonne(e);
-  const vitesse = vitesseDuTick(etat, e, p, obstacles, rangee);
 
   // ⚠⚠⚠ LA CASE DEVANT, NOMMÉE UNE FOIS ET DONNÉE À SES DEUX LECTEURS — LE
   // PIÈGE DE L'ÉCRASEUR, TROUVÉ PAR EXÉCUTION ET PAS PAR RELECTURE.
@@ -2933,7 +3153,27 @@ function avancer(etat, e, p, occupation, obstacles) {
   // déplacer sans retirer les anciennes produit un `SyntaxError` franc ; laisser
   // l'ancienne VALEUR en place produit une destination NON BORNÉE et aucune
   // erreur — c'est-à-dire le saut d'hier, sous une marge qui a l'air calculée.
-  const marge = margeDeContact(etat, e, p, occupation, rangee, colonne, AXE_RANGEE, 1);
+  // ⚠⚠⚠ ET LE BALAYAGE PASSE DEVANT LA VITESSE — LOT CONTACT-2. La vitesse se
+  // déclarait ici même, DEUX lignes plus haut, avant `caseDevant` ; elle ne le
+  // peut plus : c'est le balayage qui dit s'il y a un écrasement en cours, donc
+  // lui qui décide du frein, donc il vient avant ce qu'il freine. L'ordre est
+  // désormais balayage → frein → vitesse → dégâts → pas.
+  const ecrasees = [];
+  const marge = margeDeContact(
+    etat, e, p, occupation, rangee, colonne, AXE_RANGEE, 1, ecrasees,
+  );
+  const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
+  const vitesse = vitesseDuTick(etat, e, p, obstacles, rangee, frein);
+  // ⚠⚠ LES DÉGÂTS SE PAIENT AVANT TOUT `return`, ET IL Y EN A CINQ EN DESSOUS —
+  // l'arrêt, le repli, la case inchangée, le fond, l'aviation. Le contact est un
+  // fait de POSITION : une unité arrêtée pour tirer sur un bâtiment, ou qui se
+  // replie ce tick-ci, écrase quand même ce qu'elle touche. Les compter plus bas
+  // rendrait l'écrasement dépendant d'une décision qui n'a rien à voir avec lui.
+  //
+  // ⚠⚠ ET C'EST AUSSI CE QUI FAIT DU FRANCHISSEMENT UN NON-ÉVÉNEMENT : la
+  // victime qui tombe ici libère sa cellule AVANT que la branche d'occupation ne
+  // la lise, donc l'écraseuse entre par le chemin ordinaire.
+  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
   const pas = Math.min(vitesse, marge);
   const destinationMilli = e.rangeeMilli + pas;
   const caseDestination = caseDepuisMilli(destinationMilli);
@@ -3100,25 +3340,31 @@ function avancer(etat, e, p, occupation, obstacles) {
   }
   const occupante = etat.entites[indiceOccupante];
   const po = profil(occupante);
-  if (peutEcraser(etat, e, p, occupante, po)) {
-    occupante.pvMilli = 0;
-    occupante.vivant = false;
-    occupante.ecrase = true;
-    // ⚠⚠ LA SECONDE MORT DU MOTEUR, ET ELLE A ÉTÉ TROUVÉE PAR UN TEST, PAS PAR
-    // RELECTURE. Le premier jet du lot JOURNAL-DE-COMBAT n'accrochait le journal
-    // qu'à `retirerLesMorts` en écrivant que c'était « la seule ligne qui fasse
-    // passer `vivant` à faux » — c'était FAUX, un écrasement tue à l'étape 7.
-    // Mesuré : une pièce sur vingt-trois manquait au journal sur la graine 9,
-    // et rien d'autre ne l'aurait dit.
+  if (peutEcraser(etat, e, p, occupante, po) && !ecrasees.includes(occupante)) {
+    // ⚠⚠⚠ LA VICTIME DE DERNIÈRE MINUTE — §2.2 du brief, et le seul chemin qui
+    // reste au franchissement. La case visée est `rangee + 1`, donc elle EST dans
+    // la fenêtre du balayage : une écrasable qui n'y figure pas est une écrasable
+    // qui n'était PAS au contact au début du tick — une vague qui vient d'entrer,
+    // une passagère qui vient de débarquer. Elle prend son quart comme les
+    // autres, **et l'écraseuse n'entre pas ce tick-là.**
     //
-    // ⚠ ET LA POSITION EST CELLE DE L'ÉCRASÉE, PAS DE L'ÉCRASEUSE : elle meurt
-    // là où elle était, sur la case que l'autre vient de lui prendre.
-    etat.journal.destructions.push(faitDeLEntite(occupante));
-    retirer(occupation, caseDestination, colonne);
-    retirer(occupation, rangee, colonne);
-    poser(occupation, caseDestination, colonne, e.indice);
-    e.rangeeMilli = destinationMilli;
+    // ⚠⚠ LE `includes` EMPÊCHE UN DOUBLE COUP, il n'est pas décoratif : sans lui,
+    // une écraseuse assez rapide pour franchir depuis le contact paierait deux
+    // quarts dans le même tick et tuerait en DEUX ticks au lieu de quatre.
+    ecraserAuContact(etat, occupation, occupante);
   }
+  // ⚠⚠⚠ ET PLUS AUCUNE AVANCE ICI — LOT CONTACT-2. Cette branche portait la
+  // SECONDE mort du moteur, `occupante.pvMilli = 0`, et l'échange de cases qui
+  // suivait. Les deux sites sont partis ensemble ; `ecraserAuContact` est le seul
+  // écrivain, et il ne déplace personne.
+  //
+  // ⚠⚠ ENTRER SUR UNE OCCUPANTE VIVANTE CORROMPRAIT LA CARTE D'OCCUPATION, EN
+  // SILENCE : `poser` est un `Map.set`, la seconde entrée ÉCRASE la première, et
+  // l'entité perdue cesse de borner qui que ce soit sans qu'aucune erreur ne le
+  // dise. L'écraseuse entrera au tick où la cellule sera libre — c'est-à-dire au
+  // tick qui suit la mort, `retirerLesMorts` ou le geste ci-dessus l'ayant
+  // retirée de la carte.
+  //
   // Masse égale ou inférieure : blocage, aucune avance. La structure forcée,
   // elle, a déjà encaissé ses 1 % plus haut : elle tombera, et l'unité
   // avancera au tick suivant — `retirerLesMorts` passe avant `deplacement`.

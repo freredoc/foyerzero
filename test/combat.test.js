@@ -455,19 +455,44 @@ test('T7 a — masse supérieure : la bloquante meurt, la mobile ne s\'arrête p
   // ⚠ Seuil déplacé au lot 4A : le Fendeur (Predator) avance à 90 milli-cases
   // par tick et non plus 100. Sa masse, elle, ne vient pas du relevé et n'a pas
   // bougé — l'écrasement au seuil de masse reste l'arbitrage d'Ethan.
-  // Le Meute défensif (masse 1) occupe la case 3, qui commence à 3000.
-  // 2000 + 11 × 90 = 2990 : encore dans la case 2. Le pas suivant viserait
-  // 3080, donc la case 3 — c'est là que la rencontre a lieu, au tick 12.
-  jouer(etat, 11);
-  assert.equal(fendeur.rangeeMilli, 2990);
-  assert.equal(meute.vivant, true, 'le Meute tient encore au tick 11');
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT CONTACT-2, 13/09 : L'ÉCRASEMENT SE PAIE AU CONTACT ET
+  // PREND QUATRE TICKS, LÀ OÙ IL TUAIT EN UN AU FRANCHISSEMENT DE L'INDEX.
+  // Ce test assertait « 2 990 au tick 11, écrasé au tick 12, Fendeur à 3 080 » :
+  // la rencontre avait lieu quand la position franchissait 3 000. Depuis le lot
+  // CONTACT, la marge colle l'écraseuse à sa victime dès le premier tick —
+  // 3 000 − 2 000 − MILLI_PAR_CASE = 0 — et depuis celui-ci la victime perd
+  // `ceil(pvMax / 4)` par tick de contact pendant que l'écraseuse avance au
+  // QUART de sa vitesse. Ce que le test garde n'a pas bougé d'un mot : la
+  // bloquante meurt, la mobile ne s'arrête pas.
+  //
+  // Le Meute défensif (masse 1) occupe la case 3, qui commence à 3000, et il
+  // porte 700 000 milli-PV — donc 175 000 par tick d'écrasement. Les tirs du
+  // Fendeur s'y ajoutent, si bien que les PV tombent un peu plus vite que le
+  // seul quart : 519 000 · 338 066 · 157 186 · 0.
+  const pvParTick = [];
+  for (let t = 1; t <= 3; t += 1) {
+    jouer(etat, t);
+    pvParTick.push(meute.pvMilli);
+  }
+  assert.deepEqual(pvParTick, [519_000, 338_066, 157_186], 'les PV décroissent à chaque tick de contact');
+  assert.equal(meute.vivant, true, 'le Meute tient encore au troisième tick de contact');
+  // Et l'écraseuse avance au quart : floor(90 / 4) = 22, trois fois.
+  assert.equal(fendeur.rangeeMilli, 2000 + 3 * 22);
 
-  jouer(etat, 12);
-  assert.equal(meute.vivant, false, 'écrasé au tick de la rencontre');
+  jouer(etat, 4);
+  assert.equal(meute.vivant, false, 'écrasé au quatrième tick de contact');
   assert.equal(meute.ecrase, true);
   assert.equal(meute.pvMilli, 0);
-  // Et la mobile continue sans s'arrêter : elle avance bien de 90 milli-cases.
-  assert.equal(fendeur.rangeeMilli, 3080);
+  assert.equal(fendeur.rangeeMilli, 2088, 'quatre pas freinés de 22');
+
+  // Et la mobile continue sans s'arrêter : le frein tombe avec sa cause, elle
+  // reprend 90 milli-cases par tick. 2 088 + 7 × 90 = 2 718 au tick 11, contre
+  // 2 990 avant le lot — l'écart vaut EXACTEMENT les quatre ticks de frein,
+  // 4 × (90 − 22) = 272.
+  jouer(etat, 11);
+  assert.equal(fendeur.rangeeMilli, 2718);
+  assert.equal(2990 - 2718, 4 * (90 - 22), 'l’écart au nombre d’avant EST le frein');
 });
 
 test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {

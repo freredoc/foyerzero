@@ -116,6 +116,8 @@ import {
   RAPPORTS_PROCHE_REJEU, RAPPORTS_OUVRAGE_REJEU, CLES_AJOUTEES_PAR_REJEU,
   DEPLACES_PAR_CONTACT, EMPREINTES_PAR_GRAINE_CONTACT,
   RAPPORTS_PROCHE_CONTACT, RAPPORTS_OUVRAGE_CONTACT,
+  DEPLACES_PAR_CONTACT_2, EMPREINTES_PAR_GRAINE_CONTACT_2,
+  RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -260,7 +262,14 @@ function empreinteAttendue(phase, champ) {
   // la case d'autrui. ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines
   // sur 25, la taille de la sauvegarde comprise : c'est ce qui dit que le lot ne
   // touche ni la carte, ni l'économie, ni la pose, ni le choix de cible.
-  return DEPLACES_PAR_CONTACT[phase]?.[champ]
+  // ⚠⚠ VINGT-CINQUIÈME COUCHE — lot CONTACT-2, 13/09. **Trente et un couples sur
+  // 350**, cinq champs, phases p07 à p14 : les SIX PREMIÈRES PHASES sont encore
+  // identiques AU BIT. Le chevauchement en travers se ferme et l'écrasement dure
+  // quatre ticks — ce qui bouge est le DÉROULÉ d'un combat. ⚠⚠ AUCUN SCALAIRE
+  // NE BOUGE, les dix-sept, sur 25 graines sur 25, la taille de la sauvegarde
+  // comprise.
+  return DEPLACES_PAR_CONTACT_2[phase]?.[champ]
+    ?? DEPLACES_PAR_CONTACT[phase]?.[champ]
     ?? DEPLACES_PAR_REJEU[phase]?.[champ]
     ?? DEPLACES_PAR_BAREME_ET_REJEU[phase]?.[champ]
     ?? DEPLACES_PAR_VITESSE[phase]?.[champ]
@@ -688,7 +697,15 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // change rien. Le `??` reste donc NÉCESSAIRE, comme aux lots MUR, VITESSE et
     // BARÈME-ET-REJEU, et c'est la moitié qui distingue un lot qui mord là où il
     // doit d'un lot qui déplace tout.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_CONTACT[g]
+    // ⚠⚠ CONTACT-2 (13/09) N'EN DÉPLACE QUE **SIX SUR VINGT-CINQ**, ET C'EST LA
+    // TABLE LA PLUS CREUSE DE L'HISTOIRE DE CE TÉMOIN — contre 23 au lot CONTACT
+    // et 25 au lot REJEU. Sur les dix-neuf autres parties, aucune pièce ne mordait
+    // sur deux index EN TRAVERS au cours des deux raids du scénario, et aucune
+    // écraseuse n'avait de victime : la règle neuve n'y a rien à changer. Le `??`
+    // reste donc NÉCESSAIRE, et c'est la moitié qui distingue un lot qui mord là
+    // où il doit d'un lot qui déplace tout.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_CONTACT_2[g]
+      ?? EMPREINTES_PAR_GRAINE_CONTACT[g]
       ?? EMPREINTES_PAR_GRAINE_REJEU[g]
       ?? EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU[g]
       ?? EMPREINTES_PAR_GRAINE_VITESSE[g] ?? EMPREINTES_PAR_GRAINE_APPROCHE[g]
@@ -878,8 +895,15 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // garnison est dense et les files longues ; celui de l'Ouvrage frappe la
       // base du JOUEUR, que le scénario peuple à la main et bien plus
       // clairsemée.
+      // ⚠⚠ ET LE LOT CONTACT-2 EN DÉPLACE ENCORE MOINS — **5 sur 25 côté
+      // proximité, 2 sur 25 côté Ouvrage** —, ce qui est la forme du lot MUR
+      // poussée d'un cran. Le même écart entre les deux côtés se lit, et pour la
+      // même raison : la base du joueur est clairsemée, donc deux pièces ne s'y
+      // croisent presque jamais en travers. Une table PLEINE voudrait dire que le
+      // lot déplace le résultat de tout raid, ce qu'il ne fait pas.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_CONTACT[g]
+        ? (RAPPORTS_OUVRAGE_CONTACT_2[g]
+          ?? RAPPORTS_OUVRAGE_CONTACT[g]
           ?? RAPPORTS_OUVRAGE_REJEU[g] ?? RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
           ?? RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
           ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
@@ -889,7 +913,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_CONTACT[g]
+        : (RAPPORTS_PROCHE_CONTACT_2[g]
+          ?? RAPPORTS_PROCHE_CONTACT[g]
           ?? RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
           ?? RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_PROCHE_RETOUCHES[g]
