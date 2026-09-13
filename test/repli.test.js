@@ -102,14 +102,30 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
   const combat = creerCombat(ennemi);
   const attaquant = combat.entites.find((e) => e.camp === 'attaque');
   const defenseur = combat.entites.find((e) => e.camp === 'defense' && e.id === 'meute');
-  // 2000 + 11 × 90 = 2990, encore en case 2 ; le pas suivant viserait 3080,
-  // donc la case 3 : la rencontre a lieu au tick 12.
-  jouer(combat, 11);
-  assert.equal(defenseur.vivant, true, 'pas encore au contact au tick 11');
-  jouer(combat, 12);
-  assert.equal(defenseur.vivant, false, 'écrasé au tick de la rencontre');
+  // ⚠⚠ RÉANCRÉ AU LOT CONTACT-2, 13/09 — MÊME PRÉMISSE PERDUE QUE
+  // `combat.test.js T7 a`, ET POUR LA MÊME RAISON. Ce montage assertait
+  // « 2 000 + 11 × 90 = 2 990, encore en case 2 ; la rencontre a lieu au tick
+  // 12 » : l'écrasement tuait au FRANCHISSEMENT de l'index. Depuis le lot
+  // CONTACT la marge colle l'écraseuse à sa victime dès le premier tick, et
+  // depuis celui-ci la victime perd `ceil(pvMax / 4)` par tick de contact —
+  // quatre ticks sur une pièce intacte — pendant que l'écraseuse avance au
+  // quart de sa vitesse, floor(90 / 4) = 22.
+  // Ce que ce test garde n'a pas bougé : entre camps opposés l'écrasement a
+  // bien lieu, et la mobile ne s'arrête pas pour autant.
+  jouer(combat, 3);
+  assert.equal(defenseur.vivant, true, 'la victime tient encore au troisième tick de contact');
+  assert.ok(
+    defenseur.pvMilli < defenseur.pvMaxMilli,
+    'et elle est déjà entamée — sans quoi le contact ne mordrait pas',
+  );
+  jouer(combat, 4);
+  assert.equal(defenseur.vivant, false, 'écrasée au quatrième tick de contact');
   assert.equal(defenseur.ecrase, true);
-  assert.equal(attaquant.rangeeMilli, 3080, 'et la mobile continue sans s\'arrêter');
+  assert.equal(attaquant.rangeeMilli, 2088, 'quatre pas freinés de 22');
+  // Le frein tombe avec sa cause : 2 088 + 7 × 90 = 2 718 au tick 11, contre
+  // 2 990 avant le lot.
+  jouer(combat, 11);
+  assert.equal(attaquant.rangeeMilli, 2718, 'et la mobile continue sans s\'arrêter');
 });
 
 // ---------------------------------------------------------------------------
@@ -532,8 +548,28 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // gagnés, pris par l'autre bout : une file qui ne rend plus une case de vide
   // derrière chaque bloqueuse arrive plus tôt ET plus nombreuse sur les
   // bâtiments. Aucun barème n'a été touché ; le calibrage revient à Ethan.
-  assert.deepEqual(r.butin, { quartz: 6471, scorie: 2157 });
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
+  // ⚠⚠ LOT CONTACT-2 : 6 471 → 150 ET 2 157 → 50, SOIT 2,3 % DE CE QUE LE
+  // RAID RAPPORTAIT — ET LE TICK NE BOUGE PAS D'UNE UNITÉ. C'est le premier lot
+  // de l'histoire de ce seuil à déplacer le BUTIN sans déplacer la DURÉE : 501
+  // ticks, cause `attaquants`, des deux côtés.
+  // ⚠⚠ ET L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE : tout vient de la FENÊTRE
+  // élargie, rien de l'écrasement progressif ni du frein. En ramenant le
+  // balayage perpendiculaire de `margeDeContact` à la seule colonne du milieu
+  // — `j = 0`, l'ancienne fenêtre à deux cellules — le raid rend EXACTEMENT
+  // 6 471 et 2 157 et ses quatre survivants ; et les quatre combinaisons de
+  // `ECRASEMENT_TICKS` × `ECRASEMENT_FREIN` (1×1, 4×1, 1×4, 4×4) rendent toutes
+  // 150 et 50. Une file qui voit désormais la bloqueuse à cheval sur la colonne
+  // voisine s'arrête là où elle la traversait : elle atteint moins les
+  // bâtiments, donc elle en rapporte moins. Aucun barème n'a été touché ; le
+  // calibrage revient à Ethan.
+  assert.deepEqual(r.butin, { quartz: 150, scorie: 50 });
+  assert.notDeepEqual(
+    r.butin, { quartz: 6471, scorie: 2157 },
+    'la fenêtre élargie est ce qui déplace ce butin — le nombre d\'avant ne doit pas revenir',
+  );
+  // ⚠ Quatre survivants → trois, et les TROIS sont rentrés : même mécanique vue
+  // par l'autre bout, on avance moins loin donc on s'expose moins longtemps.
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',

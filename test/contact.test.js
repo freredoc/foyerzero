@@ -24,7 +24,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { creerCombat, tick } from '../src/sim/combat.js';
+import {
+  creerCombat, tick, ECRASEMENT_TICKS, ECRASEMENT_FREIN,
+} from '../src/sim/combat.js';
 import { MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
 import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
@@ -179,6 +181,24 @@ function raidsReels() {
   return sortie;
 }
 
+/**
+ * ⚠⚠ LE MONTAGE DE L'ÉCRASEMENT, POUR `CONTACT-2 T1` — ET IL N'ENTRE PAS DANS
+ * `MONTAGES`. Les deux invariants de ce fichier (aucun saut, aucun
+ * chevauchement hors écrasement différé) sont mesurés sur les sept montages de
+ * la table ; celui-ci sert à mesurer la DURÉE d'un écrasement, ce qui est une
+ * autre grandeur. L'y ajouter ferait porter à `CONTACT T1` et à `CONTACT-2 T2`
+ * des comptes qu'ils n'ont pas mesurés.
+ *
+ * Un Fendeur assaillant (masse 10) en rangée 2, colonne 5 ; un Meute défensif
+ * (masse 1) en rangée 3, même colonne. L'écart vaut 3 000 − 2 000 = une case
+ * pile, donc `margeDeContact` rend **zéro dès le premier tick** : le contact est
+ * immédiat, et les quatre ticks se comptent à partir de là.
+ */
+const ECRASEMENT = montage({
+  defenseurs: [{ id: 'meute', rangee: 3, colonne: 5 }],
+  vagues: [[{ id: 'fendeur', rangee: GRILLE.bandes.deploiement.derniere, colonne: 5 }]],
+});
+
 const MONTAGES = [
   ['convergence (§1)', CONVERGENCE],
   ['file verticale (§1.3)', FILE],
@@ -267,7 +287,99 @@ test('CONTACT T1 — aucune entité ne franchit plus que son pas nominal en un t
 });
 
 // ---------------------------------------------------------------------------
-// CONTACT T2 — AUCUN CHEVAUCHEMENT
+// CONTACT-2 T1 — UN ÉCRASEMENT PREND QUATRE TICKS, ET IL USE LA VICTIME
+// ---------------------------------------------------------------------------
+
+// ⚠⚠ VU ROUGE SUR L'ARBRE FUSIONNÉ AVANT D'ÊTRE ÉCRIT — ET PAS PAR L'ASSERTION
+// QUE LE BRIEF ANNONÇAIT. Son §5 prévoyait que « la victime est morte au premier
+// tick de contact, donc „ vivante au tick 3 “ tombe » ; **mesuré, c'est l'autre
+// moitié qui mord d'abord**, parce que le moteur du lot CONTACT ne tue pas au
+// contact mais au FRANCHISSEMENT de l'index — sur ce montage, au tick 12. La
+// victime y est donc bien vivante au tick 3, et ce qui tombe est la chute de PV :
+//   « tick 1 : la chute (6000) doit valoir au moins le quart (175000) »
+// — les 6 000 sont le TIR du Fendeur, et rien d'autre : l'écrasement n'a pas
+// commencé. C'est l'arbitrage d'Ethan du 13/09 pris à l'envers : « On prend c
+// plus vitesse divisée par quatre. »
+//
+// ⚠⚠ ET LE COMPORTEMENT SE DÉRIVE DES DEUX CONSTANTES, DONC LES DEUX SE PINNENT.
+// Le test lit `ECRASEMENT_TICKS` et `ECRASEMENT_FREIN` au lieu de retaper 4 —
+// une seule table fait foi par grandeur — mais un test qui ne ferait QUE dériver
+// serait vrai sous n'importe quelle valeur : **mesuré, à `ECRASEMENT_TICKS = 1`
+// la boucle des trois premiers ticks ne tourne plus et tout le reste passe.** Les
+// deux valeurs sont donc ÉPINGLÉES ci-dessous, comme témoins de calibrage, et
+// c'est ce qui fait tomber le test quand la règle change de paramètre.
+test('CONTACT-2 T1 — un écrasement prend quatre ticks de contact, et il use la victime', () => {
+  // ⚠ TÉMOINS DE CALIBRAGE — valeurs arbitrées par Ethan le 13/09, à réaligner
+  // au prochain arbitrage sans jamais servir d'argument CONTRE lui. Elles sont
+  // épinglées ici, et là seulement : tout le reste du test les DÉRIVE.
+  assert.equal(ECRASEMENT_TICKS, 4, 'un écrasement prend quatre ticks de contact');
+  assert.equal(ECRASEMENT_FREIN, 4, 'et l\'écraseuse y avance au quart de sa vitesse');
+
+  const etat = creerCombat(ECRASEMENT);
+  const ecraseuse = etat.entites.find((e) => e.camp === 'attaque');
+  const victime = etat.entites.find((e) => e.camp === 'defense' && e.id === 'meute');
+
+  // ⚠ LE MONTAGE MESURE QUELQUE CHOSE, ET ON LE PROUVE AVANT D'ASSERTER QUOI QUE
+  // CE SOIT : la victime est INTACTE, les masses sont strictement ordonnées, et
+  // l'écart vaut une case pile — donc le contact est immédiat. Sans ces trois
+  // lignes, un montage où personne ne se touche passerait le test.
+  assert.equal(victime.pvMilli, victime.pvMaxMilli, 'la victime doit être intacte');
+  assert.ok(masseDe(ecraseuse) > masseDe(victime), 'l\'écraseuse doit être plus lourde');
+  assert.equal(victime.rangeeMilli - ecraseuse.rangeeMilli, MILLI_PAR_CASE,
+    'une case pile : la marge vaut zéro dès le premier tick');
+
+  const depart = ecraseuse.rangeeMilli;
+  const quart = Math.ceil(victime.pvMaxMilli / ECRASEMENT_TICKS);
+  const pasFreine = Math.floor(UNITES[ecraseuse.id].vitesse / ECRASEMENT_FREIN);
+
+  // ⚠ LES TROIS PREMIERS TICKS DE CONTACT : la victime tient, ses PV décroissent
+  // STRICTEMENT, et chaque chute vaut AU MOINS le quart — au moins, parce que
+  // l'écraseuse lui tire dessus en même temps, et un test qui exigerait
+  // l'égalité mesurerait le barème de tir au lieu de l'écrasement.
+  let precedent = victime.pvMilli;
+  for (let t = 1; t < ECRASEMENT_TICKS; t += 1) {
+    tick(etat);
+    assert.ok(victime.pvMilli < precedent,
+      `tick ${t} : les PV doivent décroître (${precedent} → ${victime.pvMilli})`);
+    assert.ok(precedent - victime.pvMilli >= quart,
+      `tick ${t} : la chute (${precedent - victime.pvMilli}) doit valoir au moins le quart (${quart})`);
+    assert.equal(victime.vivant, true,
+      `la victime doit tenir jusqu'au tick ${ECRASEMENT_TICKS - 1} de contact (tick ${t})`);
+    precedent = victime.pvMilli;
+  }
+
+  // ⚠ ET ELLE MEURT AU QUATRIÈME, PAR L'ÉCRASEMENT — pas par un tir, pas par
+  // `retirerLesMorts` : `ecrase` est vrai, et son fait est au journal DU TICK
+  // QUI TUE. C'est la comptabilité que le lot JOURNAL-DE-COMBAT a payée une fois
+  // pour l'avoir oubliée — « une pièce sur vingt-trois manquait au journal ».
+  tick(etat);
+  assert.equal(victime.vivant, false, `morte au tick ${ECRASEMENT_TICKS} de contact`);
+  assert.equal(victime.ecrase, true, 'écrasée, et non abattue');
+  assert.equal(victime.pvMilli, 0);
+  assert.ok(
+    etat.journal.destructions.some((f) => f.indice === victime.indice),
+    'le fait de la destruction doit être publié au tick qui tue',
+  );
+
+  // ⚠⚠ ET LE FREIN EST LA SECONDE MOITIÉ DE L'ARBITRAGE : pendant les quatre
+  // ticks, l'écraseuse avance au QUART de sa vitesse. Le pas se dérive de la
+  // table — `floor(90 / 4) = 22` — et jamais d'un nombre retapé.
+  assert.equal(ecraseuse.rangeeMilli - depart, ECRASEMENT_TICKS * pasFreine,
+    'quatre pas freinés, et pas un de plus');
+  assert.ok(pasFreine < UNITES[ecraseuse.id].vitesse,
+    'le frein doit mordre — sans quoi cette dernière assertion ne dirait rien');
+
+  // ⚠ LE FREIN TOMBE AVEC SA CAUSE : au tick suivant, plus personne à écraser,
+  // l'écraseuse reprend sa pleine vitesse. C'est ce qui distingue un frein d'un
+  // ralentissement permanent, et rien d'autre ne le mesure.
+  const avant = ecraseuse.rangeeMilli;
+  tick(etat);
+  assert.equal(ecraseuse.rangeeMilli - avant, UNITES[ecraseuse.id].vitesse,
+    'le frein doit tomber avec sa cause');
+});
+
+// ---------------------------------------------------------------------------
+// CONTACT-2 T2 — LA FAMILLE B EST FERMÉE
 // ---------------------------------------------------------------------------
 
 // ⚠⚠ C'EST L'ÉNONCÉ GÉOMÉTRIQUE COMPLET, et il ne se scinde pas. Une entité
@@ -275,83 +387,93 @@ test('CONTACT T1 — aucune entité ne franchit plus que son pas nominal en un t
 // case ne se recouvrent que si les DEUX intervalles se recouvrent. Tester un
 // seul axe refuserait deux pièces côte à côte, qui sont l'état normal.
 //
-// ⚠⚠ VU ROUGE SUR L'ARBRE INTACT : il tombe au premier montage, tick 26 —
-// « convergence (§1), tick 26 : ratisseur et ratisseur se recouvrent
-//   (Δrangée 0, Δcolonne 920) ». Le §1 du brief le décrit autrement, par le saut
-// du tick SUIVANT ; c'est le MÊME fait pris un tick plus tôt : le saut n'est que
-// la façon dont l'ancien moteur défaisait le recouvrement qu'il venait de créer.
+// ⚠⚠⚠ CE TEST **EST** L'ANCIEN `CONTACT T2`, PRIVÉ DE SON EXCEPTION B — il n'y
+// en a pas un second à côté, le dépôt aurait deux vérités sur le même
+// invariant. Ce que le lot CONTACT avait découvert et laissé ouvert, le §9 de
+// `rapports/RAPPORT-lotCONTACT.md` le posait à Ethan en deux familles ; son
+// arbitrage du 13/09 est **« A : garder — B : à corriger. »**
 //
-// ⚠⚠⚠ ET IL TOMBE AUSSI SUR LES RAIDS RÉELS, POUR UNE RAISON QUI N'EST NI LE
-// RANGEMENT NI LE FLUAGE. Le §8 du brief l'avait prévu et tranché d'avance :
-// « SI T2 TOMBE SUR UN MONTAGE POUR UNE AUTRE RAISON QUE LE RANGEMENT OU LE
-// FLUAGE, NE PAS L'AFFAIBLIR — L'ÉCRIRE. » Il posait que l'invariant « devrait
-// tenir par construction, les pièces étant posées sur des multiples exacts et
-// **l'écrasement tuant dans le même pas** ». Mesuré : l'écrasement ne tue PAS
-// dans le même pas, et ce n'est pas tout.
+//   famille                        CONTACT   CONTACT-2
+//   A — l'écrasement différé            69          26
+//   B — le croisement à cheval          22           0
+//   TOTAL                               91          26   (−71,4 %)
 //
-// DEUX FAMILLES RESTENT, ET LES DEUX SONT ANTÉRIEURES AU LOT — mesuré sur les
-// quatre raids réels, 1 981 774 paires comparées, arbre d'avant contre arbre
-// d'après :
+// **B — LE CROISEMENT À CHEVAL SUR DEUX INDEX : FERMÉ.** Les deux axes se
+// scannaient séparément, chacun sur son propre index de case, et une entité à
+// une position fractionnaire est à cheval sur deux index de son axe : l'autre
+// ne scannait pas celui-là. `margeDeContact` balaie désormais la colonne
+// PERPENDICULAIRE de part et d'autre — six cellules au lieu de deux — et
+// écarte une bloqueuse dont le pavé ne mord pas le sien. **Zéro paire sur les
+// quatre raids réels, là où le fusionné en rendait 22, toutes dans
+// `avantPoste/n20/g2`.** La branche qui les comptait est devenue un
+// `assert.fail` : une paire de cette nature FAIT TOMBER le test au lieu d'être
+// tolérée.
 //
-//   famille                              AVANT   APRÈS
-//   A — l'écrasement différé               144      69
-//   B — le croisement à cheval             591      22
-//   TOTAL                                  735      91   (−87,6 %)
+// **A — L'ÉCRASEMENT DIFFÉRÉ : GARDÉ, SUR ARBITRAGE, ET IL MAIGRIT DE 62 %.**
+// `bloqueuseSur` rend `null` sur une occupante ÉCRASABLE — sinon la marge
+// bornerait le pas avant que `peutEcraser` ne soit atteint et l'écrasement
+// mourrait en silence — donc l'écraseuse entre dans le pavé de sa victime et
+// les deux se recouvrent jusqu'à la mort. Ce que CONTACT-2 change est la DURÉE
+// de cet épisode, pas son existence : la victime meurt désormais au CONTACT, en
+// quatre ticks de `ceil(pvMax / 4)`, là où elle mourait au franchissement de
+// l'INDEX, ce qui pouvait prendre bien plus longtemps et enfoncer l'écraseuse
+// presque entièrement dans le pavé de sa victime.
+// **Mesuré sur les quatre raids réels, même filtre que ce test : profondeur
+// maximale 930 → 138 millièmes, durée maximale 22 → 4 ticks.** ⚠ Le brief
+// annonçait « 952 millièmes et huit ticks » ; les deux sont faux, et le second
+// l'est du simple au double — **écart déclaré**. Le 11 est le pire d'un SEUL
+// montage, `base/n35/g3` ; le pire des quatre vaut **22**, dans
+// `avantPoste/n20/g2`, qui est aussi celui où la famille B vivait. La fermer demanderait de tuer AVANT d'entrer, donc de renoncer à
+// l'écrasement progressif qu'Ethan vient d'arbitrer. **Elle reste ouverte, et
+// c'est son choix.**
 //
-// **A — L'ÉCRASEMENT DIFFÉRÉ.** `bloqueuseSur` rend `null` sur une occupante
-// ÉCRASABLE — c'est le §3 du brief mot pour mot, « sinon l'écrasement meurt en
-// silence » —, donc la marge de l'écraseuse est infinie et elle entre dans le
-// pavé de sa victime. Mais `avancer` ne TUE qu'au franchissement de l'INDEX de
-// case : entre les deux, les deux pavés se recouvrent pendant plusieurs ticks.
-// Relevé : un Bélier à 9 048 sous une Meute à 10 000, Δ 952, sur huit ticks.
-// **Fermer cette famille demanderait d'écraser au CONTACT et non au
-// franchissement, c'est-à-dire de déplacer l'instant de la mort — une règle de
-// jeu. Ethan tranche ; le lot ne la touche pas.**
-//
-// **B — LE CROISEMENT À CHEVAL SUR DEUX INDEX.** Les deux axes se scannent
-// SÉPARÉMENT, chacun sur son propre index de case : `avancer` regarde les
-// rangées devant DANS SA COLONNE, `seDecaler` les colonnes à côté DANS SA
-// RANGÉE. Une entité à une position fractionnaire est à cheval sur deux index
-// de son axe, et l'autre ne scanne pas celui-là. Relevé : une Meute décalée en
-// colonne 1 720 et une Carapace montée en rangée 7 020, masses ÉGALES donc
-// aucun écrasement — chacune est hors de l'index que l'autre inspecte.
-// **Le lot en retire 96 % ; le reste demande un balayage à deux index par axe,
-// donc quatre cases au lieu de deux, et c'est un changement de coût du tick.
-// Ethan tranche.**
-//
-// ⚠⚠ ET CE TEST NE SE DESSERRE PAS POUR AUTANT — IL EST LE CONTRAIRE D'UNE
-// TOLÉRANCE, ET C'EST L'IDIOME DE `DETTES_ACCENT` : les deux familles sont
-// NOMMÉES, leurs comptes sont EXACTS, et chacune porte une caractérisation
-// POSITIVE qui peut tomber. Un chevauchement d'une troisième nature tombe par
-// son nom ; un de plus ou de moins dans l'une des deux fait tomber le compte et
-// oblige à remesurer. **Le jour où l'une des deux se ferme, ce test tombe : c'est
-// ce qu'on lui demande.**
-test('CONTACT T2 — deux bloquantes actives ne se recouvrent jamais, hors deux familles nommées et comptées', () => {
+// ⚠⚠ ET CE TEST NE SE DESSERRE PAS — IL EST LE CONTRAIRE D'UNE TOLÉRANCE, ET
+// C'EST L'IDIOME DE `DETTES_ACCENT` : la seule famille qui reste est NOMMÉE, son
+// compte est EXACT, sa répartition par montage l'est aussi, et elle porte une
+// caractérisation POSITIVE qui peut tomber — camps opposés, masses strictement
+// différentes. Un chevauchement d'une autre nature tombe par son nom ; un de
+// plus ou de moins fait tomber le compte et oblige à remesurer. **Le jour où A
+// se ferme à son tour, ce test tombe : c'est ce qu'on lui demande.**
+test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé recouvre, nommé et compté', () => {
   // ⚠ LES TROIS MONTAGES DU BRIEF SONT TENUS EN ABSOLU, SANS AUCUNE EXCEPTION.
-  // C'est la scène qu'Ethan a rapportée, et c'est là que le test est rouge sur
-  // l'arbre d'avant le lot.
+  // C'est la scène qu'Ethan a rapportée, et c'est là que le test était rouge sur
+  // l'arbre d'avant le lot CONTACT.
   const ABSOLUS = new Set(['convergence (§1)', 'file verticale (§1.3)', 'masse égale (§1.4)']);
 
-  // ⚠ LES DEUX COMPTES SONT DES RELEVÉS DU 13/09, PAS DES SEUILS. Ils se
-  // remesurent au prochain lot qui touche au déplacement, et ils ne se
-  // relèvent JAMAIS pour faire passer un lot.
-  const ATTENDUS = { A: 69, B: 22 };
+  // ⚠ LE COMPTE EST UN RELEVÉ DU 13/09, PAS UN SEUIL. Il se remesure au
+  // prochain lot qui touche au déplacement, et il ne se relève JAMAIS pour
+  // faire passer un lot. ⚠ Et il n'y a plus de clé `B` : la famille est
+  // fermée, donc son exception est RETIRÉE et non mise à zéro — un zéro
+  // laisserait une place où la reposer.
+  const ATTENDUS = { A: 26 };
   const PAR_MONTAGE = {
-    'camp/n5/g1': { A: 8, B: 0 },
-    'avantPoste/n20/g2': { A: 39, B: 22 },
-    'base/n35/g3': { A: 11, B: 0 },
-    'base/n50/g4': { A: 11, B: 0 },
+    'camp/n5/g1': { A: 4 },
+    'avantPoste/n20/g2': { A: 15 },
+    'base/n35/g3': { A: 4 },
+    'base/n50/g4': { A: 3 },
   };
 
   let paires = 0;
-  const comptes = { A: 0, B: 0 };
+  let ticksJoues = 0;
+  let pasMax = 0;
+  const comptes = { A: 0 };
   const parMontage = {};
   for (const [nom, m] of MONTAGES) {
-    if (!ABSOLUS.has(nom)) parMontage[nom] = { A: 0, B: 0 };
+    if (!ABSOLUS.has(nom)) parMontage[nom] = { A: 0 };
     const etat = creerCombat(m);
+    let avant = releverPositions(etat);
     for (let t = 1; t <= TICKS; t += 1) {
       tick(etat);
+      ticksJoues += 1;
+      const apres = releverPositions(etat);
       const actives = etat.entites.filter((e) => estActive(e) && estBloquante(e.genre, e.id));
+      for (const e of actives) {
+        const d = avant.get(e.indice);
+        if (d === undefined) continue; // elle vient d'apparaître : posée, pas déplacée
+        pasMax = Math.max(pasMax,
+          Math.abs(e.rangeeMilli - d.r), Math.abs(e.colonneMilli - d.c));
+      }
+      avant = apres;
       for (let i = 0; i < actives.length; i += 1) {
         for (let j = i + 1; j < actives.length; j += 1) {
           const a = actives[i];
@@ -374,28 +496,32 @@ test('CONTACT T2 — deux bloquantes actives ne se recouvrent jamais, hors deux 
             parMontage[nom].A += 1;
             continue;
           }
-          // FAMILLE B — le croisement à cheval. ⚠ SA CARACTÉRISATION EST
-          // POSITIVE, ET C'EST CE QUI LA REND FALSIFIABLE : au moins une des
-          // quatre coordonnées n'est PAS un multiple de `MILLI_PAR_CASE`. Deux
-          // bloquantes qui se recouvriraient en étant toutes deux sur des
-          // multiples exacts violeraient la carte d'occupation elle-même —
-          // c'est un défaut d'une troisième nature, et il tombe ici.
+          // ⚠⚠ TOUT LE RESTE FAIT TOMBER LE TEST. La famille B est fermée depuis
+          // le lot CONTACT-2 ; le message garde sa caractérisation — « au moins
+          // une des quatre coordonnées n'est pas un multiple de MILLI_PAR_CASE »
+          // — pour que la paire qui reviendrait se DIAGNOSTIQUE au lieu de se
+          // compter.
           const aCheval = [a.rangeeMilli, a.colonneMilli, b.rangeeMilli, b.colonneMilli]
             .some((v) => v % MILLI_PAR_CASE !== 0);
-          assert.ok(aCheval,
-            `${nom}, tick ${t} : ${a.id} et ${b.id} se recouvrent sur des multiples EXACTS `
-            + `(${a.rangeeMilli}, ${a.colonneMilli}) et (${b.rangeeMilli}, ${b.colonneMilli}) : `
-            + 'ni écrasement différé ni croisement à cheval, c\'est une troisième famille');
-          comptes.B += 1;
-          parMontage[nom].B += 1;
+          assert.fail(
+            `${nom}, tick ${t} : ${a.id} et ${b.id} se recouvrent hors écrasement différé `
+            + `(${a.rangeeMilli}, ${a.colonneMilli}) et (${b.rangeeMilli}, ${b.colonneMilli}) — `
+            + `à cheval sur deux index : ${aCheval}`,
+          );
         }
       }
       if (etat.termine) break;
     }
   }
+  // ⚠ LES TROIS PLANCHERS DE FALSIFIABILITÉ. Sans eux, un moteur qui ne
+  // bougerait plus personne — ou qui ne produirait plus une seule paire à
+  // comparer — passerait ce test la tête haute, et « zéro famille B » ne
+  // voudrait rien dire.
+  assert.ok(ticksJoues > 2000, `seulement ${ticksJoues} ticks joués`);
   assert.ok(paires > 100_000, `seulement ${paires} paires comparées`);
+  assert.ok(pasMax > 0, 'aucune bloquante n\'a bougé d\'un millième : le montage ne mesure rien');
   assert.deepEqual(comptes, ATTENDUS,
-    'le compte des deux familles a bougé : remesurer et réécrire le pavé ci-dessus, '
-    + 'jamais relever les nombres pour faire passer le lot');
+    'le compte de la famille A a bougé : remesurer et réécrire le pavé ci-dessus, '
+    + 'jamais relever le nombre pour faire passer le lot');
   assert.deepEqual(parMontage, PAR_MONTAGE, 'la répartition par montage a bougé');
 });

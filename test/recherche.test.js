@@ -3395,7 +3395,16 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   // reprend. Les POINTS, eux, n'ont bougé d'aucune unité sur les deux lots —
   // c'est exactement ce que cette ligne existe pour dire, et elle le dit deux
   // fois mieux en revenant à son point de départ.
-  assert.equal(jeu.resultat.tick, 120, 'montage : le combat doit se dérouler pareil');
+  // ⚠⚠ LOT CONTACT-2 (13/09) : 121, UN TICK DE PLUS, ET LES CINQ NOMBRES DE
+  // POINTS DE CE TEST NE BOUGENT PAS D’UNE UNITÉ — mesuré, pas supposé : 2 059 722
+  // trois fois et 2 106 166 deux fois, exactement comme avant le lot. **C’est la
+  // troisième fois que la règle de déplacement bouge sous ce montage sans que les
+  // points bronchent**, et c’est tout ce que cette ligne existe pour dire.
+  // ⚠ ATTRIBUÉ PAR ISOLATION : la fenêtre de balayage ramenée à deux cellules
+  // rend **121 aussi** — elle n’y est donc pour rien — et l’écrasement instantané
+  // sous la fenêtre de six rend **120**. Le tick de plus est l’écrasement en
+  // quatre ticks, et rien d’autre.
+  assert.equal(jeu.resultat.tick, 121, 'montage : le combat doit se dérouler pareil');
 
   // ⚠ ET LE MONTAGE N'EST PAS VIDE. Le Merlon porte `pvPlusVingt` côté Ouvrage :
   // débloquer ce module-là majore bien les points. Sans cette ligne, l'égalité
@@ -4888,7 +4897,11 @@ test('MODULES-E T7 — contre-épreuve : le même nom dans l\'AUTRE branche ne r
   // ⚠⚠ LOT MUR (10/09) : 120, le nombre d'avant le lot ARRÊT, comme à
   // MODULES-D T4 et pour la même raison retournée — l'arrêt devant le Merlon est
   // rétabli, le montage n'a toujours pas bougé, et les POINTS non plus.
-  assert.equal(resultat.tick, 120, 'le combat lui-même a changé : le module a été lu');
+  // ⚠ LOT CONTACT-2 (13/09) : 121, comme à MODULES-D T4, même montage et même
+  // attribution — l’écrasement en quatre ticks, mesuré par isolation ; la
+  // fenêtre de balayage n’y est pour rien. **Et les points ne bougent toujours
+  // pas d’une unité**, ce qui est la seule chose que ce test garde.
+  assert.equal(resultat.tick, 121, 'le combat lui-même a changé : le module a été lu');
 });
 
 test('MODULES-E T8 — le déterminisme tient, les deux branches armées', () => {
@@ -5754,6 +5767,20 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // sixième fois que ce montage perd une prémisse, et le fait reste le même —
   // **un montage qui dépend d'une disposition tirée la reperdra au prochain lot
   // qui touche au déroulé.**
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : LES TROIS GRAINES NE CHANGENT PAS, ET C'EST LA
+  // TROISIÈME FOIS QUE LA PRÉMISSE TIENT — après DISPOSITION-OUVRAGE et
+  // BARÈME-ET-REJEU. Les trois discriminent toujours aux trois niveaux ; balayage
+  // des graines 1 à 60 : **douze** conviennent — 7, 18, 24, 33, 34, 36, 39, 45,
+  // 51, 52, 56, 57 —, contre dix au lot CONTACT, dont c'est la même liste plus
+  // les 34 et 45. La propriété est donc un peu PLUS robuste qu'au lot précédent,
+  // et non moins.
+  //
+  // ⚠⚠ ET TROIS DES NEUF VALEURS NE BOUGENT PAS D'UN POINT : la graine 24 aux
+  // niveaux 20 et 38, la graine 18 au niveau 50. Le lot ne touche ni la
+  // composition ni la disposition d'un site — il change la façon dont une pièce
+  // bloquée en travers cesse de passer, et la façon dont une écraseuse tue —,
+  // donc il ne mord que là où l'un des deux cas se présente.
   const GRAINES = [7, 18, 24];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
@@ -5781,7 +5808,16 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // pas — armé et vide rendent le même nombre au niveau 20, sur les trois
   // graines. Un combat qui se déroule autrement ne rapporte pas les mêmes
   // points ; que le canal ne morde pas sous 28 est ce qui est gardé ici.
-  const apres20 = { 7: 4_658_390n, 18: 6_291_989n, 24: 7_643_623n };
+  // ⚠ RÉANCRÉ AU LOT CONTACT-2 : 4 658 390 → **4 007 074** et 6 291 989 →
+  // **6 336 296** ; la graine 24 ne bouge pas d'un point. La PROPRIÉTÉ ne bouge
+  // pas non plus — armé et vide rendent le même nombre au niveau 20, sur les
+  // trois graines, et c'est tout ce qui est gardé ici.
+  // ⚠ ATTRIBUÉ PAR ISOLATION, ET LES DEUX MOITIÉS DU LOT NE TIRENT PAS LA MÊME :
+  // sur la graine 7, la fenêtre ramenée à deux cellules rend **4 658 390, le
+  // nombre d'avant À L'UNITÉ** — c'est donc elle, et elle seule ; sur la
+  // graine 18, c'est l'inverse, l'écrasement instantané rend **6 291 989**, le
+  // nombre d'avant, et la fenêtre n'y est pour rien.
+  const apres20 = { 7: 4_007_074n, 18: 6_336_296n, 24: 7_643_623n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5815,7 +5851,20 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // trois —, et c'est la seule chose que ce test mesure. ⚠ L'écart est MINCE sur
   // la graine 7 : 339 244 054 contre 339 420 295, soit 0,05 %. Il discrimine, et
   // c'est ce qu'on lui demande ; les deux autres écartent de 2 % et 1 %.
-  const apres38 = { 7: 339_244_054n, 18: 981_204_465n, 24: 617_471_580n };
+  // ⚠ RÉANCRÉ AU LOT CONTACT-2 : 339 244 054 → **397 136 854** et 981 204 465 →
+  // **962 259 697** ; la graine 24 ne bouge pas d'un point. Le SENS est intact —
+  // armé reste sous vide sur les trois —, et c'est la seule chose que ce test
+  // mesure. ⚠ L'écart reste MINCE sur la graine 7 : 397 136 854 contre
+  // 397 323 419, soit **0,05 %**, exactement la finesse du lot CONTACT. Il
+  // discrimine, et c'est ce qu'on lui demande ; les deux autres écartent de
+  // 2,2 % et 1,6 %.
+  // ⚠ ATTRIBUÉ PAR ISOLATION : l'écrasement instantané rend **exactement les
+  // nombres du lot** sur les trois graines — les quatre ticks et le frein n'y
+  // sont donc pour rien —, et la fenêtre à deux cellules rend 323 530 933 et
+  // 886 834 317, qui ne sont ni les nombres d'avant ni ceux d'après : le
+  // déplacement est la fenêtre ÉLARGIE composée avec l'écrasement payé AU
+  // CONTACT, qui ne se débranche pas.
+  const apres38 = { 7: 397_136_854n, 18: 962_259_697n, 24: 617_471_580n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5844,7 +5893,19 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // 57,7 % sur la 24**. Le Vol de vie et le Rayon minimum −1 sont armés à ce
   // niveau-là, et une file qui s'arrête AU CONTACT au lieu de fluer dans la case
   // de la garnison la laisse travailler plus longtemps encore.
-  const apres50 = { 7: 7_547_414_717n, 18: 8_925_916_216n, 24: 8_851_951_208n };
+  // ⚠ RÉANCRÉ AU LOT CONTACT-2 : 7 547 414 717 → **8 627 727 166** et
+  // 8 851 951 208 → **21 191 318 893** ; la graine 18 ne bouge pas d'un point.
+  // Le SENS est intact sur les trois — **10,5 % de moins sur la 7, 22,8 % sur la
+  // 18, 0,8 % sur la 24**. ⚠ ET L'ÉCART DE LA GRAINE 24 S'EST EFFONDRÉ, de
+  // 57,7 % à 0,8 % : il discrimine encore, et il est désormais le plus mince des
+  // trois. **À remonter comme un constat, pas comme un défaut** — aucun barème
+  // n'a été touché, et le jour où il tombera sous zéro c'est la prémisse qui
+  // sera à réparer, pas l'assertion.
+  // ⚠ ATTRIBUÉ PAR ISOLATION : sur la graine 7, la fenêtre à deux cellules rend
+  // **7 547 414 717, le nombre d'avant À L'UNITÉ** — c'est elle, et elle seule ;
+  // sur la graine 24, c'est l'inverse, la fenêtre rend exactement le nombre du
+  // lot et le déplacement vient de l'écrasement.
+  const apres50 = { 7: 8_627_727_166n, 18: 8_925_916_216n, 24: 21_191_318_893n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);

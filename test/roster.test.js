@@ -449,7 +449,24 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // dépendaient d'une grandeur qui monte avec le niveau. Ni la vitesse, ni la
   // masse, ni le camp n'en dépendent : le gel ne lit que `camp`, le rangement
   // `camp` et `vitesseMilli`.
-  assert.deepEqual([...ticks], [193], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT CONTACT-2 (13/09) : 193 → 166, TROISIÈME RÉANCRAGE PAR LE DÉROULÉ
+  // SEUL. L'avant-poste de la graine 99 est composé et disposé exactement comme
+  // hier ; ce qui change est que l'écrasement se paie au CONTACT et non plus au
+  // franchissement de l'index, et qu'il prend quatre ticks au quart de vitesse.
+  // ⚠ L'attribution est mesurée : la fenêtre élargie de la famille B n'y est
+  // pour rien — à balayage perpendiculaire réduit à la seule colonne du milieu,
+  // ce montage rend les MÊMES 166 — et l'écrasement instantané
+  // (`ECRASEMENT_TICKS = 1`, `ECRASEMENT_FREIN = 1`) en rend 163 : les trois
+  // ticks d'écart sont le quart et le frein, les vingt-sept autres le déplacement
+  // de l'instant de la mort.
+  // **La propriété tient toujours, et c'est la seule que ce test mesure : UNE
+  // seule durée, sur neuf niveaux** — le lot ne l'a pas rompue, ce qu'il aurait
+  // fait si le quart ou le frein dépendaient d'une grandeur qui monte avec le
+  // niveau. Le quart se prend sur `pvMaxMilli`, qui monte AVEC le niveau, donc
+  // le nombre de ticks ne bouge pas ; le frein ne lit que `vitesseMilli`, qui
+  // n'en dépend pas. C'est exactement l'asymétrie que ce test existe pour
+  // attraper, et il ne la trouve pas.
+  assert.deepEqual([...ticks], [166], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -582,15 +599,41 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     //       tire plus ET on meurt davantage.
     // ⚠ LES TROIS CAUSES NE BOUGENT PAS, et aucun barème n'a été touché : le
     // calibrage revient à Ethan.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 310, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 357, butin: { quartz: 25_614, scorie: 8_538 }, survivants: 7 },
+    //
+    // ⚠⚠ LOT CONTACT-2 (13/09) : LES TROIS BOUGENT, ET POUR LA PREMIÈRE FOIS
+    // L'ATTRIBUTION SE FAIT POSTE PAR POSTE. Le lot porte DEUX gestes indépendants
+    // — la fenêtre de `margeDeContact` passe de deux à six cellules (famille B), et
+    // l'écrasement se paie au contact en quatre ticks au quart de vitesse — et
+    // chacun se neutralise séparément : balayage perpendiculaire ramené à la seule
+    // colonne du milieu d'un côté, `ECRASEMENT_TICKS = 1` et
+    // `ECRASEMENT_FREIN = 1` de l'autre.
+    //   A : 310 → 322 ticks, butin toujours NUL, toujours AUCUN survivant.
+    //       **Les douze ticks sont la FENÊTRE** — à fenêtre de deux, ce raid rend
+    //       exactement ses 310 ; à écrasement instantané, il rend 322.
+    //   B : 357 → 439 ticks, butin 25 614 / 8 538 → 32 686 / 10 895 (+27,6 %),
+    //       survivants 7 → 8. **Les quatre-vingt-deux ticks sont l'ÉCRASEMENT**, et
+    //       plus précisément le déplacement de l'INSTANT de la mort : à fenêtre de
+    //       deux il rend 446, à écrasement instantané 439. C'est l'assaut lourd,
+    //       neuf unités de masse 10 et 20 : il n'y a que là que l'écrasement pesait.
+    //   C : le tick NE BOUGE PAS — 501 des deux côtés — et son butin tombe de
+    //       6 471 / 2 157 à 150 / 50, soit 2,3 % de ce qu'il rapportait ; survivants
+    //       4 → 3, et les trois sont rentrés. **Tout vient de la FENÊTRE** : à
+    //       fenêtre de deux il rend exactement 6 471 et 2 157, et les quatre
+    //       combinaisons de `ECRASEMENT_TICKS` × `ECRASEMENT_FREIN` rendent toutes
+    //       150 et 50.
+    // ⚠ **C'est le contraste qui attribue** : un lot qui n'aurait fait qu'une des
+    // deux choses aurait déplacé les trois raids dans le même sens. Ici A et C
+    // suivent la fenêtre, B suit l'écrasement, et aucune des trois causes ne
+    // bouge. Aucun barème n'a été touché ; le calibrage revient à Ethan.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 322, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 439, butin: { quartz: 32_686, scorie: 10_895 }, survivants: 8 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 501, butin: { quartz: 6_471, scorie: 2_157 }, survivants: 4 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 501, butin: { quartz: 150, scorie: 50 }, survivants: 3 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

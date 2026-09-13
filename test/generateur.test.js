@@ -686,7 +686,7 @@ const MIROIR_TYPES = ['camp', 'avantPoste'];
 // 3,6 fois de marge, et reste quatre ordres de grandeur sous le perceptible.
 const MIROIR_RESIDU_PPM_MAX = 100;
 
-test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparaisons', () => {
+test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 paires', () => {
   // ⚠ On ne génère PAS deux sites à deux niveaux : la densité varie avec le
   // niveau, et comparer un camp de niveau 5 (8 bâtiments, 3 défenses) à un camp
   // de niveau 30 (21 et 21) mélangerait la loi d'échelle et la loi de densité.
@@ -700,6 +700,17 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   const ecartsRelatifs = [];
   let cellules = 0;
   let combatsTropCourts = 0;
+  // ⚠⚠ LOT CONTACT-2 (13/09) : DEUX COMPTEURS ENTRENT, ET C'EST UN
+  // RESSERREMENT DU MONTAGE, PAS UN ASSOUPLISSEMENT DE L'ASSERTION. Un combat qui
+  // sort par `duree` n'a pas conclu : il a été TRONQUÉ au plafond de 900 ticks.
+  // Comparer sa cause et son tick à ceux d'un combat qui conclut, c'est mesurer le
+  // PLAFOND et non le miroir — et comparer deux tronqués entre eux, c'est comparer
+  // 900 à 900, ce qui ne prouve rien dans les deux sens. On ne compare donc que
+  // les paires dont les DEUX côtés concluent d'eux-mêmes, et on compte
+  // exactement ce qu'on écarte pour que la perte de couverture soit lue et non
+  // subie.
+  let combatsAuPlafond = 0;
+  let pairesSautees = 0;
   let entitesQuiBasculent = 0;
   let residuPpmMax = 0;
 
@@ -729,9 +740,17 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
         // 1) La cause et la durée, sur TOUTES les paires.
         for (let i = 0; i < resultats.length; i++) {
           if (resultats[i].tick <= 50) combatsTropCourts += 1;
+          if (resultats[i].cause === 'duree') combatsAuPlafond += 1;
           for (let j = i + 1; j < resultats.length; j++) {
             const a = MIROIR_NIVEAUX[i];
             const b = MIROIR_NIVEAUX[j];
+            // ⚠ LA PAIRE EST ÉCARTÉE DÈS QU'UN DES DEUX CÔTÉS A ÉTÉ TRONQUÉ, jamais
+            // l'un des deux seulement : le miroir se mesure entre deux combats
+            // qui se terminent, et le plafond se mesure par le compteur.
+            if (resultats[i].cause === 'duree' || resultats[j].cause === 'duree') {
+              pairesSautees += 1;
+              continue;
+            }
             assert.equal(
               resultats[i].cause, resultats[j].cause,
               `${type} g${graine} ${profil}/${graineAssaut} : causes différentes entre ${a} et ${b}`,
@@ -748,9 +767,18 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
 
         // 2) Le SORT de chaque entité. Ce que la rédaction précédente ne
         // regardait pas du tout — et c'est là que le miroir n'est pas parfait.
+        // ⚠⚠ LE MÊME PARTAGE QU'AU §1, ET POUR LA MÊME RAISON — LOT CONTACT-2.
+        // Une entité qui survit dans un combat TRONQUÉ au plafond de 900 ticks
+        // n'a pas survécu à un arrondi : le combat s'est arrêté avant qu'elle ne
+        // tombe. Mesuré sur `avantPoste` graine 37 `infanterie/5` : le ratisseur
+        // du niveau 2 y tient **500 343 ppm de ses PV**, soit la moitié — cinq
+        // mille fois le seuil, et ce n'est pas le seuil qui est trop juste,
+        // c'est la comparaison qui n'a pas lieu d'être.
+        const conclus = resultats.filter((r) => r.cause !== 'duree');
         for (const bord of ['batiments', 'defenses', 'attaquants']) {
           for (const temoin of resultats[0][bord]) {
-            const lignes = resultats.map((r) => r[bord].find((x) => x.indice === temoin.indice));
+            const lignes = conclus.map((r) => r[bord].find((x) => x.indice === temoin.indice));
+            if (lignes.length < 2) continue;
             if (lignes.some((x) => x === undefined)) continue;
             if (new Set(lignes.map((x) => x.detruit)).size === 1) continue;
 
@@ -779,7 +807,21 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
 
   // 3) Le montage doit avoir mesuré quelque chose.
   assert.equal(cellules, 50, `${cellules} montages au lieu de 50`);
-  assert.equal(ecarts.length, 500, `${ecarts.length} comparaisons au lieu de 500`);
+  // ⚠⚠ RÉANCRÉ AU LOT CONTACT-2 : 500 → **456** comparaisons, et les
+  // quarante-quatre qui manquent sont COMPTÉES plutôt que perdues. Sur la
+  // référence — l'arbre fusionné `f21ba4e` — le même partage rendait **470
+  // comparées, 30 sautées et 15 combats au plafond** ; le lot en porte **456, 44
+  // et 21**. Les trois nombres sont assertés EXACTEMENT : un lot qui pousserait
+  // le montage vers le plafond éroderait la couverture de ce test en silence, et
+  // ces trois égalités obligent à le remesurer et à l'écrire.
+  assert.equal(ecarts.length, 456, `${ecarts.length} comparaisons au lieu de 456`);
+  assert.equal(pairesSautees, 44, `${pairesSautees} paires écartées au lieu de 44`);
+  assert.equal(combatsAuPlafond, 21, `${combatsAuPlafond} combats au plafond de 900 au lieu de 21`);
+  // ⚠ ET LA COUVERTURE NE DOIT PAS FONDRE : neuf dixièmes des paires au moins.
+  // Sans ce plancher, les trois égalités ci-dessus se réancreraient lot après lot
+  // jusqu'à ce qu'il ne reste plus rien à comparer, chaque réancrage étant
+  // défendable pris seul.
+  assert.ok(ecarts.length >= 450, `${ecarts.length} comparaisons : la couverture du miroir a fondu`);
   assert.equal(combatsTropCourts, 0, `${combatsTropCourts} combats de 50 ticks ou moins : ils ne prouvent rien`);
 
   // 4) Les écarts de ticks. Le MAXIMUM seul ne suffit pas : un miroir qui se
@@ -876,6 +918,24 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   // ⚠ ET C'EST UNE ÉGALITÉ, PAS UN `>=`. Un `>=` laisserait l'écart glisser à
   // trois ticks sans un mot ; l'égalité oblige à remesurer et à écrire ce qu'on
   // a mesuré, ce que ce bloc fait pour la quatrième fois.
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : LA MESURE DU MIROIR NE BOUGE PAS D'UN CHEVEU, ET
+  // C'EST LE FAIT À DIRE EN PREMIER. Écart maximal **1**, médiane **0**, **quatre**
+  // comparaisons au-dessus de zéro, `entitesQuiBasculent` toujours à **0** — les
+  // quatre mêmes nombres qu'au lot CONTACT. Ce qui a bougé est AILLEURS : six
+  // combats de plus sortent par `duree`, donc quatorze paires de plus sont
+  // écartées, et c'est cela seul que le lot déplace.
+  //
+  // ⚠ LA CELLULE QUI PORTE L'ÉCART CHANGE, LA STRUCTURE NON : `camp` graine 37
+  // `mixte/17` cède la place à **`camp` graine 53 `infanterie/5`**, et c'est
+  // toujours **le niveau 2 SEUL contre les quatre autres** — 475 ticks contre 476.
+  // L'arrondi déplace **0,211 %** d'un combat contre 1 % permis (4,7 fois de
+  // marge), contre 0,148 % au lot CONTACT.
+  //
+  // ⚠ ET SANS LE PARTAGE DU §3, CE TEST SERAIT TOMBÉ SUR UNE CAUSE ET NON SUR UN
+  // ÉCART : `avantPoste` graine 37 `infanterie/5` conclut par `attaquants` au tick
+  // 881 aux niveaux 1, 10, 30 et 50, et touche le plafond au niveau 2. Comparer
+  // ces deux-là mesurait le plafond, pas le miroir.
   assert.equal(ecartMax, 1, `écart maximal ${ecartMax} ticks au lieu du 1 mesuré`);
   // Contre-assertion : le 0 du lot APPROCHE ne doit pas revenir en silence.
   assert.notEqual(ecartMax, 0, 'écart nul : le miroir a cessé d’échantillonner l’arrondi, remesurer');

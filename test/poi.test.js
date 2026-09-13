@@ -881,9 +881,22 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   // butins montent ENSEMBLE. **L'ÉCART RELATIF — ce que ce test mesure — vaut
   // +33,3 %**, contre +34,6 % au lot PAQUETS : au point de mesure près, le bonus
   // se lit toujours pareil. Les durées coïncident toujours des deux côtés.
-  assert.deepEqual(rNu.butin, { quartz: 69, scorie: 23 });
-  assert.deepEqual(rAvec.butin, { quartz: 92, scorie: 30 });
+  // ⚠ LOT CONTACT-2 (13/09) : 69 · 23 → 62 · 20, et 92 · 30 → 87 · 29.
+  // **ATTRIBUÉ PAR ISOLATION, PAS DÉDUIT** : la fenêtre de balayage ramenée à deux
+  // cellules — le lot entier par ailleurs — reproduit 69 · 23 et 92 · 30 À
+  // L’UNITÉ, et l’écrasement instantané sous la fenêtre de six rend 62 · 20 et
+  // 87 · 29. **Tout l’écart vient donc de la fenêtre élargie, et rien des quatre
+  // ticks d’écrasement ni du frein.** Une pièce qui mordait sur deux index en
+  // travers cesse de passer, donc les six Meutes ne griffent plus la même chose.
+  // **L’ÉCART RELATIF — ce que ce test mesure — passe de +33,3 % à +40,3 %**, et
+  // **les durées coïncident toujours des deux côtés, à 451 ticks**, ce qui est la
+  // moitié qui dit que le montage emporte encore les POI.
+  assert.deepEqual(rNu.butin, { quartz: 62, scorie: 20 });
+  assert.deepEqual(rAvec.butin, { quartz: 87, scorie: 29 });
+  assert.notDeepEqual(rNu.butin, { quartz: 69, scorie: 23 },
+    'le butin sans POI est revenu à sa valeur d’avant CONTACT-2 : la fenêtre a rétréci');
   assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
+  assert.equal(rNu.ticks, 451, 'la durée des deux raids, réancrée au lot CONTACT-2');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),
     'le raid laisse le site dans le même état avec et sans POI',
