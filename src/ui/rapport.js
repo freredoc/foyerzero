@@ -27,6 +27,7 @@ import { PICTOGRAMMES, PICTOGRAMME_DU_CHASSIS, creerPictogramme } from './pictog
 import { BATIMENTS, EMBLEMES_CARTE } from '../data/sites.js';
 import { TICK_MS } from '../sim/clock.js';
 import { direLaDuree } from '../sim/reparation.js';
+import { formaterPoints } from '../sim/recherche.js';
 import { LIBELLE_VERDICT, formaterEntier, formaterDelai } from './chantier.js';
 
 const LIBELLE_CHASSIS = {
@@ -83,11 +84,63 @@ export function lignesDuResultat(rapport) {
       picto: PICTOGRAMMES.butin,
       valeur: `${rapport.butin.quartz ?? 0} quartz · ${rapport.butin.scorie ?? 0} scorie`,
     },
+  ];
+
+  // ⚠⚠ LA RECHERCHE SE DIT JUSTE APRÈS LE BUTIN — ETHAN, 13/09, POINT 2 : « les
+  // points de recherche doivent apparaître sur les reports ». Un raid rapporte
+  // DEUX choses, du quartz et des points, et le rapport n'en annonçait qu'une :
+  // le second gain se lisait au compteur de l'écran Recherche, sans que rien ne
+  // le rattache au raid qui venait de le produire.
+  //
+  // ⚠⚠ ELLE SE POSE AVANT LES QUATRE POURCENTAGES, ET CE N'EST PAS UN GOÛT.
+  // Les lignes de ce panneau vont des GAINS à ce qui RESTE debout chez la cible :
+  // le butin, la recherche, puis les quatre restes. Glisser un gain au milieu des
+  // pourcentages obligerait le joueur à relire la colonne pour savoir de quel
+  // côté chaque chiffre tombe.
+  //
+  // ⚠⚠ ET LE FORMATAGE SE DEMANDE À `sim/recherche.js`, IL NE SE RÉÉCRIT PAS.
+  // `formaterPoints` fait déjà la division par mille, le groupement par trois et
+  // le compactage au-delà de dix mille ; en réécrire un ici donnerait deux
+  // écritures de la même grandeur, et le compteur de l'écran Recherche dirait
+  // « 10,0M » là où le rapport dirait « 10 000 000 ». C'est la faute que
+  // `direLaDuree` a été EXPORTÉE pour éviter au lot RÉPARER-ÉCRAN.
+  //
+  // ⚠⚠ ET LE CHAMP EST UNE CHAÎNE, PAS UN `bigint` : `executerRaid` range
+  // `gagnesMilli.toString()`, parce qu'un `bigint` ne traverse pas `JSON`.
+  // `formaterPoints` attend un `bigint` — elle divise par `1000n` —, donc la
+  // conversion se fait ICI, à la lecture. La passer telle quelle lèverait
+  // « Cannot mix BigInt and other types », ce qui est bruyant ; ce serait
+  // néanmoins une levée dans la boucle de dessin du journal.
+  //
+  // ⚠⚠ LE CHAMP ABSENT NE DONNE AUCUNE LIGNE, ET CE N'EST PAS DE LA PRUDENCE :
+  // C'EST MESURÉ. `etat.rapports` existe depuis la v19 (lot RAID-A, 02/09) et
+  // `rechercheMilli` n'est entré dans l'objet rapport que le 06/09 ; aucune
+  // migration ne vide `rapports` — le lot REJEU l'écrit en toutes lettres, « les
+  // dix derniers raids sont de l'histoire ». Une sauvegarde de cette fenêtre-là
+  // porte donc des entrées SANS le champ, et `BigInt(undefined)` LÈVE : le
+  // dépliant du journal viderait l'écran, exactement comme une garnison de
+  // Fusiliers a vidé l'écran de la base le 30/08. ⚠ Et deux montages du dépôt
+  // forgent déjà un rapport sans ce champ — `RAID-A T7` et le dépliant de
+  // `JRN T7` —, donc le cas n'est pas hypothétique, il est dans la suite.
+  //
+  // ⚠ « ABSENT » VAUT « PAS DE LIGNE », JAMAIS « ZÉRO POINT ». C'est l'idiome de
+  // `rapportRejouable` cinquante lignes plus bas — « l'absence du champ est donc
+  // le message ». Un raid qui rapporte VRAIMENT zéro point, lui, garde sa ligne
+  // et dit « 0 », comme le butin dit « 0 quartz · 0 scorie ».
+  if (rapport.rechercheMilli !== undefined && rapport.rechercheMilli !== null) {
+    lignes.push({
+      quoi: 'Recherche',
+      picto: PICTOGRAMMES.recherche,
+      valeur: `${formaterPoints(BigInt(rapport.rechercheMilli))} points`,
+    });
+  }
+
+  lignes.push(
     { quoi: 'Défense restante', valeur: pct(rapport.restantDefense) },
     { quoi: 'Bâtiments restants', valeur: pct(rapport.restantBatiments) },
     { quoi: BATIMENTS.souche.nom, valeur: pct(rapport.restantSouche) },
     { quoi: BATIMENTS.etai.nom, valeur: pct(rapport.restantEtai) },
-  ];
+  );
 
   // ⚠ LA RÉPARATION INDUITE, CHÂSSIS PAR CHÂSSIS, EN TEMPS **ET** EN POURCENT.
   // ⚠⚠ ET « SANS BÂTIMENT » SE DIT, parce que zéro veut dire deux choses : un

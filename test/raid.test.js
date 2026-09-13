@@ -17,7 +17,13 @@ import { ciblageDuSite, lignesDuSite } from '../src/ui/monde.js';
 // ⚠ ELLE A DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09, pour que le journal puisse la
 // lire sans fermer un cycle d'imports. Elle n'a pas été recopiée : `ui/raid.js`
 // la lit de là pour ses deux panneaux.
-import { lignesDuResultat } from '../src/ui/rapport.js';
+import {
+  lignesDuResultat, lignesDetailleesDuRapport, lignesDuPanneauDeFin,
+} from '../src/ui/rapport.js';
+// ⚠ LE FORMATEUR VIENT DU MOTEUR, ET `ÉCRANS T1` LE LIT DE LÀ POUR LA MÊME
+// RAISON QUE L'ÉCRAN : un test qui réécrirait le groupement passerait sur une
+// seconde écriture du formatage, qui est très exactement ce qu'il garde.
+import { formaterPoints } from '../src/sim/recherche.js';
 // ⚠ `LIBELLE_VERDICT` A DÉMÉNAGÉ DANS `ui/chantier.js` AU LOT JOURNAL — deux
 // écrans le lisent désormais, et ils ne peuvent pas importer `ui/raid.js`.
 import { LIBELLE_VERDICT } from '../src/ui/chantier.js';
@@ -1269,4 +1275,121 @@ test('RAID-A — trois raids d\'affilée sur la même cible, et le pourcentage D
       `le restant remonte : ${restants.join(' → ')}`);
   }
   assert.ok(restants[4] < restants[0], 'montage sans mordant : rien n\'a été détruit');
+});
+
+// ---------------------------------------------------------------------------
+// ÉCRANS T1 — lot ÉCRANS, 13/09
+//
+// Ethan, point 2 : « les points de recherche doivent apparaître sur les
+// reports. » La donnée était déjà rangée — `executerRaid` écrit `rechercheMilli`
+// dans l'objet rapport depuis le 06/09, et `enregistrerLeRapport` pousse l'objet
+// ENTIER dans `etat.rapports` ; c'est l'affichage qui ne la lisait pas.
+// ---------------------------------------------------------------------------
+
+test('ÉCRANS T1 — le rapport publie la recherche, à la valeur du moteur', () => {
+  // ⚠⚠ LE MONTAGE RELÈVE SA VALEUR, IL NE LA SUPPOSE PAS. Un raid qui ne
+  // rapporterait aucun point rendrait « 0 points » des deux côtés, et
+  // l'assertion d'égalité passerait sans rien mesurer.
+  const etat = partieArmee();
+  const rapport = executerRaid(etat, baseCourante(etat), premierCamp(etat));
+  assert.ok(BigInt(rapport.rechercheMilli) > 0n,
+    'montage sans mordant : ce raid n\'a rapporté aucune recherche');
+
+  const lignes = lignesDuResultat(rapport);
+  const recherche = lignes.filter((l) => l.quoi === 'Recherche');
+  assert.equal(recherche.length, 1,
+    `le panneau rend ${recherche.length} ligne(s) de recherche au lieu d'une`);
+
+  // ⚠⚠ C'EST L'ÉGALITÉ À LA SORTIE DE `formaterPoints` QUI GARDE LE LOT, ET NON
+  // LA PRÉSENCE DE LA LIGNE. Un test qui se contenterait de compter passerait
+  // avec une ligne vide, et surtout il passerait avec un formatage RÉÉCRIT sur
+  // place : `formaterPoints` divise par mille, groupe par trois et compacte
+  // au-delà de dix mille, si bien qu'une seconde écriture dirait « 10 000 000 »
+  // là où l'écran Recherche dit « 10,0M ». C'est la faute que `direLaDuree` a
+  // été exportée pour éviter au lot RÉPARER-ÉCRAN (`CLAUDE.md` §4).
+  assert.equal(recherche[0].valeur, `${formaterPoints(BigInt(rapport.rechercheMilli))} points`,
+    'la ligne ne dit pas ce que le moteur a rangé, ou elle le formate elle-même');
+
+  // ⚠ ET LA VALEUR N'EST PAS CELLE DU CHAMP BRUT. `rechercheMilli` est une
+  // CHAÎNE de milli-points ; l'afficher telle quelle donnerait un nombre mille
+  // fois trop grand, et cette assertion-ci tombe si quelqu'un s'en contente.
+  assert.notEqual(recherche[0].valeur, `${rapport.rechercheMilli} points`,
+    'montage dégénéré : les milli-points et les points s\'écrivent pareil');
+
+  // ⚠⚠ ET LE RAID RÉEL NE SUFFIT PAS À GARDER LE FORMATAGE — MESURÉ, ET C'EST LA
+  // FALSIFICATION QUI L'A DIT. Ce montage rapporte quelques dizaines de points,
+  // où `formaterPoints` et une division naïve par mille rendent EXACTEMENT le
+  // même texte : « le formatage est réécrit sur place » ne mordait pas, et
+  // l'assertion d'égalité ci-dessus passait des deux côtés. **Une falsification
+  // qui ne mord pas se vérifie avant d'être crue**, et c'est le montage qu'on
+  // répare : au-delà de dix mille, `formaterPoints` COMPACTE, et les deux
+  // écritures divergent.
+  const gros = { ...rapport, rechercheMilli: '12345678000' };
+  const rendu = lignesDuResultat(gros).find((l) => l.quoi === 'Recherche').valeur;
+  assert.equal(rendu, `${formaterPoints(BigInt(gros.rechercheMilli))} points`,
+    'la ligne formate elle-même au lieu de demander au moteur');
+  assert.notEqual(rendu, `${Number(gros.rechercheMilli) / 1000} points`,
+    'montage dégénéré : les deux écritures rendent le même texte');
+
+  // ⚠ LA LIGNE SE POSE AVANT LES QUATRE POURCENTAGES : ce panneau va des GAINS
+  // à ce qui RESTE debout chez la cible, et un gain glissé au milieu des restes
+  // obligerait le joueur à relire la colonne pour savoir de quel côté un chiffre
+  // tombe.
+  const quoi = lignes.map((l) => l.quoi);
+  assert.ok(quoi.indexOf('Recherche') > quoi.indexOf('Butin'),
+    'la recherche ne suit pas le butin');
+  assert.ok(quoi.indexOf('Recherche') < quoi.indexOf('Défense restante'),
+    'la recherche est tombée au milieu des pourcentages');
+
+  // ⚠⚠ LES TROIS SURFACES, PARCE QU'IL N'Y A QU'UNE ÉCRITURE. `lignesDuResultat`
+  // sert le panneau du simulateur, celui de fin de raid et le dépliant du
+  // journal ; les deux fonctions de dispatch la réexpédient. Un lot qui les
+  // séparerait fait tomber cette moitié-ci.
+  assert.ok(lignesDuPanneauDeFin(rapport).some((l) => l.quoi === 'Recherche'),
+    'le panneau de fin ne dit pas la recherche');
+  assert.ok(lignesDetailleesDuRapport(rapport).some((l) => l.libelle === 'Recherche'),
+    'le dépliant du journal ne dit pas la recherche');
+
+  // ⚠⚠ ET UN RAID SUBI N'EN REND AUCUNE — un raid subi ne rapporte pas un point,
+  // son rapport n'a pas le champ, et `lignesDeLaDefense` n'a pas été touchée. Y
+  // poser une ligne à zéro mentirait sur la mécanique.
+  const subi = { ...rapport, sens: 'defense' };
+  assert.ok(!lignesDetailleesDuRapport(subi).some((l) => l.libelle === 'Recherche'),
+    'un raid SUBI annonce des points de recherche');
+  assert.ok(!lignesDuPanneauDeFin(subi).some((l) => l.quoi === 'Recherche'),
+    'le panneau de fin d\'un raid SUBI annonce des points de recherche');
+});
+
+test('ÉCRANS T1 bis — un rapport sans le champ ne rend pas de ligne, et ne LÈVE pas', () => {
+  // ⚠⚠ CE N'EST PAS DE LA PRUDENCE, C'EST UNE FENÊTRE DE SAUVEGARDES MESURÉE.
+  // `etat.rapports` existe depuis la v19 (lot RAID-A, 02/09) ; `rechercheMilli`
+  // n'est entré dans l'objet rapport que le 06/09, et AUCUNE migration ne vide
+  // `rapports` — le lot REJEU l'écrit en toutes lettres, « les dix derniers
+  // raids sont de l'histoire ». Une sauvegarde de cette fenêtre-là porte donc
+  // des entrées SANS le champ, et `BigInt(undefined)` LÈVE : le dépliant du
+  // journal viderait l'écran, exactement comme une garnison de Fusiliers a vidé
+  // l'écran de la base le 30/08.
+  //
+  // ⚠ ET LE CAS EST DÉJÀ DANS LA SUITE : `RAID-A T7` et le dépliant de `JRN T7`
+  // forgent tous deux un rapport sans ce champ.
+  const sansChamp = {
+    verdict: 'victoire', butin: { quartz: 11, scorie: 22 },
+    restantDefense: 33, restantBatiments: 44, restantSouche: 55, restantEtai: 66,
+    reparationInduite: {}, ticks: 880,
+  };
+  assert.equal('rechercheMilli' in sansChamp, false, 'le montage ne mesure rien');
+  const lignes = lignesDuResultat(sansChamp);
+  assert.ok(!lignes.some((l) => l.quoi === 'Recherche'),
+    'un rapport sans le champ annonce quand même une recherche');
+  // ⚠ ET LE RESTE DU PANNEAU EST INTACT : l'absence retire UNE ligne, elle n'en
+  // casse aucune autre.
+  assert.equal(lignes[0].quoi, 'Verdict');
+  assert.equal(lignes.at(-1).quoi, 'Durée du combat');
+
+  // ⚠ « ABSENT » VAUT « PAS DE LIGNE », JAMAIS « ZÉRO POINT » — et un raid qui
+  // rapporte VRAIMENT zéro garde sa ligne, comme le butin dit « 0 quartz ».
+  const aZero = lignesDuResultat({ ...sansChamp, rechercheMilli: '0' });
+  const ligneZero = aZero.find((l) => l.quoi === 'Recherche');
+  assert.ok(ligneZero !== undefined, 'un raid à zéro point perd sa ligne');
+  assert.equal(ligneZero.valeur, `${formaterPoints(0n)} points`);
 });

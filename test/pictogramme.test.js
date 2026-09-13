@@ -446,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 est de 2,42 %', () => {
+test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 est de 2,23 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -743,11 +743,25 @@ test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 e
   // postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI / 307
   // lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image ni un
   // son — il range un MONTAGE dans un rapport : la borne NE BOUGE PAS.
+  // ⚠⚠ RÉANCRÉ AU LOT ÉCRANS, 13/09, ET SON ANCRE MENTAIT DÉJÀ AVANT CE LOT-CI.
+  // Elle écrivait **9 384 775**, la mesure du lot REJEU ; le lot CONTACT est
+  // passé dessus sans la toucher et a porté le disque à **9 385 049** — soit
+  // **274 octets** de dérive, très en dessous de la tolérance de 50 000, donc
+  // VERTE et fausse. Ce lot-ci en ajoute 589, ce qui l'aurait portée à 863 sans
+  // qu'un test bronche, pendant que le §0 de `CLAUDE.md` aurait annoncé une
+  // marge que ce fichier-ci contredisait. **C'est exactement ce que la dernière
+  // assertion de ce test existe pour empêcher** — « la tolérance garde contre la
+  // dérive LENTE, pas contre un lot qui sait ce qu'il déplace ».
+  //
+  // ⚠ ET LE LOT NE FAIT ENTRER AUCUNE RESSOURCE : **+589 octets, ENTIÈREMENT DU
+  // JAVASCRIPT** — feuille +0 · balisage +0 · images +0 · audio +0, et **306 URI
+  // `data:` de part et d'autre**. Deux lignes d'affichage, dans deux fichiers de
+  // `src/ui/`. La borne T10, elle, NE BOUGE PAS.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_384_775;          // remesuré au lot REJEU, base `d2dfae3`
-  const MARGE = BORNE - MESURE;      // 215 225 octets — 216 330 avant ce lot
-  assert.equal(MARGE, 215_225);
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.24);
+  const MESURE = 9_385_638;          // remesuré au lot ÉCRANS, base `f21ba4e`
+  const MARGE = BORNE - MESURE;      // 214 362 octets — 215 225 avant ce lot
+  assert.equal(MARGE, 214_362);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.23);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
