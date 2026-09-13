@@ -583,7 +583,20 @@ test('DO T8 — un site entamé retrouve ses dégâts sur les mêmes bâtiments'
   // conviennent**, et la **189** en laisse **treize touchés dont sept
   // détruits**, donc **six survivants abîmés** — la marge la plus large des
   // vingt-neuf, et la plus large que ce montage ait jamais eue.
-  const etat = creerEtat(189);
+  //
+  // ⚠⚠ LOT PRÉDILECTION (13/09) : 189 → 141, ET C'EST LE MOTIF DU LOT PAQUETS,
+  // PAS CELUI DE MUR NI DE CONTACT-2. Sur la 189, le raid ne touche plus que
+  // **DEUX** bâtiments : il ne rase pas le site — l'entrée est bien là — mais il
+  // n'ouvre plus la brèche qu'il ouvrait, donc le montage cesse d'exercer les
+  // deux branches de `montageCourant`. La cause est mesurable et c'est celle du
+  // lot : la garnison élit désormais une cible de sa PRÉDILECTION avant la plus
+  // proche, donc elle tue plus vite ce qu'elle tue le mieux, et sur cette base-là
+  // l'assaut va moins loin. Balayé sur les graines 99 à 240 : **quarante-six
+  // conviennent**, et la **141** en laisse **douze touchés dont six détruits**,
+  // donc **six survivants abîmés** — la marge la plus large des quarante-six, et
+  // la seule qui l'atteigne. C'est la PRÉMISSE qu'on répare, jamais l'assertion :
+  // les trois seuils du montage ne bougent pas d'une unité.
+  const etat = creerEtat(141);
   const vagues = [Array.from({ length: GRILLE.largeur }, (_, k) => ({
     id: ['belier', 'pilon', 'broyeur', 'crecelle'][k % 4], colonne: k + 1, niveau: 25,
   }))];

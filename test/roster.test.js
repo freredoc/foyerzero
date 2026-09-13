@@ -466,7 +466,16 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // le nombre de ticks ne bouge pas ; le frein ne lit que `vitesseMilli`, qui
   // n'en dépend pas. C'est exactement l'asymétrie que ce test existe pour
   // attraper, et il ne la trouve pas.
-  assert.deepEqual([...ticks], [166], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT PRÉDILECTION (13/09) : 166 → **200**, QUATRIÈME RÉANCRAGE PAR LE
+  // DÉROULÉ, ET IL ALLONGE LÀ OÙ CONTACT-2 RACCOURCISSAIT. Le site est composé
+  // et disposé exactement comme hier ; ce qui change est que chaque tireur élit
+  // une cible de sa PRÉDILECTION avant la plus proche, donc l'assaut lourd ne
+  // tape plus sur ce qui se présente mais sur ce qu'il tue le mieux — et la
+  // garnison fait de même contre lui. **La propriété, elle, ne bouge pas d'un
+  // cheveu, et c'est la seule que ce test mesure : UNE seule durée, sur neuf
+  // niveaux.** L'invariance en miroir ne dit pas QUELLE est la durée, elle dit
+  // qu'elle ne dépend pas du niveau.
+  assert.deepEqual([...ticks], [200], `durées observées : ${[...ticks].join(', ')}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -625,15 +634,34 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // deux choses aurait déplacé les trois raids dans le même sens. Ici A et C
     // suivent la fenêtre, B suit l'écrasement, et aucune des trois causes ne
     // bouge. Aucun barème n'a été touché ; le calibrage revient à Ethan.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 322, butin: { quartz: 0, scorie: 0 }, survivants: 0 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 439, butin: { quartz: 32_686, scorie: 10_895 }, survivants: 8 },
+    // ⚠⚠ LOT PRÉDILECTION (13/09) : LES TROIS RAIDS BOUGENT, LES TROIS CAUSES
+    // NON, ET LES TROIS DÉPLACEMENTS VONT DANS LE MÊME SENS — chacun tue
+    // d'abord ce qu'il tue le mieux, donc le feu se concentre et ce qui n'est pas
+    // de sa prédilection passe.
+    //   A : 322 → 727 ticks (×2,26), butin 0 / 0 → **254 470 / 84 823**,
+    //       survivants 0 → **6**. C'est le plus gros déplacement qu'ait connu ce
+    //       raid : l'assaut d'infanterie budgété ne meurt plus devant la défense,
+    //       il franchit la bande, il vide les bâtiments et il RENTRE ENTIER. Le
+    //       butin quitte le zéro où huit lots l'avaient laissé.
+    //   B : 439 → **424** ticks, butin 32 686 / 10 895 → **32 823 / 10 941**
+    //       (+0,4 %), survivants **8 des deux côtés**. L'assaut lourd raccourcit
+    //       et ne change presque rien d'autre.
+    //   C : 501 → **493** ticks, butin 150 / 50 → **6 486 / 2 162** (×43,2),
+    //       survivants 3 → **5**. Il retrouve l'ordre de grandeur qu'il avait au
+    //       lot CONTACT sans que la fenêtre de `margeDeContact` ait bougé d'une
+    //       cellule. Le même couple se lit dans `repli.test.js T6` et dans
+    //       `assaut.test.js T7`, sur le même raid C.
+    // ⚠ Aucun barème n'a été touché ; le calibrage revient à Ethan, et
+    // `rapports/RAPPORT-lotPREDILECTION.md` §5 le porte avec ses trois options.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 727, butin: { quartz: 254_470, scorie: 84_823 }, survivants: 6 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 424, butin: { quartz: 32_823, scorie: 10_941 }, survivants: 8 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 501, butin: { quartz: 150, scorie: 50 }, survivants: 3 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 493, butin: { quartz: 6_486, scorie: 2_162 }, survivants: 5 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({

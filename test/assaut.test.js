@@ -450,10 +450,17 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // où les unités ne s'alignent pas en files serrées.
   // ⚠ LES TROIS CAUSES NE BOUGENT PAS, des deux côtés, et le contraste que ce
   // test garde est intact : les deux séries ne rendent pas les mêmes durées.
+  //
+  // ⚠⚠ LOT PRÉDILECTION (13/09) : `A 871 → 834`, `B 700 → 698`, `C 478 → 478` —
+  // **C NE BOUGE PAS D'UN TICK, AUX QUATRE LOTS DE SUITE**. Le lot ajoute un
+  // critère de tête à `ciblage` : chacun élit désormais une cible de sa
+  // prédilection avant la plus proche, donc il tue plus vite ce qu'il tue le
+  // mieux. Les trois préréglages figés raccourcissent ou ne bougent pas, et les
+  // trois causes restent `attaquants`.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 871);
+  assert.equal(figes[0].tick, 834);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
-  assert.equal(figes[1].tick, 700);
+  assert.equal(figes[1].tick, 698);
   assert.equal(figes[2].cause, 'attaquants');
   assert.equal(figes[2].tick, 478);
 
@@ -478,7 +485,14 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // ⚠ LOT CONTACT-2 : 310 → 322, et les douze ticks sont la FENÊTRE élargie —
   // à balayage perpendiculaire réduit à la seule colonne du milieu, ce raid rend
   // exactement ses 310. Le butin reste à ZERO, huitième lot de suite.
-  assert.equal(budgetes[0].nbTicks, 322);
+  // ⚠⚠ LOT PRÉDILECTION : 322 → **727**, SOIT ×2,26, ET C'EST LE PLUS GROS
+  // DÉPLACEMENT QU'AIT CONNU CE NOMBRE. L'assaut d'infanterie budgété ne meurt
+  // plus devant la défense : la garnison élit désormais une cible de sa
+  // prédilection avant la plus proche, donc elle concentre son feu au lieu de
+  // l'étaler sur ce qui passe, et ce qui n'est pas de sa prédilection franchit la
+  // bande. Le raid dure deux fois plus longtemps ET rapporte pour la première
+  // fois depuis le lot PAQUETS — voir le butin juste en dessous.
+  assert.equal(budgetes[0].nbTicks, 727);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -512,7 +526,13 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // l'avant-poste. C'est du CALIBRAGE, pas un défaut, et c'est la cinquième fois
   // que ce nombre change de sens : le rapport le porte pour Ethan.
   // ⚠ LOT PAQUETS : { 0, 0 } — voir ci-dessus.
-  assert.deepEqual(budgetes[0].butin, { quartz: 0, scorie: 0 });
+  // ⚠⚠ LOT PRÉDILECTION : { 0, 0 } → **{ 254 470, 84 823 }**, ET LE RAID A SORT
+  // DU ZÉRO OÙ HUIT LOTS L'AVAIENT LAISSÉ. C'est le neuvième renversement de ce
+  // nombre, et de loin le plus large : l'assaut d'infanterie budgété atteint de
+  // nouveau les bâtiments de l'avant-poste, et il y reste assez longtemps pour
+  // les vider. Mesuré, PAS COMPENSÉ — aucun barème n'a été touché, et
+  // `rapports/RAPPORT-lotPREDILECTION.md` §5 le porte pour Ethan.
+  assert.deepEqual(budgetes[0].butin, { quartz: 254_470, scorie: 84_823 });
   assert.equal(budgetes[1].cause, 'attaquants');
   // ⚠ LOT PAQUETS : 323 → 287, 528 → 396.
   // ⚠ LOT MUR (10/09) : B passe de 287 à 244 ticks, et C de 396 à 458 — en sens
@@ -526,11 +546,17 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // la mort : à fenêtre de deux ce raid rend 446, à écrasement instantané 439.
   // C'est l'assaut lourd, neuf unités de masse 10 et 20 — il n'y a que là que
   // l'écrasement pèse, et c'est pourquoi A et C ne le suivent pas.
-  assert.equal(budgetes[1].nbTicks, 439);
+  // ⚠ LOT PRÉDILECTION : 439 → **424**. L'assaut lourd raccourcit de quinze
+  // ticks, dans le sens de A et de B figés — ce que chacun tue le mieux, il le
+  // tue d'abord.
+  assert.equal(budgetes[1].nbTicks, 424);
   assert.equal(budgetes[2].cause, 'attaquants');
   // ⚠ LOT BARÈME-ET-REJEU : 489 → 509, puis LOT CONTACT : 509 → 501. Voir le
   // bloc des six ticks ci-dessus.
-  assert.equal(budgetes[2].nbTicks, 501);
+  // ⚠ LOT PRÉDILECTION : 501 → **493**, et le même nombre se lit dans
+  // `arsenal.test.js T10`, `repli.test.js T6` et `roster.test.js T6`, sur le
+  // même raid C.
+  assert.equal(budgetes[2].nbTicks, 493);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
   // Lot CARTE : 24 796. Le butin baisse parce que le raid est plus court — 305
@@ -577,7 +603,14 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // s'arrête là où elle la traversait. Le même nombre se lit dans
   // `repli.test.js T6` et dans `roster.test.js T6`, sur le même raid C.
   // Le calibrage revient à Ethan ; rien n'a été compensé.
-  assert.equal(budgetes[2].butin.quartz, 150);
+  // ⚠⚠ LOT PRÉDILECTION : 150 → **6 486**, soit ×43,2, ET LE RAID C RETROUVE
+  // L'ORDRE DE GRANDEUR QU'IL AVAIT AU LOT CONTACT (6 471). Le raid dure huit
+  // ticks de MOINS et rapporte quarante-trois fois plus : la garnison concentre
+  // son feu sur ce qu'elle tue le mieux, donc ce qui n'est pas de sa prédilection
+  // franchit la bande et va griffer les bâtiments. Le même nombre se lit dans
+  // `repli.test.js T6` et dans `roster.test.js T6`, sur le même raid C. Le
+  // calibrage revient à Ethan ; rien n'a été compensé.
+  assert.equal(budgetes[2].butin.quartz, 6486);
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

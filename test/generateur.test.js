@@ -814,9 +814,16 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 paires', 
   // et 21**. Les trois nombres sont assertés EXACTEMENT : un lot qui pousserait
   // le montage vers le plafond éroderait la couverture de ce test en silence, et
   // ces trois égalités obligent à le remesurer et à l'écrire.
-  assert.equal(ecarts.length, 456, `${ecarts.length} comparaisons au lieu de 456`);
-  assert.equal(pairesSautees, 44, `${pairesSautees} paires écartées au lieu de 44`);
-  assert.equal(combatsAuPlafond, 21, `${combatsAuPlafond} combats au plafond de 900 au lieu de 21`);
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT PRÉDILECTION (13/09) : **456 → 460 comparées, 44 → 40
+  // sautées, 21 → 20 au plafond**, ET LA COUVERTURE REMONTE POUR LA PREMIÈRE
+  // FOIS. Les quatre lots précédents l'érodaient ; celui-ci change le CHOIX DE
+  // CIBLE, donc il raccourcit des combats que le plafond tronquait — un combat
+  // de moins au plafond, donc quatre paires de moins sautées, donc quatre
+  // comparaisons de plus. Le plancher de 450 ci-dessous n'a pas eu à bouger.
+  assert.equal(ecarts.length, 460, `${ecarts.length} comparaisons au lieu de 460`);
+  assert.equal(pairesSautees, 40, `${pairesSautees} paires écartées au lieu de 40`);
+  assert.equal(combatsAuPlafond, 20, `${combatsAuPlafond} combats au plafond de 900 au lieu de 20`);
   // ⚠ ET LA COUVERTURE NE DOIT PAS FONDRE : neuf dixièmes des paires au moins.
   // Sans ce plancher, les trois égalités ci-dessus se réancreraient lot après lot
   // jusqu'à ce qu'il ne reste plus rien à comparer, chaque réancrage étant
@@ -936,9 +943,32 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 paires', 
   // ÉCART : `avantPoste` graine 37 `infanterie/5` conclut par `attaquants` au tick
   // 881 aux niveaux 1, 10, 30 et 50, et touche le plafond au niveau 2. Comparer
   // ces deux-là mesurait le plafond, pas le miroir.
-  assert.equal(ecartMax, 1, `écart maximal ${ecartMax} ticks au lieu du 1 mesuré`);
-  // Contre-assertion : le 0 du lot APPROCHE ne doit pas revenir en silence.
-  assert.notEqual(ecartMax, 0, 'écart nul : le miroir a cessé d’échantillonner l’arrondi, remesurer');
+  //
+  // ⚠⚠ LOT PRÉDILECTION (13/09) : 1 → 0, CINQUIÈME BASCULE DE CETTE MESURE, ET
+  // C'EST LE MOUVEMENT DU LOT APPROCHE À L'IDENTIQUE. Le lot ne touche ni au
+  // générateur, ni à la courbe de niveau, ni à un barème : il ajoute un critère
+  // de tête au CHOIX DE CIBLE, donc il échantillonne d'autres fins de combat, et
+  // l'arrondi redevient invisible là où CONTACT-2 le montrait. **Les 460
+  // comparaisons rendent de nouveau le même tick**, `entitesQuiBasculent` reste
+  // à **0**, et la borne relative de 1 % redevient VACUEUSE sur ce montage —
+  // exactement comme aux lots PAQUETS et APPROCHE, et c'est déclaré plutôt que tu.
+  //
+  // ⚠⚠ ET LA CONTRE-ASSERTION EST RETOURNÉE, JAMAIS RETIRÉE. Elle refusait le
+  // retour du **0** d'APPROCHE ; ce zéro est mesuré, donc elle ne peut plus être
+  // honorée en l'état. Elle refuse désormais le retour du **1** de CONTACT-2 :
+  // la propriété qu'elle défend n'a pas changé d'un mot — un écart qui
+  // reviendrait à sa valeur d'avant sans qu'on l'ait mesuré passerait en
+  // silence —, seul le nombre refusé bascule avec elle. Un lot qui défferait ce
+  // lot-ci sans toucher ce test repasserait au vert sans elle.
+  //
+  // ⚠ ET LE ZÉRO A ÉTÉ MESURÉ DES DEUX CÔTÉS AVANT D'ÊTRE CRU, ce que le message
+  // de l'ancienne contre-assertion demandait en toutes lettres : sur l'arbre
+  // pristine de `src/sim/combat.js`, le même montage rend **1** ; sous le
+  // prototype, **0**. C'est le lot qui déplace la mesure, pas une couverture qui
+  // aurait fondu — les 460 comparaisons le disent au-dessus.
+  assert.equal(ecartMax, 0, `écart maximal ${ecartMax} ticks au lieu du 0 mesuré`);
+  // Contre-assertion RETOURNÉE : le 1 du lot CONTACT-2 ne doit pas revenir en silence.
+  assert.notEqual(ecartMax, 1, 'écart d’un tick : le miroir rééchantillonne l’arrondi, remesurer');
 
   // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
   // du §4 aurait été choisi trop juste sans qu'on le sache.

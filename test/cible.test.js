@@ -427,7 +427,18 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // devant les bâtiments, qu'il griffe davantage avant de tomber — et le
   // multiplicateur de 3,25 de l'avant-poste amplifie la hausse comme il
   // amplifiait les baisses. **Aucun barème n'a été touché.**
-  assert.deepEqual(r.butin, { quartz: 20_898, scorie: 6_966 });
+  // ⚠⚠ LOT PRÉDILECTION (13/09) : 20 885 ET 6 961, SOIT −0,06 % — ET C'EST TOUT
+  // CE QUI BOUGE SUR CE RAID. Le tick reste à 308, la cause à `attaquants`, les
+  // survivants à quatre : treize unités de quartz sur vingt mille. Le ciblage
+  // préfère désormais la prédilection, donc l'assaut lourd répartit ses tirs
+  // autrement à quelques ticks près ; sur un avant-poste, où le multiplicateur de
+  // 3,25 amplifie tout, l'écart reste sous le dixième de pour-cent. C'est le plus
+  // petit réancrage que ce test ait porté, et il faut le dire dans ce sens-là :
+  // un lot qui change ce que QUATORZE unités visent peut ne rien déplacer ici.
+  // **Aucun barème n'a été touché.**
+  assert.deepEqual(r.butin, { quartz: 20_885, scorie: 6_961 });
+  assert.notDeepEqual(r.butin, { quartz: 20_898, scorie: 6_966 },
+    'le butin d\'avant le lot PRÉDILECTION est revenu : le ciblage ne préfère plus');
   // ⚠ ET LE SURVIVANT REVIENT — trois au premier geste, **quatre** au second.
   // La première moitié du lot faisait s'arrêter les anti-structure sous le feu
   // des tourelles ; la seconde écarte les défenseuses de leur trajet. Les deux
@@ -676,12 +687,45 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // **895 ticks pour `mixte/base/1`, soit cinq ticks sous le plafond.** Le vide
   // ne tient qu'à un cheveu, et c'est ce qu'il faut savoir — un test qui
   // n'annoncerait que l'ensemble vide laisserait croire à une marge.
+  //
+  // ⚠⚠⚠ LOT PRÉDILECTION (13/09) : UN RAID Y REVIENT, ET C'EST LA CONSÉQUENCE
+  // LA PLUS LARGE DE CE LOT-LÀ. `infanterie/base/3` touche le plafond. La cause
+  // est mécanique : le ciblage préfère désormais la cible de PRÉDILECTION, donc
+  // `doitSArreter` répond oui bien plus souvent, donc les assauts s'arrêtent pour
+  // combattre au lieu de traverser.
+  //
+  // ⚠⚠ ET CE N'EST PAS UN GEL, vérifié comme les huit fois précédentes en
+  // portant `maxTicks` à 20 000 : il se conclut par `attaquants` au tick
+  // **1 973**, soit **2,19 fois le plafond** — 197 secondes de combat. C'est un
+  // combat deux fois trop long, pas un combat sans issue. À comparer aux
+  // précédents : 4 645 au lot CARTE, 5 478 au lot COLONNE, 3 539 au lot
+  // DISPOSITION-OUVRAGE, 2 618 au lot MUR, 940 au lot APPROCHE, 1 018 au lot
+  // BARÈME-ET-REJEU, 1 020 au lot CONTACT.
+  //
+  // ⚠⚠⚠ ET LE SENS DE LA CAUSE EST L'INVERSE DE CE QU'ON CROIT — MESURÉ, PAS
+  // DÉDUIT. La lecture naturelle serait « l'assaut s'arrête pour la garnison,
+  // donc il n'atteint plus les bâtiments ». **Faux sur ce raid-ci.** Avant le
+  // lot, `infanterie/base/3` se concluait au tick **414** par `attaquants` avec
+  // **ZERO bâtiment tombé sur 21** : l'assaut était balayé en quarante et une
+  // secondes sans jamais griffer l'objectif. Après, il tient **1 973** ticks et
+  // fait tomber **QUATRE bâtiments sur 21**. Le combat s'allonge parce que
+  // l'assaut SURVIT — il tire enfin dans sa colonne la plus forte —, pas parce
+  // qu'il piétine. Sur les cinquante-quatre raids : attaquants détruits
+  // **424 → 388**, bâtiments tombés **35 → 44**, défenseurs tombés **179 → 188**,
+  // somme des ticks **25 715 → 29 169**. Le lot rend les assauts plus FORTS, et
+  // c'est pour ça qu'ils durent.
+  //
+  // **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan. Trois issues
+  // sont au rapport ; aucune n'est prise ici.
   assert.deepEqual(
-    expires.sort(), [],
+    expires.sort(), ['infanterie/base/3'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
-  assert.equal(plusLong, 895, 'le plus long des cinquante-quatre');
-  assert.ok(plusLong < 900, 'et il tient sous le plafond — sinon il serait dans la liste');
+  assert.equal(plusLong, 900, 'le plus long des cinquante-quatre — il EST le raid au plafond');
+  // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DE LA LISTE VIDE : un lot qui
+  // déferait la préférence de prédilection rendrait `[]` et 895, et il repasserait
+  // au vert sous une assertion qui ne dirait que « au plus un ».
+  assert.notEqual(plusLong, 895, 'le plus long d\'avant le lot PRÉDILECTION est revenu');
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');
   assert.equal(dcaSteriles, 0, 'la DCA ne vise plus rien qu\'elle ne puisse abattre');

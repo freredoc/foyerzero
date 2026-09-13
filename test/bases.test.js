@@ -117,6 +117,8 @@ import {
   DEPLACES_PAR_CONTACT, EMPREINTES_PAR_GRAINE_CONTACT,
   RAPPORTS_PROCHE_CONTACT, RAPPORTS_OUVRAGE_CONTACT,
   DEPLACES_PAR_CONTACT_2, EMPREINTES_PAR_GRAINE_CONTACT_2,
+  DEPLACES_PAR_PREDILECTION, EMPREINTES_PAR_GRAINE_PREDILECTION,
+  RAPPORTS_OUVRAGE_PREDILECTION,
   RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
 } from './temoins-bases-0.js';
 
@@ -268,7 +270,20 @@ function empreinteAttendue(phase, champ) {
   // quatre ticks — ce qui bouge est le DÉROULÉ d'un combat. ⚠⚠ AUCUN SCALAIRE
   // NE BOUGE, les dix-sept, sur 25 graines sur 25, la taille de la sauvegarde
   // comprise.
-  return DEPLACES_PAR_CONTACT_2[phase]?.[champ]
+  // ⚠⚠ VINGT-SIXIÈME COUCHE — lot PRÉDILECTION, 13/09. **SEIZE couples sur 350,
+  // la plus étroite de l'histoire de ce témoin**, cinq champs, phases p11 à p14 :
+  // **les DIX PREMIÈRES PHASES sont identiques AU BIT**, là où les deux lots
+  // d'avant partaient de la p07. ⚠⚠ LE RAID DE PROXIMITÉ NE BOUGE PAS D'UN BIT —
+  // zéro sur 25 —, celui de l'Ouvrage sur TREIZE, et c'est l'inverse de la forme
+  // des lots MUR et CONTACT. Mesuré sur le combat de la phase 7, tick par tick :
+  // le nombre de colonnes de matrice distinctes à portée d'un attaquant ne
+  // dépasse JAMAIS UN, sur 483 ticks — le camp porte trois `meute` et rien
+  // d'autre, donc le critère de tête n'a rien à départager. **La prédilection ne
+  // mord que là où une pièce avait plus d'une CLASSE de cible valide à portée.**
+  // ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
+  // de la sauvegarde comprise.
+  return DEPLACES_PAR_PREDILECTION[phase]?.[champ]
+    ?? DEPLACES_PAR_CONTACT_2[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT[phase]?.[champ]
     ?? DEPLACES_PAR_REJEU[phase]?.[champ]
     ?? DEPLACES_PAR_BAREME_ET_REJEU[phase]?.[champ]
@@ -704,7 +719,14 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // écraseuse n'avait de victime : la règle neuve n'y a rien à changer. Le `??`
     // reste donc NÉCESSAIRE, et c'est la moitié qui distingue un lot qui mord là
     // où il doit d'un lot qui déplace tout.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_CONTACT_2[g]
+    // ⚠⚠ PRÉDILECTION (13/09) EN DÉPLACE **DIX-NEUF SUR VINGT-CINQ** — contre six
+    // au lot CONTACT-2 et vingt-trois au lot CONTACT. Les six qui tombent à
+    // l'octet sur `CONTACT_2` — **8, 10, 13, 17, 20 et 24** — sont des parties où
+    // la garnison que l'Ouvrage attaque n'offre jamais deux classes de cible à
+    // portée d'un même assaillant. Le `??` reste donc NÉCESSAIRE, comme aux lots
+    // MUR, VITESSE, BARÈME-ET-REJEU, CONTACT et CONTACT-2.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_PREDILECTION[g]
+      ?? EMPREINTES_PAR_GRAINE_CONTACT_2[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT[g]
       ?? EMPREINTES_PAR_GRAINE_REJEU[g]
       ?? EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU[g]
@@ -902,7 +924,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // croisent presque jamais en travers. Une table PLEINE voudrait dire que le
       // lot déplace le résultat de tout raid, ce qu'il ne fait pas.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_CONTACT_2[g]
+        ? (RAPPORTS_OUVRAGE_PREDILECTION[g]
+          ?? RAPPORTS_OUVRAGE_CONTACT_2[g]
           ?? RAPPORTS_OUVRAGE_CONTACT[g]
           ?? RAPPORTS_OUVRAGE_REJEU[g] ?? RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
           ?? RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
@@ -913,6 +936,16 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
+        // ⚠⚠ ET LE LOT PRÉDILECTION N'EN DÉPLACE AUCUN DE CE CÔTÉ-CI — **zéro
+        // sur vingt-cinq** —, quand il en déplace TREIZE côté Ouvrage. Il n'y a
+        // donc pas de `RAPPORTS_PROCHE_PREDILECTION`, et cette absence EST la
+        // mesure : les vingt-cinq rapports du raid de proximité restent gardés
+        // contre `RAPPORTS_PROCHE_CONTACT_2` et les couches d'avant, si bien
+        // qu'un lot futur qui les déplacerait ferait tomber ce test sans qu'on
+        // ait eu à l'écrire. ⚠ Le motif est mesuré, pas déduit : le camp raidé
+        // porte trois `meute` et rien d'autre, donc aucun attaquant n'a jamais
+        // deux CLASSES de cible à portée — zéro couple (entité, tick) sur les
+        // 483 ticks du combat.
         : (RAPPORTS_PROCHE_CONTACT_2[g]
           ?? RAPPORTS_PROCHE_CONTACT[g]
           ?? RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]

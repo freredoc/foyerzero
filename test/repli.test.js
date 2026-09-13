@@ -505,7 +505,15 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // ⚠ CE NOMBRE EST UNE EMPREINTE, PAS UN INVARIANT — et ce que ce test existe
   // pour tenir ne bouge pas : le raid ne se traîne pas jusqu'au plafond de 900,
   // et au moins une unité rentre à la base.
-  assert.equal(r.nbTicks, 501);
+  // ⚠ LOT PRÉDILECTION (13/09) : 501 → **493**, ET C'EST LE SECOND LOT À
+  // RACCOURCIR CE RAID, POUR UNE AUTRE RAISON QUE LE PREMIER. Le pas n'est pas
+  // en cause : chaque tireur élit désormais une cible de sa PRÉDILECTION avant la
+  // plus proche, donc il concentre son feu sur ce qu'il tue le mieux au lieu de
+  // l'étaler sur ce qui passe. Ni la disposition, ni la garnison, ni un barème ne
+  // bougent d'un identifiant : `src/data/` n'a pas une ligne au diff. Le même
+  // nombre se lit dans `arsenal.test.js T10`, `assaut.test.js T7` et
+  // `roster.test.js T6`, sur le même raid C.
+  assert.equal(r.nbTicks, 493);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -562,14 +570,29 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // voisine s'arrête là où elle la traversait : elle atteint moins les
   // bâtiments, donc elle en rapporte moins. Aucun barème n'a été touché ; le
   // calibrage revient à Ethan.
-  assert.deepEqual(r.butin, { quartz: 150, scorie: 50 });
+  // ⚠⚠ LOT PRÉDILECTION : 150 → **6 486** ET 50 → **2 162**, SOIT ×43,2, ET LE
+  // RAID C RETROUVE L'ORDRE DE GRANDEUR QU'IL AVAIT AU LOT CONTACT — 6 471 et
+  // 2 157 —, SANS QUE LA FENÊTRE DE `margeDeContact` AIT BOUGÉ D'UNE CELLULE. Le
+  // sens est celui des huit ticks gagnés, pris par l'autre bout : la garnison
+  // concentre son feu sur ce qu'elle tue le mieux, donc ce qui n'est pas de sa
+  // prédilection franchit la bande et va griffer les bâtiments. Aucun barème n'a
+  // été touché ; le calibrage revient à Ethan.
+  //
+  // ⚠ LA CONTRE-ASSERTION EST RETOURNÉE, JAMAIS RETIRÉE : elle refusait le retour
+  // des 6 471 du lot CONTACT, que la fenêtre élargie avait fait tomber à 150 ;
+  // elle refuse désormais le retour de ces **150**, que ce lot-ci fait remonter.
+  // La propriété qu'elle défend n'a pas changé d'un mot — un butin qui
+  // reviendrait à sa valeur d'avant sans qu'on l'ait remesuré passerait en
+  // silence —, seul le couple refusé bascule avec elle.
+  assert.deepEqual(r.butin, { quartz: 6486, scorie: 2162 });
   assert.notDeepEqual(
-    r.butin, { quartz: 6471, scorie: 2157 },
-    'la fenêtre élargie est ce qui déplace ce butin — le nombre d\'avant ne doit pas revenir',
+    r.butin, { quartz: 150, scorie: 50 },
+    'le choix de cible est ce qui déplace ce butin — le nombre d\'avant ne doit pas revenir',
   );
-  // ⚠ Quatre survivants → trois, et les TROIS sont rentrés : même mécanique vue
-  // par l'autre bout, on avance moins loin donc on s'expose moins longtemps.
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 3);
+  // ⚠ LOT PRÉDILECTION : trois survivants → **cinq**, et la mécanique est celle
+  // du butin, vue par l'autre bout — un feu concentré tue ce qu'il vise et laisse
+  // passer le reste, donc il en rentre davantage.
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',
