@@ -1024,8 +1024,37 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   // ⚠ ET LA CAUSE EST TOUJOURS LA MÊME, ce que la seconde assertion mesure : le
   // défaut est dans `pvCourantsDesDefenses` quand l'Étai est tombé. Aucune ligne
   // de ce lot ne l'a touché — `src/sim/site-entame.js` n'apparaît pas au diff.
+  //
+  // ⚠⚠⚠ LOT PRÉDILECTION (13/09) : HUITIÈME RÉANCRAGE, ET LE BRIEF DEMANDAIT DE
+  // RETIRER CE TEST. **La mesure le contredit, et c'est elle qui tranche.** Son
+  // §6 annonce « dette payée sur 2 sur 2 […] Le lot ferme la dette. Le retirer,
+  // et le dire au rapport ». Les DEUX scénarios épinglés cessent bien de lever —
+  // c'est le déplacement que ce commentaire annonce depuis sept lots — mais le
+  // balayage du MÊME échantillon de 600 — `camp`, niveaux 25 à 30, graines 1 à
+  // 100 — en trouve **UN qui lève encore**, `camp/30/30`, sur un défenseur
+  // « perceurs », et le message n'a pas changé d'un caractère : `pvMilli 11611890
+  // hors de 1…11104100`. La règle que ce test s'est donnée à lui-même quatre
+  // lignes plus haut fait donc foi : **on ne retire la boucle que le jour où le
+  // BALAYAGE rend zéro**, pas le jour où les épinglés cessent de mordre. Épingler
+  // les scénarios pour ensuite les croire est très exactement la faute que le
+  // balayage existe pour attraper.
+  //
+  // ⚠⚠ ET LE COMPTE PRISTINE ÉTAIT FAUX DANS LE COMMENTAIRE CI-DESSUS : SIX, PAS
+  // DEUX. Rejoué sur l'arbre PRISTINE de ce lot — `src/sim/combat.js` restauré,
+  // même échantillon de 600 — le balayage rend **six** levées : `25/92`, `26/1`,
+  // `27/1`, `29/60`, `30/30` et `30/53`. Le lot BARÈME-ET-REJEU n'en avait relevé
+  // que deux, qui sont ses deux ÉPINGLÉS : il a compté ce qu'il regardait, pas ce
+  // qu'il y avait. Le vrai mouvement du lot PRÉDILECTION est donc **six → un**,
+  // et non deux → un. **Un compte de balayage se remesure des deux côtés avant
+  // d'être cru** ; celui-ci ne l'avait pas été.
+  //
+  // ⚠ ET `camp/30/30` TRAVERSE LES DEUX CÔTÉS : il lève sur le pristine comme sur
+  // l'arbre du lot, avec la même pièce et le même message. C'est la première fois
+  // que ce test épingle un scénario que le lot n'a PAS déplacé — donc le plus
+  // solide des huit réancrages, et celui qui dit le mieux que la cause est
+  // ailleurs que dans le ciblage.
   for (const [type, niveau, graine] of [
-    ['camp', 25, 92], ['camp', 30, 53],
+    ['camp', 30, 30],
   ]) {
     const identite = {
       type, saveur: 'richeQuartz', niveau, rangee: 100, colonne: 5, instance: 1,
@@ -1046,8 +1075,9 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   }
   // ⚠ ASSERTÉE ENCORE VIOLÉE. Le jour où la dette est payée, cette ligne tombe
   // et quelqu'un vient la retirer — c'est ce qu'on lui demande.
-  assert.equal(leve.length, 2,
-    `la dette est payée sur ${2 - leve.length} des deux cas : retirer ce test et le dire`);
+  assert.equal(leve.length, 1,
+    `la dette est payée sur ${1 - leve.length} du seul cas épinglé : NE PAS retirer ce test `
+    + 'tant que le balayage de 600 ne rend pas zéro — voir le pavé ci-dessus');
   for (const m of leve) {
     assert.match(m, /pvMilli \d+ hors de 1…\d+/, `la levée a changé de nature : ${m}`);
   }

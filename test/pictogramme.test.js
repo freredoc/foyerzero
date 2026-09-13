@@ -780,14 +780,29 @@ test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 e
   // tombant EXACTEMENT sur le total des DEUX côtés (écart 0 · 0), et **306 URI /
   // 307 lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image
   // ni un son — deux lignes d'affichage : la borne NE BOUGE PAS.
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT PRÉDILECTION — SIXIÈME FOIS, ET LE COÛT EST DE 117 OCTETS.
+  // `main` pristine à `a5dbd5a` rend **9 385 997**, le nombre que la §0 annonçait,
+  // retrouvé à l'octet ; l'arbre du lot rend **9 386 114**. Ventilé poste par
+  // poste dans un `git worktree` sur ce pristine-là : **JavaScript +117 · feuille
+  // +0 · balisage +0 · images +0 · audio +0**, la partition tombant EXACTEMENT
+  // sur le total des DEUX côtés, et **306 URI / 307 lignes `data:` de part et
+  // d'autre**. Le lot ne touche qu'`src/sim/combat.js` : la borne NE BOUGE PAS.
+  //
+  // ⚠ ET 117 OCTETS VALENT UN QUATRE-CENT-VINGT-SEPTIÈME DE LA TOLÉRANCE DE
+  // 50 000 : laisser l'ancienne ancre aurait passé au VERT en faisant mentir la
+  // §0 de `CLAUDE.md`, qui annonce l'autre nombre. C'est très exactement la
+  // dérive LENTE que la dernière assertion de ce test existe pour refuser.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_385_997;          // remesuré à la fusion ÉCRANS, base `0c4a546`
-  const MARGE = BORNE - MESURE;      // 214 003 octets — 214 592 écrits par CONTACT-2
-  assert.equal(MARGE, 214_003);
+  const MESURE = 9_386_114;          // remesuré au lot PRÉDILECTION, base `a5dbd5a`
+  const MARGE = BORNE - MESURE;      // 213 886 octets — 214 003 écrits par ÉCRANS
+  assert.equal(MARGE, 213_886);
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
   assert.notEqual(MARGE, 214_592,
     'la marge est celle de CONTACT-2 seul : la fusion avec ÉCRANS a été défaite');
+  assert.notEqual(MARGE, 214_003,
+    'la marge est celle d\'avant PRÉDILECTION : le réancrage a été défait');
   assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.23);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des

@@ -562,7 +562,7 @@ test('ARRÊT T9 — aucune tourelle ne retient plus, et aucune n\'est non bloqua
 // ARRÊT T10 — `colonnePredilection` n'est pas devenu un champ mort
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T10 — `colonnePredilection` garde ses HUIT lecteurs', () => {
+test('ARRÊT T10 — `colonnePredilection` garde ses DIX lecteurs', () => {
   // ⚠ LE BRIEF DU LOT ARRÊT LE DEMANDAIT PAR GREP, ET C'EST LA BONNE FORME : un
   // champ qu'on laisserait sans lecteur serait un commentaire menteur en
   // puissance. Le compte SE RESSERRE au lot COLONNE, il ne s'assouplit pas — le
@@ -576,15 +576,52 @@ test('ARRÊT T10 — `colonnePredilection` garde ses HUIT lecteurs', () => {
   // bâtiment et la colonne pour la prédilection.
   const code = sansCommentaires(readFileSync(join(RACINE, 'src/sim/combat.js'), 'utf8'));
   const lectures = code.match(/[\w.]*colonnePredilection/g) ?? [];
-  // Onze occurrences : trois écritures de profil, et huit lectures — une pour
+  // Treize occurrences : trois écritures de profil, et DIX lectures — une pour
   // la munition spéciale et sa garde de nullité (2), deux pour le camouflage,
   // deux pour `doitSArreter` (garde puis comparaison), deux pour
-  // `cibleDuDecalage` (garde puis comparaison).
-  assert.equal(lectures.length, 11, `occurrences trouvées : ${lectures.join(', ')}`);
+  // `cibleDuDecalage` (garde puis comparaison), et DEUX POUR `ciblage` DEPUIS LE
+  // LOT PRÉDILECTION — sa garde de nullité puis sa comparaison.
+  //
+  // ⚠⚠ LE NOUVEAU LECTEUR EST NOMMÉ, PAS SEULEMENT COMPTÉ. Ethan, 13/09 :
+  // « l'épervier ne s'est pas arrêté pour cibler le fendeur ». Le défaut était
+  // dans `ciblage`, qui élisait à la seule DISTANCE : une cible hors prédilection
+  // plus proche raflait le ciblage, et `doitSArreter` — qui interroge la cible
+  // COURANTE — ne pouvait plus jamais répondre oui. La prédilection passe donc en
+  // tête de l'ordre du ciblage, et `doitSArreter` n'a PAS été touché.
+  assert.equal(lectures.length, 13, `occurrences trouvées : ${lectures.join(', ')}`);
   assert.ok(code.includes('pc.colonneMatrice !== p.colonnePredilection'),
     'la munition spéciale ne lit plus la prédilection');
   assert.ok(code.includes('profil(c).colonneMatrice !== p.colonnePredilection'),
     'le camouflage ne lit plus la prédilection');
+  assert.ok(code.includes('profil(c).colonneMatrice === p.colonnePredilection'),
+    'le ciblage ne préfère plus la prédilection : le défaut du 13/09 est revenu');
+
+  // ⚠⚠ ET LES QUATRE SITES SONT NOMMÉS, PARCE QU'ILS POSENT QUATRE QUESTIONS
+  // DIFFÉRENTES QUI PARTAGENT UNE COMPARAISON — ET QUE LE LOT A MESURÉ QU'ELLES
+  // DIVERGENT. `ensembleCamoufles` demande « une cible de prédilection EXISTE-t-elle
+  // dans MA portée », sans filtre de dégâts ; `ciblage` demande « ce candidat, déjà
+  // filtré par les dégâts, l'approche et le masque, est-il de ma prédilection » ;
+  // `cibleDuDecalage` cherche la plus proche SANS condition de portée ;
+  // `doitSArreter` et `degatsContre` interrogent une cible déjà connue.
+  //
+  // Le lot PRÉDILECTION a cherché si un prédicat commun était dû, et la mesure dit
+  // NON : un Frappeur camouflé à réserve VIDE, avec un bâtiment à portée, est
+  // RÉVÉLÉ par `ensembleCamoufles` — le bâtiment est de sa prédilection — pendant
+  // que `ciblage` ne lui donne AUCUNE cible, `degatsContre` rendant zéro. Les deux
+  // réponses sont justes, et un prédicat unique devrait en choisir une : y ajouter
+  // le filtre de dégâts garderait ce Frappeur camouflé, l'en retirer ferait viser
+  // une cible qu'on ne peut pas blesser — ce que `T5` de `cible.test.js` a fermé.
+  // Ce qui se partage est la DISCIPLINE, et c'est ce test qui la tient.
+  for (const site of ['function ciblage', 'function ensembleCamoufles',
+    'function doitSArreter', 'function cibleDuDecalage', 'function degatsContre']) {
+    const bloc = code.match(new RegExp(`${site}[\\s\\S]*?\\n}`));
+    assert.ok(bloc !== null, `${site} est introuvable`);
+    assert.ok(bloc[0].includes('colonnePredilection'),
+      `${site} ne lit plus la prédilection : la question a changé de porteur`);
+    assert.ok(bloc[0].includes('p.colonnePredilection === null')
+      || bloc[0].includes('p.colonnePredilection !== null'),
+    `${site} compare la prédilection sans garde de nullité`);
+  }
 
   // ⚠⚠ ET LA COMPARAISON EST ÉCRITE DANS LE SENS QUI PROTÈGE DU `null`,
   // PARTOUT : `p.colonnePredilection === pc.colonneMatrice` seul serait VRAI si
@@ -622,9 +659,11 @@ test('ARRÊT T10 — `colonnePredilection` garde ses HUIT lecteurs', () => {
   assert.ok(/return true;\n}$/.test(regle[0]),
     'la règle ne conclut plus sans condition : une exclusion a été rajoutée');
 
-  // ⚠ LE COMPTE DE LECTEURS NE BOUGE PAS, ET LE BRIEF SE TROMPAIT DESSUS : il
-  // annonçait que `colonnePredilection` « en perdrait un si l'exclusion part ».
-  // Mesuré : `estStructureDefensive` lisait `genre` et `colonneMatrice`, jamais
-  // `colonnePredilection`. Les onze occurrences assertées plus haut sont les
-  // mêmes avant et après le lot.
+  // ⚠ LE COMPTE DE LECTEURS NE BOUGE PAS AU LOT MUR, ET SON BRIEF SE TROMPAIT
+  // DESSUS : il annonçait que `colonnePredilection` « en perdrait un si
+  // l'exclusion part ». Mesuré : `estStructureDefensive` lisait `genre` et
+  // `colonneMatrice`, jamais `colonnePredilection`.
+  //
+  // ⚠ IL MONTE À TREIZE AU LOT PRÉDILECTION, ET C'EST UN RESSERREMENT : le champ
+  // gagne un lecteur, il n'en perd aucun. Onze avant, treize après.
 });

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **13/09/2026**, version 0.99.56 · build 158.
+Dernière révision : **13/09/2026**, version 0.99.58 · build 160.
 
 ---
 
@@ -42,7 +42,191 @@ Dernière révision : **13/09/2026**, version 0.99.56 · build 158.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 13/09/2026 (après le lot ÉCRANS), à confronter :**
+**Référence au 13/09/2026 (après le lot PRÉDILECTION), à confronter :**
+⚠⚠ **LA CIBLE DE PRÉDILECTION PASSE EN TÊTE DE L'ORDRE DE CIBLAGE, ET LA RÈGLE
+D'ARRÊT N'A PAS UNE LIGNE DE CHANGÉE.** Ethan, 13/09, point 3 : « L'épervier ne
+s'est pas arrêté pour cibler le fendeur. D'autres situations comme ça ? » — **OUI,
+DOUZE UNITÉS SUR QUATORZE.** `doitSArreter` demandait déjà si la cible COURANTE est
+de prédilection ; `ciblage`, lui, élisait la plus PROCHE sans préférence. Une cible
+hors prédilection plus proche raflait donc le ciblage, et la règle d'arrêt ne pouvait
+plus jamais répondre oui. **Arbitrage rendu — route i : on change `ciblage`.**
+`npm test` rend **1611 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré est
+**1610 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le 08/09), et
+`npm run check` sort en 0. `npm run build` → `dist/index.html`, **9 386 114
+octets**, 0 référence externe. Coût **+117 octets, ENTIÈREMENT DU JAVASCRIPT**,
+mesuré poste par poste contre le livrable rebâti dans un `git worktree` sur l'arbre
+pristine de `main` = `a5dbd5a` (**9 385 997**, le nombre que la §0 précédente
+annonçait, retrouvé à l'octet) : **JavaScript +117 · feuille +0 · balisage +0 ·
+images +0 · audio +0**, la partition tombant EXACTEMENT sur le total des DEUX côtés
+— écart **0 · 0** —, et **306 URI / 307 lignes `data:` de part et d'autre**. Borne
+T10 **inchangée à 9 600 000**, marge **213 886 octets, 2,23 %**. Version et build
+passent à **0.99.58 · build 160** — et **les deux restent des CHAÎNES**, vérifié au
+type. Le lot touche **`src/sim/combat.js` et lui seul** dans `src/`, plus
+`package.json`, `CLAUDE.md`, **quatorze** fichiers de `test/`, les DEUX témoins, et
+fait entrer `test/predilection.test.js` et `rapports/RAPPORT-lotPREDILECTION.md`.
+**Pas une ligne de `src/data/`, `src/render/`, `src/ui/`, `src/son/`, `tools/` ni
+`art/`** — vérifié au diff.
+⚠⚠ **L'EN-TÊTE DE CE FICHIER MENTAIT D'UN BUILD, ET LE BRIEF L'AVAIT VU.** Sa ligne
+« Dernière révision » annonçait **0.99.56 · build 158** quand `package.json` portait
+**0.99.57 · build 159** : le lot ÉCRANS avait bumpé le paquet à la fusion et n'avait
+pas repris l'en-tête. C'est la contradiction entre deux documents que ce fichier
+punit ailleurs quatre fois, commise sur sa propre première page. **Corrigée ici**, et
+elle se relit désormais à chaque lot.
+⚠⚠ **`doitSArreter` N'EST PAS TOUCHÉE, ET C'EST TOUT L'ARBITRAGE.** La route écartée
+ajoutait une règle d'arrêt à côté de celle qui existe — deux vérités pour une même
+question — et elle arrêtait l'Épervier en le laissant tirer sur l'infanterie, **4 de
+dégâts là où il en fait 20**. Ici l'arrêt suit tout seul : dès qu'une cible de
+prédilection est à portée, elle EST la cible, donc le prédicat d'arrêt est vrai sans
+qu'une ligne l'y branche. ⚠ `cibleDuDecalage` n'est pas touchée non plus.
+⚠⚠ **LA GARDE DE NULLITÉ VIENT D'ABORD, ET LA FORME COURTE EST INTERDITE.**
+`p.colonnePredilection === pc.colonneMatrice` serait **VRAI quand les deux valent
+`null`** — l'avertissement que `degatsContre` et `doitSArreter` portent déjà en
+toutes lettres. La forme écrite est `p.colonnePredilection !== null &&
+profil(c).colonneMatrice === p.colonnePredilection`, et `ARRÊT T10` l'exige au
+caractère. ⚠ Elle épargne aussi un `profil(c)` par candidat à qui n'a pas de
+prédilection. ⚠ Et **aucune entité du roster n'est dans ce cas** : `peutTirer` a déjà
+écarté celles qui ne tirent pas. La garde est écrite quand même.
+⚠ **LES TROIS AUTRES CRITÈRES NE BOUGENT PAS** — distance, colonne, rangée
+départagent À L'INTÉRIEUR de chaque classe. Une entité sans prédilection retombe donc
+EXACTEMENT sur l'ordre d'hier, le critère de tête étant uniformément faux.
+⚠⚠ **LE §1 DU BRIEF EST FAUX SUR LE RETARD, ET SA CAUSE EST L'INVERSE DE CE QU'IL
+DIT.** Il annonce « il ne le prendra qu'à la mort des Fusiliers — trois rangées et
+demie trop tard ». **Mesuré sur son propre montage, arbre pristine : l'Épervier prend
+le Chasseur au tick 35, rangée 6 080, les Fusiliers ENCORE VIVANTS à 595 704 /
+700 000, soit 85,1 % de leurs PV.** Le retard vaut **dix-neuf ticks et 2,28 rangées**,
+et ce n'est pas une mort. ⚠⚠ **ET LE MÉCANISME EST UN DÉPASSEMENT** : à ce tick-là
+l'Épervier a DOUBLÉ les Fusiliers — d² 1 166 400 contre 1 006 400 — si bien que le
+Chasseur est devenu **le plus proche**. Il ne l'a jamais préféré ; il l'a rattrapé.
+⚠ **EN REVANCHE SA PRÉDICTION SUR LE PROTOTYPE TOMBE AU CARACTÈRE** : tick 16, rangée
+3 800, bascule ET arrêt, `avance` faux à tous les ticks suivants.
+⚠⚠ **ET C'EST BIEN UNE PRÉFÉRENCE, PAS UNE PROXIMITÉ — `PRÉDILECTION T1` LE MESURE.**
+Au tick de bascule les Fusiliers sont **strictement plus proches** que le Chasseur —
+1 440 000 contre 5 840 000 milli-cases au carré, soit 1,20 case contre 2,42 — et le
+Chasseur vient d'entrer dans les 6 250 000 de portée : il était à 6 382 400 au tick
+d'avant. **L'Épervier laisse passer la cible la plus proche pour prendre celle qu'il
+frappe le mieux.**
+⚠⚠ **DEUX TESTS ENTRENT — `PRÉDILECTION T1` ET `T2` — ET LES DEUX ONT ÉTÉ VUS ROUGES
+SUR `main` AVANT D'ÊTRE ÉCRITS.** `T1` y tombe sur « expected 16, actual 35 » ; `T2`
+sur « `infanterie/camp/1` tick 93 : « meute » vise « casemate » alors que
+« carapace » est à portée ». **Le compte passe de 1 609 à 1 611.**
+⚠⚠ **`PRÉDILECTION T2` RELÈVE 6 097 VIOLATIONS SUR `main`, DANS 53 MONTAGES SUR 54.**
+Son oracle est recalculé depuis les DONNÉES seules — `colonneDe`, `tableDe`,
+`dominante`, `degatsAttendus` — et ne doit rien au moteur ; il balaie les mêmes 54
+raids que `CIBLE T5`, **134 836 ticks-entités**, avec le plancher de falsifiabilité
+`> 40 000` du même idiome. Sur l'arbre du lot : **zéro**.
+⚠⚠⚠ **ET IL A FALLU LE MESURER SUR LA PHOTO D'AVANT LE TICK, SANS QUOI IL ACCUSE UN
+MOTEUR JUSTE.** Le ciblage est l'étape 3, le DÉPLACEMENT l'étape 7 : lire les
+positions en FIN de tick compte des cibles qui n'étaient pas à portée quand le choix
+a été fait. **Mesuré : la même boucle écrite sur l'état de fin de tick rend 366
+violations sur l'arbre du lot, dont pas une n'en est une.** C'est la leçon de
+`CIBLE T5` prise par l'autre bout — là-bas on demande si la cible stérile SURVIT au
+ciblage suivant, ici on juge le ciblage sur la géométrie qu'il a VUE.
+⚠ **ET LA PRÉMISSE DU CAMOUFLAGE EST DÉCLARÉE PLUTÔT QUE REJOUÉE.** `ciblage` masque
+les camouflés au camp qui DÉFEND ; l'oracle ne le fait pas, et il n'a pas à le faire
+tant qu'aucun module n'est armé. **Mesuré : les 54 montages arment ZÉRO module** —
+`apparitionModule` du Camouflage vaut 28, les sites sont de niveau 15, et
+`montageDuBanc` n'arme rien côté joueur. Une assertion le fige et tombera le jour où
+l'un d'eux en armera un.
+⚠⚠ **LE §4 EST TRANCHÉ PAR LA MESURE : ON N'EXTRAIT PAS DE PRÉDICAT PARTAGÉ AVEC
+`ensembleCamoufles`.** Les deux fonctions posent la même question et n'attendent pas
+la même réponse — **mesuré sur un Frappeur à `reserve: 0` devant un bâtiment à
+portée** : `ensembleCamoufles` le RÉVÈLE (le bâtiment est de sa prédilection) quand
+`ciblage` ne lui donne **aucune cible du tout** (`degatsContre` rend 0, la réserve
+étant vide). Les deux ont raison ; un prédicat unique devrait en choisir une. Ce qui
+est partagé est la DISCIPLINE, et `ARRÊT T10` la tient : il passe de **11 à 13**
+occurrences de `colonnePredilection`, **NOMME les cinq sites** — `ciblage`,
+`ensembleCamoufles`, `doitSArreter`, `degatsContre`, `colonneDominante` — et exige de
+chacun la garde de nullité.
+⚠⚠ **LE §5 EST MESURÉ, TROIS ISSUES SONT AU RAPPORT, ET AUCUNE N'EST PRISE. ⚠⚠ MAIS
+LE SENS DE LA CAUSE EST L'INVERSE DE CE QUE LE BRIEF ANNONCE.** Il écrit que l'assaut
+« s'arrête pour la combattre, et n'avance plus vers les bâtiments ». **Faux, mesuré
+sur le seul raid qui touche le plafond, `infanterie/base/3`** : avant le lot il se
+concluait au tick **414** par `attaquants` avec **ZÉRO bâtiment tombé sur 21** — il
+était balayé en quarante et une secondes sans jamais griffer l'objectif ; après, il
+tient **1 973** ticks et fait tomber **QUATRE bâtiments sur 21**. Sur les
+cinquante-quatre raids : attaquants détruits **424 → 388**, bâtiments tombés
+**35 → 44**, défenseurs tombés **179 → 188**, somme des ticks **25 715 → 29 169**.
+**Le lot rend les assauts plus FORTS, et c'est pour ça qu'ils durent.**
+⚠ **ET LE 1 973 N'EST PAS UN GEL**, vérifié comme les huit fois précédentes en levant
+le plafond : il se conclut par `attaquants`, soit **2,19 fois le plafond**. À comparer
+aux précédents — 4 645 au lot CARTE, 5 478 au lot COLONNE, 2 618 au lot MUR, 1 020 au
+lot CONTACT. **Aucun barème n'a été touché ; le calibrage revient à Ethan.**
+⚠⚠ **LE §6 DU BRIEF EST FAUX SUR L'AMPLEUR : 21 TESTS TOMBENT SUR 13 FICHIERS, PAS 6
+SUR 8.** Il annonce « 86 tests, 86 verts sur `main`, 80 verts avec le prototype » sur
+huit fichiers. Les six qu'il nomme tombent bien ; **beaucoup d'autres tombent aussi,
+sur des fichiers qu'il n'a pas balayés** — `arsenal`, `assaut`, `repli`, `roster`,
+`disposition-ouvrage`, `contact`, `recherche`, `generateur`. Un lot qui n'aurait
+réancré que sa liste aurait laissé `main` rouge.
+⚠⚠ **ET `COL T18 bis` NE SE FERME PAS — LE BRIEF ANNONÇAIT L'INVERSE, ET LE COMPTE
+DU LOT PRÉCÉDENT ÉTAIT FAUX.** Il pose « le lot ferme la dette ». **Mesuré sur le
+balayage de 600 scénarios : une levée subsiste, `camp/30/30`.** ⚠⚠ Et l'ancre d'hier
+mentait : le lot CONTACT-2 en écrivait **deux** quand son propre arbre pristine en
+rend **SIX** — `25/92, 26/1, 27/1, 29/60, 30/30, 30/53`. Le mouvement réel est donc
+**six → une**, et `camp/30/30` lève des DEUX côtés. Le test est **gardé, pas retiré**,
+son couple épinglé ramené à `[['camp', 30, 30]]` et son compte à **1**. *Un correctif
+qui ne mord pas se vérifie avant d'être cru* — et un compte de dette aussi.
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS.**
+`COMBATS_DEPLACES_PAR_PREDILECTION` porte les 200 clés et porte l'union à **1 179
+surchargés / 421 gardés** contre la capture d'APPROCHE ;
+`COMBATS_DEPLACES_PAR_PREDILECTION_AVANT_PAQUETS` la porte à **1 337 / 263**.
+⚠⚠ **ET L'INVARIANCE DE `T1 bis` DIT CE QUE LE LOT TOUCHE : 1 335 → 1 337, DEUX
+CHAMPS NEUFS SEULEMENT** — le lot bouge donc le **TIR** et le **CIBLAGE**, et c'est
+la première fois depuis longtemps : les six lots précédents bougeaient la FILE et
+n'ajoutaient qu'un champ. ⚠ Les deux tables portent les 200 clés, `{ }` là où rien ne
+bouge : une clé absente se lirait « ce combat n'existe plus ».
+⚠⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGT-SIXIÈME COUCHE, ET C'EST LA PLUS ÉTROITE DE
+SON HISTOIRE : 16 COUPLES SUR 350**, cinq champs, phases **p11 à p14** — **les DIX
+PREMIÈRES PHASES sont identiques AU BIT**, là où les deux lots d'avant partaient de la
+p07 —, et **aucun scalaire ne bouge**, la taille de la sauvegarde comprise.
+⚠⚠ **ET LE RAID DE PROXIMITÉ NE BOUGE PAS D'UN BIT — ZÉRO SUR 25 —, CELUI DE
+L'OUVRAGE SUR TREIZE.** Il n'y a donc pas de `RAPPORTS_PROCHE_PREDILECTION`, et cette
+absence EST la mesure. **Motif mesuré, pas supposé** : sur le combat de la phase 7,
+tick par tick, le nombre de colonnes de matrice DISTINCTES à portée d'un attaquant ne
+dépasse **JAMAIS UN** sur 483 ticks — le camp porte trois `meute` et rien d'autre,
+donc le critère de tête n'a rien à départager. **La prédilection ne mord que là où une
+pièce avait plus d'une CLASSE de cible valide à portée.**
+⚠⚠ **QUATORZE FICHIERS DE `test/` SONT TOUCHÉS, ET AUCUNE ASSERTION N'A ÉTÉ RETIRÉE
+NI ASSOUPLIE.** Les réancrages remplacent une valeur en écrivant le nombre d'avant à
+côté de celui d'après, et chacun porte une contre-assertion `notEqual` qui refuse le
+retour de l'ancienne. ⚠ **Trois montages ont perdu leur PRÉMISSE et c'est le MONTAGE
+qu'on répare** : `MODULES-A T2` (son mur était de la prédilection du tireur — il passe
+en (4, 4), HORS de portée, les trois nombres assertés ne bougent pas),
+`MODULES-C T5` (sa Casemate visait l'infanterie — elle devient une Batterie, les six
+assertions de corps ne bougent pas), et `DO T8` (la graine 189 ne touchait plus que
+deux bâtiments — la 141 en touche douze, mesurée sur un balayage de 99 à 240).
+⚠⚠ **ET `MODULES-F T14` PERD SES TROIS GRAINES D'UN COUP, PREMIÈRE FOIS DU DÉPÔT.**
+Le balayage de 1 à 60 en rend **six** qui discriminent aux trois niveaux — 1, 36, 39,
+51, 56, 57 — et **l'intersection avec les trois d'hier est VIDE**. Elles passent à
+`[1, 36, 39]`. **Septième fois que ce montage-là perd sa prémisse.**
+⚠ **`generateur.test.js T12` VOIT SA COUVERTURE MONTER POUR LA PREMIÈRE FOIS** —
+`ecarts.length` **456 → 460**, paires sautées **44 → 40**, combats au plafond
+**21 → 20** : le lot RACCOURCIT les combats miroirs que le plafond de 900 tronquait.
+⚠ Et `ecartMax` retombe de **1 à 0**, médiane 0, `entitesQuiBasculent` **0** ; la
+contre-assertion est **RETOURNÉE** — elle refusait le zéro, elle refuse le un.
+⚠ **`PIC T7` EST RÉANCRÉ POUR LA SIXIÈME FOIS** : 9 385 997 → **9 386 114**, marge
+214 003 → **213 886**, 2,23 % des deux côtés. Les 117 octets valent **un
+quatre-cent-vingt-septième** de sa tolérance de 50 000 : le laisser aurait passé au
+VERT en faisant mentir cette §0. Une troisième contre-assertion `notEqual` refuse
+l'ancre d'ÉCRANS.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — démontré et non supposé :
+`src/sim/state.js` n'apparaît pas au diff, et **cinq parties jouées vingt-quatre
+heures sous le feu** — rangée 200, quatre rapports rangés chacune — se sérialisent
+sous `"version":33`, se rechargent et se resérialisent **identiques à l'octet**.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot ne
+touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change se
+VOIT — une unité qui laisse passer ce qui la serre de plus près pour s'arrêter sur ce
+qu'elle sait tuer — et rien n'a été ouvert dans un navigateur : tout est mesuré sur
+`cibleIndice`, `rangeeMilli` et des fonctions PURES. **À regarder au premier essai** :
+que l'arrêt se lise comme un choix et non comme un blocage, et que les assauts qui
+durent deux fois plus longtemps ne fassent pas attendre devant un écran figé.
+⚠ **ET LE LOT N'EST PAS SUR UNE BRANCHE NOMMÉE PAR LE BRIEF** — il demande
+`claude/[descriptive]` ; l'environnement d'exécution épingle la session à
+`claude/new-session-j500j0` et interdit de pousser ailleurs sans autorisation
+explicite.
+
+**Auparavant, après le lot ÉCRANS :**
 ⚠⚠ **DEUX LIGNES D'AFFICHAGE QUI MANQUAIENT, ET PAS UNE LIGNE DE MOTEUR.**
 Ethan, 13/09, points 2 et 4 : « les points de recherche doivent apparaître sur
 les reports » et « Caserne, aérodrome, usine affiche le plafond de réserve or je
@@ -12529,7 +12713,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   72 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   73 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -12541,7 +12725,7 @@ test/                   72 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
-  bareme-et-rejeu  contact
+  bareme-et-rejeu  contact  predilection
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

@@ -1402,6 +1402,7 @@ function ciblage(etat) {
     // masquer évite un test de camp par candidat.
     const masque = e.camp === 'defense' ? camoufles : null;
     let meilleur = null;
+    let meilleurePredilection = false;
     let meilleureDistance = 0;
     let meilleureColonne = 0;
     let meilleureRangee = 0;
@@ -1425,14 +1426,48 @@ function ciblage(etat) {
       // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
       // serre de plus près, et toute la couche anti-aérienne est inerte.
       if (degatsContre(etat, e, p, c) === 0) continue;
+      // ⚠⚠ LA PRÉDILECTION PASSE EN TÊTE DE L'ORDRE — ETHAN, 13/09 : « l'épervier
+      // ne s'est pas arrêté pour cibler le fendeur ». Le défaut n'était pas dans la
+      // règle d'arrêt, qui demande déjà si la cible COURANTE est de prédilection :
+      // il était ici, où la cible courante s'élisait à la seule DISTANCE. Une cible
+      // hors prédilection plus proche raflait le ciblage, et `doitSArreter` ne
+      // pouvait plus jamais répondre oui. Mesuré sur le montage de
+      // `PRÉDILECTION T1` : l'Épervier prenait le Chasseur vingt ticks trop tard,
+      // et seulement parce qu'il l'avait DOUBLÉ — pas parce qu'il l'avait préféré.
+      //
+      // ⚠⚠ ET C'EST TOUT L'ARBITRAGE : `doitSArreter` N'A PAS ÉTÉ TOUCHÉ. La route
+      // écartée ajoutait une règle d'arrêt à côté de celle-ci — deux vérités pour une
+      // question —, et elle arrêtait l'Épervier en le laissant tirer sur
+      // l'infanterie, 4 de dégâts là où il en fait 20. Ici l'arrêt suit tout seul :
+      // dès qu'une cible de prédilection est à portée, elle EST la cible, donc
+      // `pc.colonneMatrice === p.colonnePredilection` est vrai.
+      //
+      // ⚠ LES TROIS AUTRES CRITÈRES NE BOUGENT PAS — ils départagent À L'INTÉRIEUR
+      // de chaque classe. Une entité SANS prédilection retombe donc exactement sur
+      // l'ordre d'hier : le critère de tête est uniformément faux, et les trois
+      // autres décident seuls. Aucune n'est dans ce cas au roster d'aujourd'hui —
+      // `peutTirer` a déjà écarté celles qui ne tirent pas —, et la garde est
+      // écrite quand même.
+      //
+      // ⚠ LA GARDE DE NULLITÉ VIENT D'ABORD, ET ELLE COURT-CIRCUITE. Sans elle,
+      // `p.colonnePredilection === profil(c).colonneMatrice` serait VRAI quand les
+      // deux valent `null` — l'avertissement que `degatsContre` et `doitSArreter`
+      // portent déjà, et qu'`ARRÊT T10` interdit par assertion. Elle épargne aussi
+      // un `profil(c)` par candidat à qui n'a pas de prédilection.
+      const predilection = p.colonnePredilection !== null
+        && profil(c).colonneMatrice === p.colonnePredilection;
       if (
         meilleur === null
-        || d2 < meilleureDistance
-        || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
-        || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
-            && c.rangeeMilli < meilleureRangee)
+        || (predilection && !meilleurePredilection)
+        || (predilection === meilleurePredilection && (
+          d2 < meilleureDistance
+          || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
+          || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
+              && c.rangeeMilli < meilleureRangee)
+        ))
       ) {
         meilleur = c.indice;
+        meilleurePredilection = predilection;
         meilleureDistance = d2;
         meilleureColonne = c.colonneMilli;
         meilleureRangee = c.rangeeMilli;

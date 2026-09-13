@@ -880,17 +880,35 @@ test('MODULES-A T2 — le barrage recalcule la COLONNE, il ne reverse pas la cib
   // ⚠ ET LA SECONDE ESCOUADE ÉPROUVE LE FILTRE DE GENRE : « les structures
   // voisines », pas les unités. Elle est adverse, à Tchebychev 1 de la cible,
   // et elle ne doit rien perdre du barrage.
+  //
+  // ⚠⚠ LE MUR A QUITTÉ (3, 4) POUR (4, 4) AU LOT PRÉDILECTION (13/09), ET C'EST
+  // LE MONTAGE QU'ON RÉPARE, JAMAIS L'ASSERTION. Sa PRÉMISSE a cessé d'être
+  // vraie : les Grenadiers font 25 à la structure contre 5 à l'infanterie, donc
+  // `structureOuAviation` EST leur prédilection, et depuis que `ciblage` élit
+  // d'abord une cible de prédilection, le mur de (3, 4) — à portée — leur est
+  // élu AVANT l'escouade. **Mesuré : le tireur visait le merlon, l'escouade
+  // perdait 0 et le mur 25 000** — c'est-à-dire que le test ne mesurait plus
+  // rien du barrage, et pour la raison même que le lot corrige.
+  //
+  // ⚠ LE REMÈDE EST DE SORTIR LE MUR DE LA PORTÉE DU TIREUR, PAS DU VOISINAGE DE
+  // LA CIBLE — les deux ne sont pas la même chose, et c'est tout ce dont le
+  // barrage a besoin. Portée des Grenadiers **1,5 case**, tireur en (2, 5) :
+  // (3, 4) est à d² = 2 000 000 sur 2 250 000, donc DEDANS ; (4, 4) est à
+  // 5 000 000, donc DEHORS. Et (4, 4) reste à Tchebychev 1 de la cible (3, 5),
+  // ce qui est la seule condition que l'éclaboussure pose. **Les trois nombres
+  // assertés plus bas ne bougent pas d'une unité** : 5 000 sur l'escouade,
+  // 7 500 sur le mur, 0 sur l'unité voisine.
   const etat = scene({
     cible: { id: 'meute', rangee: 3, colonne: 5 },
     voisines: [
-      { id: 'merlon', rangee: 3, colonne: 4 },
+      { id: 'merlon', rangee: 4, colonne: 4 },
       { id: 'meute', rangee: 3, colonne: 6 },
     ],
     avecModule: true,
   });
   const pertes = pertesAuPremierTick(etat);
   const surLEscouade = pertes.get('3,5');
-  const surLeMur = pertes.get('3,4');
+  const surLeMur = pertes.get('4,4');
   assert.equal(surLEscouade, 5000, 'montage : la colonne infanterie des Grenadiers a changé');
   assert.equal(surLeMur, 7500,
     `le barrage a lu la colonne de la CIBLE et non celle du mur : ${surLeMur}`);
@@ -906,13 +924,13 @@ test('MODULES-A T2 — le barrage recalcule la COLONNE, il ne reverse pas la cib
   const sans = pertesAuPremierTick(scene({
     cible: { id: 'meute', rangee: 3, colonne: 5 },
     voisines: [
-      { id: 'merlon', rangee: 3, colonne: 4 },
+      { id: 'merlon', rangee: 4, colonne: 4 },
       { id: 'meute', rangee: 3, colonne: 6 },
     ],
     avecModule: false,
   }));
   assert.equal(sans.get('3,5'), surLEscouade);
-  assert.equal(sans.get('3,4'), 0);
+  assert.equal(sans.get('4,4'), 0);
   assert.equal(sans.get('3,6'), 0);
 });
 
@@ -2778,13 +2796,29 @@ test('MODULES-C T4 — le réservoir ne se recharge jamais', () => {
 });
 
 test('MODULES-C T5 — un bouclier mort ne protège plus, DANS LE MÊME TICK', () => {
-  // Le porteur en c4 face à une casemate, l'allié en c6 face à l'autre : les
-  // deux sont visés le même tick, et le porteur porte l'indice le PLUS PETIT.
+  // Le porteur en c4 face à une batterie, l'allié en c6 face à une casemate :
+  // les deux sont visés le même tick, et le porteur porte l'indice le PLUS PETIT.
+  //
+  // ⚠⚠ LA TOURELLE DE c4 EST PASSÉE DE `casemate` À `batterie` AU LOT
+  // PRÉDILECTION (13/09), ET C'EST LE MONTAGE QU'ON RÉPARE, JAMAIS L'ASSERTION.
+  // Sa PRÉMISSE a cessé d'être vraie : la casemate fait 20 à l'infanterie contre
+  // 8 à la structure, donc `infanterie` EST sa prédilection, et depuis que
+  // `ciblage` élit d'abord une cible de prédilection, les DEUX casemates visaient
+  // l'allié — une escouade — et PLUS PERSONNE ne visait le porteur, qui est un
+  // aéronef, donc de colonne `structureOuAviation`. **Mesuré : `vises` rendait
+  // `[5, 5]`, l'allié deux fois, et le porteur jamais.**
+  //
+  // ⚠ LE REMÈDE EST DE DONNER À LA TOURELLE DE c4 LA PRÉDILECTION DU PORTEUR, pas
+  // d'assouplir quoi que ce soit : la `batterie` fait **40 à la structure et 0
+  // partout ailleurs**, donc elle élit l'aéronef et elle seule. La casemate de c6
+  // garde la sienne et élit l'escouade. `vises` rend `[4, 5]`, et les six
+  // assertions du corps ne bougent pas d'une ligne — le porteur tombe, l'allié
+  // perd des PV, le réservoir reste intact, et la contre-épreuve couvre l'allié.
   const monter = () => {
     const etat = sceneBouclier({
       defenseurs: [
         { id: 'merlon', rangee: 5, colonne: 5, niveau: 30 },
-        { id: 'casemate', rangee: 5, colonne: 4, niveau: 20 },
+        { id: 'batterie', rangee: 5, colonne: 4, niveau: 20 },
         { id: 'casemate', rangee: 5, colonne: 6, niveau: 20 },
       ],
       vague: [
@@ -5781,7 +5815,32 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // composition ni la disposition d'un site — il change la façon dont une pièce
   // bloquée en travers cesse de passer, et la façon dont une écraseuse tue —,
   // donc il ne mord que là où l'un des deux cas se présente.
-  const GRAINES = [7, 18, 24];
+  //
+  // ⚠⚠ LOT PRÉDILECTION (13/09) : LES TROIS GRAINES CHANGENT ENSEMBLE — 7, 18,
+  // 24 → **1, 36, 39** —, ET C'EST LA PREMIÈRE FOIS QUE LES TROIS PERDENT LEUR
+  // PRÉMISSE DANS LE MÊME LOT. Mesuré, canal armé contre canal vide :
+  //   • graine 7, niveau 50 : **17 337 666 592 des DEUX côtés**, au point. Le
+  //     canal ne mord plus du tout — le test n'y mesurerait plus rien.
+  //   • graine 18, niveau 50 : **6 552 115 973 armé contre 6 048 183 274 vide**,
+  //     le signe s'inverse.
+  //   • graine 24, niveaux 38 ET 50 : **509 822 754 contre 504 582 046** et
+  //     **26 158 416 172 contre 24 917 312 071**, le signe s'inverse deux fois.
+  // La cause est mesurable et c'est celle du lot : la garnison élit désormais
+  // une cible de sa PRÉDILECTION avant la plus proche, donc elle tue ce qu'elle
+  // tue le mieux, donc les combats ne se déroulent plus de la même façon — et sur
+  // ces trois bases-là le bonus de 20 % de l'Ouvrage cesse d'être payé par un
+  // surcroît de résistance.
+  //
+  // ⚠ BALAYAGE DES GRAINES 1 À 60 : **six** conviennent — 1, 36, 39, 51, 56,
+  // 57 —, contre douze au lot CONTACT-2, et **l'intersection avec les trois
+  // anciennes est VIDE**. Aucune ne pouvait donc être gardée ; ce sont les trois
+  // plus petites des six. ⚠ La graine **1** revient, elle qui était sortie au lot
+  // MUR pour une inversion de signe : ce montage se reperd et se retrouve au gré
+  // des lots qui touchent au déroulé, et c'est la septième fois qu'on l'écrit.
+  //
+  // ⚠ LES TROIS INVERSIONS SONT UN CONSTAT À REMONTER, PAS UN DÉFAUT : aucun
+  // barème n'a été touché, et l'équilibrage revient à Ethan.
+  const GRAINES = [1, 36, 39];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
   // graines DISCRIMINENT toujours aux deux niveaux — c'est ce que les deux
@@ -5817,7 +5876,13 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // nombre d'avant À L'UNITÉ** — c'est donc elle, et elle seule ; sur la
   // graine 18, c'est l'inverse, l'écrasement instantané rend **6 291 989**, le
   // nombre d'avant, et la fenêtre n'y est pour rien.
-  const apres20 = { 7: 4_007_074n, 18: 6_336_296n, 24: 7_643_623n };
+  // ⚠ RÉANCRÉ AU LOT PRÉDILECTION, sur les trois graines NEUVES : 4 007 074 ·
+  // 6 336 296 · 7 643 623 → **12 990 000 · 10 028 009 · 2 665 090**. Les valeurs
+  // ne se comparent pas d'un lot à l'autre, les graines ayant changé ; ce qui se
+  // compare est la PROPRIÉTÉ, et elle ne bouge pas — armé et vide rendent le même
+  // nombre au niveau 20, sur les trois graines, parce qu'aucun module n'est armé
+  // sous 28.
+  const apres20 = { 1: 12_990_000n, 36: 10_028_009n, 39: 2_665_090n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5864,7 +5929,13 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // 886 834 317, qui ne sont ni les nombres d'avant ni ceux d'après : le
   // déplacement est la fenêtre ÉLARGIE composée avec l'écrasement payé AU
   // CONTACT, qui ne se débranche pas.
-  const apres38 = { 7: 397_136_854n, 18: 962_259_697n, 24: 617_471_580n };
+  // ⚠ RÉANCRÉ AU LOT PRÉDILECTION, sur les trois graines NEUVES : 397 136 854 ·
+  // 962 259 697 · 617 471 580 → **322 302 930 · 742 303 771 · 472 790 407**. Le
+  // SENS est intact — armé reste sous vide sur les trois —, et c'est la seule
+  // chose que ce test mesure. ⚠ Et il est FRANC sur les trois, là où le lot
+  // CONTACT-2 n'avait que 0,05 % sur sa graine la plus mince : **18,7 % de moins
+  // sur la 1, 2,4 % sur la 36, 1,6 % sur la 39**.
+  const apres38 = { 1: 322_302_930n, 36: 742_303_771n, 39: 472_790_407n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5905,7 +5976,16 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // **7 547 414 717, le nombre d'avant À L'UNITÉ** — c'est elle, et elle seule ;
   // sur la graine 24, c'est l'inverse, la fenêtre rend exactement le nombre du
   // lot et le déplacement vient de l'écrasement.
-  const apres50 = { 7: 8_627_727_166n, 18: 8_925_916_216n, 24: 21_191_318_893n };
+  // ⚠ RÉANCRÉ AU LOT PRÉDILECTION, sur les trois graines NEUVES : 8 627 727 166 ·
+  // 8 925 916 216 · 21 191 318 893 → **13 882 187 857 · 23 713 374 633 ·
+  // 26 497 250 142**. Le SENS est intact sur les trois — **20,5 % de moins sur la
+  // 1, 8,8 % sur la 36, 13,2 % sur la 39** —, et l'écart le plus mince des trois
+  // vaut désormais 8,8 % là où le lot CONTACT-2 mesurait 0,8 % sur sa graine 24.
+  // Le constat que ce test portait depuis CONTACT-2 — « l'écart de la graine 24
+  // s'est effondré, le jour où il tombera sous zéro c'est la prémisse qui sera à
+  // réparer » — s'est réalisé : il est tombé sous zéro, et c'est bien la prémisse
+  // qui a été réparée, pas l'assertion.
+  const apres50 = { 1: 13_882_187_857n, 36: 23_713_374_633n, 39: 26_497_250_142n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);

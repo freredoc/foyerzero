@@ -445,12 +445,41 @@ test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé 
   // faire passer un lot. ⚠ Et il n'y a plus de clé `B` : la famille est
   // fermée, donc son exception est RETIRÉE et non mise à zéro — un zéro
   // laisserait une place où la reposer.
-  const ATTENDUS = { A: 26 };
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT PRÉDILECTION (13/09) : **26 → 14, soit −46,2 %**, ET LA
+  // FAMILLE A MAIGRIT UNE SECONDE FOIS SANS QU'UNE LIGNE DE L'ÉCRASEMENT NE
+  // BOUGE. Le lot ne touche ni `peutEcraser`, ni `bloqueuseSur`, ni
+  // `margeDeContact`, ni les masses — il ajoute un critère de tête à `ciblage`.
+  // Ce qui change est donc QUI se trouve devant qui : une écraseuse qui élit
+  // désormais la pièce de sa prédilection ne va plus se planter dans n'importe
+  // quelle victime, et les épisodes de recouvrement se raréfient d'eux-mêmes.
+  //
+  //   montage                CONTACT-2   PRÉDILECTION
+  //   camp/n5/g1                     4              4
+  //   avantPoste/n20/g2             15              6
+  //   base/n35/g3                    4              4
+  //   base/n50/g4                    3              0
+  //   TOTAL                         26             14
+  //
+  // ⚠⚠ ET `base/n50/g4` TOMBE À ZÉRO, CE QUI EST UN FAIT ET NON UNE ABSENCE DE
+  // MESURE : le montage joue ses 900 ticks comme les trois autres, et plus une
+  // seule paire n'y recouvre. La clé RESTE dans la table, à `{ A: 0 }`, pour
+  // exactement la raison inverse de celle qui a fait RETIRER la clé `B` au lot
+  // CONTACT-2 — une famille fermée n'a plus de place où la reposer, un montage
+  // qui ne produit plus rien en a une, et son zéro doit tomber si une paire y
+  // revient.
+  //
+  // ⚠ ET LA PROFONDEUR COMME LA DURÉE NE BOUGENT PAS D'UN MILLIÈME — **138
+  // millièmes et 4 ticks des DEUX côtés**, mesurés sur le même filtre. Ce sont
+  // les bornes que l'écrasement en quatre ticks du lot CONTACT-2 a posées, et
+  // ce lot-ci ne les touche pas : il réduit le NOMBRE d'épisodes (9 → 4), pas
+  // leur forme.
+  const ATTENDUS = { A: 14 };
   const PAR_MONTAGE = {
     'camp/n5/g1': { A: 4 },
-    'avantPoste/n20/g2': { A: 15 },
+    'avantPoste/n20/g2': { A: 6 },
     'base/n35/g3': { A: 4 },
-    'base/n50/g4': { A: 3 },
+    'base/n50/g4': { A: 0 },
   };
 
   let paires = 0;

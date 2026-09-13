@@ -4952,3 +4952,99 @@ export const RAPPORTS_OUVRAGE_CONTACT_2 = {
   4: "c142e9cae1094221",
   19: "8f3fa68b8523837a",
 };
+
+/**
+ * VINGT-SIXIÈME COUCHE — lot PRÉDILECTION, 13/09/2026.
+ *
+ * ⚠⚠ **SEIZE COUPLES SUR 350, ET C'EST LA COUCHE LA PLUS ÉTROITE DE L'HISTOIRE DE
+ * CE TÉMOIN** — contre trente et un au lot CONTACT-2 et trente-six au lot
+ * CONTACT. Cinq champs, QUATRE phases : `p11` à `p14`. **LES DIX PREMIÈRES
+ * PHASES SONT IDENTIQUES AU BIT**, là où les deux lots d'avant partaient de la
+ * `p07`.
+ *
+ * ⚠⚠ ET LE RAID DE PROXIMITÉ NE BOUGE PAS D'UN BIT — ZÉRO SUR VINGT-CINQ —,
+ * QUAND CELUI DE L'OUVRAGE BOUGE SUR TREIZE. C'est l'inverse de la forme des
+ * lots MUR et CONTACT, et ce n'est pas un hasard : **mesuré sur le combat de la
+ * phase 7, joué tick par tick, le nombre de COLONNES DE MATRICE distinctes à
+ * portée d'un attaquant ne dépasse JAMAIS UN — 483 ticks, zéro couple
+ * (entité, tick) où le ciblage ait le moindre choix de classe.** Le camp que le
+ * scénario raide porte trois défenseurs, tous des `meute`, et ses huit bâtiments
+ * sont dans l'autre bande : le critère de tête ne peut donc rien départager, et
+ * les trois critères d'avant décident comme avant. **La prédilection ne mord que
+ * là où une pièce avait plus d'une CLASSE de cible valide à portée.**
+ *
+ * ⚠ LA BASE DU JOUEUR, ELLE, EN A PLUSIEURS : le scénario y pose un Merlon, une
+ * Casemate, une Ronce, une Batterie, des Fusiliers et des Grenadiers — murs,
+ * tourelles et escouades mêlés. C'est là que le lot mord, et sur treize graines.
+ *
+ * ⚠⚠ ET AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
+ * de la sauvegarde comprise : ni les gestes de construction, ni ceux d'armement,
+ * ni les cases atteignables, ni le déplacement, ni les bases attaquantes, ni le
+ * nombre de cibles, ni la cible retenue, ni l'équivalence des deux chemins. C'est
+ * ce qui dit que le lot ne touche ni la carte, ni l'économie, ni la pose, ni le
+ * choix de CIBLE DE RAID — seulement le choix de cible DANS un combat.
+ */
+export const DEPLACES_PAR_PREDILECTION = {
+  p11_raidOuvrageApres: { armee: "ba373d50fcdeb63d", rapports: "815d32d7988e2a10", recherche: "ff9c700b23e38c6a", sitesEntames: "dfd9f90bb0e27341" },
+  p12_veilleDuRaid: { armee: "ba373d50fcdeb63d", rapports: "815d32d7988e2a10", recherche: "ff9c700b23e38c6a", sitesEntames: "f948b03468430c35" },
+  p13_apresLeRaid: { armee: "ba373d50fcdeb63d", disposition: "8ede993b6af92848", rapports: "5f3dc1e2f41082f3", recherche: "ff9c700b23e38c6a", sitesEntames: "6a535a873c94f000" },
+  p14_sousLeFeu: { armee: "ba373d50fcdeb63d", rapports: "4882a198f79094c2", recherche: "ff9c700b23e38c6a" },
+};
+
+/**
+ * ⚠⚠ **DIX-NEUF GRAINES SUR VINGT-CINQ**, contre six au lot CONTACT-2 et
+ * vingt-trois au lot CONTACT. Les six qui tombent à l'octet sur `CONTACT_2` —
+ * 8, 10, 13, 17, 20, 24 — sont des parties où la garnison que l'Ouvrage attaque
+ * n'offre jamais deux classes de cible à portée d'un même assaillant. Le `??`
+ * reste donc NÉCESSAIRE, comme aux lots MUR, VITESSE, BARÈME-ET-REJEU, CONTACT
+ * et CONTACT-2.
+ */
+export const EMPREINTES_PAR_GRAINE_PREDILECTION = {
+  1: "e905dd143553c126",
+  2: "bd1a3a47ed3412d4",
+  3: "c060cdfec86b8800",
+  4: "21546053f17d5040",
+  5: "767eb6ceb7750adb",
+  6: "580633c8d94e8087",
+  7: "74bf2beab5f3378b",
+  9: "d44f7c53dc938b86",
+  11: "d98a36d78fae7c84",
+  12: "28ace3daea045d9e",
+  14: "a01b5d291fee6ea6",
+  15: "343bc4eea98bc1db",
+  16: "c921624e64661f95",
+  18: "6de5ccd403aff952",
+  19: "31c3fc4baea1bcef",
+  21: "a62605ac9e74a753",
+  22: "f715d29ed96ae764",
+  23: "c2b60d9c7f56dbfa",
+  25: "afb63ebc2aec276c",
+};
+
+/**
+ * ⚠⚠ **TREIZE SUR VINGT-CINQ CÔTÉ OUVRAGE, ET ZÉRO SUR VINGT-CINQ CÔTÉ
+ * PROXIMITÉ.** Il n'y a donc PAS de `RAPPORTS_PROCHE_PREDILECTION`, et cette
+ * absence est la mesure : les vingt-cinq rapports du raid de proximité restent
+ * gardés contre `RAPPORTS_PROCHE_CONTACT_2` et les couches d'avant, si bien
+ * qu'un lot futur qui les déplacerait ferait tomber le test sans qu'on ait rien
+ * à écrire ici.
+ *
+ * ⚠ ET L'ÉCART ENTRE LES DEUX CÔTÉS EST MESURÉ, PAS DÉDUIT — voir le pavé de
+ * `DEPLACES_PAR_PREDILECTION` : zéro choix de classe sur les 483 ticks du raid
+ * de proximité.
+ */
+export const RAPPORTS_OUVRAGE_PREDILECTION = {
+  2: "34386a6c62d9e8a6",
+  3: "e362c435b8c1e5f2",
+  6: "7c032e1610352fa7",
+  9: "efc6ca529cd1f327",
+  11: "01c424a033e9e784",
+  12: "1b3c9641384c9f22",
+  14: "9a07130b45271d6b",
+  16: "4960352c2c28cb75",
+  18: "e8b6d5a31767f785",
+  19: "585be30596993e29",
+  21: "76452541aa6e309f",
+  23: "16eb8b7d1607f7be",
+  25: "213d31b0ca596f72",
+};

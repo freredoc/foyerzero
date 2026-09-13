@@ -675,7 +675,14 @@ test('T10 — montageDuBanc accepte encore un nom de profil', async () => {
   // même raid C. Ce que ce test-ci mesure n'a toujours rien à voir avec la durée.
   // ⚠ LOT CONTACT : 509 → 501. Le pas borné au contact rend à chaque file la case
   // de vide que le rangement lui faisait abandonner ; le raid va donc plus vite.
-  assert.equal(r.nbTicks, 501);
+  // ⚠ LOT PRÉDILECTION (13/09) : 501 → **493**, ET C'EST LA HUITIÈME CAUSE, DU
+  // MÊME GENRE QUE LA SEPTIÈME — LE DÉROULÉ. Le site est composé et disposé
+  // exactement comme hier ; ce qui change est que chaque tireur élit désormais
+  // une cible de sa PRÉDILECTION avant la plus proche, donc il tue plus vite ce
+  // qu'il tue le mieux, et le raid C se conclut huit ticks plus tôt. **Ce que ce
+  // test-ci mesure n'a toujours rien à voir avec la durée** — ce sont les trois
+  // assertions d'équivalence au-dessus, et elles n'ont pas bougé d'une ligne.
+  assert.equal(r.nbTicks, 493);
   assert.equal(r.cause, 'attaquants');
 });
 
