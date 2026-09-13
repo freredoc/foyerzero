@@ -446,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 est de 2,42 %', () => {
+test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 est de 2,23 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -759,13 +759,36 @@ test('PIC T7 — le livrable pèse 9 367 456 octets, la marge sur la borne T10 e
   // postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI / 307
   // lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image ni
   // un son — il élargit une fenêtre de balayage : la borne NE BOUGE PAS.
+  // ⚠⚠ RÉANCRÉ UNE CINQUIÈME FOIS AU LOT ÉCRANS, 13/09, ET CELUI-CI EST UN
+  // RÉANCRAGE DE FUSION. Le lot ÉCRANS et le lot CONTACT-2 ont été écrits en
+  // parallèle sur la MÊME base, `f21ba4e` : chacun a mesuré son coût contre elle
+  // — CONTACT-2 **+359**, ÉCRANS **+589** — et chacun a écrit SON ancre. Les deux
+  // ancres étaient justes séparément et **fausses ensemble**, ce qui est très
+  // exactement la faute que `CLAUDE.md` §6 nomme ailleurs : « deux modules justes
+  // séparément peuvent être faux ensemble ». CONTACT-2 ayant atterri le premier,
+  // c'est la fusion qui porte le nombre du disque.
+  // ⚠⚠ ET LE NOMBRE NE S'ADDITIONNE PAS, IL SE MESURE — la contrainte est écrite
+  // au lot ARRIVÉE-CARTE-ET-BUILD, qui avait relevé **six octets** d'écart entre
+  // la somme de deux diffs et le livrable fusionné, les deux lots partageant un
+  // fichier. Ici ils n'en partagent aucun du livrable — CONTACT-2 touche
+  // `src/sim/combat.js`, ÉCRANS `src/ui/chantier.js` et `src/ui/rapport.js` — et
+  // **la mesure le confirme au lieu de le supposer** : `main` pristine à
+  // `0c4a546` rend **9 385 408**, le fusionné **9 385 997**, soit **+589**, le
+  // coût d'ÉCRANS à l'octet.
+  // ⚠ VENTILÉ POSTE PAR POSTE contre ce pristine-là : **JavaScript +589 ·
+  // feuille +0 · balisage +0 · images +0 · audio +0**, la somme des cinq postes
+  // tombant EXACTEMENT sur le total des DEUX côtés (écart 0 · 0), et **306 URI /
+  // 307 lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image
+  // ni un son — deux lignes d'affichage : la borne NE BOUGE PAS.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_385_408;          // remesuré au lot CONTACT-2, base `f21ba4e`
-  const MARGE = BORNE - MESURE;      // 214 592 octets — 215 225 écrits avant ce lot
-  assert.equal(MARGE, 214_592);
+  const MESURE = 9_385_997;          // remesuré à la fusion ÉCRANS, base `0c4a546`
+  const MARGE = BORNE - MESURE;      // 214 003 octets — 214 592 écrits par CONTACT-2
+  assert.equal(MARGE, 214_003);
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.24);
+  assert.notEqual(MARGE, 214_592,
+    'la marge est celle de CONTACT-2 seul : la fusion avec ÉCRANS a été défaite');
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.23);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

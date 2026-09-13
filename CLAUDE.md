@@ -42,7 +42,214 @@ Dernière révision : **13/09/2026**, version 0.99.56 · build 158.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 13/09/2026 (après le lot CONTACT-2), à confronter :**
+**Référence au 13/09/2026 (après le lot ÉCRANS), à confronter :**
+⚠⚠ **DEUX LIGNES D'AFFICHAGE QUI MANQUAIENT, ET PAS UNE LIGNE DE MOTEUR.**
+Ethan, 13/09, points 2 et 4 : « les points de recherche doivent apparaître sur
+les reports » et « Caserne, aérodrome, usine affiche le plafond de réserve or je
+voulais qu'il affiche le plafond de réparation actuelle (par exemple j'ai 1
+Épervier ça me coûte combien en repa et qu'est-ce que cela me coûterait en cas
+d'amélioration de l'aérodrome) ». ⚠⚠ **ET LES NOMBRES QUI SUIVENT SONT CEUX DE
+LA FUSION, PAS CEUX DU LOT SEUL** — voir le pavé « `main` A BOUGÉ SOUS LE LOT »
+plus bas. `npm test` rend **1609 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1608 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 385 997 octets**, 0 référence externe. Coût **+589 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `0c4a546` (**9 385 408**, le
+nombre que le lot CONTACT-2 annonçait, retrouvé à l'octet) : **JavaScript +589 ·
+feuille +0 · balisage +0 · images +0 · audio +0**, la partition tombant
+EXACTEMENT sur le total des DEUX côtés — écart **0 · 0** —, et **306 URI / 307
+lignes `data:` de part et d'autre**. Borne T10 **inchangée à 9 600 000**, marge
+**214 003 octets, 2,23 %**. Version et build passent à **0.99.57 · build 159** —
+et **les deux restent des CHAÎNES**, vérifié au type. Le lot touche `src/ui/rapport.js`,
+`src/ui/chantier.js`, `package.json`, **trois** fichiers de `test/`, et fait
+entrer `rapports/RAPPORT-lotECRANS-13-09.md`. **Pas une ligne de `src/sim/`,
+`src/data/`, `src/render/`, `src/son/`, `tools/` ni `art/`** — vérifié au diff.
+⚠⚠ **`main` A BOUGÉ SOUS LE LOT, ET LA FUSION A ÉTÉ RÉSOLUE À LA MAIN — ETHAN NE
+POUVAIT PAS LA RÉSOUDRE SUR GITHUB WEB.** Il a fusionné la PR #141, lot CONTACT-2,
+pendant que celui-ci était ouvert : `main` passe de `f21ba4e` à `0c4a546`, et les
+deux lots se croisent sur **trois fichiers** — `CLAUDE.md`, `package.json` et
+`test/pictogramme.test.js`. **Ce sont les trois que deux lots parallèles heurtent
+toujours** : le bloc §0 en tête, le numéro de version, et l'ancre de taille du
+livrable. Un lot qui atterrit sur un `main` qui a bougé doit s'attendre à ces
+trois-là, et à aucun autre tant qu'il ne partage pas un fichier de `src/`.
+⚠⚠ **ET `package.json` S'EST AUTO-FUSIONNÉ EN SILENCE, CE QUI EST LE PIÈGE.** Les
+deux lots avaient bumpé au **MÊME** numéro — `0.99.56 · build 158` — parce que
+tous deux l'avaient pris comme « le suivant disponible » sur la même base : git ne
+voit alors aucun conflit et garde la valeur, si bien que **deux livrables
+différents auraient porté le même `config.build`**, que l'enveloppe Android lit.
+`git status` n'aurait rien dit. La fusion prend donc **0.99.57 · build 159**, et
+c'est la **QUATRIÈME** fois du dépôt — après ÉCRANS du 10/09,
+ARRIVÉE-CARTE-ET-BUILD et le lot ÉCRANS d'origine. **Deux lots parallèles ne
+peuvent pas choisir leur numéro chacun de son côté ; c'est la fusion qui le
+choisit.**
+⚠⚠ **LES DEUX BLOCS §0 SONT GARDÉS, ET C'EST L'ORDRE D'ATTERRISSAGE QUI TRANCHE.**
+CONTACT-2 est sur `main`, ÉCRANS atterrit après lui : le bloc d'ÉCRANS passe en
+tête et celui de CONTACT-2 est **rétrogradé en « Auparavant »**, sans qu'un mot de
+son corps ne bouge. En garder un seul aurait effacé un lot entier de l'historique
+que ce fichier EST.
+⚠⚠ **ET LES NOMBRES DU LOT ONT ÉTÉ REMESURÉS, PAS RECOPIÉS NI ADDITIONNÉS.**
+Écrit seul, le lot mesurait 9 385 638 contre `f21ba4e` ; la fusion mesure
+**9 385 997** contre `0c4a546`, et le coût retombe sur **+589**, le même nombre.
+⚠ **C'est un fait MESURÉ et non une addition** — le lot ARRIVÉE-CARTE-ET-BUILD
+avait relevé **six octets** d'écart entre la somme de deux diffs et le livrable
+fusionné, les deux lots partageant deux fichiers de `src/ui/`. Ici ils n'en
+partagent AUCUN du livrable — CONTACT-2 touche `src/sim/combat.js`, ÉCRANS
+`src/ui/chantier.js` et `src/ui/rapport.js` — et la ventilation le confirme poste
+par poste au lieu de le supposer.
+⚠⚠ **LA DONNÉE ÉTAIT DÉJÀ RANGÉE, ET C'EST TOUT CE QUI MANQUAIT.**
+`executerRaid` écrit `rechercheMilli` dans l'objet rapport depuis le 06/09, et
+`enregistrerLeRapport` pousse l'objet ENTIER dans `etat.rapports` : rien à
+migrer, rien à recalculer. Ce qui ne le lisait pas était `lignesDuResultat`.
+⚠⚠ **UNE LIGNE AJOUTÉE, TROIS SURFACES SERVIES.** `lignesDuResultat` sert le
+panneau du simulateur, celui de fin de raid et le dépliant du journal —
+`lignesDetailleesDuRapport` et `lignesDuPanneauDeFin` la réexpédient. **Zéro
+recopie**, et `ÉCRANS T1` mesure les trois.
+⚠⚠ **LE FORMATAGE SE DEMANDE À `formaterPoints` DE `sim/recherche.js`, IL NE SE
+RÉÉCRIT PAS.** Elle divise par mille, groupe par trois ET compacte au-delà de dix
+mille : une seconde écriture dirait « 10 000 000 » là où l'écran Recherche dit
+« 10,0M ». ⚠ Et le champ est une **CHAÎNE** quand `formaterPoints` attend un
+`bigint` — `executerRaid` range `gagnesMilli.toString()`, un `bigint` ne
+traversant pas `JSON` —, donc la conversion se fait à la lecture ; la passer
+telle quelle lèverait « Cannot mix BigInt and other types ».
+⚠⚠ **LE CHAMP ABSENT NE DONNE AUCUNE LIGNE, ET CE N'EST PAS DE LA PRUDENCE —
+C'EST UNE FENÊTRE DE SAUVEGARDES MESURÉE.** `etat.rapports` existe depuis la
+**v19** (lot RAID-A, 02/09) ; `rechercheMilli` n'est entré dans l'objet rapport
+que le **06/09**, et aucune migration ne vide `rapports` — le lot REJEU l'écrit
+en toutes lettres. Une sauvegarde de cette fenêtre-là porte donc des entrées SANS
+le champ, et `BigInt(undefined)` **LÈVE** : le dépliant du journal viderait
+l'écran, exactement comme une garnison de Fusiliers a vidé l'écran de la base le
+30/08. ⚠⚠ **ET LE CAS EST DÉJÀ DANS LA SUITE, MESURÉ** : la garde retirée,
+**trois** tests tombent, dont **DEUX antérieurs au lot** — `RAID-A T7` et
+`JD T1` forgent tous deux un rapport sans ce champ. « Absent » vaut « pas de
+ligne » ; un raid qui rapporte VRAIMENT zéro garde la sienne et dit « 0 ».
+⚠ **ET RIEN CÔTÉ DÉFENSE** : un raid subi ne rapporte aucun point, son rapport
+n'a pas le champ, et `lignesDeLaDefense` n'a pas une ligne de changée.
+⚠⚠ **LA FICHE DE PRODUCTION DIT LE COÛT PLEIN, ET SURTOUT PAS LA DEMANDE
+COURANTE.** « Remise à neuf · véhicule » = `Σ secondesPleines(piece.id,
+piece.niveau, niveauDuBâtiment)` sur les pièces du châssis, et l'« après » la
+MÊME somme au niveau visé. ⚠⚠ **`reservoirsDeLArmee` ET `coutDeLaReparation`
+SONT ÉCARTÉES, ET LE MOTIF EST MÉCANIQUE** : les deux sont indexées sur
+`degatsMilli` — `part = degats / pvMax` — donc elles rendent **ZÉRO sur une armée
+intacte**, c'est-à-dire exactement rien à l'instant où le joueur regarde la fiche
+pour décider d'une amélioration. Elles sont justes pour l'écran de réparation ;
+elles ne sont pas celle-ci.
+⚠⚠⚠ **LE PIÈGE DU LOT EST UN PIÈGE D'UNITÉS, ET IL AURAIT ÉTÉ MUET.**
+`secondesPleines` rend des **SECONDES** ; `direLaDuree`, que `forme: 'duree'`
+appelle, attend des **TICKS**, et sa voisine `plafondDeLaReserveDeLaBase` en
+rend. Un tick vaut un dixième de seconde : brancher les secondes telles quelles
+afficherait des durées **dix fois trop courtes** sans que rien ne bronche — même
+type, même forme, la ligne s'affiche. La conversion est
+`Math.ceil(secondes * TICKS_PAR_SECONDE)`, **jamais un 10 écrit à la main**, et
+`ÉCRANS T2` asserte l'égalité EN TICKS — une assertion qui ne vérifierait que la
+décroissance passerait avec des secondes brutes, d'un facteur dix.
+⚠ **L'ARRONDI SE PREND SUR LA SOMME, PAS PIÈCE PAR PIÈCE**, et c'est ce que le
+§2.5 du brief donne : quatre Pionniers au Dépôt 2 valent **3 566,97 s → 3 567**,
+non 4 × 892. Les six nombres du brief sont retrouvés **au centième** — 3 888,00 ·
+3 566,97 · 2 754,36 · 1 790,14 · 1 506,73 · 1 345,29.
+⚠⚠ **MAIS SES DEUX COLONNES DE TEXTE SONT FAUSSES, ET L'ÉCART EST DÉCLARÉ.** Il
+annonce « 1 h 04 » et « 59 min 26 » : c'est le rendu de `formaterDuree` de
+`ui/rapport.js`, PAS celui de la fiche. La fiche passe par `direLaDuree`, qui dit
+**« 1.1 h »** et **« 60 min »**. ⚠⚠ **ET LA BASCULE D'UNITÉ À 3 600 s SE VOIT :
+sur l'exemple même du brief, la ligne lit « 1.1 h → 60 min »**, ce qu'un œil
+pressé lit comme une AUGMENTATION. Aux autres niveaux elle est nette — « 46 min →
+43 min ». **Relevé, non corrigé** : un second formateur de durée sur la même
+fiche divergerait de sa voisine, et `ui/chantier.js` ne PEUT pas importer
+`formaterDuree` — `ui/rapport.js` importe `ui/chantier.js`, ce serait le cycle
+que ce fichier-là existe pour éviter. **Ethan tranche.**
+⚠ **ET L'EXEMPLE D'ETHAN TOMBE JUSTE** : un Épervier sur l'Aérodrome de niveau 1
+rend **« 18 min → 17 min »**.
+⚠⚠ **UN CHÂSSIS SANS UNE SEULE PIÈCE REND `null`, JAMAIS `0 s`** — convention du
+dépôt depuis `niveauDeCommandement`, réaffirmée par `batimentDuChassis` du module
+même d'où vient la mesure. « 0 s » se lirait « réparer mon aviation est gratuit »
+là où la vérité est « tu n'as pas d'aviation ». La fiche dit **« rien à
+réparer »**.
+⚠⚠ **ET LA PHRASE DE L'ABSENCE A QUITTÉ `formaterEffet` POUR LA LIGNE — DÉFAUT
+TROUVÉ EN ÉCRIVANT, PAS AU BRIEF.** Elle valait **« aucun retour » EN DUR**, ce
+qui était juste tant qu'UNE seule ligne du dépôt pouvait rendre `null` : celle du
+Complexe de défense. La ligne neuve en fait une seconde, où `null` veut dire tout
+autre chose — sans ce déplacement, la fiche d'un Aérodrome sans avion aurait
+annoncé « aucun retour », en parlant d'un mécanisme qu'elle ne commande pas.
+⚠ **LE RENDU DU COMPLEXE NE BOUGE PAS D'UN CARACTÈRE** — sa ligne DÉCLARE
+« aucun retour », `F-J T10` l'asserte au mot et n'est pas touché. ⚠ Et une valeur
+nulle **sans** phrase **LÈVE** désormais plutôt que d'écrire `undefined` à
+l'écran ; `CH-F T7` rend les lignes des six uniques à chaque `npm run check`.
+⚠⚠ **AUCUNE SCORIE, ET DEUX RAISONS POUR LA MÊME DÉCISION.** Ethan : « on ne
+prend que le temps, pas les scories ». `coutDeLaReparation` indexe la scorie sur
+le niveau de l'**UNITÉ** « et rien d'autre », donc améliorer le bâtiment ne la
+baisse pas d'un point — une colonne identique des deux côtés se lirait comme un
+défaut d'affichage ; et une pièce de niveau 1 est **gratuite** en scorie, donc
+sur une armée neuve elle afficherait zéro partout.
+⚠ **LE PLAFOND DE RÉSERVE RESTE, VALEUR ET `apres: null` COMPRIS**, son pavé de
+dix lignes avec, et **son libellé n'a pas bougé** : « Plafond de réserve · armée »
+nomme déjà la grandeur qui le gouverne, ce que le brief autorisait à retoucher
+sans l'exiger.
+⚠⚠ **LE SIMULATEUR ANNONCE DÉSORMAIS LE GAIN DE RECHERCHE AVANT L'ENGAGEMENT, ET
+C'EST UNE INFORMATION DE JEU NEUVE.** C'est la conséquence de l'écriture unique :
+la réserver au seul vrai raid demanderait un paramètre dans une fonction qui n'en
+a pas, donc deux chemins là où il y en a un. Ethan ne l'a ni demandée ni refusée.
+**À regarder au premier essai** ; elle se retire par une condition dans
+`lignesDuResultat`, et le rapport dit où.
+⚠⚠ **`PIC T7` EST RÉANCRÉ, ET C'EST UN RÉANCRAGE DE FUSION — LE CINQUIÈME.**
+Écrit seul, le lot le portait à 9 385 638 sur la base `f21ba4e` ; CONTACT-2, écrit
+en parallèle sur la MÊME base, le portait à 9 385 408. **Les deux ancres étaient
+justes séparément et fausses ensemble** — la faute que §6 nomme ailleurs, « deux
+modules justes séparément peuvent être faux ensemble ». Le disque fusionné rend
+**9 385 997**, et c'est lui que le test écrit. ⚠ Il gagne une SECONDE
+contre-assertion, `notEqual(MARGE, 214_592)` : sans elle, un lot qui défferait la
+fusion et rendrait l'ancre de CONTACT-2 repasserait au vert.
+⚠ **ET SON ANCRE MENTAIT DÉJÀ AVANT LES DEUX LOTS.** Elle écrivait **9 384 775**,
+la mesure du lot REJEU ; CONTACT est passé dessus sans la toucher et a porté le
+disque à 9 385 049 — **274 octets** de dérive, VERTE sous la tolérance de 50 000,
+pendant que la §0 annonçait l'autre nombre. Les deux documents se contredisaient.
+**Trouvé à la relecture hostile par les DEUX lots, indépendamment.**
+⚠⚠ **DOUZE FALSIFICATIONS JOUÉES, DOUZE CHUTES — ET **DEUX** N'ONT PAS MORDU AU
+PREMIER RELEVÉ, LES DEUX FOIS POUR UN MONTAGE DÉGÉNÉRÉ.** (1) Le filtre de châssis
+retiré — donc la Caserne comptant les Pionniers du Dépôt — laissait `ÉCRANS T2`
+**entièrement vert** : chaque montage ne posait qu'UN châssis, si bien que
+`armee.filter(…)` et `armee` rendaient la même liste. L'armée du test est
+**MÊLÉE** désormais, sur les trois châssis, et une assertion l'exige avant de
+mesurer quoi que ce soit. (2) Le formatage **réécrit sur place** — une division
+naïve par mille — laissait `ÉCRANS T1` vert : le raid du montage rapporte
+quelques dizaines de points, où `formaterPoints` et `x / 1000` rendent
+**exactement le même texte**, l'égalité passant des deux côtés. Le test reçoit
+désormais, EN PLUS du raid réel, une valeur au-delà de dix mille — là où
+`formaterPoints` COMPACTE — et une assertion refuse que les deux écritures
+coïncident. *Une falsification qui ne mord pas se vérifie avant d'être crue*, et
+c'est le MONTAGE qu'on répare, jamais l'assertion.
+⚠⚠ **ET LA RELECTURE HOSTILE A TROUVÉ UN COMMENTAIRE AU-DESSUS DE LA MAUVAISE
+FONCTION.** L'aide `coutPleinEnTicks` avait été insérée **ENTRE** le pavé de
+documentation d'`effetsDuBatiment` — trente lignes qui racontent trois arbitrages
+d'Ethan — et sa fonction : le pavé décrivait donc, pour tout lecteur, la fonction
+voisine. **Aucun test ne lit les commentaires** ; l'aide est remontée au-dessus du
+pavé, et le `@returns` d'`effetsDuBatiment` nomme désormais le champ `absence`.
+⚠ **Le livrable ne bouge pas d'un octet** — mesuré identique avant comme après le
+déplacement, `esbuild` retirant les commentaires.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — démontré et non supposé :
+`src/sim/state.js` n'apparaît pas au diff, le lot ne lit l'état que pour
+l'afficher, et un aller-retour de sérialisation sur une partie portant un rapport
+rend un texte **identique à l'octet**.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU DANS UN NAVIGATEUR, ET SE DÉCLARE NON EXÉCUTÉ.**
+Les deux lignes sont mesurées par les fonctions PURES — `lignesDuResultat` et
+`lignesDuPanneau` — et rendues hors ligne, jamais à l'écran. **À regarder au
+premier essai** : que « Recherche · N points » tienne sur la ligne du panneau de
+fin sans pousser les quinze autres, et que « 1.1 h → 60 min » ne se lise pas
+comme une aggravation.
+⚠ **ET LE RAPPORT N'A PAS LE NOM QUE LE BRIEF DONNE — ÉCART DÉCLARÉ.** Il demande
+`rapports/RAPPORT-lotECRANS.md` ; **`RAPPORT-lotECRANS.md` existe déjà**, à la
+racine, et décrit le lot ÉCRANS du 10/09. Deux fichiers de même nom court dans
+deux dossiers, pour deux lots différents, sont l'homonyme que §6 raconte déjà —
+le sélecteur d'un téléphone n'affiche que le nom court. Il s'appelle donc
+`rapports/RAPPORT-lotECRANS-13-09.md`.
+⚠ **ET LE LOT N'EST PAS SUR UNE BRANCHE NOMMÉE PAR LE BRIEF** — il n'en nomme
+aucune, il demande `claude/[descriptive]` ; l'environnement d'exécution épingle la
+session à `claude/new-session-ic99ey` et interdit de pousser ailleurs sans
+autorisation explicite.
+
+**Auparavant, après le lot CONTACT-2 :**
 ⚠⚠ **LA FAMILLE B EST FERMÉE, ET L'ÉCRASEMENT PREND QUATRE TICKS À QUART DE
 VITESSE.** Ethan, 13/09, sur le §9 de `rapports/RAPPORT-lotCONTACT.md` : « **A :
 garder — B : à corriger.** », puis « **On prend c plus vitesse divisée par

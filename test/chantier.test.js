@@ -76,7 +76,7 @@ import { GRILLE, OBSTACLES } from '../src/data/combat.js';
 import { satellitesVides } from '../src/sim/satellites.js';
 import { creerPointsAttaque } from '../src/sim/points-attaque.js';
 import {
-  reservesVides, complexeDeLaBase, ticksDeRetourDUnePieceRasee,
+  reservesVides, complexeDeLaBase, ticksDeRetourDUnePieceRasee, secondesPleines,
 } from '../src/sim/reparation.js';
 import { champsDeLaBase } from '../src/sim/champs.js';
 import { ligneEcranDeLaRangee, ligneEcranDeLaBande } from '../src/render/orientation.js';
@@ -7612,4 +7612,169 @@ test('VIT T8 — Caserne, Dépôt et Aérodrome disent le plafond, et le niveau 
     avantMontee,
     'monter l\'ARMÉE n\'a pas bougé le plafond : la fiche ne le lit pas dans le moteur',
   );
+});
+
+// ---------------------------------------------------------------------------
+// ÉCRANS T2 — lot ÉCRANS, 13/09
+//
+// Ethan, point 4 : « Caserne, aérodrome, usine affiche le plafond de réserve or
+// je voulais qu'il affiche le plafond de réparation actuelle (par exemple j'ai 1
+// Épervier ça me coûte combien en repa et qu'est-ce que cela me coûterait en cas
+// d'amélioration de l'aérodrome) », puis : « si j'ai quatre pionniers, je veux
+// que l'usine m'affiche le coût de réparation maximale pour quatre pionniers et
+// l'implication d'une amélioration ».
+//
+// ⚠ LE PLAFOND DE RÉSERVE N'EST PAS RETIRÉ — il répondait à une autre question,
+// posée le 11/09, et la garde qui le tient vit juste au-dessus, intacte.
+// ---------------------------------------------------------------------------
+
+/** La ligne de remise à neuf d'une fiche de production, ou `undefined`. */
+function ligneDeRemiseANeuf(etat, id) {
+  return apercuDuBatiment(etat, indiceDe(etat, id)).effets
+    .find((e) => e.libelle.startsWith('Remise à neuf'));
+}
+
+test('ÉCRANS T2 — la fiche chiffre le coût PLEIN, et l\'amélioration le fait bouger', () => {
+  // ⚠⚠ LES TROIS BÂTIMENTS, PARCE QUE LES DEUX EXEMPLES D'ETHAN TOMBENT SUR
+  // DEUX FICHES DIFFÉRENTES. `BATIMENT_DE_CHASSIS` apparie `escouade → caserne`,
+  // `blinde → depotDeVehicules`, `aeronef → aerodrome` : le Pionnier se répare
+  // au Dépôt, l'Épervier à l'Aérodrome. Un test sur un seul laisserait deux
+  // fiches non mesurées.
+  //
+  // ⚠⚠ ET L'ARMÉE EST **MÊLÉE**, SUR LES TROIS CHÂSSIS À LA FOIS. La première
+  // écriture de ce test posait un seul châssis par montage : retirer le filtre
+  // de `coutPleinEnTicks` — donc faire compter à la Caserne les Pionniers du
+  // Dépôt — la laissait ENTIÈREMENT VERTE, `armee.filter(…)` et `armee` rendant
+  // la même liste. **Une falsification qui ne mord pas se vérifie avant d'être
+  // crue**, et c'est le montage qu'on répare.
+  const ARMEE = [
+    { id: 'meute', niveau: 1 }, { id: 'meute', niveau: 1 }, { id: 'perceurs', niveau: 1 },
+    { id: 'belier', niveau: 1 }, { id: 'belier', niveau: 1 },
+    { id: 'belier', niveau: 1 }, { id: 'belier', niveau: 1 },
+    { id: 'busard', niveau: 1 },
+  ];
+
+  for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
+    const etat = baseDesUniques();
+    const laBase = baseCourante(etat);
+    ARMEE.forEach((piece, i) => {
+      poserEffectif(etat, 'armee', {
+        ...piece, vague: Math.floor(i / 9) + 1, colonne: (i % 9) + 1,
+      });
+    });
+    // ⚠ LES TROIS CHÂSSIS SONT REPRÉSENTÉS, sans quoi le filtre ne discrimine
+    // rien et la ligne pourrait sommer l'armée entière sans qu'on le voie.
+    assert.equal(new Set(laBase.armee.map((p) => UNITES[p.id].chassis)).size, 3,
+      'le montage ne porte pas les trois châssis : le filtre ne se mesure pas');
+    // ⚠ LE MONTAGE PROUVE QU'IL DISCRIMINE : le châssis de ce bâtiment-là porte
+    // bien des pièces, sinon la ligne rendrait `null` et les trois assertions
+    // suivantes mesureraient l'absence.
+    const chassis = BASE_BATIMENTS[id].chassis;
+    assert.ok(laBase.armee.some((p) => UNITES[p.id].chassis === chassis),
+      `${id} : le montage ne pose aucune pièce de son châssis`);
+
+    const niveau = laBase.disposition[indiceDe(etat, id)].niveau;
+    const vise = niveau + 1;
+    const somme = (n) => laBase.armee
+      .filter((p) => UNITES[p.id].chassis === chassis)
+      .reduce((t, p) => t + secondesPleines(p.id, p.niveau, n), 0);
+
+    const ligne = ligneDeRemiseANeuf(etat, id);
+    assert.ok(ligne !== undefined, `${id} : la fiche ne dit pas le coût de remise à neuf`);
+    assert.equal(ligne.forme, 'duree', `${id} : la ligne n'est pas une durée`);
+
+    // ⚠⚠⚠ L'ÉGALITÉ EN **TICKS** EST LE SEUL GARDE DU PIÈGE D'UNITÉS.
+    // `secondesPleines` rend des SECONDES, `direLaDuree` attend des TICKS, et un
+    // tick vaut un dixième de seconde : brancher les secondes telles quelles
+    // afficherait des durées DIX FOIS TROP COURTES sans que rien ne bronche — le
+    // type est le même, la forme est la même, la ligne s'affiche. Une assertion
+    // qui ne vérifierait que la DÉCROISSANCE passerait avec des secondes brutes.
+    assert.equal(ligne.avant, Math.ceil(somme(niveau) * TICKS_PAR_SECONDE),
+      `${id} : l'« avant » n'est pas la somme des réparations pleines, en ticks`);
+    assert.equal(ligne.apres, Math.ceil(somme(vise) * TICKS_PAR_SECONDE),
+      `${id} : l'« après » n'est pas la même somme au niveau visé`);
+    assert.ok(ligne.apres < ligne.avant,
+      `${id} : améliorer ne raccourcit pas la remise à neuf (${ligne.avant} → ${ligne.apres})`);
+
+    // ⚠ ET CE NE SONT PAS DES SECONDES — la falsification du §2.4, prise de
+    // face. Le montage prouve d'abord que les deux unités se distinguent.
+    assert.notEqual(Math.ceil(somme(niveau)), Math.ceil(somme(niveau) * TICKS_PAR_SECONDE),
+      `${id} : montage dégénéré, secondes et ticks rendent le même nombre`);
+    assert.notEqual(ligne.avant, Math.ceil(somme(niveau)),
+      `${id} : la ligne porte des SECONDES là où « duree » attend des ticks`);
+
+    // ⚠⚠ ET C'EST LE COÛT **PLEIN**, PAS LA DEMANDE COURANTE. L'armée du montage
+    // est INTACTE : `reservoirsDeLArmee` et `coutDeLaReparation` sont indexées
+    // sur `degatsMilli` et rendraient zéro, ce qui est exactement la grandeur
+    // qu'Ethan écarte. Cette assertion-ci tombe si la ligne les emprunte.
+    assert.ok(laBase.armee.every((p) => (p.degatsMilli ?? 0) === 0),
+      `${id} : le montage a des dégâts, il ne distingue plus plein et courant`);
+    assert.ok(ligne.avant > 0, `${id} : la ligne rend zéro sur une armée intacte`);
+  }
+});
+
+test('ÉCRANS T2 bis — un châssis sans pièce dit qu\'il n\'y a rien à réparer', () => {
+  // ⚠⚠ `null` N'EST PAS ZÉRO, et c'est la convention du dépôt depuis
+  // `niveauDeCommandement` — réaffirmée par `batimentDuChassis`, du module même
+  // d'où vient la mesure : « l'écran doit pouvoir le DIRE ». « 0 s » se lirait
+  // « réparer mon aviation est gratuit » là où la vérité est « tu n'as pas
+  // d'aviation ».
+  const etat = baseDesUniques();
+  assert.equal(baseCourante(etat).armee.length, 0, 'le montage ne mesure rien : l\'armée n\'est pas vide');
+
+  for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
+    const ligne = ligneDeRemiseANeuf(etat, id);
+    assert.ok(ligne !== undefined, `${id} : la ligne a disparu au lieu de se dire sans nombre`);
+    assert.equal(ligne.avant, null, `${id} : un châssis vide rend un nombre au lieu de « rien »`);
+
+    // ⚠⚠ ET LA PHRASE EST CELLE DE LA LIGNE, PAS CELLE DU COMPLEXE. « aucun
+    // retour » parle d'un mécanisme que ce bâtiment-ci ne commande pas : la
+    // phrase a quitté `formaterEffet` pour la ligne au lot ÉCRANS, et c'est
+    // cette assertion qui empêche qu'on l'y remette.
+    const section = lignesDuPanneau(apercuDuBatiment(etat, indiceDe(etat, id)))
+      .sections.find((s) => s.titre === 'Ce qu\'il commande');
+    const rendue = section.lignes.find((l) => l.libelle.startsWith('Remise à neuf'));
+    assert.equal(rendue.avant, 'rien à réparer',
+      `${id} : la fiche emprunte la phrase d'absence d'une autre ligne`);
+    assert.equal(rendue.apres, null, `${id} : un « après » sans « avant »`);
+  }
+
+  // ⚠ ET LE COMPLEXE GARDE SA PHRASE AU MOT — le déplacement n'a pas bougé un
+  // caractère de son rendu, ce que `F-J T10` asserte par ailleurs.
+  const rase = baseDesUniques();
+  baseCourante(rase).disposition[indiceDe(rase, 'complexeDeDefense')]
+    .degatsMilli = Number.MAX_SAFE_INTEGER;
+  const sectionComplexe = lignesDuPanneau(
+    apercuDuBatiment(rase, indiceDe(rase, 'complexeDeDefense')),
+  ).sections.find((s) => s.titre === 'Ce qu\'il commande');
+  assert.equal(sectionComplexe.lignes[0].avant, 'aucun retour');
+});
+
+test('ÉCRANS T2 ter — la fiche de production ne dit AUCUNE scorie', () => {
+  // ⚠⚠ ETHAN : « on ne prend que le temps, pas les scories ». La raison est
+  // solide et non de commodité : `coutDeLaReparation` indexe la scorie sur le
+  // niveau de l'UNITÉ « et rien d'autre », donc améliorer le bâtiment ne la
+  // baisse pas d'un point — une colonne identique des deux côtés se lirait comme
+  // un défaut d'affichage. Et une pièce de niveau 1 est GRATUITE en scorie : sur
+  // une armée neuve, cette colonne afficherait zéro partout.
+  const etat = baseDesUniques();
+  poserEffectif(etat, 'armee', { id: 'belier', vague: 1, colonne: 1, niveau: 1 });
+
+  for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
+    const section = lignesDuPanneau(apercuDuBatiment(etat, indiceDe(etat, id)))
+      .sections.find((s) => s.titre === 'Ce qu\'il commande');
+    for (const ligne of section.lignes) {
+      const texte = `${ligne.libelle} ${ligne.avant} ${ligne.apres ?? ''}`.toLowerCase();
+      assert.ok(!texte.includes('scorie'),
+        `${id} : « ${ligne.libelle} » nomme la scorie`);
+    }
+  }
+
+  // ⚠ ET LE MONTAGE DISCRIMINE : le mot EST écrit ailleurs dans le même panneau
+  // — le bouton porte le prix de l'amélioration. Sans cette ligne, « aucune
+  // scorie » serait vrai d'un panneau vide.
+  const bouton = lignesDuPanneau(apercuDuBatiment(etat, indiceDe(etat, 'caserne'))).bouton;
+  assert.ok(bouton.note.toLowerCase().includes('scorie')
+    || Object.values(LIBELLES_RESSOURCE).some((r) => bouton.note.toLowerCase().includes(r.nom.toLowerCase())),
+  'le panneau ne nomme aucune ressource : le test ne discrimine rien');
 });

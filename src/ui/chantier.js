@@ -106,6 +106,7 @@ import {
   problemesDeToutReparerLesBatiments, toutReparerLesBatiments,
   plafondDeLaReserveDesBatiments, plafondDeLaReserveDeLaBase, direLaDuree,
   complexeDeLaBase, retourDeLaPiece, ticksDeRetourDUnePieceRasee, rendLesPv, diviseurDuBatiment,
+  secondesPleines,
   etatDeLaPose, pvMaxDuBatimentMilli, pvMaxDeLaPieceDeGarnisonMilli,
 } from '../sim/reparation.js';
 import { acquisesDe } from '../sim/recherche.js';
@@ -1266,6 +1267,31 @@ export function libelleDuVoisin(type) {
  * }}
  */
 /**
+ * Ce que coûterait, EN TICKS, de remettre à neuf toutes les pièces d'un châssis.
+ *
+ * ⚠ LE COÛT **PLEIN** — pas la demande courante. Une pièce intacte compte pour
+ * son temps de réparation entier : ce que la fiche chiffre est une capacité,
+ * pas une dépense du jour. Voir le pavé du point d'appel.
+ *
+ * ⚠⚠ ET LA CONVERSION EST LE PIÈGE DE LA LIGNE : `secondesPleines` rend des
+ * SECONDES, `direLaDuree` attend des TICKS. `TICKS_PAR_SECONDE`, jamais un 10.
+ *
+ * @param {Array<{id: string, niveau: number}>} armee celle de la base COURANTE
+ * @param {string} chassis `escouade`, `blinde` ou `aeronef`
+ * @param {number} niveauBatiment celui du bâtiment réparateur
+ * @returns {number|null} ticks, ou `null` si l'armée n'a aucune pièce de ce châssis
+ */
+function coutPleinEnTicks(armee, chassis, niveauBatiment) {
+  const pieces = armee.filter((piece) => UNITES[piece.id].chassis === chassis);
+  if (pieces.length === 0) return null;
+  const secondes = pieces.reduce(
+    (total, piece) => total + secondesPleines(piece.id, piece.niveau, niveauBatiment),
+    0,
+  );
+  return Math.ceil(secondes * TICKS_PAR_SECONDE);
+}
+
+/**
  * Ce qu'un bâtiment UNIQUE commande, lu dans le module qui le porte.
  *
  * ⚠⚠ ETHAN, 06/09 : « les bâtiments uniques n'indiquent pas ce qu'elles
@@ -1326,16 +1352,22 @@ export function libelleDuVoisin(type) {
  * @param {number|null} vise `null` au plafond
  * @param {Array} disposition celle de la base, telle qu'elle est
  * @param {Array|null} candidate la même, ce bâtiment monté d'un niveau
- * @returns {Array<{libelle: string, avant: number|null, apres: number|null, forme: string}>}
+ * @returns {Array<{libelle: string, avant: number|null, apres: number|null,
+ *   forme: string, absence: string|undefined}>}
  */
 function effetsDuBatiment(pose, def, vise, disposition, candidate, laBase) {
   // ⚠ LES DEUX MESURES SE PRENNENT SUR UNE VRAIE DISPOSITION, jamais sur un
   // montage d'une seule case fabriqué ici : `complexeDeLaBase` balaie la
   // disposition, et lui en donner une fausse serait mesurer autre chose que la
   // base du joueur.
-  const ligne = (libelle, forme, mesure) => ({
+  // ⚠ `absence` EST LE MOT QUE LA LIGNE DIT QUAND SA MESURE REND `null`, et il
+  // n'a de défaut pour personne : deux lignes de cette fiche peuvent rendre
+  // `null`, et les deux absences ne parlent pas de la même chose. Voir
+  // `formaterEffet`.
+  const ligne = (libelle, forme, mesure, absence) => ({
     libelle,
     forme,
+    absence,
     avant: mesure(pose.niveau, disposition),
     apres: vise === null ? null : mesure(vise, candidate),
   });
@@ -1403,6 +1435,10 @@ function effetsDuBatiment(pose, def, vise, disposition, candidate, laBase) {
         if (complexe === null || !rendLesPv(complexe.santeMilli)) return null;
         return ticksDeRetourDUnePieceRasee(niveau, niveau, complexe.santeMilli);
       },
+      // ⚠ LA PHRASE DE L'ABSENCE, DÉPLACÉE DE `formaterEffet` VERS SA LIGNE AU
+      // LOT ÉCRANS — le rendu ne bouge pas d'un caractère, `F-J T10` l'asserte.
+      // « Jamais » se dit comme ça, et non « 0 s ».
+      'aucun retour',
     )];
   }
 
@@ -1417,6 +1453,69 @@ function effetsDuBatiment(pose, def, vise, disposition, candidate, laBase) {
         `Réparation · ${FAMILLE_DE_CHASSIS[def.chassis]}`,
         'diviseur',
         (niveau) => diviseurDuBatiment(niveau),
+      ),
+      // ⚠⚠ CE QUE L'ARMÉE COÛTERAIT À REMETTRE À NEUF — ETHAN, 13/09, POINT 4 :
+      // « Caserne, aérodrome, usine affiche le plafond de réserve or je voulais
+      // qu'il affiche le plafond de réparation actuelle (par exemple j'ai 1
+      // Épervier ça me coûte combien en repa et qu'est-ce que cela me coûterait
+      // en cas d'amélioration de l'aérodrome) », puis : « si j'ai quatre
+      // pionniers, je veux que l'usine m'affiche le coût de réparation maximale
+      // pour quatre pionniers et l'implication d'une amélioration ».
+      //
+      // ⚠⚠ C'EST LE COÛT **PLEIN**, PAS LA DEMANDE COURANTE, ET C'EST TOUTE LA
+      // DIFFÉRENCE. `reservoirsDeLArmee` et `coutDeLaReparation` sont indexées
+      // sur `degatsMilli` — `part = degats / pvMax` — donc elles rendent ZÉRO
+      // sur une armée intacte, c'est-à-dire exactement rien à l'instant où le
+      // joueur regarde la fiche pour décider d'une amélioration. Les deux sont
+      // justes pour l'écran de réparation, qui chiffre une dépense ; celle-ci
+      // chiffre une CAPACITÉ, et la capacité ne dépend pas des dégâts du jour.
+      //
+      // ⚠⚠ ET LA SOMME SE DEMANDE À `secondesPleines`, QUI PREND LE NIVEAU DU
+      // BÂTIMENT EN PARAMÈTRE. C'est ce paramètre-là qui rend la ligne possible :
+      // l'« après » est la MÊME somme au niveau visé, donc aucune formule neuve
+      // n'est écrite ici — « la valeur se demande, elle ne se recalcule pas »,
+      // et `CH-F T8` le garde pour les six uniques.
+      //
+      // ⚠⚠⚠ SECONDES CONTRE TICKS — LE PIÈGE DE CETTE LIGNE. `secondesPleines`
+      // rend des SECONDES ; `direLaDuree`, que `forme: 'duree'` appelle, attend
+      // des TICKS, et sa voisine `plafondDeLaReserveDeLaBase` en rend. Un tick
+      // vaut un dixième de seconde : brancher les secondes telles quelles
+      // afficherait des durées DIX FOIS TROP COURTES — « 6 min » au lieu de
+      // « 1,1 h » — sans que rien ne bronche, le type et la forme étant les
+      // mêmes des deux côtés. La conversion passe donc par `TICKS_PAR_SECONDE`,
+      // JAMAIS par un 10 écrit à la main, et `ÉCRANS T2` l'asserte en ticks.
+      //
+      // ⚠ L'ARRONDI SE PREND SUR LA SOMME, PAS PIÈCE PAR PIÈCE, et il est
+      // `Math.ceil` comme partout où `sim/reparation.js` convertit un temps en
+      // ticks. Arrondir chaque pièce ferait payer à quatre Pionniers quatre
+      // demi-ticks de plus que ce que la somme vaut.
+      //
+      // ⚠⚠ ET LA SCORIE N'Y EST PAS — ETHAN : « on ne prend que le temps, pas
+      // les scories ». La raison est solide et non de commodité :
+      // `coutDeLaReparation` indexe la scorie sur le niveau de l'UNITÉ « et rien
+      // d'autre », donc améliorer le bâtiment ne la baisse pas d'un point. Une
+      // colonne de scorie identique des deux côtés se lirait comme un défaut
+      // d'affichage — très exactement ce que le pavé du plafond dit du
+      // « 13 h → 13 h » quinze lignes plus bas. ⚠ Et une pièce de niveau 1 est
+      // GRATUITE en scorie : sur une armée neuve, cette colonne afficherait zéro
+      // partout. Deux raisons pour la même décision.
+      //
+      // ⚠⚠ UN CHÂSSIS SANS UNE SEULE PIÈCE REND `null`, JAMAIS `0 s`. C'est la
+      // convention du dépôt depuis `niveauDeCommandement`, réaffirmée par
+      // `batimentDuChassis` du module même d'où vient cette mesure : « `null`
+      // n'est pas zéro […] l'écran doit pouvoir le DIRE ». « 0 s » se lirait
+      // « réparer mon aviation est gratuit » là où la vérité est « tu n'as pas
+      // d'aviation ».
+      //
+      // ⚠ ET L'ARMÉE EST CELLE DE LA BASE COURANTE, comme le plafond de la
+      // ligne suivante : `laBase` est l'argument que `plafondDeLaReserveDeLaBase`
+      // a fait entrer ici au lot BASES-1, pour que la fiche ne compte jamais une
+      // pièce d'une autre base.
+      ligne(
+        `Remise à neuf · ${FAMILLE_DE_CHASSIS[def.chassis]}`,
+        'duree',
+        (niveau) => coutPleinEnTicks(laBase.armee, def.chassis, niveau),
+        'rien à réparer',
       ),
       // ⚠⚠ LE PLAFOND DE RÉSERVE — ETHAN, 11/09, POINT 10 : « la fiche doit dire
       // le plafond de réserve courant et ce qu'une amélioration lui fait ». Il
@@ -1684,12 +1783,38 @@ export function noteDuRefus(apercu) {
  * ⚠ ET `null` SE DIT, IL NE SE TAIT PAS. Un Complexe à zéro PV ne rend rien,
  * jamais ; un tiret laisserait croire à une valeur manquante.
  *
+ * ⚠⚠ MAIS LA PHRASE DE L'ABSENCE APPARTIENT À LA LIGNE, PLUS À CE FORMATEUR —
+ * LOT ÉCRANS, 13/09. Elle valait « aucun retour » EN DUR ici, ce qui était juste
+ * tant qu'une seule ligne du dépôt pouvait rendre `null` : celle du Complexe de
+ * défense, où l'absence veut dire « rien ne revient, jamais ». La fiche des trois
+ * bâtiments de production en fait naître une seconde, où `null` veut dire « ce
+ * châssis n'a pas une seule pièce dans l'armée » — et « aucun retour » y serait
+ * FAUX, en parlant d'un mécanisme que cette ligne-là ne commande pas. Deux
+ * absences, deux mots ; seule la ligne sait de quoi elle parle.
+ *
+ * ⚠ LE RENDU DU COMPLEXE NE BOUGE PAS D'UN CARACTÈRE : sa ligne DÉCLARE
+ * « aucun retour », que ce formateur lui rend. `F-J T10` l'asserte au mot et
+ * n'est pas touché.
+ *
+ * ⚠⚠ ET UNE VALEUR NULLE SANS PHRASE **LÈVE**, elle n'écrit pas `undefined` à
+ * l'écran. C'est un fait de PROGRAMME — une ligne qui peut valoir `null` et qui
+ * ne dit pas ce que son absence signifie —, et il tombe au dépôt : `CH-F T7`
+ * rend les lignes des six uniques à chaque `npm run check`.
+ *
  * @param {number|null} valeur
  * @param {'entier'|'duree'|'diviseur'} forme
+ * @param {string|undefined} absence ce que la LIGNE dit quand sa valeur n'existe pas
  * @returns {string}
  */
-function formaterEffet(valeur, forme) {
-  if (valeur === null) return 'aucun retour';
+function formaterEffet(valeur, forme, absence) {
+  if (valeur === null) {
+    if (typeof absence !== 'string' || absence.length === 0) {
+      throw new Error(
+        'fiche : un effet rend « null » sans dire ce que son absence signifie',
+      );
+    }
+    return absence;
+  }
   if (forme === 'duree') return direLaDuree(valeur);
   if (forme === 'diviseur') return `÷ ${valeur.toFixed(2).replace('.', ',')}`;
   return formaterEntier(valeur);
@@ -1775,8 +1900,8 @@ export function lignesDuPanneau(apercu) {
         // un diviseur : deux d'entre elles n'ont pas d'image à montrer, et en
         // inventer une pour remplir la colonne dirait quelque chose de faux.
         picto: e.forme === 'duree' ? PICTOGRAMMES.temps : null,
-        avant: formaterEffet(e.avant, e.forme),
-        apres: e.apres === null ? null : formaterEffet(e.apres, e.forme),
+        avant: formaterEffet(e.avant, e.forme, e.absence),
+        apres: e.apres === null ? null : formaterEffet(e.apres, e.forme, e.absence),
       })),
     });
   }
