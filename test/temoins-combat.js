@@ -2595,3 +2595,451 @@ export const COMBATS_DEPLACES_PAR_CONTACT_AVANT_PAQUETS = {
   198: { 1: "e902abdacc103a0bbd9f30a32ac46766", 2: "9a9732fbc24d313a6ebd9c59a3789aa6", 4: 354, 6: "70227091765", 7: "5602747500/4272124096/0" },   // base/-/n50/g5/toutes
   199: { 2: "988db2b8dede498a83f1187f383a9e3b" },   // base/-/n50/g5/moitie
 };
+
+/**
+ * LA HUITIÈME COUCHE — LOT CONTACT-2, 13/09/2026.
+ *
+ * ⚠⚠ C'EST UNE COUCHE, PAS UNE RECAPTURE, ET LA CONSIGNE EST SUIVIE POUR LA
+ * TROISIÈME FOIS D'AFFILÉE. Elle déplace **907 champs sur 1 600** et touche **177
+ * des 200 combats** ; l'union avec les deux couches d'avant passe de **1 125 à
+ * 1 153**, donc **447 champs restent adossés à la capture d'APPROCHE**. Les 71 %
+ * qui avaient rendu la recapture inévitable aux lots PAQUETS et APPROCHE ne sont
+ * pas atteints — 72,1 % de la table est couverte, et le reste tient.
+ *
+ * ⚠⚠ ET UNE RECAPTURE SERAIT DE TOUTE FAÇON ILLÉGITIME : elle ne s'autorise
+ * qu'APRÈS que `JOURNAL T1 bis` ait prouvé le MOTEUR inchangé, et c'est
+ * exactement le moteur que ce lot change. La preuve ne peut pas être produite ;
+ * on empile.
+ *
+ * ⚠⚠ VINGT-TROIS COMBATS SONT INTACTS, ET C'EST LA PREMIÈRE FOIS DEPUIS LE LOT
+ * MUR QU'UNE COUCHE N'EN TOUCHE PAS DEUX CENTS. Le lot ne change ni la
+ * composition ni la disposition d'un site : il ferme un chevauchement en travers
+ * et étale l'écrasement sur quatre ticks. Un combat où aucune pièce ne mordait
+ * sur deux index et où rien n'écrase ne bouge donc pas d'un bit — leur entrée
+ * est `{ }`, écrite plutôt qu'omise, pour que la table décrive les deux cents.
+ *
+ * ⚠ CINQ CAUSES DE FIN BOUGENT SEULEMENT, sur deux cents — le même nombre qu'au
+ * lot CONTACT. Le lot déplace des DURÉES et des PV, pas des issues.
+ */
+export const COMBATS_DEPLACES_PAR_CONTACT_2 = {
+  0: { 1: "b8d0c05054e0413ee7a324001dbded98", 2: "8bf1770ab5076e2476783d78da264198", 4: 227, 7: "11336048/0/18479637" },   // camp/richeQuartz/n5/g1/toutes
+  1: { 1: "3dfcf6790ae81ab27f7b0b21caa736f7", 2: "e82f92ce08a6ef9e930f7b7d04144748", 7: "19260988/0/6591452" },   // camp/richeQuartz/n5/g1/moitie
+  2: { 1: "b8d0c05054e0413ee7a324001dbded98", 2: "251b8a7ae5e9e09d98d995400bbdfbe2", 4: 227, 7: "11336048/0/18479637" },   // camp/richeScorie/n5/g1/toutes
+  3: { 1: "3dfcf6790ae81ab27f7b0b21caa736f7", 2: "49305d4f685fc04699653d9b449c10c9", 7: "19260988/0/6591452" },   // camp/richeScorie/n5/g1/moitie
+  4: { 1: "f70a410f7f1cd56df325ab1a486eb05d", 2: "9311b34b6aeae7e7ec17ee144f01355e", 4: 288, 7: "10980000/0/18423386", 8: "5/5/0" },   // avantPoste/richeQuartz/n5/g1/toutes
+  5: { },   // avantPoste/richeQuartz/n5/g1/moitie
+  6: { 1: "f70a410f7f1cd56df325ab1a486eb05d", 2: "872b4e4c2af3a484f83ab61647d140a1", 4: 288, 7: "10980000/0/18423386", 8: "5/5/0" },   // avantPoste/richeScorie/n5/g1/toutes
+  7: { },   // avantPoste/richeScorie/n5/g1/moitie
+  8: { 1: "35ae0eb54820345843db613a80daba85", 2: "cd7145fa6e7a22e5b34cb0ea3673db3f", 4: 333, 7: "10980000/0/16957977" },   // base/-/n5/g1/toutes
+  9: { 1: "6bc86a623aa52df411850cc08bec0c0d", 2: "0da636bd43b43196b1db9f2ebc0a68ac", 4: 468, 6: "106353", 7: "20496000/1809974/4748384", 8: "4/4/1" },   // base/-/n5/g1/moitie
+  10: { 1: "c2216866df7dc50a10b226c8e45efcfa", 2: "96bdf93245cfc485734a408a38ebd0ba", 4: 576, 5: "{\"quartz\":67925,\"scorie\":22641}", 6: "29840527", 7: "140973800/12232000/25673947", 8: "1/13/9" },   // camp/richeQuartz/n20/g1/toutes
+  11: { },   // camp/richeQuartz/n20/g1/moitie
+  12: { 1: "c2216866df7dc50a10b226c8e45efcfa", 2: "8b1ac7da35ce539b9538a050deabdc12", 4: 576, 5: "{\"quartz\":22641,\"scorie\":67925}", 6: "29840527", 7: "140973800/12232000/25673947", 8: "1/13/9" },   // camp/richeScorie/n20/g1/toutes
+  13: { },   // camp/richeScorie/n20/g1/moitie
+  14: { 1: "546922374b476760307364636826abc5", 2: "61f1d7897cbb32cc50498ab45c2ec9a4", 4: 432, 5: "{\"quartz\":24428,\"scorie\":8142}", 6: "28027733", 7: "210415452/89092940/4281200", 8: "0/11/13" },   // avantPoste/richeQuartz/n20/g1/toutes
+  15: { 1: "9339e9f4418912405966f5402ed1a88e", 2: "95907583af7d2713d9f1060d68688aae", 4: 302, 6: "9291909", 7: "211002000/126289016/0", 8: "0/5/7" },   // avantPoste/richeQuartz/n20/g1/moitie
+  16: { 1: "546922374b476760307364636826abc5", 2: "8defd7e594d9c3854a9b163a10586ded", 4: 432, 5: "{\"quartz\":8142,\"scorie\":24428}", 6: "28027733", 7: "210415452/89092940/4281200", 8: "0/11/13" },   // avantPoste/richeScorie/n20/g1/toutes
+  17: { 1: "9339e9f4418912405966f5402ed1a88e", 2: "40fd74539bc4761bf794bb5857bf69bf", 4: 302, 6: "9291909", 7: "211002000/126289016/0", 8: "0/5/7" },   // avantPoste/richeScorie/n20/g1/moitie
+  18: { 1: "83adb1fa12a7b5e8b6618006f095900c", 2: "096c5751e282ba170166607dbef1fa70", 3: "attaquants", 4: 654, 5: "{\"quartz\":54515,\"scorie\":54515}", 6: "27410401", 7: "211934411/96651058/2166647", 8: "1/10/13" },   // base/-/n20/g1/toutes
+  19: { 1: "1948ce8c49c8878862963c6aa985f613", 2: "8efe407a8dc2e7b60e79ea116b329d93", 4: 269, 6: "5731328", 7: "226292000/146022979/0" },   // base/-/n20/g1/moitie
+  20: { 1: "d82d024e332d96633ea265767577eb22", 2: "2eb6966d7e7ac3943335d23000e484e4", 4: 399, 5: "{\"quartz\":1173845,\"scorie\":391281}", 6: "2221824559", 7: "849912605/336983202/12120953", 8: "0/11/13" },   // camp/richeQuartz/n35/g1/toutes
+  21: { 1: "9d80fbd01f537cdb5f6594a887149586", 2: "08cc6720fb3739ea570c62104d71a488", 4: 314, 6: "852951832", 7: "855858000/488272668/0", 8: "0/5/7" },   // camp/richeQuartz/n35/g1/moitie
+  22: { 1: "d82d024e332d96633ea265767577eb22", 2: "8590261e8be28293d851a5658e55d843", 4: 399, 5: "{\"quartz\":391281,\"scorie\":1173845}", 6: "2221824559", 7: "849912605/336983202/12120953", 8: "0/11/13" },   // camp/richeScorie/n35/g1/toutes
+  23: { 1: "9d80fbd01f537cdb5f6594a887149586", 2: "739f1d6dec71f6eea7e88b1675444627", 4: 314, 6: "852951832", 7: "855858000/488272668/0", 8: "0/5/7" },   // camp/richeScorie/n35/g1/moitie
+  24: { 1: "c45c3b0654b5d03a0dd4a61ce544012a", 2: "f104f60d8e545370ef701257ca245ea2", 4: 313, 6: "1937352133", 7: "1162434000/540961112/0", 8: "0/12/14" },   // avantPoste/richeQuartz/n35/g1/toutes
+  25: { 1: "4ca51fbe499d213c43c229f0ddb7674b", 2: "de594b51bf4367eb40cee32b0c53d07a", 4: 199, 6: "481008168", 7: "1162434000/716572819/0" },   // avantPoste/richeQuartz/n35/g1/moitie
+  26: { 1: "c45c3b0654b5d03a0dd4a61ce544012a", 2: "fdbb576ef27d6bbe8474ccac8c1c21d5", 4: 313, 6: "1937352133", 7: "1162434000/540961112/0", 8: "0/12/14" },   // avantPoste/richeScorie/n35/g1/toutes
+  27: { 1: "4ca51fbe499d213c43c229f0ddb7674b", 2: "ecf928926d31d6e0ed1345410fea3dcb", 4: 199, 6: "481008168", 7: "1162434000/716572819/0" },   // avantPoste/richeScorie/n35/g1/moitie
+  28: { 1: "daebd43b6d74ac83b8ce426adc98d775", 2: "bc60dd40a7a9d342f46f90679b8f0259", 4: 493, 6: "983808341", 7: "1251852000/665257286/0" },   // base/-/n35/g1/toutes
+  29: { },   // base/-/n35/g1/moitie
+  30: { 1: "c9dd76473a2813ccc1ef40086541ad3c", 2: "a7898ddecf26903541b3bdde2a3db2fa", 4: 344, 6: "130855757967", 7: "3788524500/1546169855/0", 8: "0/14/14" },   // camp/richeQuartz/n50/g1/toutes
+  31: { 1: "3f784bf114e5cff5ca6a4388099043c1", 2: "28719d72d48819e29092e6dd0cd4efb3", 4: 353, 6: "52027235563", 7: "3788524500/2176094976/0" },   // camp/richeQuartz/n50/g1/moitie
+  32: { 1: "c9dd76473a2813ccc1ef40086541ad3c", 2: "f03cf206f32f274d8ed37283e8b12c8f", 4: 344, 6: "130855757967", 7: "3788524500/1546169855/0", 8: "0/14/14" },   // camp/richeScorie/n50/g1/toutes
+  33: { 1: "3f784bf114e5cff5ca6a4388099043c1", 2: "8e2a10d6b39c9fafbd5fadae2062f3b3", 4: 353, 6: "52027235563", 7: "3788524500/2176094976/0" },   // camp/richeScorie/n50/g1/moitie
+  34: { 1: "b37c9db38cd8e3af7ff214cfa574ea83", 2: "c0dd577bda309be5c45ec2fafd22f839", 4: 629, 5: "{\"quartz\":160369627,\"scorie\":53456542}", 6: "141088623360", 7: "5052931250/2571145050/0", 8: "0/14/14" },   // avantPoste/richeQuartz/n50/g1/toutes
+  35: { 1: "412e76ebaff69f39118a2fbc5391f233", 2: "526ee31593da5d675b8bc262930c18fa", 4: 211, 6: "53345536804", 7: "5069152500/3447109961/0" },   // avantPoste/richeQuartz/n50/g1/moitie
+  36: { 1: "b37c9db38cd8e3af7ff214cfa574ea83", 2: "2b49670bfd52482f5984d6a9ad252121", 4: 629, 5: "{\"quartz\":53456542,\"scorie\":160369627}", 6: "141088623360", 7: "5052931250/2571145050/0", 8: "0/14/14" },   // avantPoste/richeScorie/n50/g1/toutes
+  37: { 1: "412e76ebaff69f39118a2fbc5391f233", 2: "3cf4a6e655ba96534f5cb24102888f0c", 4: 211, 6: "53345536804", 7: "5069152500/3447109961/0" },   // avantPoste/richeScorie/n50/g1/moitie
+  38: { },   // base/-/n50/g1/toutes
+  39: { },   // base/-/n50/g1/moitie
+  40: { 1: "b60a7590fd054148e0e180b3b52b0a94", 2: "a00d54b6cad06fc83ef83f8b1bd1d541", 4: 201, 7: "13384476/0/19091949" },   // camp/richeQuartz/n5/g2/toutes
+  41: { 1: "90b78a28227afd0be0e7d3519ab50479", 2: "3b7435702a4f8e3f36eaefa60829cd00", 5: "{\"quartz\":328,\"scorie\":109}", 7: "17285265/331037/6761668" },   // camp/richeQuartz/n5/g2/moitie
+  42: { 1: "b60a7590fd054148e0e180b3b52b0a94", 2: "02676a5422caedb791eb777c4b630aca", 4: 201, 7: "13384476/0/19091949" },   // camp/richeScorie/n5/g2/toutes
+  43: { 1: "90b78a28227afd0be0e7d3519ab50479", 2: "b17abe0ba0fdce38772c2c1093c6be69", 5: "{\"quartz\":109,\"scorie\":328}", 7: "17285265/331037/6761668" },   // camp/richeScorie/n5/g2/moitie
+  44: { 1: "8308d7b73d46cffe5f45a17a3ff5032e", 2: "f69657d981c09cc12da433bbde02e059", 7: "5124000/0/19361658" },   // avantPoste/richeQuartz/n5/g2/toutes
+  45: { 1: "b466a84c3e13ca971b47ef91a5fe241c", 2: "d33f96a87db1e13e295948589cb486bb", 6: "81085", 7: "17568000/1816014/4958589" },   // avantPoste/richeQuartz/n5/g2/moitie
+  46: { 1: "8308d7b73d46cffe5f45a17a3ff5032e", 2: "a257b75e160ce7b50827cbbb690c9058", 7: "5124000/0/19361658" },   // avantPoste/richeScorie/n5/g2/toutes
+  47: { 1: "b466a84c3e13ca971b47ef91a5fe241c", 2: "9df5f1fe92148543b02c61195a55c864", 6: "81085", 7: "17568000/1816014/4958589" },   // avantPoste/richeScorie/n5/g2/moitie
+  48: { 1: "ec6c77a04a44c6ce384b24f20c6acb9d", 2: "7c076f35d653737251086e0e0cfc1638", 7: "8157299/0/15148791", 8: "5/6/1" },   // base/-/n5/g2/toutes
+  49: { 1: "5650505da653ebaa1bd8379f7c85d79b", 2: "9c4bed5281f07e02ee068ac63a6434e6", 4: 498, 5: "{\"quartz\":4428,\"scorie\":2261}", 6: "133638", 7: "18223495/696857/2303743" },   // base/-/n5/g2/moitie
+  50: { 1: "f14b5f1a8f96c23e2bd40661c9d937d3", 2: "ab78c62de8285e6d3a07b9d2f552c008", 4: 567, 5: "{\"quartz\":68017,\"scorie\":22672}", 6: "29001443", 7: "134497788/24533284/24621907", 8: "1/12/9" },   // camp/richeQuartz/n20/g2/toutes
+  51: { 1: "5ee2a26a98d6ab9533d75f91604639ae", 2: "f4d66d7c4c1abea9b39fa6fa8e86243f", 4: 519 },   // camp/richeQuartz/n20/g2/moitie
+  52: { 1: "f14b5f1a8f96c23e2bd40661c9d937d3", 2: "0feaeff260bb22d74626ac9a94a6c25b", 4: 567, 5: "{\"quartz\":22672,\"scorie\":68017}", 6: "29001443", 7: "134497788/24533284/24621907", 8: "1/12/9" },   // camp/richeScorie/n20/g2/toutes
+  53: { 1: "5ee2a26a98d6ab9533d75f91604639ae", 2: "af3b141eb862e68d1f99e325a985ecdb", 4: 519 },   // camp/richeScorie/n20/g2/moitie
+  54: { 1: "f9a2b5f77b76bd655f698a484803cb6d", 2: "fedcaf75dc659704d1f7d57fd28ef670", 4: 828, 5: "{\"quartz\":80369,\"scorie\":26789}", 6: "30766038", 7: "179161411/44652729/1061255" },   // avantPoste/richeQuartz/n20/g2/toutes
+  55: { 1: "b66d58540cb3e937ffb81b091f63609a", 2: "36ec073e8f9c9b27fdacfbe32e480e51", 4: 263, 6: "6949721", 7: "211002000/114613024/0" },   // avantPoste/richeQuartz/n20/g2/moitie
+  56: { 1: "f9a2b5f77b76bd655f698a484803cb6d", 2: "b79da716e0a036865d5e77578560f455", 4: 828, 5: "{\"quartz\":26789,\"scorie\":80369}", 6: "30766038", 7: "179161411/44652729/1061255" },   // avantPoste/richeScorie/n20/g2/toutes
+  57: { 1: "b66d58540cb3e937ffb81b091f63609a", 2: "70a60b2af6290acbd129a6f700242b50", 4: 263, 6: "6949721", 7: "211002000/114613024/0" },   // avantPoste/richeScorie/n20/g2/moitie
+  58: { 1: "4f9832a22094b3c148999c26f979fa02", 2: "ea3de89d96ffa69a92bc7b0cea42eab3", 4: 290, 6: "21101395", 7: "226292000/104749188/0" },   // base/-/n20/g2/toutes
+  59: { 1: "8bb6cbe1bf1fbdeffbca1cd4d0a254e8", 2: "cd35cafc9c4c3d2b19f412767247ad66", 4: 296, 6: "12691626", 7: "226292000/128364650/0" },   // base/-/n20/g2/moitie
+  60: { 1: "1afb39a928bf33efead08eee91230158", 2: "da5d89efdc394d9288412b22ee3a8984", 4: 520, 5: "{\"quartz\":417348,\"scorie\":139116}", 6: "2757161865", 7: "820979913/156984304/0" },   // camp/richeQuartz/n35/g2/toutes
+  61: { 1: "d78c9a0554be47c0d3c2a5d8290437f4", 2: "086eca1b1a9a01f95c5b0d37e2c52854", 4: 332, 6: "1067173831", 7: "855858000/427211311/0" },   // camp/richeQuartz/n35/g2/moitie
+  62: { 1: "1afb39a928bf33efead08eee91230158", 2: "f55d629fa35daa101669deb2aa6b6c52", 4: 520, 5: "{\"quartz\":139116,\"scorie\":417348}", 6: "2757161865", 7: "820979913/156984304/0" },   // camp/richeScorie/n35/g2/toutes
+  63: { 1: "d78c9a0554be47c0d3c2a5d8290437f4", 2: "eb6230161170c7c972e109f440ce7577", 4: 332, 6: "1067173831", 7: "855858000/427211311/0" },   // camp/richeScorie/n35/g2/moitie
+  64: { 1: "3e9a2467860b0b6ebd991b1297ce8d3c", 2: "fb57b0d7004edf7fd62aaa28b2e67a6a", 4: 454, 6: "1854998785", 7: "1162434000/648272709/0", 8: "0/7/14" },   // avantPoste/richeQuartz/n35/g2/toutes
+  65: { 1: "7bbf123dbdbdb374e9923705ee25cb8d", 2: "8b57e74980930fb4729d16c81e759132", 4: 293 },   // avantPoste/richeQuartz/n35/g2/moitie
+  66: { 1: "3e9a2467860b0b6ebd991b1297ce8d3c", 2: "02faf827811aa6442f84c978b630321d", 4: 454, 6: "1854998785", 7: "1162434000/648272709/0", 8: "0/7/14" },   // avantPoste/richeScorie/n35/g2/toutes
+  67: { 1: "7bbf123dbdbdb374e9923705ee25cb8d", 2: "47933b54d6891757baefb2fff0e1ec35", 4: 293 },   // avantPoste/richeScorie/n35/g2/moitie
+  68: { 1: "58f396ec2f73267323e6342303221442", 2: "509e1ddf827b72fd5322bb1b6aa85270", 4: 327, 6: "1626098337", 7: "1251852000/590418230/0", 8: "0/12/14" },   // base/-/n35/g2/toutes
+  69: { 1: "709d4bba1ee1e56aa000f04cb911e857", 2: "4e1e4a9bb770ef81ab82756ee690bd75", 4: 378, 6: "1137205169", 7: "1251852000/682353626/0", 8: "0/8/7" },   // base/-/n35/g2/moitie
+  70: { 1: "bb1ddd336c0c2b616e061de9f6e93992", 2: "65a15c72ad0f163b3993bfa03e98a7c2", 4: 253, 6: "96511467050", 7: "3788524500/2137514796/0", 8: "0/6/14" },   // camp/richeQuartz/n50/g2/toutes
+  71: { 1: "e54cb22889f081436a937aa18e895873", 2: "ed052f61fa9d7a33d972c21d19694be6", 4: 189, 6: "22278144232", 7: "3788524500/2662277615/0", 8: "0/1/7" },   // camp/richeQuartz/n50/g2/moitie
+  72: { 1: "bb1ddd336c0c2b616e061de9f6e93992", 2: "7acd7d7640110a98645f6410b87d2d80", 4: 253, 6: "96511467050", 7: "3788524500/2137514796/0", 8: "0/6/14" },   // camp/richeScorie/n50/g2/toutes
+  73: { 1: "e54cb22889f081436a937aa18e895873", 2: "600171fe502a558d8342be1bada82ffd", 4: 189, 6: "22278144232", 7: "3788524500/2662277615/0", 8: "0/1/7" },   // camp/richeScorie/n50/g2/moitie
+  74: { 1: "6ac03ede99f5dc15e1134e4adf691fd7", 2: "ac9ae92e93c8187a09ad59585e821154", 4: 286, 6: "124246613980", 7: "5069152500/2888497898/0", 8: "0/7/14" },   // avantPoste/richeQuartz/n50/g2/toutes
+  75: { 2: "a93dddbb37d7efd1514307630a316539" },   // avantPoste/richeQuartz/n50/g2/moitie
+  76: { 1: "6ac03ede99f5dc15e1134e4adf691fd7", 2: "4e94829076da5c29ea37fc637afb5a22", 4: 286, 6: "124246613980", 7: "5069152500/2888497898/0", 8: "0/7/14" },   // avantPoste/richeScorie/n50/g2/toutes
+  77: { 2: "7a514df4cb328b7d6e4464dca1c7eb9a" },   // avantPoste/richeScorie/n50/g2/moitie
+  78: { 1: "0138afbff9ee33f60780fc9f2e97f7e9", 2: "5399747383d8d018515e108511d8865c", 4: 234, 6: "65809366959", 7: "5602747500/3820390286/0" },   // base/-/n50/g2/toutes
+  79: { 1: "5f9e62b622ecfb124eaf981d5722e984", 2: "729f33f40e152386aa3bd2dd310d7d9b", 4: 189, 6: "28094183079", 7: "5602747500/4134824462/0" },   // base/-/n50/g2/moitie
+  80: { 1: "32c91e6b99eca52d3e6205630eca6fa0", 2: "a25a59deda228d0d400c0190697c0635", 7: "8784000/0/19290237" },   // camp/richeQuartz/n5/g3/toutes
+  81: { 1: "1fe01995339db4f69e9653b65441c3cc", 2: "8cb45adcefbb8f45e00b31232ee4b32a", 6: "55859", 7: "7800212/795566/5653120" },   // camp/richeQuartz/n5/g3/moitie
+  82: { 1: "32c91e6b99eca52d3e6205630eca6fa0", 2: "1fb3efd98bc3dfceffb75ec3fe331b74", 7: "8784000/0/19290237" },   // camp/richeScorie/n5/g3/toutes
+  83: { 1: "1fe01995339db4f69e9653b65441c3cc", 2: "ed1b224854337139f989446cf0f0f1ea", 6: "55859", 7: "7800212/795566/5653120" },   // camp/richeScorie/n5/g3/moitie
+  84: { 1: "aacf3bd6a1cb8c6a664cff63b5b5dba1", 2: "c275d04be7baf66ccfd6743576256526", 4: 498, 7: "13908000/0/17248571" },   // avantPoste/richeQuartz/n5/g3/toutes
+  85: { },   // avantPoste/richeQuartz/n5/g3/moitie
+  86: { 1: "aacf3bd6a1cb8c6a664cff63b5b5dba1", 2: "7cab9f9b7295322c58ac474d9c61426c", 4: 498, 7: "13908000/0/17248571" },   // avantPoste/richeScorie/n5/g3/toutes
+  87: { },   // avantPoste/richeScorie/n5/g3/moitie
+  88: { 1: "c0865f6d52b4c792a06e02fde36c6829", 2: "465bd71afeca0ae464e5f6d4d60837fb", 4: 538, 7: "13908000/0/16148657" },   // base/-/n5/g3/toutes
+  89: { 1: "fd23bb6b3bcd20f1d984b7b18994cbf0", 2: "7d76abb05a4e1f592b24534a85006813", 4: 551, 5: "{\"quartz\":5998,\"scorie\":8260}", 7: "15462376/0/3900583" },   // base/-/n5/g3/moitie
+  90: { 1: "5a24ae3c6b09c1e28128a5cdea4a7ccd", 2: "9b71bf25cf068ba203bf74623878b2d5", 4: 571, 7: "76450000/34861200/43014909" },   // camp/richeQuartz/n20/g3/toutes
+  91: { 1: "71b700014dd3395933322738a6258599", 2: "e1f28a0f77f41a9ca25e6752f256a3a0", 4: 448, 5: "{\"quartz\":2683,\"scorie\":894}", 6: "14450770", 7: "152327195/68359597/6237604" },   // camp/richeQuartz/n20/g3/moitie
+  92: { 1: "5a24ae3c6b09c1e28128a5cdea4a7ccd", 2: "33cb11749a97270d7312f035e521b3a4", 4: 571, 7: "76450000/34861200/43014909" },   // camp/richeScorie/n20/g3/toutes
+  93: { 1: "71b700014dd3395933322738a6258599", 2: "b2a714ea31cf6f4afbd80e5bcdafadca", 4: 448, 5: "{\"quartz\":894,\"scorie\":2683}", 6: "14450770", 7: "152327195/68359597/6237604" },   // camp/richeScorie/n20/g3/moitie
+  94: { 1: "604caf98864cdfc8868730ab8a37814b", 2: "56ba9a2bcb8c8030915d6305dfd11aeb", 4: 323, 6: "24704636", 7: "211002000/86021268/0", 8: "0/10/14" },   // avantPoste/richeQuartz/n20/g3/toutes
+  95: { 1: "ad75632078607cec114d7e1567d12356", 2: "073166120c5ad37ae9b206152d5576db", 4: 255, 6: "9266435", 7: "211002000/137160178/0" },   // avantPoste/richeQuartz/n20/g3/moitie
+  96: { 1: "604caf98864cdfc8868730ab8a37814b", 2: "fc1a8bc1d3863fffe7c9df1cba43fd4f", 4: 323, 6: "24704636", 7: "211002000/86021268/0", 8: "0/10/14" },   // avantPoste/richeScorie/n20/g3/toutes
+  97: { 1: "ad75632078607cec114d7e1567d12356", 2: "baa3efbb066247e64f48db33792fddfd", 4: 255, 6: "9266435", 7: "211002000/137160178/0" },   // avantPoste/richeScorie/n20/g3/moitie
+  98: { 1: "be509ecda7d4cb4e3f842d3eefe817ca", 2: "19de2e0c379698fea05562b5224d1c68", 4: 537, 5: "{\"quartz\":9446,\"scorie\":104500}", 6: "29562958", 7: "219623148/86953240/2885552", 8: "1/11/13" },   // base/-/n20/g3/toutes
+  99: { 1: "4404d7388da1128909a0d4b1399ecc60", 2: "92a160c1516b3bc03f65bed300b04663", 4: 310 },   // base/-/n20/g3/moitie
+  100: { 1: "8f73bbc618bf7c6e452a3579b37037ce", 2: "892544d21b1d5f759d94f0a3835a7e98", 4: 481, 6: "2370127031", 7: "855858000/356076812/0" },   // camp/richeQuartz/n35/g3/toutes
+  101: { },   // camp/richeQuartz/n35/g3/moitie
+  102: { 1: "8f73bbc618bf7c6e452a3579b37037ce", 2: "b70b23082181ca0de4daa743b5f2ba69", 4: 481, 6: "2370127031", 7: "855858000/356076812/0" },   // camp/richeScorie/n35/g3/toutes
+  103: { },   // camp/richeScorie/n35/g3/moitie
+  104: { 1: "7a84d938926c771e585c6627e7af8968", 2: "e5334b7360a2f60410a4bad7d608b3e5", 4: 330, 6: "1270894055", 7: "1162434000/696949770/0", 8: "0/9/14" },   // avantPoste/richeQuartz/n35/g3/toutes
+  105: { 1: "1e2dc2a6131249c63f5164de79124a86", 2: "88d0623866aa7dbc07f58b743b7741a0", 4: 264, 6: "440540434", 7: "1162434000/859030080/0", 8: "0/3/7" },   // avantPoste/richeQuartz/n35/g3/moitie
+  106: { 1: "7a84d938926c771e585c6627e7af8968", 2: "50649c302309c58c561a0dad56fab06c", 4: 330, 6: "1270894055", 7: "1162434000/696949770/0", 8: "0/9/14" },   // avantPoste/richeScorie/n35/g3/toutes
+  107: { 1: "1e2dc2a6131249c63f5164de79124a86", 2: "68d340cdc6da890ca5f3d95f95a0843f", 4: 264, 6: "440540434", 7: "1162434000/859030080/0", 8: "0/3/7" },   // avantPoste/richeScorie/n35/g3/moitie
+  108: { 1: "3a1256a109b71d9b92bc2da3a7cd3656", 2: "1da89d5ff5fbd53dca439db85478efb4", 4: 333, 6: "1535263756", 7: "1251852000/839394023/0" },   // base/-/n35/g3/toutes
+  109: { },   // base/-/n35/g3/moitie
+  110: { 1: "5578ad99beff66b05424299b99c5e075", 2: "1937dfa0e4e2c61edb4dc1868e34f048", 6: "134629903574", 7: "3788524500/1756815373/0" },   // camp/richeQuartz/n50/g3/toutes
+  111: { 1: "6ae01b44097ac2009f2e3f7266c7f4dc", 2: "988d6a4e7a692f0e818d01ae0b507e8c", 4: 196, 6: "26915702250", 7: "3788524500/2591668618/0", 8: "0/2/7" },   // camp/richeQuartz/n50/g3/moitie
+  112: { 1: "5578ad99beff66b05424299b99c5e075", 2: "276984235d5fd0306b4374d229b2e421", 6: "134629903574", 7: "3788524500/1756815373/0" },   // camp/richeScorie/n50/g3/toutes
+  113: { 1: "6ae01b44097ac2009f2e3f7266c7f4dc", 2: "940d56da526451938b4bb6d98a5f885a", 4: 196, 6: "26915702250", 7: "3788524500/2591668618/0", 8: "0/2/7" },   // camp/richeScorie/n50/g3/moitie
+  114: { 1: "4ca4e172eba8ae66f723e88f82b5452e", 2: "0aaca90caef19f81d6abdcd220ec952a", 4: 395, 6: "103676104292", 7: "5069152500/3268064910/0" },   // avantPoste/richeQuartz/n50/g3/toutes
+  115: { },   // avantPoste/richeQuartz/n50/g3/moitie
+  116: { 1: "4ca4e172eba8ae66f723e88f82b5452e", 2: "7e850fcfcdf01b8ffe3b8b48ac0c341d", 4: 395, 6: "103676104292", 7: "5069152500/3268064910/0" },   // avantPoste/richeScorie/n50/g3/toutes
+  117: { },   // avantPoste/richeScorie/n50/g3/moitie
+  118: { 1: "be57714e493755cfb7f821de856dfa0f", 2: "681b2d523c7fd819e412c3a8a36ac981", 4: 288, 6: "54048540311", 7: "5602747500/3554811726/0" },   // base/-/n50/g3/toutes
+  119: { 1: "1cc23092f7687b3e8df574b829707e77", 2: "8fb3b4dd9e1e7673c0b29a88cca390c2", 4: 246, 6: "52968323037", 7: "5602747500/3614523019/0", 8: "0/4/7" },   // base/-/n50/g3/moitie
+  120: { 1: "31dd8959875865783396df5b4903a7c6", 2: "28501b0fb10841de690e23a442162a01", 4: 197, 7: "8762481/0/18446302" },   // camp/richeQuartz/n5/g4/toutes
+  121: { 1: "86d2d090995c31e53abbfdd8bf38fffc", 2: "663f43d3348ec821240c2a8eb6081f0b", 4: 561, 5: "{\"quartz\":5058,\"scorie\":1686}", 7: "11590862/0/6749096" },   // camp/richeQuartz/n5/g4/moitie
+  122: { 1: "31dd8959875865783396df5b4903a7c6", 2: "d064e9071fe5a27faa1a50247aa4fb8a", 4: 197, 7: "8762481/0/18446302" },   // camp/richeScorie/n5/g4/toutes
+  123: { 1: "86d2d090995c31e53abbfdd8bf38fffc", 2: "8ef4525af55d3e75e67091d33bb305f1", 4: 561, 5: "{\"quartz\":1686,\"scorie\":5058}", 7: "11590862/0/6749096" },   // camp/richeScorie/n5/g4/moitie
+  124: { 1: "5c1188713cdcb90ad778999ba7eb79e2", 2: "a2bd57bcabb94e9d19f1586f50648991", 7: "6588000/0/18166552" },   // avantPoste/richeQuartz/n5/g4/toutes
+  125: { 1: "383596e00924275dca7ed6d7390a5c32", 2: "da12facbabef6e9c1ecae581cf6b6860", 6: "56323", 7: "15372000/2826227/4549151" },   // avantPoste/richeQuartz/n5/g4/moitie
+  126: { 1: "5c1188713cdcb90ad778999ba7eb79e2", 2: "f6cff2a81ef003a1fa7672e7c052b4a8", 7: "6588000/0/18166552" },   // avantPoste/richeScorie/n5/g4/toutes
+  127: { 1: "383596e00924275dca7ed6d7390a5c32", 2: "1a11e229e89bb1091291da7d179a9d63", 6: "56323", 7: "15372000/2826227/4549151" },   // avantPoste/richeScorie/n5/g4/moitie
+  128: { 1: "775a4b45506995959d42c51e1a534823", 2: "8529eabe999295e7e016e86b920e189d", 4: 389, 7: "5124000/0/16948535" },   // base/-/n5/g4/toutes
+  129: { 1: "92be069668b774e6d7d8a6683cc573f9", 2: "a1fe8437f4fef766d4d6fe41df7b918d", 5: "{\"quartz\":3724,\"scorie\":5276}", 6: "106667", 7: "16288285/1797187/3907742", 8: "4/4/2" },   // base/-/n5/g4/moitie
+  130: { 1: "73d7d99c62380c7bfa3ce6465a56a8ad", 2: "14ef1f6a4c0d08a759654673130c601b", 4: 462, 5: "{\"quartz\":1100,\"scorie\":366}", 6: "24874246", 7: "151483201/25272519/1835840", 8: "0/10/12" },   // camp/richeQuartz/n20/g4/toutes
+  131: { },   // camp/richeQuartz/n20/g4/moitie
+  132: { 1: "73d7d99c62380c7bfa3ce6465a56a8ad", 2: "5342bd05403a8f93d8dfcee9da3227f0", 4: 462, 5: "{\"quartz\":366,\"scorie\":1100}", 6: "24874246", 7: "151483201/25272519/1835840", 8: "0/10/12" },   // camp/richeScorie/n20/g4/toutes
+  133: { },   // camp/richeScorie/n20/g4/moitie
+  134: { 1: "a96f4bde8857cc25ab1c0d3aaeba6f96", 2: "cb04d6ae7fcd274acd1ed27fef414e53", 4: 458, 6: "28850753", 7: "211002000/49782180/0", 8: "0/13/14" },   // avantPoste/richeQuartz/n20/g4/toutes
+  135: { 1: "c6cfa6b3576b21d5f68a6f4ad0ef7073", 2: "6a12a9d5006a8592f198fb67946fa613", 6: "9169062", 7: "211002000/106663355/0" },   // avantPoste/richeQuartz/n20/g4/moitie
+  136: { 1: "a96f4bde8857cc25ab1c0d3aaeba6f96", 2: "ee991735f1b7b0feddcc71621af205a0", 4: 458, 6: "28850753", 7: "211002000/49782180/0", 8: "0/13/14" },   // avantPoste/richeScorie/n20/g4/toutes
+  137: { 1: "c6cfa6b3576b21d5f68a6f4ad0ef7073", 2: "966554d3120a2f17f9a83a0e2ea50f2c", 6: "9169062", 7: "211002000/106663355/0" },   // avantPoste/richeScorie/n20/g4/moitie
+  138: { 1: "eee79193a5e3ca8715e41dac96b6286f", 2: "7ed2235367a1cf90d028ca784da66ca8", 4: 441, 5: "{\"quartz\":0,\"scorie\":2436}", 6: "33582344", 7: "226149414/85024484/0", 8: "0/12/14" },   // base/-/n20/g4/toutes
+  139: { },   // base/-/n20/g4/moitie
+  140: { 1: "d2f104b32f41645c27a8e6ed1314f6a4", 2: "24996c36c9ea7a372675d9c41889042c", 4: 263, 6: "1366247187", 7: "855858000/327000041/0", 8: "0/8/14" },   // camp/richeQuartz/n35/g4/toutes
+  141: { },   // camp/richeQuartz/n35/g4/moitie
+  142: { 1: "d2f104b32f41645c27a8e6ed1314f6a4", 2: "1508463580030a040e620aba4372d0b1", 4: 263, 6: "1366247187", 7: "855858000/327000041/0", 8: "0/8/14" },   // camp/richeScorie/n35/g4/toutes
+  143: { },   // camp/richeScorie/n35/g4/moitie
+  144: { 1: "f728222c597a934a892191d690bc0a50", 2: "563022b0789f0917674891eb1cef5f3a", 4: 250, 6: "713567327", 7: "1162434000/656350297/0", 8: "0/8/14" },   // avantPoste/richeQuartz/n35/g4/toutes
+  145: { 1: "9e8d1b20bda0c6d321a4d2cb7d95818f", 2: "0cd7ec36a0a30947673dd7da1a49452a", 4: 215, 6: "476762461", 7: "1162434000/744696466/0", 8: "0/4/7" },   // avantPoste/richeQuartz/n35/g4/moitie
+  146: { 1: "f728222c597a934a892191d690bc0a50", 2: "d1d04c78fb18673c40274d6944aaa400", 4: 250, 6: "713567327", 7: "1162434000/656350297/0", 8: "0/8/14" },   // avantPoste/richeScorie/n35/g4/toutes
+  147: { 1: "9e8d1b20bda0c6d321a4d2cb7d95818f", 2: "a20f870b19bc76d8d549e191cdab40ed", 4: 215, 6: "476762461", 7: "1162434000/744696466/0", 8: "0/4/7" },   // avantPoste/richeScorie/n35/g4/moitie
+  148: { 1: "79d0d7ad3c58fe0006f85a06af9ba056", 2: "39ba3236fa2063b08779a1e0cb78678b", 4: 329, 6: "1364270031", 7: "1251852000/694168453/0" },   // base/-/n35/g4/toutes
+  149: { 1: "4a573e45f294e27d7a21b9eb68747b27", 2: "a4beb77b33b29a7ae62f8a5c5b397aff" },   // base/-/n35/g4/moitie
+  150: { 2: "e3cfc375fbdbf3909b1f733052067658" },   // camp/richeQuartz/n50/g4/toutes
+  151: { 1: "117562be389616506878610a995abea2", 2: "525575af3945a12a7a31fe159d87b03d", 4: 316, 6: "48574973500", 7: "3788524500/2484774554/0", 8: "0/5/7" },   // camp/richeQuartz/n50/g4/moitie
+  152: { 2: "5150f98b45d13279a944e43c6c6feb1b" },   // camp/richeScorie/n50/g4/toutes
+  153: { 1: "117562be389616506878610a995abea2", 2: "8cfa771d39b638177a0a5cb7d2bc3f3c", 4: 316, 6: "48574973500", 7: "3788524500/2484774554/0", 8: "0/5/7" },   // camp/richeScorie/n50/g4/moitie
+  154: { 1: "75c1f3acb395853ec81d9eb841648cb4", 2: "354cd0d37cddfca2b233ee72c2509f87", 4: 327, 6: "84427041060", 7: "5069152500/2721496719/0" },   // avantPoste/richeQuartz/n50/g4/toutes
+  155: { 1: "38928fdde26458129a5982e400963e79", 2: "3b274ede474c68f21b2e855938e20c47", 4: 179, 6: "6026295418", 7: "5069152500/3645019465/0" },   // avantPoste/richeQuartz/n50/g4/moitie
+  156: { 1: "75c1f3acb395853ec81d9eb841648cb4", 2: "4cb03e2405844e03daf23f660f9cba53", 4: 327, 6: "84427041060", 7: "5069152500/2721496719/0" },   // avantPoste/richeScorie/n50/g4/toutes
+  157: { 1: "38928fdde26458129a5982e400963e79", 2: "1d241f19924806a87ff23fd0c814e093", 4: 179, 6: "6026295418", 7: "5069152500/3645019465/0" },   // avantPoste/richeScorie/n50/g4/moitie
+  158: { 1: "71a6122b0b193f3341eceb172548d58c", 2: "e6e7679c74d21a4e92f33d7c04d3a77a", 4: 246, 6: "84375218472", 7: "5602747500/3735849563/0" },   // base/-/n50/g4/toutes
+  159: { },   // base/-/n50/g4/moitie
+  160: { 1: "08a1baa56e3f67231b4933e91a6a77fe", 2: "86dcab727d63b03d890d112e4bf243ba", 4: 479, 7: "13908000/0/18186693" },   // camp/richeQuartz/n5/g5/toutes
+  161: { },   // camp/richeQuartz/n5/g5/moitie
+  162: { 1: "08a1baa56e3f67231b4933e91a6a77fe", 2: "7db3ea563a6048a29a0ffbe05f2b9812", 4: 479, 7: "13908000/0/18186693" },   // camp/richeScorie/n5/g5/toutes
+  163: { },   // camp/richeScorie/n5/g5/moitie
+  164: { 1: "e840534a7688b15c14c6c91d6d7b50a4", 2: "e2be30b617ee928da10fc07e33ecb725", 7: "10687188/0/16568240" },   // avantPoste/richeQuartz/n5/g5/toutes
+  165: { 1: "d8b67bd761eeca6e597c39a0e8305b62", 2: "b18cd3939cce71cd3a1bebb87a11c439", 4: 620, 7: "12444000/0/5769689" },   // avantPoste/richeQuartz/n5/g5/moitie
+  166: { 1: "e840534a7688b15c14c6c91d6d7b50a4", 2: "d55be871386ce5a301fd5959a45697e0", 7: "10687188/0/16568240" },   // avantPoste/richeScorie/n5/g5/toutes
+  167: { 1: "d8b67bd761eeca6e597c39a0e8305b62", 2: "264c994c180044b9cbc7d6fa4baef635", 4: 620, 7: "12444000/0/5769689" },   // avantPoste/richeScorie/n5/g5/moitie
+  168: { 1: "8b930466fcce4a82ac6cb6d0385d49b4", 2: "4202a16c935a0355bfb488d37b326cb4", 5: "{\"quartz\":4215,\"scorie\":753}", 7: "14996100/0/15042774" },   // base/-/n5/g5/toutes
+  169: { 1: "5fb13ae6a2a329a47e4a820acd755de7", 2: "a6df26fa6c114ff6ed22fc8c91f007dd", 4: 614, 7: "19764000/0/5891565" },   // base/-/n5/g5/moitie
+  170: { 1: "d8baf055a018b7896f0f7bfc0b402b03", 2: "47bb635615ba5eefc816c3d478097860", 3: "duree", 4: 900, 5: "{\"quartz\":140539,\"scorie\":46846}", 7: "124844652/32414800/23223367", 8: "2/11/10" },   // camp/richeQuartz/n20/g5/toutes
+  171: { 1: "d671c75ce621f258d335dcebb69daae4", 2: "6346bf8eaa4f873d068b9ee861c4071e", 4: 324, 6: "7788019", 7: "152900000/74751793/0", 8: "0/1/7" },   // camp/richeQuartz/n20/g5/moitie
+  172: { 1: "d8baf055a018b7896f0f7bfc0b402b03", 2: "5f832858657555b83687291392074479", 3: "duree", 4: 900, 5: "{\"quartz\":46846,\"scorie\":140539}", 7: "124844652/32414800/23223367", 8: "2/11/10" },   // camp/richeScorie/n20/g5/toutes
+  173: { 1: "d671c75ce621f258d335dcebb69daae4", 2: "86b3f918ab3c07155393ff275bb7853c", 4: 324, 6: "7788019", 7: "152900000/74751793/0", 8: "0/1/7" },   // camp/richeScorie/n20/g5/moitie
+  174: { 1: "4742537c09c27f6770819ca1838045b5", 2: "c1f7da4810cb4c7c1de30d8e3010acfc", 3: "souche", 4: 716, 5: "{\"quartz\":5009476,\"scorie\":1669825}", 6: "38761322", 7: "167938342/47756820/14408602", 8: "2/17/10" },   // avantPoste/richeQuartz/n20/g5/toutes
+  175: { 1: "ed2f6b4c0fc905d8cfcdaa9b6ca3fe69", 2: "bbb75c555871483e2ba89940fe1d3071", 4: 240, 6: "7769126", 7: "211002000/121318770/0" },   // avantPoste/richeQuartz/n20/g5/moitie
+  176: { 1: "4742537c09c27f6770819ca1838045b5", 2: "693746b22c85e70a80718c6cb50bf237", 3: "souche", 4: 716, 5: "{\"quartz\":1669825,\"scorie\":5009476}", 6: "38761322", 7: "167938342/47756820/14408602", 8: "2/17/10" },   // avantPoste/richeScorie/n20/g5/toutes
+  177: { 1: "ed2f6b4c0fc905d8cfcdaa9b6ca3fe69", 2: "03efca8259c1296e6ad55b9d47801a52", 4: 240, 6: "7769126", 7: "211002000/121318770/0" },   // avantPoste/richeScorie/n20/g5/moitie
+  178: { 1: "3b132236a4c64e8501ec198a54d7d976", 2: "7234fa3f05794ebdb8e69f96cf6e0362", 4: 701, 5: "{\"quartz\":283160,\"scorie\":701161}", 6: "37831558", 7: "142542560/56677622/31981696", 8: "11/17/7" },   // base/-/n20/g5/toutes
+  179: { 1: "e67f7c9f0adc513ef3b06ab10a5c4351", 2: "1ccb93538d03ee35dc1c28c1b3d48180", 4: 275, 6: "11266752", 7: "226292000/117356067/0", 8: "0/5/7" },   // base/-/n20/g5/moitie
+  180: { 1: "6db7424a40b41cb74c1c5d1fa3679cde", 2: "a7676cc44b80b5d41ddb4aff6854fcd8", 4: 480, 6: "2366645771", 7: "855858000/147997319/0", 8: "0/16/14" },   // camp/richeQuartz/n35/g5/toutes
+  181: { 1: "f4fd1b6b72494a8d7d76b91ce34d0a6e", 2: "ed404aa34f28c48ee3c897998273b60f", 4: 334, 6: "713617138", 7: "855858000/466683243/0", 8: "0/3/7" },   // camp/richeQuartz/n35/g5/moitie
+  182: { 1: "6db7424a40b41cb74c1c5d1fa3679cde", 2: "73aa2224ec66ebc83e446616ba9ac662", 4: 480, 6: "2366645771", 7: "855858000/147997319/0", 8: "0/16/14" },   // camp/richeScorie/n35/g5/toutes
+  183: { 1: "f4fd1b6b72494a8d7d76b91ce34d0a6e", 2: "011a564783b4d61fac7fa2632598390b", 4: 334, 6: "713617138", 7: "855858000/466683243/0", 8: "0/3/7" },   // camp/richeScorie/n35/g5/moitie
+  184: { 1: "9663203e71866d57d810c00e7898e727", 2: "f3c0b8afe3b196f992742595c8e7dcdd", 4: 327, 6: "869188390", 7: "1162434000/534085457/0", 8: "0/10/14" },   // avantPoste/richeQuartz/n35/g5/toutes
+  185: { 1: "9b1f6af59b8af80413865c9d50e50cf3", 2: "fd74c9895525af4a13d90af61ef2b587", 4: 316, 6: "693737858", 7: "1162434000/602452960/0", 8: "0/6/7" },   // avantPoste/richeQuartz/n35/g5/moitie
+  186: { 1: "9663203e71866d57d810c00e7898e727", 2: "52b9be9921d35db38f4d37c349f9f5b0", 4: 327, 6: "869188390", 7: "1162434000/534085457/0", 8: "0/10/14" },   // avantPoste/richeScorie/n35/g5/toutes
+  187: { 1: "9b1f6af59b8af80413865c9d50e50cf3", 2: "cad7c2737fca8a748342e465afadfaa3", 4: 316, 6: "693737858", 7: "1162434000/602452960/0", 8: "0/6/7" },   // avantPoste/richeScorie/n35/g5/moitie
+  188: { 1: "e1e57cbff85fa3c0522ea18bdb40014a", 2: "43f755308998236c85bd94273279f6dc", 4: 241, 6: "1342028557", 7: "1251852000/720234764/0", 8: "0/6/14" },   // base/-/n35/g5/toutes
+  189: { },   // base/-/n35/g5/moitie
+  190: { 1: "f544063000f75bc9bbaf92e595f55404", 2: "4038e2dbc38e56f4d14e28c2aa3df9d3", 4: 377, 5: "{\"quartz\":7986886,\"scorie\":2662295}", 6: "156650302553", 7: "3782616975/1279305635/8053362" },   // camp/richeQuartz/n50/g5/toutes
+  191: { 1: "fa40b98306548c2be25a8169ea3d05ad", 2: "0a29b8460f50a45759d3e48764dee3c3", 4: 243, 6: "38289279464", 7: "3788524500/1991960744/0" },   // camp/richeQuartz/n50/g5/moitie
+  192: { 1: "f544063000f75bc9bbaf92e595f55404", 2: "2231bc8061c8637d59096af492137500", 4: 377, 5: "{\"quartz\":2662295,\"scorie\":7986886}", 6: "156650302553", 7: "3782616975/1279305635/8053362" },   // camp/richeScorie/n50/g5/toutes
+  193: { 1: "fa40b98306548c2be25a8169ea3d05ad", 2: "f2f12ea582b1aa0423df2147a08b57f3", 4: 243, 6: "38289279464", 7: "3788524500/1991960744/0" },   // camp/richeScorie/n50/g5/moitie
+  194: { 1: "d0b5d4bb7e5339af4ef1aff8bea3fd7f", 2: "6bfc19a68ca7a4b44b4f0fae7b4baa55", 4: 225, 6: "56939774974", 7: "5069152500/2652575372/0" },   // avantPoste/richeQuartz/n50/g5/toutes
+  195: { 1: "0ef6d0c1b65ac9b6c4335d01effacfa5", 2: "db216b60a36c07d0b8169044a0772e57", 6: "30482197578", 7: "5069152500/2887174984/0" },   // avantPoste/richeQuartz/n50/g5/moitie
+  196: { 1: "d0b5d4bb7e5339af4ef1aff8bea3fd7f", 2: "ac91112e19dc58501ae34371e170ea56", 4: 225, 6: "56939774974", 7: "5069152500/2652575372/0" },   // avantPoste/richeScorie/n50/g5/toutes
+  197: { 1: "0ef6d0c1b65ac9b6c4335d01effacfa5", 2: "45429e8f85d15e81cb400d3383a24d56", 6: "30482197578", 7: "5069152500/2887174984/0" },   // avantPoste/richeScorie/n50/g5/moitie
+  198: { 1: "a0e982312e914958eb5ed81e16669028", 2: "2e5f97b07ab37d69a1e6b7b5a7df7a3d", 4: 268, 6: "135255889514", 7: "5602747500/2665848551/0", 8: "0/10/14" },   // base/-/n50/g5/toutes
+  199: { 1: "1c48578cb66c0f9682cd3f93e50b400a", 2: "efc54fb6d131e5d1cf95341d978ac328", 4: 244, 6: "59113856275", 7: "5602747500/3144698605/0", 8: "0/4/7" },   // base/-/n50/g5/moitie
+};
+
+/**
+ * LA HUITIÈME COUCHE DE `T1 bis` — LOT CONTACT-2, 13/09/2026.
+ *
+ * ⚠⚠ ELLE DÉPLACE 764 CHAMPS ET N'EN AJOUTE QU'**UN SEUL** À LA SURCHARGE —
+ * 1 334 → **1 335**, **265 gardés** —, exactement comme la couche du lot CONTACT
+ * avant elle. 763 des 764 étaient déjà couverts par l'une des sept d'avant.
+ *
+ * ⚠⚠ ET C'EST CETTE INVARIANCE QUI DIT CE QUE LE LOT TOUCHE. Un lot qui bougerait
+ * le TIR ou le CIBLAGE briserait les causes de fin qui tiennent encore ; celui-ci
+ * bouge le MÊME axe qu'ARRÊT, COLONNE, MUR, BARÈME-ET-REJEU et CONTACT — la FILE
+ * —, plus l'instant de la mort d'une écrasée. **Sixième lot d'affilée à n'ajouter
+ * qu'un ou deux champs à l'union.**
+ *
+ * ⚠ CINQUANTE ET UN COMBATS SONT INTACTS ICI CONTRE VINGT-TROIS DANS `T1` —
+ * l'ancien placement fait naître les vagues sur le front de la bande de
+ * déploiement, donc moins de pièces se croisent en travers en approchant.
+ */
+export const COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS = {
+  0: { 1: "67c815e13768ca0f3b4ea4c77fc9407b", 2: "37fce74abfb2e7662f20c972ab49399b", 4: 277, 7: "5856000/0/19155630" },   // camp/richeQuartz/n5/g1/toutes
+  1: { 1: "27b748076cb07be770434bb675bb25cf", 2: "7abe0dfea65b2ee80d576d6b1bdef2f9", 4: 433, 7: "15372000/0/7039761" },   // camp/richeQuartz/n5/g1/moitie
+  2: { 1: "67c815e13768ca0f3b4ea4c77fc9407b", 2: "6e1f6a61644fa9175a23fc8587531be6", 4: 277, 7: "5856000/0/19155630" },   // camp/richeScorie/n5/g1/toutes
+  3: { 1: "27b748076cb07be770434bb675bb25cf", 2: "deb1f3cffb04f22539d933eebbc5d30f", 4: 433, 7: "15372000/0/7039761" },   // camp/richeScorie/n5/g1/moitie
+  4: { 1: "851187167a946e2400b43a8a7cc10634", 2: "352ccc7a9ca917c3f0af9ce2a0dd6dd7", 4: 323, 7: "5856000/0/19268088" },   // avantPoste/richeQuartz/n5/g1/toutes
+  5: { 1: "fac90cc8e2ae33565a1645a0dfd2bf53", 2: "6de6a43fbe45a19491d26308a913a952", 4: 492, 6: "107463", 7: "15372000/739914/6376336" },   // avantPoste/richeQuartz/n5/g1/moitie
+  6: { 1: "851187167a946e2400b43a8a7cc10634", 2: "eac47043114994d9ac7b7bbed84ea708", 4: 323, 7: "5856000/0/19268088" },   // avantPoste/richeScorie/n5/g1/toutes
+  7: { 1: "fac90cc8e2ae33565a1645a0dfd2bf53", 2: "5e89012b2c63089f7e9d42d07f4c3274", 4: 492, 6: "107463", 7: "15372000/739914/6376336" },   // avantPoste/richeScorie/n5/g1/moitie
+  8: { 1: "e9197eab12f1e1fac032ba51a363b0f8", 2: "d4140784db85f5dd5cf77b65f67d1e23", 4: 373, 7: "4392000/0/18399616" },   // base/-/n5/g1/toutes
+  9: { 1: "8dfb042fcd78ccb2668fd27fa9a57cfa", 2: "7a6313ecf0ab4ed86fd1050d991686f4", 4: 431, 5: "{\"quartz\":3755,\"scorie\":5276}", 6: "87007", 7: "16901513/2599196/5689900" },   // base/-/n5/g1/moitie
+  10: { 1: "54b21cc3af0ee8398490378457ff145c", 2: "47590635253f7275d46342b28cf7de6a", 4: 554, 5: "{\"quartz\":271053,\"scorie\":90351}", 6: "26373866", 7: "120598825/34620748/9089544", 8: "4/10/12" },   // camp/richeQuartz/n20/g1/toutes
+  11: { 1: "3054406ac9e24ec9b860f60128728cd1", 2: "760ef75ed7ccab7c77fd447f0cbdb68e", 4: 417, 5: "{\"quartz\":1786,\"scorie\":595}", 6: "13538672", 7: "152586250/62505178/3142037" },   // camp/richeQuartz/n20/g1/moitie
+  12: { 1: "54b21cc3af0ee8398490378457ff145c", 2: "32f6c3feb05420d32a075b2ff560241c", 4: 554, 5: "{\"quartz\":90351,\"scorie\":271053}", 6: "26373866", 7: "120598825/34620748/9089544", 8: "4/10/12" },   // camp/richeScorie/n20/g1/toutes
+  13: { 1: "3054406ac9e24ec9b860f60128728cd1", 2: "80daaaf1d2fc263eff8bcccf36fd7e20", 4: 417, 5: "{\"quartz\":595,\"scorie\":1786}", 6: "13538672", 7: "152586250/62505178/3142037" },   // camp/richeScorie/n20/g1/moitie
+  14: { 1: "c920223bdc4e883aff7d1084ff68968c", 2: "cf4d33c2846bbd06a9028e36f534ce44", 4: 761, 5: "{\"quartz\":1358502,\"scorie\":452834}", 6: "26607952", 7: "168190000/46432789/31805988", 8: "6/16/7" },   // avantPoste/richeQuartz/n20/g1/toutes
+  15: { 1: "a5a7bfeb7c60500d83f48f71994f837b", 2: "45b266414484e9b856d36e779723b03a", 4: 305, 6: "9734445", 7: "211002000/111686604/0" },   // avantPoste/richeQuartz/n20/g1/moitie
+  16: { 1: "c920223bdc4e883aff7d1084ff68968c", 2: "68a07358aae89277c617e6354b1687c8", 4: 761, 5: "{\"quartz\":452834,\"scorie\":1358502}", 6: "26607952", 7: "168190000/46432789/31805988", 8: "6/16/7" },   // avantPoste/richeScorie/n20/g1/toutes
+  17: { 1: "a5a7bfeb7c60500d83f48f71994f837b", 2: "58498554ee3321700b93cb7bb92a9816", 4: 305, 6: "9734445", 7: "211002000/111686604/0" },   // avantPoste/richeScorie/n20/g1/moitie
+  18: { 1: "95b147e5ee5b988c02a649f64061cb12", 2: "fa72c4d19888175a2b66cc583b7ec190", 4: 437, 6: "32121874", 7: "226292000/89774983/0", 8: "0/12/14" },   // base/-/n20/g1/toutes
+  19: { 1: "3a8e4a16df0a68950d3b18dbf3c77922", 2: "f109c15713019d9e19117a5e7b1a39ac", 6: "9350131", 7: "226292000/137706321/0" },   // base/-/n20/g1/moitie
+  20: { 1: "84e1a393f3d318c4f84c680073a3229f", 2: "02cd9fec99fe1e6cc8b56c0dd56e1718", 4: 860, 6: "1820076586", 7: "855858000/434351535/0" },   // camp/richeQuartz/n35/g1/toutes
+  21: { 2: "1c74cdab5f16f27d8996bcdbef9a1e62" },   // camp/richeQuartz/n35/g1/moitie
+  22: { 1: "84e1a393f3d318c4f84c680073a3229f", 2: "071db9da054a079e0cdbde30bd667485", 4: 860, 6: "1820076586", 7: "855858000/434351535/0" },   // camp/richeScorie/n35/g1/toutes
+  23: { 2: "b9fe0cbd81cb751b16c13ec6fafb60b1" },   // camp/richeScorie/n35/g1/moitie
+  24: { 1: "256ab6023849cff354d9c9ac0343304a", 2: "91f389bec6e0ef75b0ade5b9eb1e4565", 4: 577, 6: "2627484368", 7: "1162434000/400458178/0", 8: "0/16/14" },   // avantPoste/richeQuartz/n35/g1/toutes
+  25: { 1: "7ce9766b439600051ab47760177e7053", 2: "e2d809a345a19734a30d4d03b291f5cb", 6: "202556110", 7: "1162434000/742583598/0", 8: "0/3/7" },   // avantPoste/richeQuartz/n35/g1/moitie
+  26: { 1: "256ab6023849cff354d9c9ac0343304a", 2: "5532d86051691dea0dde6da3443313b1", 4: 577, 6: "2627484368", 7: "1162434000/400458178/0", 8: "0/16/14" },   // avantPoste/richeScorie/n35/g1/toutes
+  27: { 1: "7ce9766b439600051ab47760177e7053", 2: "fd0c44204454b16991caecb31131681e", 6: "202556110", 7: "1162434000/742583598/0", 8: "0/3/7" },   // avantPoste/richeScorie/n35/g1/moitie
+  28: { 1: "00288d30aa9ee885868bbd54df340c7b", 2: "ee30b861b09549effffcc5bbcb6cbe2e", 4: 340, 6: "1978942082", 7: "1251852000/576072911/0", 8: "0/12/14" },   // base/-/n35/g1/toutes
+  29: { 1: "0a8958798288104f05128623650e7400", 2: "0e66386031b8b150e5f92d2f0829a758", 4: 198, 6: "479724124", 7: "1251852000/796714341/0", 8: "0/3/7" },   // base/-/n35/g1/moitie
+  30: { 1: "93caf6c45328e8705c1599d46b8ae9ca", 2: "c1bbf11b45fd15ea133c9ffcb9b84f6a", 4: 272, 6: "120911707832", 7: "3788524500/1559153609/0" },   // camp/richeQuartz/n50/g1/toutes
+  31: { },   // camp/richeQuartz/n50/g1/moitie
+  32: { 1: "93caf6c45328e8705c1599d46b8ae9ca", 2: "3d43eb6dcf6ca9cf7a0b4ed0f5e53961", 4: 272, 6: "120911707832", 7: "3788524500/1559153609/0" },   // camp/richeScorie/n50/g1/toutes
+  33: { },   // camp/richeScorie/n50/g1/moitie
+  34: { },   // avantPoste/richeQuartz/n50/g1/toutes
+  35: { },   // avantPoste/richeQuartz/n50/g1/moitie
+  36: { },   // avantPoste/richeScorie/n50/g1/toutes
+  37: { },   // avantPoste/richeScorie/n50/g1/moitie
+  38: { },   // base/-/n50/g1/toutes
+  39: { },   // base/-/n50/g1/moitie
+  40: { 1: "03073508bb9f980e52e0c205c4b84934", 2: "246bc19eccbde1ec4944be037730e67f", 7: "13176000/0/19447304" },   // camp/richeQuartz/n5/g2/toutes
+  41: { 1: "3917fdcfd16381ec75bab918473a7bdf", 2: "7c381bebde2b6fd5cd336a086400b0ad", 7: "14640000/1417152/7621013" },   // camp/richeQuartz/n5/g2/moitie
+  42: { 1: "03073508bb9f980e52e0c205c4b84934", 2: "2b91cb0dce07afeff8c54316bd107839", 7: "13176000/0/19447304" },   // camp/richeScorie/n5/g2/toutes
+  43: { 1: "3917fdcfd16381ec75bab918473a7bdf", 2: "d347038bfa09d69271b7fc73e5a726f0", 7: "14640000/1417152/7621013" },   // camp/richeScorie/n5/g2/moitie
+  44: { 1: "ad72279d2c790879f32f01943484865e", 2: "242a6ec3cd6b9578b65c4cbd38beeb33", 4: 446, 7: "15372000/0/18275313" },   // avantPoste/richeQuartz/n5/g2/toutes
+  45: { },   // avantPoste/richeQuartz/n5/g2/moitie
+  46: { 1: "ad72279d2c790879f32f01943484865e", 2: "a693e6c848c178a3eba3e6881b510574", 4: 446, 7: "15372000/0/18275313" },   // avantPoste/richeScorie/n5/g2/toutes
+  47: { },   // avantPoste/richeScorie/n5/g2/moitie
+  48: { 1: "6452e1a7b98c7a98b7bcae5d2a58f0b8", 2: "a58f4bf686b810c466cc9127c5aef761", 4: 475, 7: "13176000/0/16909085" },   // base/-/n5/g2/toutes
+  49: { 1: "303282263acccce1b011a96775fc0f05", 2: "ce756df45d64faa5d9288ca718550046", 4: 449, 5: "{\"quartz\":3281,\"scorie\":4789}", 6: "127132", 7: "18254616/962281/2936844" },   // base/-/n5/g2/moitie
+  50: { 1: "8a69eea8a71f1426be8175b35400007b", 2: "422c4dc573203eca4371d3bb335f15dc", 4: 725, 5: "{\"quartz\":299754,\"scorie\":99918}", 7: "106063985/30274200/21308109", 8: "5/11/11" },   // camp/richeQuartz/n20/g2/toutes
+  51: { },   // camp/richeQuartz/n20/g2/moitie
+  52: { 1: "8a69eea8a71f1426be8175b35400007b", 2: "85ba35ec1d2efca9b94521050dfc3d4c", 4: 725, 5: "{\"quartz\":99918,\"scorie\":299754}", 7: "106063985/30274200/21308109", 8: "5/11/11" },   // camp/richeScorie/n20/g2/toutes
+  53: { },   // camp/richeScorie/n20/g2/moitie
+  54: { 1: "f98b84fdae52a4220212938d391cc1e0", 2: "ff66153f5536e02e72d775c08e272d0a", 4: 307, 6: "23296634", 7: "211002000/70915787/0", 8: "0/10/14" },   // avantPoste/richeQuartz/n20/g2/toutes
+  55: { },   // avantPoste/richeQuartz/n20/g2/moitie
+  56: { 1: "f98b84fdae52a4220212938d391cc1e0", 2: "0fdbb6d7a13469cef26a04dcf2da9325", 4: 307, 6: "23296634", 7: "211002000/70915787/0", 8: "0/10/14" },   // avantPoste/richeScorie/n20/g2/toutes
+  57: { },   // avantPoste/richeScorie/n20/g2/moitie
+  58: { 1: "4fba900eda89f9ff551213cb610a867f", 2: "04df334c3838586b87b36cfae5ba2bcb", 4: 644, 5: "{\"quartz\":17840,\"scorie\":17840}", 6: "37550877", 7: "221593272/58340990/3665991", 8: "0/16/13" },   // base/-/n20/g2/toutes
+  59: { },   // base/-/n20/g2/moitie
+  60: { },   // camp/richeQuartz/n35/g2/toutes
+  61: { },   // camp/richeQuartz/n35/g2/moitie
+  62: { },   // camp/richeScorie/n35/g2/toutes
+  63: { },   // camp/richeScorie/n35/g2/moitie
+  64: { 1: "6051ec44132f945f2a058027e93aab15", 2: "323db72deba4d95331205da45bfe504d", 6: "2146934316", 7: "1162434000/601009644/0", 8: "0/7/14" },   // avantPoste/richeQuartz/n35/g2/toutes
+  65: { 1: "2154d31673d39dbfb19e57589af3137a", 2: "21c16c4b0a9638e3d3fd5371144b4831", 4: 174, 6: "208861901", 7: "1162434000/785946962/0" },   // avantPoste/richeQuartz/n35/g2/moitie
+  66: { 1: "6051ec44132f945f2a058027e93aab15", 2: "40c8c3ea6209a145bcb806eea2159272", 6: "2146934316", 7: "1162434000/601009644/0", 8: "0/7/14" },   // avantPoste/richeScorie/n35/g2/toutes
+  67: { 1: "2154d31673d39dbfb19e57589af3137a", 2: "c399be7e77a1e44f91ab7f6b53b407bf", 4: 174, 6: "208861901", 7: "1162434000/785946962/0" },   // avantPoste/richeScorie/n35/g2/moitie
+  68: { 1: "aeba867a899f2690d8d1c4ae5f8a78bd", 2: "02fa546af2d93c0f5dd2f8275eaaf876", 4: 309, 6: "2180325354", 7: "1251852000/513116153/0", 8: "0/13/14" },   // base/-/n35/g2/toutes
+  69: { 1: "48d2797e7b22fc9bd5b8e522252bf74a", 2: "5c8b8263e1fc4bdae0df16c7f9ae3e64", 4: 194, 6: "715139469", 7: "1251852000/715567432/0", 8: "0/4/7" },   // base/-/n35/g2/moitie
+  70: { 1: "894f42483363bc55903a6af62af26bcc", 2: "19ec2ef85c370a78a12432bbf252ac79", 4: 268, 6: "102142220371", 7: "3788524500/1704394244/0", 8: "0/6/14" },   // camp/richeQuartz/n50/g2/toutes
+  71: { },   // camp/richeQuartz/n50/g2/moitie
+  72: { 1: "894f42483363bc55903a6af62af26bcc", 2: "53beef1f56c405ccbe36ab6173bcad31", 4: 268, 6: "102142220371", 7: "3788524500/1704394244/0", 8: "0/6/14" },   // camp/richeScorie/n50/g2/toutes
+  73: { },   // camp/richeScorie/n50/g2/moitie
+  74: { 1: "4fdbbb17093aa9f34ca6cac31f38f460", 2: "0e7a10a697918c7fb79d04b4a73f4b90", 4: 251, 6: "59420550862", 7: "5069152500/3205926930/0", 8: "0/7/14" },   // avantPoste/richeQuartz/n50/g2/toutes
+  75: { 1: "dacfd8f6ccddf20da8554b39bd3d2d91", 2: "b6b62e06d082dbaffb7c4c544d218917", 6: "13823572199", 7: "5069152500/3938100901/0" },   // avantPoste/richeQuartz/n50/g2/moitie
+  76: { 1: "4fdbbb17093aa9f34ca6cac31f38f460", 2: "fe28eac11942eafed0005201e4cdfe06", 4: 251, 6: "59420550862", 7: "5069152500/3205926930/0", 8: "0/7/14" },   // avantPoste/richeScorie/n50/g2/toutes
+  77: { 1: "dacfd8f6ccddf20da8554b39bd3d2d91", 2: "28584f37cca0a008c382921f6097d081", 6: "13823572199", 7: "5069152500/3938100901/0" },   // avantPoste/richeScorie/n50/g2/moitie
+  78: { },   // base/-/n50/g2/toutes
+  79: { },   // base/-/n50/g2/moitie
+  80: { 1: "da0825e73015deb911b7baecf082d9c1", 2: "b6a3e693e9a994449f98c04865d5b650", 4: 411, 7: "6588000/0/19059851" },   // camp/richeQuartz/n5/g3/toutes
+  81: { 1: "9517ba1933d4a8490ce674ba66e680e2", 2: "37d09e8f1670b5507d8fb7ee6d9eb621", 4: 382, 6: "62925", 7: "18300000/507279/5674450" },   // camp/richeQuartz/n5/g3/moitie
+  82: { 1: "da0825e73015deb911b7baecf082d9c1", 2: "e2a71f61cf5986272ce7a25088f75853", 4: 411, 7: "6588000/0/19059851" },   // camp/richeScorie/n5/g3/toutes
+  83: { 1: "9517ba1933d4a8490ce674ba66e680e2", 2: "637b1a475757bbf9fbaafacdae35ff16", 4: 382, 6: "62925", 7: "18300000/507279/5674450" },   // camp/richeScorie/n5/g3/moitie
+  84: { 1: "d5b16c2dde4197ee151ded6b5c71e4a3", 2: "89d0997fa56944b7eb9f8138a014cc9a", 7: "8784000/0/17455523" },   // avantPoste/richeQuartz/n5/g3/toutes
+  85: { 1: "c3794f47195bbd95f36d447f8a7fc6ea", 2: "ad908c2b0e56f0a15c200939fac8e8b4", 4: 389, 6: "113165", 7: "19764000/507279/5238129" },   // avantPoste/richeQuartz/n5/g3/moitie
+  86: { 1: "d5b16c2dde4197ee151ded6b5c71e4a3", 2: "e9a60ea7c02235db0546f932b748f298", 7: "8784000/0/17455523" },   // avantPoste/richeScorie/n5/g3/toutes
+  87: { 1: "c3794f47195bbd95f36d447f8a7fc6ea", 2: "4247a63721bfbe4ff53a941433d1bb40", 4: 389, 6: "113165", 7: "19764000/507279/5238129" },   // avantPoste/richeScorie/n5/g3/moitie
+  88: { 1: "889bbb2cb57117fa237c4f83977a7337", 2: "ab65ce475be09ac7f8fac5d04a793c35", 4: 402, 7: "8784000/0/17293138", 8: "7/6/0" },   // base/-/n5/g3/toutes
+  89: { 1: "7d318a7bc08fe769cc3d72e8d38db190", 2: "f612a8192d12a763b57ee62d5c59a31a", 4: 476, 5: "{\"quartz\":5002,\"scorie\":2740}", 6: "119751", 7: "21294543/1263378/5883343", 8: "3/4/0" },   // base/-/n5/g3/moitie
+  90: { 1: "a0d169214a06bc81c6bba87d6b14694e", 2: "482802bd86d0bbd3a0016a3a383975ce", 4: 598, 5: "{\"quartz\":247759,\"scorie\":82586}", 6: "27834458", 7: "132333732/19961756/18726931", 8: "3/11/11" },   // camp/richeQuartz/n20/g3/toutes
+  91: { 1: "7328d4779cdf6d1714ca03c0501413ac", 2: "db29f50694da0c5323ba22732dd76d85", 4: 530, 6: "12257218", 7: "152900000/59185843/0", 8: "0/3/7" },   // camp/richeQuartz/n20/g3/moitie
+  92: { 1: "a0d169214a06bc81c6bba87d6b14694e", 2: "dc393b6cb9aa155e68e4239122e834fd", 4: 598, 5: "{\"quartz\":82586,\"scorie\":247759}", 6: "27834458", 7: "132333732/19961756/18726931", 8: "3/11/11" },   // camp/richeScorie/n20/g3/toutes
+  93: { 1: "7328d4779cdf6d1714ca03c0501413ac", 2: "44d1b4785251f599715340544c9363a4", 4: 530, 6: "12257218", 7: "152900000/59185843/0", 8: "0/3/7" },   // camp/richeScorie/n20/g3/moitie
+  94: { 1: "642bb4e5ed22bc60880c4c3e6213a6bc", 2: "c97a00144ab567851bc5dccc9076f749", 4: 619, 5: "{\"quartz\":26354,\"scorie\":8784}", 6: "32976104", 7: "209578242/50149060/7757982", 8: "0/14/13" },   // avantPoste/richeQuartz/n20/g3/toutes
+  95: { },   // avantPoste/richeQuartz/n20/g3/moitie
+  96: { 1: "642bb4e5ed22bc60880c4c3e6213a6bc", 2: "923b9e135efc9f711ba512a62dd7e240", 4: 619, 5: "{\"quartz\":8784,\"scorie\":26354}", 6: "32976104", 7: "209578242/50149060/7757982", 8: "0/14/13" },   // avantPoste/richeScorie/n20/g3/toutes
+  97: { },   // avantPoste/richeScorie/n20/g3/moitie
+  98: { 1: "2577ab026b444dc39a3f7cc0eb59c0b6", 2: "6e8f926af86669d5cce1d1f037428b24", 4: 383, 5: "{\"quartz\":45,\"scorie\":45}", 6: "27700675", 7: "226280064/75274211/0", 8: "0/13/14" },   // base/-/n20/g3/toutes
+  99: { 1: "fb31e5b77e610b0d2a1fbb625757e102", 2: "47d951695cc41539e8cac30c20489811", 4: 457, 5: "{\"quartz\":1367,\"scorie\":1367}", 6: "8817403", 7: "225931955/126021083/0" },   // base/-/n20/g3/moitie
+  100: { 1: "02eb0b4c67582d19b91886731ebd7d9a", 2: "84157c79d3cd65bea706fbe3b1f48fba", 4: 580, 6: "2252722164", 7: "855858000/298851822/0", 8: "0/12/14" },   // camp/richeQuartz/n35/g3/toutes
+  101: { },   // camp/richeQuartz/n35/g3/moitie
+  102: { 1: "02eb0b4c67582d19b91886731ebd7d9a", 2: "98af45971595cf4d212428a24b99865d", 4: 580, 6: "2252722164", 7: "855858000/298851822/0", 8: "0/12/14" },   // camp/richeScorie/n35/g3/toutes
+  103: { },   // camp/richeScorie/n35/g3/moitie
+  104: { 1: "dc69c0c7d7fd8dd627ab834042cabb28", 2: "ac66c9a576aee129ebffcdd1ea792602", 4: 273, 6: "1744921619", 7: "1162434000/634915839/0", 8: "0/10/14" },   // avantPoste/richeQuartz/n35/g3/toutes
+  105: { 1: "6da3d255cfae87ec1d09fc2d751cbd1c", 2: "cf5f8f6c0b0bff62e532b2de57968af6", 4: 193, 6: "697091451", 7: "1162434000/801652530/0", 8: "0/4/7" },   // avantPoste/richeQuartz/n35/g3/moitie
+  106: { 1: "dc69c0c7d7fd8dd627ab834042cabb28", 2: "e3db5c94700e26051c3ed5cd276a2529", 4: 273, 6: "1744921619", 7: "1162434000/634915839/0", 8: "0/10/14" },   // avantPoste/richeScorie/n35/g3/toutes
+  107: { 1: "6da3d255cfae87ec1d09fc2d751cbd1c", 2: "206f4f747226e7263852205fd1e5b872", 4: 193, 6: "697091451", 7: "1162434000/801652530/0", 8: "0/4/7" },   // avantPoste/richeScorie/n35/g3/moitie
+  108: { 1: "eefcc8a1c45075662c41eab10f8e4717", 2: "ebe1df804d2537b751754426275ff010", 4: 214, 6: "697729386", 7: "1251852000/769712802/0", 8: "0/4/14" },   // base/-/n35/g3/toutes
+  109: { 1: "6612267f4a25ce67a0335200780cd1d6", 2: "04ff8b1bc7e90ac6b9945659871fecd1", 4: 175, 6: "261754801", 7: "1251852000/933648937/0", 8: "0/2/7" },   // base/-/n35/g3/moitie
+  110: { 1: "5f9b559be32c7270a8eeafd5f6e8f546", 2: "c5def663ef62cb3cb00bd1d0b4891e23", 4: 335, 6: "99685414205", 7: "3788524500/2014721341/0", 8: "0/4/14" },   // camp/richeQuartz/n50/g3/toutes
+  111: { },   // camp/richeQuartz/n50/g3/moitie
+  112: { 1: "5f9b559be32c7270a8eeafd5f6e8f546", 2: "6e3fe9ec1c8f551881ddfc50d050c3d6", 4: 335, 6: "99685414205", 7: "3788524500/2014721341/0", 8: "0/4/14" },   // camp/richeScorie/n50/g3/toutes
+  113: { },   // camp/richeScorie/n50/g3/moitie
+  114: { 1: "d0f4f5781e24ed2f1e87e88fb75ff401", 2: "18ac6e9185a630c0080676180d667a2f", 4: 244, 6: "54319698300", 7: "5069152500/3010991574/0" },   // avantPoste/richeQuartz/n50/g3/toutes
+  115: { 1: "6d791eb4838c3a79269fb207dc2ec890", 2: "66751e483c5cc40f57b9560048038eca", 4: 294, 6: "53666893861", 7: "5069152500/3235140178/0" },   // avantPoste/richeQuartz/n50/g3/moitie
+  116: { 1: "d0f4f5781e24ed2f1e87e88fb75ff401", 2: "2d3ede581672d07714e6502147e8db5c", 4: 244, 6: "54319698300", 7: "5069152500/3010991574/0" },   // avantPoste/richeScorie/n50/g3/toutes
+  117: { 1: "6d791eb4838c3a79269fb207dc2ec890", 2: "8e0877ddd294b0c62c349334398cf403", 4: 294, 6: "53666893861", 7: "5069152500/3235140178/0" },   // avantPoste/richeScorie/n50/g3/moitie
+  118: { 1: "54d29cd95547afe9095fbc4e2443e0c5", 2: "50291a0087dc34dcf1687eeecce0d691", 4: 346, 6: "83114762803", 7: "5602747500/3889678579/0" },   // base/-/n50/g3/toutes
+  119: { },   // base/-/n50/g3/moitie
+  120: { 1: "facd85b15139da1be0d0b5c1f38119c1", 2: "fb7abcc59507b3ec1c20d85b8e13bd21", 7: "9516000/0/19454627" },   // camp/richeQuartz/n5/g4/toutes
+  121: { },   // camp/richeQuartz/n5/g4/moitie
+  122: { 1: "facd85b15139da1be0d0b5c1f38119c1", 2: "3eee7e6054d2d4dcc0c9ac92df0d1b84", 7: "9516000/0/19454627" },   // camp/richeScorie/n5/g4/toutes
+  123: { },   // camp/richeScorie/n5/g4/moitie
+  124: { 1: "d652786d8b9d232e9ac8ed0b98226db8", 2: "0a22b1d2bab52f5b572b71af7054f557", 7: "11712000/0/19889969" },   // avantPoste/richeQuartz/n5/g4/toutes
+  125: { 1: "3cd710a1b93f2fde60c5b5dd152d89d0", 2: "6e6cb785e0444e7ee2cbfbe374158ce4", 4: 475, 6: "58983", 7: "19032000/2717692/5563291", 8: "4/2/0" },   // avantPoste/richeQuartz/n5/g4/moitie
+  126: { 1: "d652786d8b9d232e9ac8ed0b98226db8", 2: "16c45b2dde2ac2d346b0f384d3063585", 7: "11712000/0/19889969" },   // avantPoste/richeScorie/n5/g4/toutes
+  127: { 1: "3cd710a1b93f2fde60c5b5dd152d89d0", 2: "bd8694b657271f1c87427d5eb48384d3", 4: 475, 6: "58983", 7: "19032000/2717692/5563291", 8: "4/2/0" },   // avantPoste/richeScorie/n5/g4/moitie
+  128: { 1: "aeabb433c46b9d9173998a142d5807ea", 2: "bbe1ee6bb7373ef87832842a9633516b", 4: 483, 7: "13176000/0/19124049" },   // base/-/n5/g4/toutes
+  129: { 1: "48bb167adfe4092e1d4ec1d2174fb698", 2: "9ca9073f0d3953113b8e81b49e4e1191", 4: 467, 6: "99289", 7: "20496000/2098169/5459016", 8: "4/3/0" },   // base/-/n5/g4/moitie
+  130: { 1: "14bb8ac063581f1e09e643268512da4c", 2: "93c50d29a95d632b7f77f48c0f541347", 4: 544, 5: "{\"quartz\":265383,\"scorie\":88461}", 6: "26630110", 7: "129239247/18853741/28643562", 8: "3/11/8" },   // camp/richeQuartz/n20/g4/toutes
+  131: { },   // camp/richeQuartz/n20/g4/moitie
+  132: { 1: "14bb8ac063581f1e09e643268512da4c", 2: "da0964580e2629b9bfb39c089cff2d71", 4: 544, 5: "{\"quartz\":88461,\"scorie\":265383}", 6: "26630110", 7: "129239247/18853741/28643562", 8: "3/11/8" },   // camp/richeScorie/n20/g4/toutes
+  133: { },   // camp/richeScorie/n20/g4/moitie
+  134: { 1: "40a550f87d9b620847e8ce3f0059197e", 2: "5d512b174f7447355809088682b8bf52", 4: 287, 5: "{\"quartz\":0,\"scorie\":0}", 6: "22780986", 7: "211002000/83189702/0" },   // avantPoste/richeQuartz/n20/g4/toutes
+  135: { },   // avantPoste/richeQuartz/n20/g4/moitie
+  136: { 1: "40a550f87d9b620847e8ce3f0059197e", 2: "46e40423264e54e055fa5a0a9c1af963", 4: 287, 5: "{\"quartz\":0,\"scorie\":0}", 6: "22780986", 7: "211002000/83189702/0" },   // avantPoste/richeScorie/n20/g4/toutes
+  137: { },   // avantPoste/richeScorie/n20/g4/moitie
+  138: { 1: "80b491dfb5621d3806d399b70d4f0e9c", 2: "888d2db0a5d09d311479d9ceff519214", 3: "duree", 4: 900, 5: "{\"quartz\":278667,\"scorie\":278667}", 6: "31405771", 7: "183480000/60858158/14007191", 8: "6/16/9" },   // base/-/n20/g4/toutes
+  139: { 1: "a3991385e3298c3bf2b82df1a6327669", 2: "fea44e7e0041682a9447bb425ec41039", 4: 325, 6: "11395435", 7: "226292000/115628304/0" },   // base/-/n20/g4/moitie
+  140: { 1: "dc04cf44d2959c40861b905ea97f12fe", 2: "6e073e8f7cf0e665ca572b8b21356fba", 4: 277, 6: "1187501261", 7: "855858000/446376309/0" },   // camp/richeQuartz/n35/g4/toutes
+  141: { 1: "0b54d31a225cfa8e628cb09cdd20a9d9", 2: "b74523ff2da71023e2aad4097acd55a0" },   // camp/richeQuartz/n35/g4/moitie
+  142: { 1: "dc04cf44d2959c40861b905ea97f12fe", 2: "49a04df96cedc4f16922d7fa44ca2e6e", 4: 277, 6: "1187501261", 7: "855858000/446376309/0" },   // camp/richeScorie/n35/g4/toutes
+  143: { 1: "0b54d31a225cfa8e628cb09cdd20a9d9", 2: "c39f47ac023e5dc3076318273817a537" },   // camp/richeScorie/n35/g4/moitie
+  144: { 1: "adec474d0d0ce17bdee9dd7a2e3e7b8c", 2: "f39cf0b636e256b480d47e2f447f7c19", 4: 415, 6: "3258804325", 7: "1162434000/434101187/0", 8: "0/16/14" },   // avantPoste/richeQuartz/n35/g4/toutes
+  145: { 1: "c32ed1ca5e22108a07f0edb3993272b6", 2: "798d154345250549db2b88a56f8fbce2", 4: 186, 6: "1169048370", 7: "1162434000/696941088/0", 8: "0/5/7" },   // avantPoste/richeQuartz/n35/g4/moitie
+  146: { 1: "adec474d0d0ce17bdee9dd7a2e3e7b8c", 2: "bb2b04224d257c632de268ebba17d00f", 4: 415, 6: "3258804325", 7: "1162434000/434101187/0", 8: "0/16/14" },   // avantPoste/richeScorie/n35/g4/toutes
+  147: { 1: "c32ed1ca5e22108a07f0edb3993272b6", 2: "be2183aafb3a5f333228bbf127c8072d", 4: 186, 6: "1169048370", 7: "1162434000/696941088/0", 8: "0/5/7" },   // avantPoste/richeScorie/n35/g4/moitie
+  148: { 1: "d3b57dcee658624f973f7b99c91d6124", 2: "6fc8f7960e8811002929116ef112094a", 3: "attaquants", 4: 699, 6: "3410976003", 7: "1251852000/482812850/0", 8: "0/15/14" },   // base/-/n35/g4/toutes
+  149: { },   // base/-/n35/g4/moitie
+  150: { 1: "9c52bca366216737dec940cf5ae54636", 2: "9501c9d2e7d823233710b3702d1b5d0a", 4: 286, 6: "96670527091", 7: "3788524500/1934605670/0", 8: "0/5/14" },   // camp/richeQuartz/n50/g4/toutes
+  151: { 1: "473c9bbbdcf498ab30cdfd196a9c72ed", 2: "b0fd550d00771c1311e0d3c890483147", 4: 179, 6: "17065636128", 7: "3788524500/2439944780/0", 8: "0/2/7" },   // camp/richeQuartz/n50/g4/moitie
+  152: { 1: "9c52bca366216737dec940cf5ae54636", 2: "15d1faba2e0ed9d09d3c7253bd4e1f59", 4: 286, 6: "96670527091", 7: "3788524500/1934605670/0", 8: "0/5/14" },   // camp/richeScorie/n50/g4/toutes
+  153: { 1: "473c9bbbdcf498ab30cdfd196a9c72ed", 2: "84544fac1801d3c0600923213529a1d4", 4: 179, 6: "17065636128", 7: "3788524500/2439944780/0", 8: "0/2/7" },   // camp/richeScorie/n50/g4/moitie
+  154: { 1: "62b95b496bbf4e6e79285ca95e5434b4", 2: "a204f3af988c080a3dd6a692bb9903d7", 4: 308, 6: "69373679680", 7: "5069152500/2558193456/0", 8: "0/11/14" },   // avantPoste/richeQuartz/n50/g4/toutes
+  155: { 1: "998e79fca92318350b9c4a4943ade56a", 2: "50819885472e0bc8ea95ea554ec94525", 4: 279, 6: "21285161371", 7: "5069152500/3638355272/0" },   // avantPoste/richeQuartz/n50/g4/moitie
+  156: { 1: "62b95b496bbf4e6e79285ca95e5434b4", 2: "0ef834a0dfa8580cc44e6ae9206b4f59", 4: 308, 6: "69373679680", 7: "5069152500/2558193456/0", 8: "0/11/14" },   // avantPoste/richeScorie/n50/g4/toutes
+  157: { 1: "998e79fca92318350b9c4a4943ade56a", 2: "4046e73709b004cb9e21a224be6e7881", 4: 279, 6: "21285161371", 7: "5069152500/3638355272/0" },   // avantPoste/richeScorie/n50/g4/moitie
+  158: { },   // base/-/n50/g4/toutes
+  159: { },   // base/-/n50/g4/moitie
+  160: { 1: "42bc9c25c549c205ba1adcc6bf7acdbe", 2: "e5d6ccabdac93260011f66fd5192756a", 4: 453, 7: "9516000/0/19989138" },   // camp/richeQuartz/n5/g5/toutes
+  161: { },   // camp/richeQuartz/n5/g5/moitie
+  162: { 1: "42bc9c25c549c205ba1adcc6bf7acdbe", 2: "07f9f5f678edd2c4f3699c105d04eed3", 4: 453, 7: "9516000/0/19989138" },   // camp/richeScorie/n5/g5/toutes
+  163: { },   // camp/richeScorie/n5/g5/moitie
+  164: { 1: "8a8f7913d5467522a3bd3bf41196358c", 2: "81302176a22c79776407d87d875becd4", 4: 447, 7: "10980000/0/18324836", 8: "7/5/1" },   // avantPoste/richeQuartz/n5/g5/toutes
+  165: { 1: "4c24cfe1943fa37d3f77fdfc2c948250", 2: "f1cf24b0f5a866f236e5d085021fe689", 4: 449, 7: "15372000/724972/6536695" },   // avantPoste/richeQuartz/n5/g5/moitie
+  166: { 1: "8a8f7913d5467522a3bd3bf41196358c", 2: "1c3a8a65baa70807f12b61f25b092b96", 4: 447, 7: "10980000/0/18324836", 8: "7/5/1" },   // avantPoste/richeScorie/n5/g5/toutes
+  167: { 1: "4c24cfe1943fa37d3f77fdfc2c948250", 2: "0880d1d7801573aeb623e79fbba0ea93", 4: 449, 7: "15372000/724972/6536695" },   // avantPoste/richeScorie/n5/g5/moitie
+  168: { 1: "5dcf3b25b1d29e5de447e2bdb33bee4d", 2: "dd67bfee99420fb9788e2e6e083eacb1", 7: "13908000/0/18476057" },   // base/-/n5/g5/toutes
+  169: { 1: "c5d7a15aa75b5d6ad07dd631f175aac9", 2: "e758b8595635e5c8e877d4405a43ffa0", 4: 460, 6: "108793", 7: "17568000/1710429/6674087" },   // base/-/n5/g5/moitie
+  170: { 1: "dcc93c6d0c92ea5a4faa3364ecfec9b7", 2: "bec4e8edc161770566b6bf2317767ab2", 4: 737, 5: "{\"quartz\":371393,\"scorie\":123797}", 6: "25776642", 7: "110626208/15290000/40974650", 8: "5/13/6" },   // camp/richeQuartz/n20/g5/toutes
+  171: { 1: "b811da466b2ec6bf4c45dc41a020f616", 2: "49b3dfbe6a60d0da4dad21ccfbb4e534", 4: 361, 6: "11039460", 7: "152900000/53491516/0" },   // camp/richeQuartz/n20/g5/moitie
+  172: { 1: "dcc93c6d0c92ea5a4faa3364ecfec9b7", 2: "a4be1391e122802fe71239ca13c73eb6", 4: 737, 5: "{\"quartz\":123797,\"scorie\":371393}", 6: "25776642", 7: "110626208/15290000/40974650", 8: "5/13/6" },   // camp/richeScorie/n20/g5/toutes
+  173: { 1: "b811da466b2ec6bf4c45dc41a020f616", 2: "6493e54c79d0c0dbafbd380e89d177eb", 4: 361, 6: "11039460", 7: "152900000/53491516/0" },   // camp/richeScorie/n20/g5/moitie
+  174: { 1: "7b8cf98cb121d51ad96db261ce428d7d", 2: "d079d6715b09e9ce63912db8f7cf3596", 4: 503, 5: "{\"quartz\":187,\"scorie\":62}", 6: "23444126", 7: "210991874/71174958/0" },   // avantPoste/richeQuartz/n20/g5/toutes
+  175: { 1: "116abdf4f06cf694be6bdb7739a74362", 2: "fd544491c7a97c16447585dc6bdf1c9f", 4: 249, 6: "10163825", 7: "211002000/113954245/0", 8: "0/5/7" },   // avantPoste/richeQuartz/n20/g5/moitie
+  176: { 1: "7b8cf98cb121d51ad96db261ce428d7d", 2: "b9ef50b15ee9773fb69d8996c5359074", 4: 503, 5: "{\"quartz\":62,\"scorie\":187}", 6: "23444126", 7: "210991874/71174958/0" },   // avantPoste/richeScorie/n20/g5/toutes
+  177: { 1: "116abdf4f06cf694be6bdb7739a74362", 2: "90d8894e68310ab3ee229431800e2044", 4: 249, 6: "10163825", 7: "211002000/113954245/0", 8: "0/5/7" },   // avantPoste/richeScorie/n20/g5/moitie
+  178: { 1: "a406be3c6fad4e6a1753cf7ce63de528", 2: "ff7587aa0a1158ee1f07406ed1851da0", 4: 350, 6: "26706801", 7: "226292000/74000250/0", 8: "0/13/14" },   // base/-/n20/g5/toutes
+  179: { 1: "8e7c9a573afcb4d3c79366eeef83f041", 2: "25f9bc9f25604a34bb07691d87205cb5", 4: 266, 6: "11873377", 7: "226292000/115175782/0", 8: "0/5/7" },   // base/-/n20/g5/moitie
+  180: { 1: "8ecbbd65cf0696b9e31f12723a5c91bc", 2: "7574438fb42da9d3f0b0cd5c2be8aa4d", 4: 292, 6: "610683841", 7: "855858000/373153895/0" },   // camp/richeQuartz/n35/g5/toutes
+  181: { },   // camp/richeQuartz/n35/g5/moitie
+  182: { 1: "8ecbbd65cf0696b9e31f12723a5c91bc", 2: "528a2021b454a4e4e34525ddbeb24f57", 4: 292, 6: "610683841", 7: "855858000/373153895/0" },   // camp/richeScorie/n35/g5/toutes
+  183: { },   // camp/richeScorie/n35/g5/moitie
+  184: { 1: "a497d68e691b84885d62e401f08bdc00", 2: "4dbe4b4f792b79b26162af95669cc3aa", 4: 265, 6: "1526588556", 7: "1162434000/574454495/0", 8: "0/6/14" },   // avantPoste/richeQuartz/n35/g5/toutes
+  185: { 2: "2b224e614cc3ee87d87ecb86ecdeec41" },   // avantPoste/richeQuartz/n35/g5/moitie
+  186: { 1: "a497d68e691b84885d62e401f08bdc00", 2: "aa0dc24c9e4f3d561ed36dba19c0eae5", 4: 265, 6: "1526588556", 7: "1162434000/574454495/0", 8: "0/6/14" },   // avantPoste/richeScorie/n35/g5/toutes
+  187: { 2: "04e9c9b5d0da5a5d636b861ce799597d" },   // avantPoste/richeScorie/n35/g5/moitie
+  188: { 1: "2dc2bd8ac600c625c3375d42e1fcfb03", 2: "6cd08346a001bf18e513ba80b9b11903", 4: 297, 6: "2210146932", 7: "1251852000/592748688/0", 8: "0/11/14" },   // base/-/n35/g5/toutes
+  189: { 1: "c7b7fb01bc82d745ec828f0d82b14adf", 2: "c7c14e37799946d30e9b0411ac98c160", 4: 353, 6: "1020260673", 7: "1251852000/767926249/0" },   // base/-/n35/g5/moitie
+  190: { 2: "0d2d9333f1721a9899d59bc91753bac0" },   // camp/richeQuartz/n50/g5/toutes
+  191: { },   // camp/richeQuartz/n50/g5/moitie
+  192: { 2: "4be185a623b0ca0dafc42cd39e88f7fe" },   // camp/richeScorie/n50/g5/toutes
+  193: { },   // camp/richeScorie/n50/g5/moitie
+  194: { },   // avantPoste/richeQuartz/n50/g5/toutes
+  195: { },   // avantPoste/richeQuartz/n50/g5/moitie
+  196: { },   // avantPoste/richeScorie/n50/g5/toutes
+  197: { },   // avantPoste/richeScorie/n50/g5/moitie
+  198: { },   // base/-/n50/g5/toutes
+  199: { },   // base/-/n50/g5/moitie
+};

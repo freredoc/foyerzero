@@ -743,24 +743,51 @@ test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 e
   // postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI / 307
   // lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image ni un
   // son — il range un MONTAGE dans un rapport : la borne NE BOUGE PAS.
-  // ⚠⚠ RÉANCRÉ AU LOT ÉCRANS, 13/09, ET SON ANCRE MENTAIT DÉJÀ AVANT CE LOT-CI.
-  // Elle écrivait **9 384 775**, la mesure du lot REJEU ; le lot CONTACT est
-  // passé dessus sans la toucher et a porté le disque à **9 385 049** — soit
-  // **274 octets** de dérive, très en dessous de la tolérance de 50 000, donc
-  // VERTE et fausse. Ce lot-ci en ajoute 589, ce qui l'aurait portée à 863 sans
-  // qu'un test bronche, pendant que le §0 de `CLAUDE.md` aurait annoncé une
-  // marge que ce fichier-ci contredisait. **C'est exactement ce que la dernière
-  // assertion de ce test existe pour empêcher** — « la tolérance garde contre la
-  // dérive LENTE, pas contre un lot qui sait ce qu'il déplace ».
-  //
-  // ⚠ ET LE LOT NE FAIT ENTRER AUCUNE RESSOURCE : **+589 octets, ENTIÈREMENT DU
-  // JAVASCRIPT** — feuille +0 · balisage +0 · images +0 · audio +0, et **306 URI
-  // `data:` de part et d'autre**. Deux lignes d'affichage, dans deux fichiers de
-  // `src/ui/`. La borne T10, elle, NE BOUGE PAS.
+  // ⚠⚠ ET LE LOT CONTACT NE L'A PAS RÉANCRÉ, ALORS QU'IL DÉPLAÇAIT 274 OCTETS
+  // — TROUVÉ PAR LE LOT CONTACT-2, EN LE RÉANCRANT. Ce test écrivait encore
+  // **9 384 775**, la mesure du lot REJEU, quand le disque en rendait
+  // **9 385 049** ; la §0 de `CLAUDE.md`, elle, annonçait déjà 9 385 049 et une
+  // marge de **214 951 octets**, là où ce test-ci écrivait 215 225. **Les deux
+  // documents se contredisaient**, et la suite était VERTE : 274 octets valent
+  // un cent-quatre-vingt-deuxième de la tolérance de 50 000, et les deux marges
+  // s'arrondissent à 2,24 %. C'est TRÈS EXACTEMENT la dérive LENTE que la
+  // dernière assertion de ce test existe pour refuser, commise par le lot
+  // précédent. **Quatrième réancrage**, après VITESSE, BARÈME-ET-REJEU et REJEU.
+  // ⚠ VENTILÉ POSTE PAR POSTE contre le livrable rebâti dans un `git worktree`
+  // sur l'arbre pristine de `main` = `f21ba4e` (**9 385 049**) : **JavaScript
+  // +359 · feuille +0 · balisage +0 · images +0 · audio +0**, la somme des cinq
+  // postes tombant EXACTEMENT sur le total des DEUX côtés, et **306 URI / 307
+  // lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image ni
+  // un son — il élargit une fenêtre de balayage : la borne NE BOUGE PAS.
+  // ⚠⚠ RÉANCRÉ UNE CINQUIÈME FOIS AU LOT ÉCRANS, 13/09, ET CELUI-CI EST UN
+  // RÉANCRAGE DE FUSION. Le lot ÉCRANS et le lot CONTACT-2 ont été écrits en
+  // parallèle sur la MÊME base, `f21ba4e` : chacun a mesuré son coût contre elle
+  // — CONTACT-2 **+359**, ÉCRANS **+589** — et chacun a écrit SON ancre. Les deux
+  // ancres étaient justes séparément et **fausses ensemble**, ce qui est très
+  // exactement la faute que `CLAUDE.md` §6 nomme ailleurs : « deux modules justes
+  // séparément peuvent être faux ensemble ». CONTACT-2 ayant atterri le premier,
+  // c'est la fusion qui porte le nombre du disque.
+  // ⚠⚠ ET LE NOMBRE NE S'ADDITIONNE PAS, IL SE MESURE — la contrainte est écrite
+  // au lot ARRIVÉE-CARTE-ET-BUILD, qui avait relevé **six octets** d'écart entre
+  // la somme de deux diffs et le livrable fusionné, les deux lots partageant un
+  // fichier. Ici ils n'en partagent aucun du livrable — CONTACT-2 touche
+  // `src/sim/combat.js`, ÉCRANS `src/ui/chantier.js` et `src/ui/rapport.js` — et
+  // **la mesure le confirme au lieu de le supposer** : `main` pristine à
+  // `0c4a546` rend **9 385 408**, le fusionné **9 385 997**, soit **+589**, le
+  // coût d'ÉCRANS à l'octet.
+  // ⚠ VENTILÉ POSTE PAR POSTE contre ce pristine-là : **JavaScript +589 ·
+  // feuille +0 · balisage +0 · images +0 · audio +0**, la somme des cinq postes
+  // tombant EXACTEMENT sur le total des DEUX côtés (écart 0 · 0), et **306 URI /
+  // 307 lignes `data:` de part et d'autre**. Le lot ne fait entrer ni une image
+  // ni un son — deux lignes d'affichage : la borne NE BOUGE PAS.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_385_638;          // remesuré au lot ÉCRANS, base `f21ba4e`
-  const MARGE = BORNE - MESURE;      // 214 362 octets — 215 225 avant ce lot
-  assert.equal(MARGE, 214_362);
+  const MESURE = 9_385_997;          // remesuré à la fusion ÉCRANS, base `0c4a546`
+  const MARGE = BORNE - MESURE;      // 214 003 octets — 214 592 écrits par CONTACT-2
+  assert.equal(MARGE, 214_003);
+  assert.notEqual(MARGE, 215_225,
+    'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
+  assert.notEqual(MARGE, 214_592,
+    'la marge est celle de CONTACT-2 seul : la fusion avec ÉCRANS a été défaite');
   assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.23);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des

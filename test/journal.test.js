@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 
 import {
   creerCombat, tick, resoudre, serialiserEtat, butin, pointsRecherche,
-  TICKS_PAR_VAGUE,
+  TICKS_PAR_VAGUE, ECRASEMENT_TICKS,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
@@ -31,6 +31,8 @@ import {
   COMBATS_DEPLACES_PAR_BAREME_ET_REJEU_AVANT_PAQUETS,
   COMBATS_DEPLACES_PAR_CONTACT,
   COMBATS_DEPLACES_PAR_CONTACT_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_CONTACT_2,
+  COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -183,6 +185,10 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
     // donc la dernière écrite l'emporte : ce que CONTACT déplace gagne, sinon
     // ce que BARÈME-ET-REJEU déplaçait, sinon le témoin d'APPROCHE.
     const deplacesContact = COMBATS_DEPLACES_PAR_CONTACT[i] ?? {};
+    // ⚠⚠ ET LE LOT CONTACT-2 EN EMPILE UNE TROISIÈME, IL NE REMPLACE AUCUNE DES
+    // DEUX AUTRES. Même doctrine, même ordre de lecture : la plus récente
+    // l'emporte, sinon CONTACT, sinon BARÈME-ET-REJEU, sinon le témoin d'APPROCHE.
+    const deplacesContact2 = COMBATS_DEPLACES_PAR_CONTACT_2[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
       let reference = attendu[c];
       let couvert = false;
@@ -192,6 +198,10 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
       }
       if (Object.prototype.hasOwnProperty.call(deplacesContact, c)) {
         reference = deplacesContact[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesContact2, c)) {
+        reference = deplacesContact2[c];
         couvert = true;
       }
       if (couvert) surcharges += 1;
@@ -222,10 +232,27 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
   // trente-six. ⚠ Le brief en déduisait 514 gardés par simple soustraction
   // `1 600 − 1 086` ; c'est la couche SEULE, pas l'empilement, et le nombre juste
   // est 475. Mesuré, pas recopié.
-  assert.equal(surcharges, 1125, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : LA SURCHARGE PASSE DE 1 125 À **1 153**, ET IL
+  // RESTE **447 CHAMPS GARDÉS** contre la capture d'APPROCHE. La couche neuve
+  // déplace **907 champs sur 1 600** — mais **879 d'entre eux étaient DÉJÀ
+  // surchargés** par CONTACT ou par BARÈME-ET-REJEU : le compte est l'UNION des
+  // trois couches, pas leur somme, et il ne monte donc que de vingt-huit.
+  //
+  // ⚠⚠ ET **VINGT-TROIS COMBATS SONT INTACTS**, là où les deux couches d'avant
+  // touchaient les deux cents. C'est la mesure qui dit que ce lot-ci ne
+  // recompose rien : il ferme un chevauchement en travers et étale l'écrasement
+  // sur quatre ticks, donc un combat où aucune pièce ne mord sur deux index et
+  // où rien n'écrase ne bouge pas d'un bit. Le compte est asserté pour qu'une
+  // couche qui s'élargirait en silence fasse tomber ce test.
+  assert.equal(surcharges, 1153, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT).length, 200);
-  assert.equal(champs - surcharges, 475, 'le compte des champs encore gardés a changé');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_2).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_CONTACT_2).filter((d) => Object.keys(d).length > 0).length,
+    177, 'la couche de CONTACT-2 a changé de largeur');
+  assert.equal(champs - surcharges, 447, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -293,6 +320,14 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
           // du lot BARÈME-ET-REJEU, et c'est la mesure qui dit que ce lot déplace
           // le même axe qu'ARRÊT, COLONNE, MUR et BARÈME-ET-REJEU : la FILE.
           const deplacesContact = COMBATS_DEPLACES_PAR_CONTACT_AVANT_PAQUETS[i] ?? {};
+          // ⚠⚠ ET LE LOT CONTACT-2 EN AJOUTE UNE HUITIÈME. Même doctrine, huitième
+          // fois : on empile, on ne remplace pas. ⚠ Elle déplace 764 champs et
+          // n'en ajoute qu'**UN SEUL** à la surcharge — 763 étaient déjà couverts
+          // par l'une des sept d'avant, exactement comme la couche du lot
+          // CONTACT. C'est la mesure qui dit que ce lot déplace le même axe que
+          // les cinq précédents — la FILE —, plus l'instant de la mort d'une
+          // écrasée, et ni le tir ni le ciblage.
+          const deplacesContact2 = COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
@@ -314,6 +349,9 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
             if (Object.prototype.hasOwnProperty.call(deplacesContact, c)) {
               reference = deplacesContact[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesContact2, c)) {
+              reference = deplacesContact2[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
@@ -323,7 +361,8 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
               || Object.prototype.hasOwnProperty.call(deplacesFlottant, c)
               || Object.prototype.hasOwnProperty.call(deplacesMur, c)
               || Object.prototype.hasOwnProperty.call(deplacesBareme, c)
-              || Object.prototype.hasOwnProperty.call(deplacesContact, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesContact, c)
+              || Object.prototype.hasOwnProperty.call(deplacesContact2, c)) surcharges += 1;
           }
           i += 1;
     }
@@ -388,7 +427,21 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
   // contact déplace le MÊME axe qu'ARRÊT, COLONNE, MUR et BARÈME-ET-REJEU — la
   // FILE. Un lot qui aurait touché au tir ou au ciblage aurait fait sauter les
   // 266, qui sont pour l'essentiel des CAUSES de fin ; trois seulement bougent.
-  assert.equal(surcharges, 1334, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : LA HUITIÈME COUCHE DÉPLACE **764 CHAMPS** ET LA
+  // SURCHARGE MONTE DE **1 334 À 1 335**, LES GARDÉS DE 266 À **265**. Un seul
+  // champ neuf, comme au lot CONTACT : **763 des 764 étaient déjà couverts** par
+  // l'une des sept d'avant. Sixième lot d'affilée à n'ajouter qu'un ou deux
+  // champs à l'union, et c'est la mesure qui dit que ce lot déplace le même axe
+  // que les cinq précédents — la FILE —, plus l'instant de la mort d'une
+  // écrasée, et ni le tir ni le ciblage : ceux-là auraient fait sauter les 265,
+  // qui sont pour l'essentiel des CAUSES de fin. **Deux seulement bougent.**
+  //
+  // ⚠ ET CINQUANTE ET UN COMBATS SONT INTACTS ICI, CONTRE VINGT-TROIS DANS `T1` :
+  // l'ancien placement fait naître les vagues sur le front de la bande de
+  // déploiement, donc moins de pièces se croisent en travers en approchant, donc
+  // la fenêtre élargie mord moins souvent.
+  assert.equal(surcharges, 1335, `champs surchargés : ${surcharges}`);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
@@ -396,7 +449,12 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUR_AVANT_PAQUETS).length, 127);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU_AVANT_PAQUETS).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_AVANT_PAQUETS).length, 200);
-  assert.ok(champs - surcharges === 266, 'le compte des champs encore gardés a changé');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS)
+      .filter((d) => Object.keys(d).length > 0).length,
+    149, 'la couche de CONTACT-2 a changé de largeur');
+  assert.ok(champs - surcharges === 265, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -625,6 +683,7 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   let ticks = 0;
   let vus = 0;
   let parts = [];
+  const ecartsNonPublies = [];
   while (!etat.termine && ticks < 400) {
     const pvAvant = new Map(etat.entites.map((e) => [e.indice, e.pvMilli]));
     tick(etat);
@@ -657,9 +716,16 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
         continue;
       }
       const perdu = pvAvant.get(i.indice) - e.pvMilli;
-      if (e.ecrase !== true) {
-        assert.ok(i.encaisseMilli >= perdu,
-          `encaissé ${i.encaisseMilli} < PV perdus ${perdu}`);
+      // ⚠⚠ LOT CONTACT-2 : L'EXCEPTION SE RELÈVE AU LIEU DE S'AUTORISER, ET
+      // C'EST UN RESSERREMENT. `e.ecrase` n'est posé qu'À LA MORT ; l'écrasement
+      // dure désormais QUATRE ticks, donc une pièce qui perd son quart pendant
+      // les trois premiers n'a pas encore le drapeau, et le `if` d'avant ne la
+      // couvrait plus — mesuré, c'est exactement par là que ce test est tombé.
+      // On ne désarme donc pas la garde : on RELÈVE chaque écart, et on le juge
+      // en bloc plus bas, contre une caractérisation POSITIVE qui peut tomber.
+      if (i.encaisseMilli < perdu) {
+        ecartsNonPublies.push({ indice: i.indice, perdu, encaisse: i.encaisseMilli,
+          quantum: Math.ceil(e.pvMaxMilli / ECRASEMENT_TICKS) });
       }
       parts.push(Math.round((1000 * i.encaisseMilli) / i.pvMaxMilli));
       vus += 1;
@@ -727,10 +793,63 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   // elle, les distingue — `[24, 28, 79]` sous le chevauchement rouvert,
   // `[28, 79]` sous la règle du contact — et elle NOMME la pièce qui a changé
   // de sort au lieu de compter.
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : `[28, 79]` → **`[10, 20, 21, 28]`**, ET LE COMPTE
+  // MONTE DE DEUX À QUATRE. Mesuré pièce par pièce contre le livrable pristine de
+  // `main` = `f21ba4e` :
+  //
+  //                                    AVANT              APRÈS
+  //   Carapace ATTAQUANTE, ind. 79     tick 64            JAMAIS
+  //   Guetteur de garnison, ind. 28    tick 155           tick 164
+  //   Carapace de garnison, ind. 10    —                  tick 222
+  //   ind. 20 et 21                    —                  écrasés
+  //   impacts publiés                  1 324              1 314
+  //   ticks de combat                  281                303
+  //
+  // ⚠⚠ ET LA CARAPACE 79 NE MEURT PLUS ÉCRASÉE PARCE QU'ELLE MEURT AUTREMENT :
+  // l'écrasement prend quatre ticks au lieu d'un, donc une victime a le temps de
+  // tomber sous le TIR pendant qu'on l'écrase, et c'est alors une mort ordinaire.
+  // C'est le lot qui travaille, pas un écrasement perdu — voir `CONTACT-2 T1`,
+  // qui mesure les quatre ticks sur un montage où rien d'autre ne tire.
   const ecrasees = etat.entites.filter((e) => e.ecrase === true)
     .map((e) => e.indice).sort((a, b) => a - b);
-  assert.deepEqual(ecrasees, [28, 79],
+  assert.deepEqual(ecrasees, [10, 20, 21, 28],
     `le montage écrase ${ecrasees.join(', ')} : l'exception ci-dessus ne se mesure plus`);
+  assert.notDeepEqual(ecrasees, [28, 79],
+    'la liste des écrasées est revenue à celle du lot CONTACT : l’écrasement a cessé de durer');
+
+  // ⚠⚠ ET L'EXCEPTION EST JUGÉE ICI, SUR UNE CARACTÉRISATION POSITIVE QUI PEUT
+  // TOMBER — l'idiome de `DETTES_ACCENT`, et un RESSERREMENT sur le `if` d'avant.
+  // Un impact publie ce que la cible a ENCAISSÉ ; une pièce peut perdre DAVANTAGE
+  // le même tick, et il n'y a qu'une façon que ça arrive : l'ÉCRASEMENT, qui
+  // retire `ceil(pvMax / ECRASEMENT_TICKS)` à l'étape 7, hors de
+  // `appliquerDegats`, donc sans publier d'impact. Trois choses sont donc exigées
+  // de CHAQUE écart, et aucune n'est un `ok` de complaisance : la pièce finit
+  // ÉCRASÉE, l'excès vaut AU PLUS un quantum d'écrasement, et le compte est exact.
+  //
+  // ⚠ MESURÉ : **cinq écarts sur 1 314 impacts, deux pièces** — la Carapace 10
+  // sur QUATRE ticks consécutifs (219 à 222), dont les trois premiers à l'excès
+  // EXACT du quantum (13 252 800) et le dernier au reste (8 973 481), et le
+  // Guetteur 28 sur un seul tick. Les deux autres écrasées n'encaissent aucun tir
+  // pendant leur écrasement, donc elles ne publient aucun impact à comparer.
+  // Sur l'arbre d'avant, les mêmes trois exigences tenaient sur DEUX écarts d'un
+  // tick chacun : la garde n'est pas relâchée, elle est dite.
+  const indicesEnEcart = [...new Set(ecartsNonPublies.map((x) => x.indice))].sort((a, b) => a - b);
+  assert.deepEqual(indicesEnEcart, [10, 28],
+    `des pièces perdent plus que leur impact sans être écrasées : ${indicesEnEcart.join(', ')}`);
+  for (const x of indicesEnEcart) {
+    assert.ok(ecrasees.includes(x),
+      `la pièce ${x} perd plus que son impact et n'est pas écrasée : le journal ment`);
+  }
+  for (const e of ecartsNonPublies) {
+    assert.ok(e.perdu - e.encaisse <= e.quantum,
+      `la pièce ${e.indice} perd ${e.perdu - e.encaisse} de plus que son impact, `
+      + `au-dessus du quantum d'écrasement ${e.quantum} : ce n'est plus l'exception connue`);
+  }
+  assert.equal(ecartsNonPublies.length, 5,
+    `${ecartsNonPublies.length} écarts au lieu des 5 mesurés`);
+  assert.ok(ecartsNonPublies.length > 0,
+    'aucun écart : l’exception a cessé d’être exercée, et les gardes ci-dessus sont vacueuses');
   // ⚠⚠ ET LA PART EST BORNÉE, CE QUE LE MONTANT N'EST PAS. C'est la mesure qui
   // justifie `IMPACT_LOURD_MILLIEMES` : un seuil ABSOLU serait ininterprétable,
   // `facteurMilli` mettant dégâts et PV à l'échelle ensemble.

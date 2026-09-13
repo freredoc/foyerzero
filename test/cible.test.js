@@ -348,7 +348,19 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // ce test tient est inchangé depuis le lot 3C, à travers les huit réancrages :
   // **le raid ne se termine pas faute de mieux**, et la cause reste
   // `attaquants`.
-  assert.equal(r.nbTicks, 334);
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : 334 → 308, ET L'ATTRIBUTION EST MESURÉE. Ce
+  // n'est PAS la fenêtre élargie de la famille B — en ramenant le balayage
+  // perpendiculaire de `margeDeContact` à la seule colonne du milieu, ce raid
+  // rend EXACTEMENT les mêmes 308 ticks et le même butin. Ce n'est pas non plus
+  // le quart de PV ni le frein : à `ECRASEMENT_TICKS = 1` et
+  // `ECRASEMENT_FREIN = 1`, il rend 307. Les vingt-six ticks viennent de ce que
+  // l'écrasement se paie désormais au CONTACT et non plus au FRANCHISSEMENT de
+  // l'index : l'assaut lourd tue ses bloqueuses un tick plus tôt, à chaque
+  // rencontre, et le raid se conclut d'autant. Ce que ce test tient est
+  // inchangé depuis le lot 3C, à travers les neuf réancrages : **le raid ne se
+  // termine pas faute de mieux**, et la cause reste `attaquants`.
+  assert.equal(r.nbTicks, 308);
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -409,7 +421,13 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // arrive donc un peu plus entamé devant les bâtiments, et le multiplicateur de
   // 3,25 de l'avant-poste amplifie la baisse comme il amplifiait la hausse.
   // **Aucun barème n'a été touché**, et la cause reste `attaquants`.
-  assert.deepEqual(r.butin, { quartz: 17_962, scorie: 5_987 });
+  // ⚠ LOT CONTACT-2 (13/09) : 20 898 et 6 966, soit +16,4 %, pour vingt-six
+  // ticks de MOINS. Le sens surprend et il se lit : l'assaut lourd ne perd plus
+  // un tick par bloqueuse écrasée, donc il arrive plus tôt et plus nombreux
+  // devant les bâtiments, qu'il griffe davantage avant de tomber — et le
+  // multiplicateur de 3,25 de l'avant-poste amplifie la hausse comme il
+  // amplifiait les baisses. **Aucun barème n'a été touché.**
+  assert.deepEqual(r.butin, { quartz: 20_898, scorie: 6_966 });
   // ⚠ ET LE SURVIVANT REVIENT — trois au premier geste, **quatre** au second.
   // La première moitié du lot faisait s'arrêter les anti-structure sous le feu
   // des tourelles ; la seconde écarte les défenseuses de leur trajet. Les deux
@@ -434,6 +452,7 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   let ticksVises = 0;
   let dcaVises = 0;
   let dcaSteriles = 0;
+  let plusLong = 0;
 
   for (const { nom, montage } of balayage()) {
     const etat = creerCombat(montage);
@@ -466,6 +485,7 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
       }
     }
     if (etat.cause === 'duree') expires.push(nom);
+    if (etat.tick > plusLong) plusLong = etat.tick;
   }
 
   assert.equal(raids, 54, '3 préréglages × 3 types × 6 graines');
@@ -642,10 +662,26 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   //
   // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
   // n'importe quel autre raid. Celui-là, et personne d'autre.
+  //
+  // ⚠⚠ LOT CONTACT-2 (13/09) : LA LISTE EST VIDE, ET C'EST LA SECONDE FOIS DE
+  // SON HISTOIRE APRÈS LE LOT ARRÊT. `infanterie/base/3` sort à son tour — il se
+  // conclut désormais sous le plafond. Le sens se lit : l'écrasement se paie au
+  // CONTACT et non plus au franchissement de l'index, donc une file se dénoue un
+  // tick plus tôt à chaque bloqueuse écrasée, et ce qui traînait conclut.
+  //
+  // ⚠⚠ ET UNE LISTE VIDE NE SE LAISSE PAS ASSERTER TOUTE SEULE — ELLE PASSERAIT
+  // SUR UN BALAYAGE QUI NE MESURERAIT PLUS RIEN. Les deux planchers ci-dessus
+  // (54 raids, plus de 40 000 ticks-entités) le refusent déjà ; on y ajoute le
+  // PIRE des cinquante-quatre, qui dit ce que l'ensemble vide ne dit pas :
+  // **895 ticks pour `mixte/base/1`, soit cinq ticks sous le plafond.** Le vide
+  // ne tient qu'à un cheveu, et c'est ce qu'il faut savoir — un test qui
+  // n'annoncerait que l'ensemble vide laisserait croire à une marge.
   assert.deepEqual(
-    expires.sort(), ['infanterie/base/3'],
+    expires.sort(), [],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
+  assert.equal(plusLong, 895, 'le plus long des cinquante-quatre');
+  assert.ok(plusLong < 900, 'et il tient sous le plafond — sinon il serait dans la liste');
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.
   assert.ok(dcaVises > 0, 'le balayage doit contenir des pièces anti-aériennes');
   assert.equal(dcaSteriles, 0, 'la DCA ne vise plus rien qu\'elle ne puisse abattre');

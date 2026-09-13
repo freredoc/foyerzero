@@ -23,15 +23,23 @@ tranche.
 
 ## 1. Ce qui est mesuré
 
-| | |
-|---|---|
-| `npm run check` | **exit 0** |
-| `npm test` | **1608 déclarés · 1607 pass · 0 fail · 1 skipped** |
-| `npm run build` | `dist/index.html`, **9 385 638 octets**, 0 référence externe |
-| Version · build | **0.99.56 · build 158** — les DEUX restent des CHAÎNES, vérifié au type |
-| `SAVE_VERSION` | **33, inchangé** — démontré au §5, pas supposé |
-| Borne T10 | **9 600 000, non touchée** — le lot ne fait entrer aucune ressource |
-| Marge | **214 362 octets, 2,23 %** |
+⚠⚠ **DEUX COLONNES, ET C'EST LA SECONDE QUI DÉCRIT CE QUI EST LIVRÉ.** Ethan a
+fusionné la PR #141 — lot CONTACT-2 — pendant que celle-ci était ouverte : `main`
+est passé de `f21ba4e` à `0c4a546`, et le lot a dû être fusionné et **remesuré**.
+Le §9 raconte la fusion. La colonne « seul » est gardée parce qu'elle dit contre
+quoi le lot a été écrit et vérifié ; **la colonne « fusionné » est celle du
+disque**.
+
+| | mesuré seul (`f21ba4e`) | **livré, fusionné (`0c4a546`)** |
+|---|---|---|
+| `npm run check` | exit 0 | **exit 0** |
+| `npm test` | 1608 décl. · 1607 pass · 0 fail · 1 skip | **1609 décl. · 1608 pass · 0 fail · 1 skip** |
+| `npm run build` | 9 385 638 octets | **9 385 997 octets**, 0 référence externe |
+| Version · build | 0.99.56 · build 158 | **0.99.57 · build 159** — les DEUX restent des CHAÎNES, vérifié au type |
+| `SAVE_VERSION` | 33, inchangé | **33, inchangé** — démontré au §5, pas supposé |
+| Borne T10 | 9 600 000, non touchée | **9 600 000, non touchée** |
+| Marge | 214 362 octets, 2,23 % | **214 003 octets, 2,23 %** |
+| Coût | +589, entièrement JS | **+589, entièrement JS** — le même nombre, MESURÉ |
 
 Le skipped est `LIMITE T8`, suspendu par Ethan le 08/09 ; il l'était déjà.
 
@@ -428,3 +436,99 @@ navigateur : tout est mesuré sur les fonctions PURES — `lignesDuResultat`,
 Le §6 demande `claude/[descriptive]` ; l'environnement d'exécution épingle la
 session à **`claude/new-session-ic99ey`** et interdit de pousser ailleurs sans
 autorisation explicite. **PR ouverte, jamais fusionnée**, comme le brief l'exige.
+
+
+---
+
+## 9. La fusion — `main` a bougé sous le lot
+
+Ethan a fusionné la **PR #141**, lot **CONTACT-2**, pendant que celle-ci était
+ouverte. `main` passe de `f21ba4e` à **`0c4a546`**. Il l'a signalé en disant qu'il
+ne pouvait pas résoudre les conflits sur GitHub web — et il avait raison de ne pas
+essayer : l'éditeur de conflits de GitHub demande de reconstruire à la main un
+fichier de plus de deux mille lignes, sur téléphone, et **deux des trois conflits
+ne se résolvent pas en choisissant un côté**.
+
+### 9.1 Trois fichiers se croisent, et ce sont toujours les mêmes
+
+| fichier | conflit | résolution |
+|---|---|---|
+| `CLAUDE.md` | les deux lots insèrent un bloc §0 en tête | **les DEUX gardés** |
+| `package.json` | les deux bumpent la version | ⚠ **auto-fusionné en silence** |
+| `test/pictogramme.test.js` | les deux réancrent `PIC T7` | **remesuré** |
+
+Ce sont les trois que deux lots parallèles heurtent toujours : le bloc de tête, le
+numéro de version, l'ancre de taille du livrable. **Aucun fichier de `src/` n'est
+partagé** — CONTACT-2 touche `src/sim/combat.js`, ÉCRANS `src/ui/chantier.js` et
+`src/ui/rapport.js`.
+
+### 9.2 ⚠⚠ Le piège est `package.json`, et git ne l'a pas signalé
+
+Les deux lots avaient bumpé au **MÊME** numéro, `0.99.56 · build 158` : chacun
+l'avait pris comme « le suivant disponible » sur la même base. Git ne voit alors
+aucun conflit — les deux côtés écrivent la même chose — et garde la valeur.
+**Deux livrables différents auraient porté le même `config.build`**, que
+`android/app/build.gradle.kts` lit et que le manifeste de Pages publie.
+`git status` n'aurait rien dit, et aucun test JS ne regarde ce nombre.
+
+La fusion prend **0.99.57 · build 159**. C'est la **quatrième fois** du dépôt —
+après ÉCRANS du 10/09, ARRIVÉE-CARTE-ET-BUILD et le lot ÉCRANS d'origine, tous
+trois consignés en §0. **Deux lots parallèles ne peuvent pas choisir leur numéro
+chacun de son côté ; c'est la fusion qui le choisit.**
+
+### 9.3 Les deux blocs §0 sont gardés
+
+CONTACT-2 est sur `main`, ÉCRANS atterrit après lui : le bloc d'ÉCRANS passe en
+tête, celui de CONTACT-2 est **rétrogradé en « Auparavant »**, sans qu'un mot de
+son corps ne bouge. En garder un seul aurait effacé un lot entier de l'historique
+que `CLAUDE.md` **est**.
+
+### 9.4 `PIC T7` : deux ancres justes séparément, fausses ensemble
+
+Écrit seul, ÉCRANS portait l'ancre à 9 385 638 ; CONTACT-2, écrit en parallèle sur
+la même base, à 9 385 408. **Les deux étaient justes contre `f21ba4e` et fausses
+contre le disque fusionné** — la faute que `CLAUDE.md` §6 nomme ailleurs, « deux
+modules justes séparément peuvent être faux ensemble ».
+
+Le test écrit désormais **9 385 997**, et il gagne une **seconde**
+contre-assertion, `notEqual(MARGE, 214_592)` : sans elle, un lot qui défferait la
+fusion et rendrait l'ancre de CONTACT-2 repasserait au vert. ⚠ La garde
+`notEqual(MARGE, 215_225)` de CONTACT-2 est **conservée**, pas remplacée — aucune
+assertion n'a été retirée.
+
+### 9.5 ⚠⚠ Le nombre ne s'additionne pas, il se mesure
+
+`main` pristine à `0c4a546`, rebâti dans un `git worktree` : **9 385 408**, à
+l'octet ce que `PIC T7` de CONTACT-2 écrit. Le fusionné : **9 385 997**.
+
+| poste | `main` pristine | fusionné | écart |
+|---|---:|---:|---:|
+| JavaScript | 425 153 | 425 742 | **+589** |
+| feuille | 46 553 | 46 553 | +0 |
+| balisage | 36 753 | 36 753 | +0 |
+| images | 7 683 603 | 7 683 603 | +0 |
+| audio | 1 193 346 | 1 193 346 | +0 |
+| **total** | **9 385 408** | **9 385 997** | **+589** |
+
+La partition tombe **exactement** sur le total des deux côtés (écart 0 · 0), et
+les **306 URI / 307 lignes `data:`** sont identiques de part et d'autre.
+
+Le coût retombe sur **+589**, le nombre du lot seul. ⚠ **C'est un fait mesuré et
+non une addition** : le lot ARRIVÉE-CARTE-ET-BUILD avait relevé **six octets**
+d'écart entre la somme de deux diffs et le livrable fusionné, parce que les deux
+lots partageaient deux fichiers de `src/ui/`. Ici ils n'en partagent aucun du
+livrable, et la ventilation le confirme au lieu de le supposer.
+
+### 9.6 Rien de CONTACT-2 n'est perdu — vérifié fichier par fichier
+
+`src/sim/combat.js` est **identique à `main`** au diff, et ses **quatorze**
+fichiers de `test/` aussi, `temoins-combat.js` et `temoins-bases-0.js` compris.
+`rapports/RAPPORT-lotCONTACT-2.md` est en place. Le diff de la fusion contre
+`main` ne porte **que** les fichiers d'ÉCRANS, plus le pavé de fusion de
+`CLAUDE.md` et le réancrage de `PIC T7`.
+
+### 9.7 Le compte de tests s'additionne, lui
+
+1 603 avant les deux lots ; CONTACT-2 en ajoute **1**, ÉCRANS **5**, et le
+fusionné en déclare **1 609** — vérifié par la garde de `documentation.test.js`,
+qui compare la §0 au dépôt et est **tombée** avant d'être mise à jour.
