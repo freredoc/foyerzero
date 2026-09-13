@@ -114,6 +114,8 @@ import {
   RAPPORTS_PROCHE_BAREME_ET_REJEU, RAPPORTS_OUVRAGE_BAREME_ET_REJEU,
   DEPLACES_PAR_REJEU, EMPREINTES_PAR_GRAINE_REJEU,
   RAPPORTS_PROCHE_REJEU, RAPPORTS_OUVRAGE_REJEU, CLES_AJOUTEES_PAR_REJEU,
+  DEPLACES_PAR_CONTACT, EMPREINTES_PAR_GRAINE_CONTACT,
+  RAPPORTS_PROCHE_CONTACT, RAPPORTS_OUVRAGE_CONTACT,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -251,7 +253,15 @@ function empreinteAttendue(phase, champ) {
   // AU BIT — `etat.rapports` est VIDE jusqu'au premier raid, qui est la phase 7 —
   // et AUCUN scalaire ne bouge, la taille de la sauvegarde comprise : elle se
   // relève à la phase 6, donc avant qu'un montage y soit rangé.
-  return DEPLACES_PAR_REJEU[phase]?.[champ]
+  // ⚠⚠ VINGT-QUATRIÈME COUCHE — lot CONTACT, 13/09. **Trente-six couples sur
+  // 350**, sur six champs, à partir de la phase 7 — les SIX PREMIÈRES PHASES sont
+  // identiques AU BIT, le scénario ne combattant pas avant son premier raid. Le
+  // pas s'arrête au CONTACT : plus de rangement sur la case, plus de fluage dans
+  // la case d'autrui. ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines
+  // sur 25, la taille de la sauvegarde comprise : c'est ce qui dit que le lot ne
+  // touche ni la carte, ni l'économie, ni la pose, ni le choix de cible.
+  return DEPLACES_PAR_CONTACT[phase]?.[champ]
+    ?? DEPLACES_PAR_REJEU[phase]?.[champ]
     ?? DEPLACES_PAR_BAREME_ET_REJEU[phase]?.[champ]
     ?? DEPLACES_PAR_VITESSE[phase]?.[champ]
     ?? DEPLACES_PAR_APPROCHE[phase]?.[champ]
@@ -671,7 +681,15 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // qu'ils touchaient au DÉROULÉ du combat et ne mordaient que là où leur règle
     // avait de quoi mordre —, celui-ci change la FORME du rapport. Le `??` reste
     // NÉCESSAIRE pour les couches d'avant, qu'il chaîne.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_REJEU[g]
+    // ⚠⚠ CONTACT (13/09) N'EN DÉPLACE QUE VINGT-TROIS : les graines **9 et 18**
+    // tombent à l'octet sur `REJEU`. Sur ces deux parties-là, aucune unité ne
+    // fluait dans la case d'une autre au cours des deux raids du scénario — ni
+    // à la verticale, ni à la latérale —, donc borner le pas au contact n'y
+    // change rien. Le `??` reste donc NÉCESSAIRE, comme aux lots MUR, VITESSE et
+    // BARÈME-ET-REJEU, et c'est la moitié qui distingue un lot qui mord là où il
+    // doit d'un lot qui déplace tout.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_CONTACT[g]
+      ?? EMPREINTES_PAR_GRAINE_REJEU[g]
       ?? EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU[g]
       ?? EMPREINTES_PAR_GRAINE_VITESSE[g] ?? EMPREINTES_PAR_GRAINE_APPROCHE[g]
       ?? EMPREINTES_PAR_GRAINE_MUR[g] ?? EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE[g])) {
@@ -851,8 +869,18 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // pas juste au-dessus — les dix-sept scalaires, la taille de la sauvegarde
       // comprise — dit que le lot ne touche ni le combat, ni la carte, ni
       // l'économie, ni le choix de cible.
+      // ⚠⚠ ET LE LOT CONTACT NE LES DÉPLACE PAS TOUS — **20 sur 25 côté
+      // proximité, 16 sur 25 côté Ouvrage** —, ce qui est la forme du lot MUR et
+      // non celle de REJEU. C'est ce qu'on attend d'une règle de DÉROULÉ : elle
+      // ne mord que là où deux pièces se rencontrent vraiment, et une table
+      // PLEINE voudrait dire qu'elle ne dit rien du contact. ⚠ L'écart entre les
+      // deux côtés se lit : le raid de proximité frappe un site GÉNÉRÉ, dont la
+      // garnison est dense et les files longues ; celui de l'Ouvrage frappe la
+      // base du JOUEUR, que le scénario peuple à la main et bien plus
+      // clairsemée.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_REJEU[g] ?? RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
+        ? (RAPPORTS_OUVRAGE_CONTACT[g]
+          ?? RAPPORTS_OUVRAGE_REJEU[g] ?? RAPPORTS_OUVRAGE_BAREME_ET_REJEU[g] ?? RAPPORTS_OUVRAGE_APPROCHE[g]
           ?? RAPPORTS_OUVRAGE_MUR[g] ?? RAPPORTS_OUVRAGE_REGLES_DE_CARTE[g] ?? RAPPORTS_OUVRAGE_PAQUETS[g]
           ?? RAPPORTS_OUVRAGE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_OUVRAGE_RETOUCHES[g]
@@ -861,7 +889,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
           ?? RAPPORTS_OUVRAGE_PRODUCTION_EN_DEFENSE[g] ?? RAPPORTS_OUVRAGE_COLONNE[g]
           ?? RAPPORTS_OUVRAGE_ARRET[g]
           ?? RAPPORTS_RETOURS_DU_03_SOIR[g] ?? surcharge.raidOuvrageRapport)
-        : (RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
+        : (RAPPORTS_PROCHE_CONTACT[g]
+          ?? RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
           ?? RAPPORTS_PROCHE_MUR[g] ?? RAPPORTS_PROCHE_PAQUETS[g] ?? RAPPORTS_PROCHE_DISPOSITION_OUVRAGE[g]
           ?? RAPPORTS_PROCHE_RETOUCHES[g]
           ?? RAPPORTS_PROCHE_CIBLES_RANGEES[g]

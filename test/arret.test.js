@@ -383,22 +383,41 @@ test('ARRÊT T7 — devant un mur bloquant, le porteur de l\'Écraseur force', (
   const murDe = (etat) => etat.entites.find((e) => e.id === 'merlon');
   const uniteDe = (etat) => assaillant(etat);
 
-  // ⚠⚠ LE CONTACT A CHANGÉ D'ENDROIT ET DE TICK AU LOT MUR, ET C'EST LE POINT 2.
-  // AVANT : le Broyeur montait jusqu'à 5 960 — le bord de sa case, 4 700 + 14 ×
-  // 90 — au tick 44, et forçait à partir du 45. APRÈS : il ENTRE dans la case 5
-  // au tick 34, à 5 060, puis se RANGE à 5 000 au tick 35, où tombe le premier
-  // forçage. On relève donc au 34 : un relevé pris au 35 trouve déjà vingt mille
-  // milli-PV d'écart, et c'est ce qui avait fait tomber le premier jet de ce
-  // test.
+  // ⚠⚠ LE CONTACT A CHANGÉ TROIS FOIS, ET LA TROISIÈME EST LA BONNE.
+  //   — AVANT LE LOT MUR : le Broyeur montait jusqu'à 5 960 — le bord de sa
+  //     case, 4 700 + 14 × 90 — au tick 44, et forçait à partir du 45.
+  //   — LOT MUR (10/09) : il ENTRAIT dans la case 5 au tick 34, à **5 060**,
+  //     puis se RANGEAIT à 5 000 au tick 35.
+  //   — LOT CONTACT (13/09) : son pas est BORNÉ au contact, donc il atterrit
+  //     **exactement sur 5 000 au tick 34**, sans jamais passer par 5 060.
   //
-  // ⚠⚠⚠ ET CE TEST EST LE CANARI DU PIÈGE DE L'ÉCRASEUR. Le lot MUR range
-  // l'unité sur sa case : `caseDestination` revaut alors `rangee`, si bien que
-  // `structureForcee` chercherait la structure SOUS l'unité et que `peutAvancer`
-  // la dirait « progressante » pour toujours. L'une ou l'autre moitié oubliée,
-  // l'écart mesuré plus bas vaut ZERO et la brèche ne s'ouvre plus — en silence.
+  // ⚠⚠⚠ ET LE 5 060 D'HIER ÉTAIT UN CHEVAUCHEMENT, PAS UN CONTACT. Ce montage
+  // disait « le porteur n'est pas au contact » sur une valeur qui EST le
+  // chevauchement : le merlon est en case 6, donc il occupe `[6 000, 7 000)`, et
+  // une unité posée en 5 060 occupe `[5 060, 6 060)` — **60 millièmes dans le
+  // mur**. C'est très exactement ce qu'Ethan a refusé le 13/09 : « ni
+  // chevauchement ». On relève toujours au tick 34, et pour la même raison qu'au
+  // lot MUR : un relevé pris au 35 trouve déjà vingt mille milli-PV d'écart.
+  //
+  // ⚠⚠ ET LE PREMIER FORÇAGE RESTE AU TICK 35, MESURÉ — LE BRIEF DU LOT CONTACT
+  // ANNONÇAIT 34. Au tick 34 la marge vaut encore 30 millièmes (6 000 − 4 970 −
+  // 1 000), donc le pas passe, donc `progresse` est VRAI et rien n'est forcé.
+  // C'est au tick 35, marge nulle, que `bloqueeAuContact` mord. La fenêtre
+  // `bloques = 16` ne se décale donc PAS non plus, contrairement à ce que le
+  // brief annonçait : remesurée, elle couvre les mêmes ticks 35 à 50.
+  //
+  // ⚠⚠⚠ ET CE TEST EST LE CANARI DU PIÈGE DE L'ÉCRASEUR. Au contact,
+  // `caseDestination` revaut `rangee` — l'entité ne bouge plus d'un millième —,
+  // si bien que `structureForcee` chercherait la structure SOUS l'entité et que
+  // `peutAvancer` la dirait « progressante » pour toujours. C'est ce que
+  // `bloqueeAuContact` empêche, et c'est pourquoi `progresse` lit la marge NULLE
+  // et non la marge : l'une ou l'autre moitié oubliée, l'écart mesuré plus bas
+  // vaut ZERO et la brèche ne s'ouvre plus — en silence.
   jouer(avec, 34);
   jouer(sans, 34);
-  assert.equal(uniteDe(avec).rangeeMilli, 5060, 'montage : le porteur n\'est pas au contact');
+  assert.equal(uniteDe(avec).rangeeMilli, 5000, 'montage : le porteur n\'est pas au contact');
+  assert.equal(murDe(avec).rangeeMilli - uniteDe(avec).rangeeMilli, MILLI_PAR_CASE,
+    'CHEVAUCHEMENT : le porteur mord dans la case du mur au lieu de s\'arrêter au contact');
   assert.equal(uniteDe(avec).rangeeMilli, uniteDe(sans).rangeeMilli, 'montage : les deux scènes divergent');
   assert.equal(murDe(avec).pvMilli, murDe(sans).pvMilli, 'montage : le forçage a commencé trop tôt');
 
@@ -413,11 +432,18 @@ test('ARRÊT T7 — devant un mur bloquant, le porteur de l\'Écraseur force', (
   assert.equal(ecart, bloques * Math.floor(murDe(avec).pvMaxMilli / 100), `écart mesuré : ${ecart}`);
   assert.ok(ecart > 0, 'le module ne force rien : le test ne mesure rien');
 
-  // Et le porteur est RANGÉ sur sa case, au millième : 5 000, là où il fluait
-  // jusqu'à 5 960 avant le lot.
+  // Et le porteur est toujours AU CONTACT, au millième : 5 000, là où il fluait
+  // jusqu'à 5 960 avant le lot MUR et jusqu'à 5 060 avant celui-ci.
+  //
+  // ⚠⚠ LA MESURE EST L'ÉCART, PLUS LE MULTIPLE — LOT CONTACT. Le
+  // `% MILLI_PAR_CASE === 0` d'hier passait ici par ACCIDENT DE MONTAGE : le mur
+  // est posé sur un multiple exact, donc le contact l'est aussi, et l'assertion
+  // serait restée verte sur un code qui rangerait encore. Ce qui se mesure est la
+  // DISTANCE au mur, qui vaut une case pleine quel que soit l'endroit d'où la
+  // pièce arrive.
   assert.equal(uniteDe(avec).rangeeMilli, 5000);
-  assert.equal(uniteDe(avec).rangeeMilli % MILLI_PAR_CASE, 0,
-    'le porteur flue encore dans la case du mur');
+  assert.equal(murDe(avec).rangeeMilli - uniteDe(avec).rangeeMilli, MILLI_PAR_CASE,
+    'le porteur flue dans la case du mur, ou s\'en est écarté');
   assert.equal(uniteDe(avec).ticksInutiles, 0, 'le compteur de repli est monté alors qu\'elle force');
 });
 

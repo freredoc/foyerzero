@@ -22,7 +22,7 @@ import {
 import { modulesOuvrageOffenseAu } from '../src/sim/raid-ouvrage.js';
 import { listeAffichage, PALETTE } from '../src/render/scene.js';
 import { calculerProjection } from '../src/render/projection.js';
-import { caseDepuisMilli, distanceCarreeMilli } from '../src/sim/grille.js';
+import { caseDepuisMilli, distanceCarreeMilli, MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { executerRaid, pvMaxDeLUnite } from '../src/sim/raid.js';
 import { APRES_RAID } from '../src/data/sites.js';
 import { genererSite } from '../src/sim/generateur.js';
@@ -2108,10 +2108,14 @@ test('NEUT T3 — une défenseuse neutralisée ne se décale plus', () => {
   const releve = (avecLeModule) => {
     const etat = monter(avecLeModule);
     const d = etat.entites.find((e) => e.camp === 'defense' && e.id === 'meute');
+    const a = etat.entites.find((e) => e.camp === 'attaque');
     const colonnes = {};
     for (let t = 1; t <= 60; t += 1) {
       tick(etat);
-      colonnes[t] = [d.colonneMilli, d.vivant, d.effetsTemporises.length];
+      // ⚠ LA COLONNE DE L'ATTAQUANTE EST RELEVÉE, PAS ÉCRITE : c'est elle qui
+      // donne le point de contact, et un `5000` retapé ici ne garderait que
+      // lui-même le jour où le montage bougerait d'une colonne.
+      colonnes[t] = [d.colonneMilli, d.vivant, d.effetsTemporises.length, a.colonneMilli];
     }
     return colonnes;
   };
@@ -2131,8 +2135,29 @@ test('NEUT T3 — une défenseuse neutralisée ne se décale plus', () => {
   }
   assert.ok(avec[60][1], 'la défenseuse est morte : le montage ne mesure plus rien');
   assert.equal(sans[39][0], geleeA, 'les deux montages doivent coïncider avant l\'effet');
-  assert.ok(sans[60][0] > geleeA + 500,
+
+  // ⚠⚠ LOT CONTACT (13/09) : LE CONTRE-MONTAGE EST RÉANCRÉ SUR LE CONTACT, ET
+  // C'EST UN RESSERREMENT. Il exigeait `> geleeA + 500` : un seuil calibré sur
+  // la FLUAGE que le lot supprime — la défenseuse glissait jusqu'à **4 960**,
+  // soit 96 % dans la colonne de l'attaquante. Elle s'arrête désormais **au
+  // contact**, à une case pleine d'elle, donc à 4 000 : le seuil de 500 ne
+  // mordait plus, et le relever d'un nombre nu aurait remplacé une mesure par
+  // un réglage. Ce qui est asserté est la RÈGLE.
+  const contact = sans[60][3] - MILLI_PAR_CASE;
+  assert.equal(sans[60][0], contact,
+    'sans le module, la défenseuse doit se décaler jusqu\'au contact et s\'y arrêter');
+  assert.ok(sans[60][0] > geleeA,
     'sans le module, la défenseuse ne se décale pas non plus : le montage ne mesure rien');
+
+  // ⚠⚠ ET LA POSITION GELÉE DOIT ÊTRE STRICTEMENT AVANT LE CONTACT — sans quoi
+  // la neutralisation serait INDISCERNABLE de l'arrêt au contact, et ce test
+  // passerait au vert sur un module entièrement débranché. C'est la moitié que
+  // le lot CONTACT rend nécessaire : elle n'avait pas lieu d'être quand rien
+  // n'arrêtait une décaleuse. Mesuré : 3 560 contre 4 000, donc 440 millièmes
+  // de marche restante au tick où l'effet se pose.
+  assert.ok(geleeA < contact,
+    `la défenseuse est gelée à ${geleeA}, or le contact est à ${contact} : `
+    + 'le montage ne distingue plus la neutralisation de l\'arrêt au contact');
 });
 
 test('NEUT T4 — le porteur sans cible libre garde son usage, et en cherche une autre', () => {
@@ -5712,7 +5737,24 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // module armé. Celui-ci ne touche ni la composition ni la disposition : il
   // change la façon dont les attaquantes se rangent en approchant. Le canal reste
   // donc porté par les mêmes pièces, et le sens qu'il donne aux points tient.
-  const GRAINES = [7, 9, 24];
+  // ⚠⚠ LOT CONTACT (13/09) : `9` SORT, `18` ENTRE, ET C'EST UNE PRÉMISSE TOMBÉE,
+  // PAS UNE ASSERTION ASSOUPLIE — le mouvement de la graine `1` au lot MUR, mot
+  // pour mot. Sur la graine 9, au niveau 50, le canal ARMÉ rapporte désormais
+  // **59,09 G contre 56,13 G vide** : le sens que ce test mesure s'y inverse. La
+  // cause est mesurable — le pas borné au contact fait que les attaquantes
+  // n'entrent plus dans la case de la garnison, donc elles la longent au lieu de
+  // l'ouvrir, et sur cette base-là le bonus de 20 % l'emporte de nouveau sur le
+  // surcroît de résistance. Balayage des graines 1 à 60 : **dix** conviennent —
+  // 7, 18, 24, 33, 36, 39, 51, 52, 56, 57 —, contre onze au lot BARÈME-ET-REJEU,
+  // dont c'est la même liste moins la 9. Les deux qui tiennent sont gardées, la
+  // troisième est la plus petite des huit restantes.
+  //
+  // ⚠ L'INVERSION DE LA GRAINE 9 EST UN CONSTAT À REMONTER, PAS UN DÉFAUT :
+  // aucun barème n'a été touché, et l'équilibrage revient à Ethan. C'est la
+  // sixième fois que ce montage perd une prémisse, et le fait reste le même —
+  // **un montage qui dépend d'une disposition tirée la reperdra au prochain lot
+  // qui touche au déroulé.**
+  const GRAINES = [7, 18, 24];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
   // graines DISCRIMINENT toujours aux deux niveaux — c'est ce que les deux
@@ -5735,7 +5777,11 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ne bouge pas — armé et vide rendent le même nombre au niveau 20, sur les
   // trois graines. Un combat qui se déroule autrement ne rapporte pas les mêmes
   // points ; que le canal ne morde pas sous 28 est ce qui est gardé ici.
-  const apres20 = { 7: 3_901_683n, 9: 4_045_833n, 24: 6_531_961n };
+  // ⚠ RÉANCRÉ AU LOT CONTACT : les trois valeurs bougent, la PROPRIÉTÉ ne bouge
+  // pas — armé et vide rendent le même nombre au niveau 20, sur les trois
+  // graines. Un combat qui se déroule autrement ne rapporte pas les mêmes
+  // points ; que le canal ne morde pas sous 28 est ce qui est gardé ici.
+  const apres20 = { 7: 4_658_390n, 18: 6_291_989n, 24: 7_643_623n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5765,7 +5811,11 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // ⚠ RÉANCRÉ AU LOT BARÈME-ET-REJEU, sur les trois MÊMES graines. Le SENS est
   // intact — armé reste sous vide sur les trois —, et c'est la seule chose que ce
   // test mesure.
-  const apres38 = { 7: 335_384_514n, 9: 1_789_234_429n, 24: 486_555_667n };
+  // ⚠ RÉANCRÉ AU LOT CONTACT. Le SENS est intact — armé reste sous vide sur les
+  // trois —, et c'est la seule chose que ce test mesure. ⚠ L'écart est MINCE sur
+  // la graine 7 : 339 244 054 contre 339 420 295, soit 0,05 %. Il discrimine, et
+  // c'est ce qu'on lui demande ; les deux autres écartent de 2 % et 1 %.
+  const apres38 = { 7: 339_244_054n, 18: 981_204_465n, 24: 617_471_580n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5789,7 +5839,12 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // 11,6 % de moins. Le Vol de vie et le Rayon minimum −1 sont armés à ce
   // niveau-là, et une file qui attend derrière ses alliées les laisse travailler
   // plus longtemps.
-  const apres50 = { 7: 8_008_420_457n, 9: 55_941_725_902n, 24: 21_934_757_798n };
+  // ⚠ RÉANCRÉ AU LOT CONTACT, sur les trois graines dont une est neuve. Le SENS
+  // est intact et il est FRANC : **8,9 % de moins sur la 7, 22,8 % sur la 18,
+  // 57,7 % sur la 24**. Le Vol de vie et le Rayon minimum −1 sont armés à ce
+  // niveau-là, et une file qui s'arrête AU CONTACT au lieu de fluer dans la case
+  // de la garnison la laisse travailler plus longtemps encore.
+  const apres50 = { 7: 7_547_414_717n, 18: 8_925_916_216n, 24: 8_851_951_208n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);

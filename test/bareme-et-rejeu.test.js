@@ -137,11 +137,17 @@ test('BR T1 — derrière une alliée : rangée sur un multiple exact, et encore
   assert.equal(devant.aTire, true,
     'A ne tire pas : son compteur monterait dès le premier tick et la file se '
       + 'dénouerait avant les trente ticks du repli — le montage ne mesure rien');
-  assert.equal(derriere.rangeeMilli % MILLI_PAR_CASE, 0,
-    'CHEVAUCHEMENT : B flue dans la sous-case de son alliée au lieu de se ranger '
-      + `(${derriere.rangeeMilli} n'est pas un multiple de ${MILLI_PAR_CASE})`);
-  assert.equal(derriere.rangeeMilli, B.rangee * MILLI_PAR_CASE,
-    'CHEVAUCHEMENT : B n\'est pas rangée sur SA case');
+  // ⚠⚠ CE QUI SE MESURE EST L'ÉCART, PLUS LE MULTIPLE — LOT CONTACT, 13/09/2026.
+  // L'assertion d'hier exigeait que B soit RANGÉE sur un multiple exact de case ;
+  // c'est le rangement qu'Ethan a refusé, parce qu'un rangement est un SAUT. B
+  // COLLE désormais à son alliée, et la grandeur qui dit « pas de chevauchement »
+  // est la DISTANCE entre les deux, qui vaut une case pleine. ⚠ Le multiple, lui,
+  // ne disait rien ici : A est posée sur un multiple exact et ne bouge pas encore
+  // au tick 2, donc l'ancienne assertion passait par ACCIDENT DE MONTAGE — elle
+  // serait restée verte sur un code qui n'aurait borné aucun pas.
+  assert.equal(devant.rangeeMilli - derriere.rangeeMilli, MILLI_PAR_CASE,
+    'CHEVAUCHEMENT : B flue dans la case de son alliée au lieu de s\'arrêter au '
+      + `contact (écart ${devant.rangeeMilli - derriere.rangeeMilli}, attendu ${MILLI_PAR_CASE})`);
 
   // --- SECONDE MOITIÉ : son compteur est GELÉ, elle ne rentre pas -------------
   //
@@ -156,8 +162,18 @@ test('BR T1 — derrière une alliée : rangée sur un multiple exact, et encore
       + 'c\'est le « puis ils ont disparu, mais 0 détruit » d\'Ethan');
   assert.equal(derriere.ticksInutiles, 0,
     'REPLI : le compteur de B monte derrière une alliée — il doit être GELÉ');
-  assert.equal(derriere.rangeeMilli, B.rangee * MILLI_PAR_CASE,
-    'CHEVAUCHEMENT : B a fini par fluer dans la case de son alliée');
+  // ⚠⚠ ET SOIXANTE TICKS PLUS TARD, L'ÉCART VAUT TOUJOURS UNE CASE — C'EST LA
+  // MOITIÉ QUI COMPTE. A n'est PAS immobile : au fond de la grille elle flue dans
+  // sa propre case, personne ne la bornant, et elle atteint 18 960. B la SUIT, à
+  // 17 960, sans jamais la mordre. Sous l'ancien rangement B restait clouée à
+  // 17 000 et perdait 960 millièmes de terrain réel : **une case pleine de vide,
+  // récupérée**. C'est pourquoi la valeur absolue ne se ré-assertait pas telle
+  // quelle — ce qui est invariant est l'écart, pas la position.
+  assert.equal(devant.rangeeMilli - derriere.rangeeMilli, MILLI_PAR_CASE,
+    'CHEVAUCHEMENT : B a fini par fluer dans la case de son alliée '
+      + `(écart ${devant.rangeeMilli - derriere.rangeeMilli}, attendu ${MILLI_PAR_CASE})`);
+  assert.ok(derriere.rangeeMilli > B.rangee * MILLI_PAR_CASE,
+    'B est restée clouée sur sa case : elle ne colle pas à son alliée, elle se range');
   assert.equal(derriere.vivant, true, 'B doit être vivante : on mesure un blocage, pas une mort');
   assert.equal(devant.vivant, true, 'A doit être vivante : un blocage, pas un écrasement');
   assert.equal(devant.ecrase, false, 'A ne doit pas être écrasée par son alliée');

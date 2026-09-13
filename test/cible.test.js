@@ -618,10 +618,32 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // se terminait « attaquants » sous le plafond peut désormais l'atteindre. C'est
   // le prix mesuré de la seconde règle, et il est au rapport.
   //
-  // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus deux » laisserait entrer
-  // n'importe quel autre raid. Ceux-là, et personne d'autre.
+  //
+  // ⚠⚠ LOT CONTACT (13/09) : IL N'EN RESTE QU'UN, ET LA LISTE BOUGE ENCORE DES
+  // DEUX CÔTÉS. `infanterie/avantPoste/11` et `mixte/base/1` SORTENT — ils se
+  // concluent désormais aux ticks 870 et 863, sous le plafond — et
+  // `infanterie/base/3` entre. Un raccourcissement uniforme ne ferait entrer
+  // personne ; ce qui se passe est que le pas est BORNÉ au contact au lieu d'être
+  // rangé sur la case, donc les files rendent moins de terrain et se dénouent
+  // autrement — deux raids qui traînaient s'achèvent, un raid qui s'achevait
+  // traîne.
+  //
+  // ⚠⚠ ET CE N'EST PAS UN GEL, vérifié comme les fois précédentes en portant
+  // `maxTicks` à 20 000 : il se conclut par `attaquants` au tick **1 020**, soit
+  // **1,13 fois le plafond**. C'est le même ordre de grandeur que les deux
+  // sortants — 4 645 au lot CARTE, 5 478 au lot COLONNE, 3 539 au lot
+  // DISPOSITION-OUVRAGE, 2 618 au lot MUR, 940 au lot APPROCHE, 1 018 au lot
+  // BARÈME-ET-REJEU. **Aucun barème n'a été touché**, et l'arbitrage revient à
+  // Ethan.
+  //
+  // ⚠ LE COMPTE REDESCEND DE DEUX À UN, ET C'EST LE MOUVEMENT INVERSE DU LOT
+  // PRÉCÉDENT : là-bas le gel du repli gardait sur le terrain des unités qui en
+  // sortaient ; ici les files avancent pour de bon, donc elles concluent.
+  //
+  // ⚠ ET LA LISTE RESTE NOMMÉE, PAS BORNÉE : « au plus un » laisserait entrer
+  // n'importe quel autre raid. Celui-là, et personne d'autre.
   assert.deepEqual(
-    expires.sort(), ['infanterie/avantPoste/11', 'mixte/base/1'],
+    expires.sort(), ['infanterie/base/3'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // Et la couche anti-aérienne, qui passait 96,7 % de ses ticks à viser du sol.

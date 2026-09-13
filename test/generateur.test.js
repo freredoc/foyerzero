@@ -853,10 +853,32 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 comparais
   // CAUSES et des TICKS sur les cinq niveaux ; ce qu'on perd est la mesure de
   // l'arrondi, qui demanderait un autre montage.
   //
+  // ⚠⚠ LOT CONTACT (13/09) : 0 → 1, ET C'EST LE MOUVEMENT DU LOT MUR À
+  // L'IDENTIQUE — QUATRIÈME BASCULE DE CETTE MESURE. Le lot ne touche ni au
+  // générateur, ni à la courbe de niveau, ni à un barème : il borne le pas au
+  // CONTACT, donc il échantillonne d'autres fins de combat, et l'arrondi
+  // redevient visible là où APPROCHE l'avait rendu invisible.
+  //
+  // ⚠⚠ ET LA STRUCTURE DE L'ÉCART EST CELLE DU LOT MUR, AU CHAMP PRÈS — c'est ce
+  // qui distingue un miroir qui se dégrade d'un montage qui échantillonne
+  // ailleurs. **Quatre comparaisons sur cinq cents**, **UNE cellule sur
+  // cinquante** (`camp` graine 37, `mixte/17`), et **le niveau 2 SEUL contre les
+  // quatre autres** — 675 ticks contre 674. Médiane toujours **0**, 0,8 % des
+  // comparaisons au-dessus de zéro contre 5 % permis, et l'arrondi ne déplace
+  // que **0,148 %** d'un combat contre 1 % permis : 6,8 fois de marge, et
+  // légèrement MIEUX que les 0,173 % du lot MUR.
+  //
+  // ⚠ `entitesQuiBasculent` VAUT TOUJOURS 0, donc le seuil de résidu reste
+  // vacueux sur ce montage — inchangé depuis le lot PAQUETS, et sans rapport
+  // avec la bascule ci-dessus : ce qui redevient visible est l'écart de TICK,
+  // pas le sort d'une entité.
+  //
   // ⚠ ET C'EST UNE ÉGALITÉ, PAS UN `>=`. Un `>=` laisserait l'écart glisser à
   // trois ticks sans un mot ; l'égalité oblige à remesurer et à écrire ce qu'on
-  // a mesuré, ce que ce bloc fait pour la troisième fois.
-  assert.equal(ecartMax, 0, `écart maximal ${ecartMax} ticks au lieu du 0 mesuré`);
+  // a mesuré, ce que ce bloc fait pour la quatrième fois.
+  assert.equal(ecartMax, 1, `écart maximal ${ecartMax} ticks au lieu du 1 mesuré`);
+  // Contre-assertion : le 0 du lot APPROCHE ne doit pas revenir en silence.
+  assert.notEqual(ecartMax, 0, 'écart nul : le miroir a cessé d’échantillonner l’arrondi, remesurer');
 
   // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
   // du §4 aurait été choisi trop juste sans qu'on le sache.

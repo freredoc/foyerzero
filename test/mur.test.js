@@ -278,30 +278,83 @@ test('MUR T4 — derrière une alliée bloquée, la suivante se RANGE et ne se r
   // ⚠ LE COÛT DU RENVERSEMENT EST PAYÉ EN TÉMOINS, ET IL EST AU RAPPORT : les
   // deux tables de `test/temoins-combat.js` reçoivent une COUCHE, elles ne sont
   // pas recapturées.
+  //
+  // ⚠⚠ LOT CONTACT (13/09) : LA SECONDE PART DE LA RANGÉE 1 ET NON DE LA 2, ET
+  // C'EST UNE PRÉMISSE RÉPARÉE — LE TEST NE MESURAIT PLUS RIEN. Partie de la
+  // rangée 2, elle est **DÉJÀ au contact au tick zéro** : la marge y vaut zéro
+  // dès le premier tick, donc elle ne bouge pas d'un millième, donc
+  // `rangeeMilli % MILLI_PAR_CASE === 0` était vrai **par accident de montage**
+  // et la contre-assertion `notEqual(2960)` passait trivialement. Mesuré : sous
+  // l'ancienne règle comme sous la neuve, elle reste à 2 000 sans avoir bougé.
+  // Le brief du lot l'avait relevé, et il avait raison.
+  //
+  // ⚠⚠ DE LA RANGÉE 1, ELLE MARCHE POUR DE BON ET S'ARRÊTE AU CONTACT — mesuré
+  // tick par tick : 1 000 → 1 060 → 1 120 → … → **2 000 pile**, où elle
+  // s'immobilise. Le dernier pas est BORNÉ par la marge (40 au lieu de 60), ce
+  // qui est très exactement la règle de ce lot. Une assertion de déplacement
+  // entre ci-dessous : sans elle, le test repasserait muet au prochain montage
+  // qui partirait du contact.
+  //
+  // ⚠ ET LA RANGÉE 1 N'EST PAS LA VOIE D'APPROCHE — `RANGEE_APPROCHE` vaut
+  // `PREMIERE_RANGEE - 1`, donc ZÉRO. C'est ce qui garde l'assertion du gel
+  // honnête : en rangée 0, `estEnApproche` gèlerait le compteur pour une AUTRE
+  // raison, et ce test cesserait de mesurer le gel par une ALLIÉE.
   const etat = creerCombat(montage({
     defenseurs: [{ id: 'merlon', rangee: 4, colonne: 5 }],
     vagues: [[
       { id: 'meute', colonne: 5, rangee: 3 },
-      { id: 'meute', colonne: 5, rangee: 2 },
+      { id: 'meute', colonne: 5, rangee: 1 },
     ]],
   }));
   const [devant, derriere] = assaillants(etat).sort((a, b) => b.rangeeMilli - a.rangeeMilli);
   assert.equal(devant.rangeeMilli, 3 * MILLI_PAR_CASE, 'montage : la première n\'est pas en 3');
-  assert.equal(derriere.rangeeMilli, 2 * MILLI_PAR_CASE, 'montage : la seconde n\'est pas en 2');
+  assert.equal(derriere.rangeeMilli, 1 * MILLI_PAR_CASE, 'montage : la seconde n\'est pas en 1');
+  const departDerriere = derriere.rangeeMilli;
 
-  jouer(etat, 60);
+  // ⚠⚠ ET LE LOT CONTACT FAIT REGARDER CHAQUE TICK, PAS SEULEMENT LE
+  // SOIXANTIÈME — SANS QUOI CE TEST NE DISTINGUERAIT PAS LES DEUX RÈGLES.
+  // Mesuré tick par tick contre le livrable pristine de `main` : les deux
+  // rendent **2 000 au tick 60**, parce que le rangement d'hier recalait sur la
+  // case et que le contact d'aujourd'hui s'arrête au même endroit — cette
+  // géométrie-ci est tout entière sur des bords de case, donc les deux règles y
+  // coïncident À L'ARRIVÉE. Elles divergent **au tick 17** : l'ancienne laisse la
+  // seconde SAUTER à **2 020** — vingt millièmes dans la case de son alliée — et
+  // la RECULE à 2 000 au tick 18 ; la neuve l'arrête à 2 000 et elle n'entre
+  // jamais. **C'est le saut qu'Ethan a vu**, et il ne se voit qu'en regardant
+  // chaque tick.
+  for (let t = 1; t <= 60; t += 1) {
+    tick(etat);
+    assert.ok(devant.rangeeMilli - derriere.rangeeMilli >= MILLI_PAR_CASE,
+      `tick ${t} : la seconde est entrée dans la case de son alliée `
+      + `(${derriere.rangeeMilli} contre ${devant.rangeeMilli})`);
+  }
 
   // Celle de DEVANT est bloquée par une structure immobile : elle se range.
   // C'est l'acquis du lot MUR, et il ne bouge pas.
   assert.equal(devant.rangeeMilli, 3 * MILLI_PAR_CASE,
     'la première ne s\'est pas rangée : le montage ne mesure rien');
 
-  // Celle de DERRIÈRE est bloquée par une ALLIÉE : elle se range AUSSI, sur sa
-  // PROPRE case, et elle n'a pas franchi un millième de celle de devant.
-  assert.equal(derriere.rangeeMilli % MILLI_PAR_CASE, 0,
+  // ⚠⚠ ET LA SECONDE A MARCHÉ AVANT DE S'ARRÊTER — c'est ce qui rend tout ce qui
+  // suit falsifiable. Sans cette ligne, un montage qui partirait déjà au contact
+  // passerait les trois assertions du dessous sans que la règle ait rien fait.
+  assert.ok(derriere.rangeeMilli > departDerriere,
+    'la seconde n\'a pas bougé : le montage ne mesure plus la règle du contact');
+
+  // Celle de DERRIÈRE est bloquée par une ALLIÉE : son pas s'arrête AU CONTACT,
+  // donc à une case pleine de celle de devant, et elle n'a pas franchi un
+  // millième de sa case.
+  //
+  // ⚠⚠ L'ASSERTION PORTE SUR L'ÉCART, PAS SUR UN MULTIPLE — LOT CONTACT. Le
+  // multiple exact était la forme que le lot BARÈME-ET-REJEU avait donnée au
+  // RANGEMENT : la pièce était recalée sur sa case. Plus rien ne se range ; ce
+  // que la règle garantit est que le pas s'arrête **une case pleine** avant le
+  // bloqueur, et c'est cela qu'on mesure. Les deux coïncident ici parce que
+  // celle de devant est elle-même sur un multiple — mais l'écart reste vrai
+  // quand elle ne l'est pas, et le multiple, lui, cesserait de l'être.
+  assert.equal(devant.rangeeMilli - derriere.rangeeMilli, MILLI_PAR_CASE,
     'la seconde flue encore dans la case de son alliée');
   assert.equal(derriere.rangeeMilli, 2 * MILLI_PAR_CASE);
-  assert.notEqual(derriere.rangeeMilli, 2960, 'elle garde la position d\'avant le lot');
+  assert.notEqual(derriere.rangeeMilli, 2960, 'elle garde la position d\'avant le lot MUR');
 
   // ⚠⚠ ET SON COMPTEUR DE REPLI EST GELÉ — c'est la SECONDE moitié de la phrase
   // d'Ethan, « puis ils ont disparu. Mais 0 détruit. » Sous l'ancienne règle
@@ -323,12 +376,26 @@ test('MUR T4 — derrière une alliée bloquée, la suivante se RANGE et ne se r
 // MUR T5 — l'Écraseur ouvre encore la brèche, et il l'ouvre PLUS TÔT
 // ---------------------------------------------------------------------------
 
-test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il se range', () => {
+test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il bute au contact', () => {
   // ⚠⚠⚠ C'EST LE TEST DU PIÈGE, ET IL DOUBLE `ARRÊT T7` CÔTÉ « CASE DEVANT ».
-  // Une entité rangée sur sa case repart de `rangee × 1 000` : `caseDestination`
-  // revaut `rangee` tant que la vitesse est sous 1 000 millièmes, et aucune ne
-  // l'atteint. DEUX lectures en dépendent, et les deux tuent la brèche EN
-  // SILENCE si on les laisse au `caseDestination` :
+  // ⚠⚠ RÉANCRÉ AU LOT CONTACT (13/09) : le porteur ne SE RANGE plus, il
+  // s'ARRÊTE AU CONTACT — `margeDeContact` borne son pas à l'écart qui reste,
+  // donc il n'entre jamais dans la case du mur et n'a rien à défaire ensuite.
+  // Mesuré sur cette scène même : AVANT le lot le Broyeur atteignait **5 040**
+  // au tick 56 — quarante millièmes DANS la case du Merlon — puis revenait à
+  // 5 000 au tick 57 ; APRÈS, il s'arrête à 5 000 au tick 56 et n'en bouge
+  // plus. L'assertion de contact ci-dessous tombe sur l'ancien moteur, au tick
+  // 56, en nommant le 5 040 : c'est ce qui empêche ce test de devenir muet
+  // comme `MUR T6` et `MUR T6 bis` (voir leur pavé).
+  // ⚠ ET LE `% MILLI_PAR_CASE === 0` D'HIER NE MESURAIT PLUS RIEN : le Merlon
+  // est posé sur une case PLEINE, donc le contact tombe exactement sur un
+  // multiple, et les deux règles y rendaient zéro. C'est l'ÉCART AU MUR qui
+  // les sépare, jamais la position seule.
+  //
+  // Une entité rangée sur sa case repartait de `rangee × 1 000` :
+  // `caseDestination` revalait `rangee` tant que la vitesse est sous 1 000
+  // millièmes, et aucune ne l'atteint. DEUX lectures en dépendaient, et les
+  // deux tuent la brèche EN SILENCE si on les laisse au `caseDestination` :
   //   — `structureForcee`, qui chercherait la structure SOUS l'entité et la
   //     refuserait sur `occupante.camp === e.camp` ;
   //   — `peutAvancer`, qui rend VRAI dès que `caseDestination === rangee`, si
@@ -360,24 +427,38 @@ test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il se range',
   const pas = Math.floor(mur(avec).pvMaxMilli / 100);
   assert.equal(pas, 20_000, 'montage : les PV max du Merlon ont changé');
 
-  // On joue jusqu'au tick où le porteur SE RANGE, on ne l'écrit pas.
+  // On joue jusqu'au tick où le porteur CESSE D'AVANCER, on ne l'écrit pas —
+  // et on vérifie À CHAQUE TICK qu'il n'est jamais entré dans la case du mur.
+  // Le Merlon est immobile, donc son `rangeeMilli` ne bouge pas : l'écart se
+  // lit directement, sans soustraire deux mesures prises à des ticks
+  // différents.
   let precedente = -1;
-  let rangement = 0;
-  while (unite(avec).rangeeMilli !== precedente && rangement < 200) {
+  let jusquAuContact = 0;
+  while (unite(avec).rangeeMilli !== precedente && jusquAuContact < 200) {
     precedente = unite(avec).rangeeMilli;
     tick(avec); tick(sans);
-    rangement += 1;
+    jusquAuContact += 1;
+    assert.ok(mur(avec).rangeeMilli - unite(avec).rangeeMilli >= MILLI_PAR_CASE,
+      `tick ${jusquAuContact} : le porteur est entré dans la case du mur (${unite(avec).rangeeMilli} contre ${mur(avec).rangeeMilli})`);
   }
-  assert.equal(unite(avec).rangeeMilli % MILLI_PAR_CASE, 0,
-    'le porteur n\'est pas sur sa case : il flue encore dans le mur');
+  assert.equal(mur(avec).rangeeMilli - unite(avec).rangeeMilli, MILLI_PAR_CASE,
+    'le porteur n\'est pas au contact du mur');
   assert.equal(unite(avec).rangeeMilli, 5 * MILLI_PAR_CASE);
+  assert.ok(jusquAuContact < 200, 'le porteur n\'a jamais buté : le montage ne mesure rien');
 
-  // ⚠⚠ ET LE FORÇAGE A DÉJÀ COMMENCÉ AU TICK DU RANGEMENT — c'est le cœur du
-  // test. Avant le lot, le porteur fluait jusqu'au bord de sa case et le forçage
-  // ne tombait qu'ensuite ; la « case devant » le rend disponible dès le premier
-  // tick de blocage. Un écart nul ici, c'est le piège refermé sur le lot.
-  const ecartAuRangement = mur(sans).pvMilli - mur(avec).pvMilli;
-  assert.ok(ecartAuRangement > 0, 'le forçage n\'a pas commencé au tick du rangement');
+  // ⚠⚠ ET LE FORÇAGE A DÉJÀ COMMENCÉ AU TICK DU CONTACT — c'est le cœur du
+  // test. Avant le lot MUR, le porteur fluait jusqu'au bord de sa case et le
+  // forçage ne tombait qu'ensuite ; la « case devant » le rend disponible dès
+  // le premier tick de blocage. Un écart nul ici, c'est le piège refermé sur
+  // le lot.
+  // ⚠ LE NOMBRE, LUI, A BOUGÉ AU LOT CONTACT, ET C'EST UNE CONSÉQUENCE DE LA
+  // BOUCLE : l'ancien moteur consommait un tick de PLUS à défaire son
+  // chevauchement (5 040 → 5 000), donc la boucle y comptait DEUX ticks de
+  // forçage — **40 000 avant, 20 000 après**, soit un pas au lieu de deux. On
+  // asserte donc le pas EXACT plutôt qu'un `> 0`, sans quoi ce nombre-là
+  // cesserait d'être gardé.
+  const ecartAuContact = mur(sans).pvMilli - mur(avec).pvMilli;
+  assert.equal(ecartAuContact, pas, 'le forçage n\'a pas commencé au tick du contact');
 
   // Puis vingt ticks bloqués : l'écart croît d'EXACTEMENT 1 % des PV max par
   // tick. Le facteur est celui du NOMBRE de ticks joués, pas un nombre choisi.
@@ -385,7 +466,7 @@ test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il se range',
   jouer(avec, bloques);
   jouer(sans, bloques);
   const ecart = mur(sans).pvMilli - mur(avec).pvMilli;
-  assert.equal(ecart - ecartAuRangement, bloques * pas, `écart mesuré : ${ecart}`);
+  assert.equal(ecart - ecartAuContact, bloques * pas, `écart mesuré : ${ecart}`);
 
   // Et la conséquence, en clair : à 1 % des PV MAXIMAUX par tick, le forçage
   // seul abat le Merlon en cent ticks, quelle que soit sa taille.
@@ -410,28 +491,63 @@ test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il se range',
 // c'est que la pièce qui bouge est une DÉFENSEUSE : un attaquant ne change
 // jamais de colonne, sa colonne est fixe.
 
-/** Une défenseuse mobile qui se décale vers un assaillant, et ce qui la gêne. */
+/**
+ * Une défenseuse mobile qui se décale vers un assaillant, et ce qui la gêne.
+ *
+ * ⚠⚠ LOT CONTACT (13/09) : LA DÉCALEUSE PART DE LA COLONNE 2, ET NON DE LA 4 —
+ * PRÉMISSE RÉPARÉE. Partie de la 4, elle était **DÉJÀ au contact du gêneur au
+ * tick zéro** : la marge y vaut zéro dès le premier tick, donc elle ne bougeait
+ * pas d'un millième, et `colonneMilli % MILLI_PAR_CASE === 0` était vrai **par
+ * accident de montage**. De la 2, elle marche pour de bon — 2 000, 2 040, …,
+ * **4 000 pile au tick 50**, où elle s'arrête — et les deux tests qui l'emploient
+ * mesurent enfin un déplacement.
+ */
 function faceAuBlocageLateral(idGene) {
   return creerCombat(montage({
     defenseurs: [
       { id: idGene, rangee: 3, colonne: 5 },
-      { id: 'meute', rangee: 3, colonne: 4 },
+      { id: 'meute', rangee: 3, colonne: 2 },
     ],
     vagues: [[{ id: 'meute', colonne: 8 }]],
   }));
 }
 
-/** La défenseuse du montage — celle de la colonne 4, jamais le gêneur. */
+/** Le départ de la décaleuse, en colonnes — à un seul endroit. */
+const COLONNE_DECALEUSE = 2;
+
+/** La défenseuse du montage — jamais le gêneur, qui est en colonne 5. */
 const decaleuse = (etat) => etat.entites.find(
-  (e) => e.camp !== 'attaque' && e.id === 'meute' && caseColonneDe(e) === 4,
+  (e) => e.camp !== 'attaque' && e.id === 'meute' && caseColonneDe(e) !== 5,
 );
 const caseColonneDe = (e) => Math.floor(e.colonneMilli / MILLI_PAR_CASE);
 
+// ⚠⚠ ET CES DEUX TESTS-CI NE DISTINGUENT PAS LE LOT CONTACT DU LOT MUR —
+// MESURÉ, ET DÉCLARÉ PLUTÔT QUE TU. Le brief du lot annonçait qu'ils « passent
+// trivialement » ; la mesure est plus précise que cela, et plus intéressante :
+// sur l'axe LATÉRAL et sur cette géométrie, les deux règles rendent la MÊME
+// position **à chaque tick**, pas seulement à l'arrivée. Relevé tick par tick
+// contre le livrable pristine de `main` : 2 000 · 2 040 · … · 3 960 · **4 000**
+// au tick 50, puis 4 000 jusqu'au bout, des deux côtés.
+//
+// ⚠⚠ LA RAISON EST ARITHMÉTIQUE. Le rangement d'hier recalait la pièce sur le
+// DÉBUT de sa case ; le contact d'aujourd'hui l'arrête une case pleine avant son
+// bloqueur. Quand le bloqueur est lui-même sur un multiple — ce qui est le cas
+// de toute pièce immobile —, les deux nombres sont le MÊME. Et le pas latéral de
+// la Meute vaut 40, qui DIVISE 1 000 : partie d'un multiple, elle ne peut jamais
+// dépasser le contact, donc l'ancienne règle n'avait même rien à recaler.
+//
+// ⚠ CE QUE CES DEUX TESTS GARDENT RESTE DONC LE PÉRIMÈTRE DU LOT MUR — devant
+// une structure ET devant une alliée mobile — et l'acquis leur survit tel quel.
+// **Ce qui distingue le lot CONTACT est ailleurs** : `MUR T4`, sur l'axe
+// VERTICAL, où le pas de 60 ne divise pas la marge et où l'ancienne règle faisait
+// SAUTER la pièce à 2 020 au tick 17 avant de la RECULER à 2 000 ; et les deux
+// tests de `test/contact.test.js`, qui mesurent la règle sur des combats entiers.
 test('MUR T6 — bloquée LATÉRALEMENT par un mur, la défenseuse reste sur sa case au millième', () => {
   const etat = faceAuBlocageLateral('merlon');
   const d = decaleuse(etat);
   assert.ok(d !== undefined, 'montage : la défenseuse est introuvable');
-  assert.equal(d.colonneMilli, 4 * MILLI_PAR_CASE, 'montage : elle ne part pas de sa case');
+  assert.equal(d.colonneMilli, COLONNE_DECALEUSE * MILLI_PAR_CASE,
+    'montage : elle ne part pas de sa case');
   assert.equal(DEFENSES.merlon.vitesse ?? 0, 0, 'montage : le Merlon s\'est mis à bouger');
   // ⚠⚠ LA RANGÉE ET LA COLONNE DOIVENT DIFFÉRER, ET CE N'EST PAS UNE COQUETTERIE
   // DE MONTAGE. `structureImmobileSur` prend `(rangee, colonne)` dans cet ordre ;
@@ -455,11 +571,24 @@ test('MUR T6 — bloquée LATÉRALEMENT par un mur, la défenseuse reste sur sa 
   const avantLeLot = 4 * MILLI_PAR_CASE + k * pas;
   assert.equal(avantLeLot, 4960, 'le calcul du seuil d\'avant le second geste a changé');
 
-  jouer(etat, 60);
-  assert.equal(d.colonneMilli % MILLI_PAR_CASE, 0, 'elle flue encore dans la case du mur');
+  // ⚠⚠ LOT CONTACT (13/09) : ON REGARDE CHAQUE TICK, ET ON MESURE L'ÉCART AU
+  // MUR PLUTÔT QU'UN MULTIPLE. Le multiple exact était la forme du RANGEMENT du
+  // lot MUR — la pièce recalée sur sa case ; plus rien ne se range, et ce que la
+  // règle garantit est que le pas s'arrête **une case pleine** avant le bloqueur.
+  // Les deux coïncident ici parce que le merlon est lui-même sur un multiple.
+  const mur = parId(etat, 'merlon');
+  for (let t = 1; t <= 80; t += 1) {
+    tick(etat);
+    assert.ok(mur.colonneMilli - d.colonneMilli >= MILLI_PAR_CASE,
+      `tick ${t} : elle est entrée dans la case du mur (${d.colonneMilli})`);
+  }
+  assert.equal(mur.colonneMilli - d.colonneMilli, MILLI_PAR_CASE,
+    'elle ne s\'est pas arrêtée AU CONTACT du mur');
   assert.equal(d.colonneMilli, 4 * MILLI_PAR_CASE);
+  assert.ok(d.colonneMilli > COLONNE_DECALEUSE * MILLI_PAR_CASE,
+    'elle n\'a pas bougé : le montage ne mesure plus la règle');
   assert.notEqual(d.colonneMilli, avantLeLot);
-  assert.equal(parId(etat, 'merlon').vivant, true, 'montage : le mur doit tenir la fenêtre');
+  assert.equal(mur.vivant, true, 'montage : le mur doit tenir la fenêtre');
   // ⚠ ET ELLE NE CHANGE PAS DE CASE : le rangement remet la POSITION sur le
   // multiple exact, il ne déplace pas la pièce d'une case. L'occupation ne bouge
   // donc pas, et rien de ce que le moteur indexe par case n'est touché.
@@ -513,13 +642,22 @@ test('MUR T6 bis — gênée par une alliée MOBILE, la défenseuse se RANGE sur
   assert.notEqual(avantLeLot % MILLI_PAR_CASE, 0,
     'montage : la position d\'avant le lot était déjà un multiple, rien ne peut se distinguer');
 
-  jouer(etat, 60);
+  // ⚠⚠ LOT CONTACT (13/09) : ON REGARDE CHAQUE TICK, ET ON MESURE L'ÉCART À
+  // L'ALLIÉE PLUTÔT QU'UN MULTIPLE — même geste qu'en `MUR T6`, et pour la même
+  // raison : plus rien ne se range.
+  for (let t = 1; t <= 80; t += 1) {
+    tick(etat);
+    assert.ok(geneur.colonneMilli - d.colonneMilli >= MILLI_PAR_CASE,
+      `tick ${t} : elle est entrée dans la case de son alliée (${d.colonneMilli})`);
+  }
   // ⚠ LE GÊNEUR N'A PAS BOUGÉ — sans quoi la mesure porterait sur autre chose.
   assert.equal(geneur.colonneMilli, 5 * MILLI_PAR_CASE,
     'montage : le gêneur s\'est décalé, il ne gêne plus');
-  assert.equal(d.colonneMilli % MILLI_PAR_CASE, 0,
-    'elle flue encore dans la case de son alliée mobile');
+  assert.equal(geneur.colonneMilli - d.colonneMilli, MILLI_PAR_CASE,
+    'elle ne s\'est pas arrêtée AU CONTACT de son alliée mobile');
   assert.equal(d.colonneMilli, 4 * MILLI_PAR_CASE);
-  assert.notEqual(d.colonneMilli, avantLeLot, 'elle garde la position d\'avant le lot');
+  assert.ok(d.colonneMilli > COLONNE_DECALEUSE * MILLI_PAR_CASE,
+    'elle n\'a pas bougé : le montage ne mesure plus la règle');
+  assert.notEqual(d.colonneMilli, avantLeLot, 'elle garde la position d\'avant le lot MUR');
   assert.equal(caseColonneDe(d), 4, 'elle a franchi la case de son alliée');
 });

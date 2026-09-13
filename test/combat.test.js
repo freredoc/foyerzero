@@ -25,7 +25,7 @@ import {
   TICKS_MAX_COMBAT,
   TICKS_PAR_VAGUE,
 } from '../src/sim/combat.js';
-import { caseDepuisMilli } from '../src/sim/grille.js';
+import { caseDepuisMilli, MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { BUTIN } from '../src/data/sites.js';
 import { GRILLE } from '../src/data/combat.js';
 
@@ -533,12 +533,30 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
   };
   const marche = creerCombat(montageMarche);
   const ratisseur = entite(marche, (e) => e.camp === 'attaque');
-  // Ratisseur : vitesse 1,2 → 120 milli/tick. 2000 + 8 × 120 = 2960 ; au tick 9
-  // la destination 3080 tombe dans la case 3, occupée par une masse égale.
+  const belier = entite(marche, (e) => e.camp === 'defense' && e.id === 'belier');
+  // ⚠⚠⚠ 2 960 ÉTAIT UN CHEVAUCHEMENT ASSERTÉ AU DÉPÔT, ET C'EST LE LOT CONTACT
+  // QUI LE FERME — 13/09/2026. Le Bélier est posé en rangée 3, donc il occupe
+  // `[3 000, 4 000)` ; un Ratisseur figé en 2 960 occupe `[2 960, 3 960)`, soit
+  // **960 millièmes DANS le Bélier**. Le lot MUR avait laissé ce cas ouvert en
+  // écrivant que « face à une ennemie, fluer jusqu'au contact EST le dessin
+  // juste » : le mot « contact » était faux, il désignait 96 % de recouvrement.
+  // Ethan, 13/09 : « je ne veux pas de saut, ni de chevauchement. »
+  //
+  // ⚠⚠ LE RATISSEUR NE BOUGE DONC PLUS D'UN MILLIÈME, ET DÈS LE PREMIER TICK. Il
+  // part de la rangée 2 (2 000) et le Bélier tient la rangée 3 (3 000) : l'écart
+  // vaut DÉJÀ une case pleine, c'est-à-dire qu'ils sont au contact au montage. La
+  // marge vaut zéro, le pas est nul. Ce que ce test existe pour tenir est intact :
+  // **aucun ne change de case, aucun n'écrase l'autre, le blocage mutuel est le
+  // même** — et il se mesure désormais sur l'ÉCART, qui est la grandeur que « ni
+  // chevauchement » nomme.
+  const ecart = () => belier.rangeeMilli - ratisseur.rangeeMilli;
+  assert.equal(ecart(), MILLI_PAR_CASE, 'montage : ils ne partent pas au contact');
   jouer(marche, 8);
-  assert.equal(ratisseur.rangeeMilli, 2960);
+  assert.equal(ratisseur.rangeeMilli, 2000);
   jouer(marche, 25);
-  assert.equal(ratisseur.rangeeMilli, 2960, 'bloqué, il n\'a pas bougé d\'un milli-case');
+  assert.equal(ratisseur.rangeeMilli, 2000, 'bloqué, il n\'a pas bougé d\'un milli-case');
+  assert.equal(ecart(), MILLI_PAR_CASE,
+    `CHEVAUCHEMENT : il mord dans la case du Bélier (écart ${ecart()})`);
   assert.ok(ratisseur.vivant);
 });
 
