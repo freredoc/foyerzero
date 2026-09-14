@@ -513,6 +513,14 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // bougent d'un identifiant : `src/data/` n'a pas une ligne au diff. Le même
   // nombre se lit dans `arsenal.test.js T10`, `assaut.test.js T7` et
   // `roster.test.js T6`, sur le même raid C.
+  // ⚠⚠ LOT FREIN (14/09) : 493 → **493**, ET C'EST LA SECONDE FOIS DE
+  // L'HISTOIRE DE CE SEUIL QU'UN LOT DÉPLACE LE BUTIN SANS DÉPLACER LA DURÉE —
+  // après CONTACT-2, et par la mécanique inverse. Le lot ne touche QUE le
+  // décalage LATÉRAL de la défense, qui ne fait avancer personne vers les
+  // bâtiments : le raid met donc exactement le même temps à se conclure, à la
+  // même cause. Ce qui change est ce que la garnison fait de ce temps-là — voir
+  // le bloc du butin ci-dessous. Ni la disposition, ni la garnison, ni un barème
+  // ne bougent d'un identifiant : `src/data/` n'a pas une ligne au diff.
   assert.equal(r.nbTicks, 493);
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
@@ -584,15 +592,41 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // La propriété qu'elle défend n'a pas changé d'un mot — un butin qui
   // reviendrait à sa valeur d'avant sans qu'on l'ait remesuré passerait en
   // silence —, seul le couple refusé bascule avec elle.
-  assert.deepEqual(r.butin, { quartz: 6486, scorie: 2162 });
+  // ⚠⚠ LOT FREIN : 6 486 → **10 493** ET 2 162 → **3 497**, SOIT +61,8 %, POUR
+  // UN TICK IDENTIQUE. C'est la lecture la plus nette du lot sur ce raid-ci :
+  // la durée ne bouge pas d'une unité, donc l'écart ne vient ni d'un combat plus
+  // long ni d'un assaut plus rapide — il vient de ce que la garnison NE FAIT
+  // PLUS. Mesuré au lot précédent : une pièce de garnison passait 99 ticks à
+  // voyager pour 32 ticks de tir ; elle ne se décale plus tant qu'une cible de sa
+  // prédilection est à portée, donc elle tire au lieu de courir. Un défenseur
+  // qui tire davantage tue davantage — et c'est justement ce qui laisse passer
+  // le reste : ce qui n'est pas de sa prédilection franchit la bande et va
+  // griffer les bâtiments. Aucun barème n'a été touché ; le calibrage revient à
+  // Ethan.
+  //
+  // ⚠ LA CONTRE-ASSERTION EST RETOURNÉE, JAMAIS RETIRÉE : elle refusait le retour
+  // des **150** du lot CONTACT-2, que le lot PRÉDILECTION avait fait remonter ;
+  // elle refuse désormais le retour de ces **6 486**, que ce lot-ci déplace. La
+  // propriété qu'elle défend n'a pas changé d'un mot — un butin qui reviendrait à
+  // sa valeur d'avant sans qu'on l'ait remesuré passerait en silence —, seul le
+  // couple refusé bascule avec elle.
+  assert.deepEqual(r.butin, { quartz: 10493, scorie: 3497 });
   assert.notDeepEqual(
-    r.butin, { quartz: 150, scorie: 50 },
-    'le choix de cible est ce qui déplace ce butin — le nombre d\'avant ne doit pas revenir',
+    r.butin, { quartz: 6486, scorie: 2162 },
+    'le frein latéral est ce qui déplace ce butin — le nombre d\'avant ne doit pas revenir',
   );
   // ⚠ LOT PRÉDILECTION : trois survivants → **cinq**, et la mécanique est celle
   // du butin, vue par l'autre bout — un feu concentré tue ce qu'il vise et laisse
   // passer le reste, donc il en rentre davantage.
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
+  // ⚠ LOT FREIN : cinq survivants → **six**, et c'est la même mécanique, encore
+  // une fois : une garnison qui ne quitte plus son poste tue ce qu'elle vise et
+  // ne poursuit plus le reste. Les SIX sont rentrés — mesuré, `sorti` vrai sur
+  // les six —, ce que l'assertion suivante tient depuis toujours.
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 6);
+  assert.notEqual(
+    r.resultat.attaquants.filter((a) => !a.detruit).length, 5,
+    'le compte d\'avant ne doit pas revenir sans qu\'on l\'ait remesuré',
+  );
   assert.ok(
     r.resultat.attaquants.some((a) => a.sorti),
     'au moins une unité doit être rentrée à la base',

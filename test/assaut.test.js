@@ -14,7 +14,7 @@ import {
   BATIMENTS, POINTS_ARMEE, PROFILS_ASSAUT, EMPLACEMENTS_ASSAUT,
 } from '../src/data/sites.js';
 import { NIVEAU } from '../src/data/niveaux.js';
-import { creerCombat, resoudre } from '../src/sim/combat.js';
+import { creerCombat, resoudre, TICKS_MAX_COMBAT } from '../src/sim/combat.js';
 import { genererAssaut, budgetAssaut, genererSite } from '../src/sim/generateur.js';
 import { montageDuBanc, executerRaidComplet } from '../src/ui/banc.js';
 import { pvMaxDeLaPieceDeGarnisonMilli } from '../src/sim/reparation.js';
@@ -457,12 +457,20 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // prédilection avant la plus proche, donc il tue plus vite ce qu'il tue le
   // mieux. Les trois préréglages figés raccourcissent ou ne bougent pas, et les
   // trois causes restent `attaquants`.
+  //
+  // ⚠⚠ LOT FREIN (14/09) : `A 834 → 793`, `B 698 → 676`, `C 478 → 478` — **C NE
+  // BOUGE PAS D'UN TICK, AUX CINQ LOTS DE SUITE**. Le lot ne touche ni la
+  // composition ni le placement : il change ce qu'une défenseuse fait de son
+  // décalage — elle ne court plus après une cible qu'elle a déjà à portée, elle
+  // tire. Les deux préréglages figés qui bougent RACCOURCISSENT tous les deux,
+  // et les trois causes restent `attaquants`.
   assert.equal(figes[0].cause, 'attaquants');
-  assert.equal(figes[0].tick, 834);
+  assert.equal(figes[0].tick, 793);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
-  assert.equal(figes[1].tick, 698);
+  assert.equal(figes[1].tick, 676);
   assert.equal(figes[2].cause, 'attaquants');
   assert.equal(figes[2].tick, 478);
+  assert.notEqual(figes[0].tick, 834, 'le tick d\'avant le lot FREIN est revenu');
 
   // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
   // que le figé de B rase : les deux séries se distinguent de nouveau par leur
@@ -492,7 +500,11 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // l'étaler sur ce qui passe, et ce qui n'est pas de sa prédilection franchit la
   // bande. Le raid dure deux fois plus longtemps ET rapporte pour la première
   // fois depuis le lot PAQUETS — voir le butin juste en dessous.
-  assert.equal(budgetes[0].nbTicks, 727);
+  // ⚠ LOT FREIN : 727 → **695**, soit trente-deux ticks de moins. L'assaut
+  // d'infanterie budgété meurt un peu plus tôt : la garnison qu'il traverse
+  // cesse de marcher pour aller chercher ce qui est déjà à sa portée, donc elle
+  // lui tire dessus pendant les ticks qu'elle passait à voyager.
+  assert.equal(budgetes[0].nbTicks, 695);
   //
   // ⚠ LOT MULTIPLICATEUR (29/08) : le butin d'un AVANT-POSTE est multiplié par
   // 3,25. `TYPES_SITE.avantPoste.multiplicateurButin` portait ce nombre depuis
@@ -532,8 +544,27 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // nouveau les bâtiments de l'avant-poste, et il y reste assez longtemps pour
   // les vider. Mesuré, PAS COMPENSÉ — aucun barème n'a été touché, et
   // `rapports/RAPPORT-lotPREDILECTION.md` §5 le porte pour Ethan.
-  assert.deepEqual(budgetes[0].butin, { quartz: 254_470, scorie: 84_823 });
-  assert.equal(budgetes[1].cause, 'attaquants');
+  // ⚠⚠ LOT FREIN : { 254 470, 84 823 } → **{ 24 987, 8 329 }**, soit 9,8 % de ce
+  // que le raid rapportait — DIXIÈME renversement de ce nombre. Le raid A ne
+  // retombe PAS au zéro où huit lots l'avaient laissé : il atteint encore les
+  // bâtiments de l'avant-poste, il y reste beaucoup moins longtemps. Mesuré, PAS
+  // COMPENSÉ — aucun barème n'a été touché.
+  assert.deepEqual(budgetes[0].butin, { quartz: 24_987, scorie: 8_329 });
+  // ⚠⚠ LOT FREIN : **L'ASSAUT LOURD BUDGÉTÉ CHANGE DE CAUSE — `attaquants` AU
+  // TICK 424 DEVIENT `duree` AU TICK 900.** C'est une MESURE et pas un réglage :
+  // `GRILLE.dureeMaxCombatSec` n'a pas bougé d'une seconde, et le §9 du brief
+  // interdit d'y toucher.
+  // ⚠⚠ ET CE N'EST PAS UN GEL, VÉRIFIÉ EN LEVANT LE PLAFOND : le même montage
+  // joué jusqu'à vingt mille ticks se conclut par **`attaquants` au tick 2 629**,
+  // soit **2,92 fois le plafond**. Le même couple — `blindeLourd/camp/1` — se
+  // lit dans `cible.test.js T5`, qui le compte désormais parmi les raids du
+  // balayage qui expirent. La cause est celle du lot : la garnison du camp cesse
+  // de traverser sa bande pour rejoindre une cible qu'elle avait déjà à portée,
+  // donc elle tient sa colonne, donc l'assaut lourd met beaucoup plus longtemps
+  // à l'ouvrir. **Le calibrage revient à Ethan ; rien n'a été compensé.**
+  assert.equal(budgetes[1].cause, 'duree');
+  assert.notEqual(budgetes[1].cause, 'attaquants',
+    'l\'assaut lourd budgété ne touche plus le plafond : la prémisse a changé');
   // ⚠ LOT PAQUETS : 323 → 287, 528 → 396.
   // ⚠ LOT MUR (10/09) : B passe de 287 à 244 ticks, et C de 396 à 458 — en sens
   // CONTRAIRE l'un de l'autre. C'est ce qu'on attend d'un lot qui change le
@@ -549,13 +580,21 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // ⚠ LOT PRÉDILECTION : 439 → **424**. L'assaut lourd raccourcit de quinze
   // ticks, dans le sens de A et de B figés — ce que chacun tue le mieux, il le
   // tue d'abord.
-  assert.equal(budgetes[1].nbTicks, 424);
+  // ⚠ LOT FREIN : 424 → **900**, qui EST le plafond — voir le bloc de la cause
+  // juste au-dessus. Le nombre se LIT donc dans `TICKS_MAX_COMBAT` plutôt que
+  // de se retaper : un 900 écrit en clair ici cesserait de dire « ce raid
+  // expire » le jour où Ethan déplacerait la durée maximale d'un combat.
+  assert.equal(budgetes[1].nbTicks, TICKS_MAX_COMBAT);
+  assert.equal(TICKS_MAX_COMBAT, 900, 'le plafond a bougé : ce réancrage est à reprendre');
   assert.equal(budgetes[2].cause, 'attaquants');
   // ⚠ LOT BARÈME-ET-REJEU : 489 → 509, puis LOT CONTACT : 509 → 501. Voir le
   // bloc des six ticks ci-dessus.
   // ⚠ LOT PRÉDILECTION : 501 → **493**, et le même nombre se lit dans
   // `arsenal.test.js T10`, `repli.test.js T6` et `roster.test.js T6`, sur le
   // même raid C.
+  // ⚠ LOT FREIN : 493 → **493**, LE RAID C NE BOUGE PAS D'UN TICK — et il est le
+  // seul des six dans ce cas, après l'avoir déjà été côté figé aux quatre lots
+  // précédents. Son BUTIN, lui, bouge : voir juste en dessous.
   assert.equal(budgetes[2].nbTicks, 493);
   // Lot COURBE : 26 321 au lieu de 26 319, les six ticks inchangés sous une
   // courbe de combat divisée par 4 500 au niveau 50.
@@ -610,7 +649,16 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // franchit la bande et va griffer les bâtiments. Le même nombre se lit dans
   // `repli.test.js T6` et dans `roster.test.js T6`, sur le même raid C. Le
   // calibrage revient à Ethan ; rien n'a été compensé.
-  assert.equal(budgetes[2].butin.quartz, 6486);
+  // ⚠⚠ LOT FREIN : 6 486 → **10 493**, soit +61,8 %, ET LE TICK NE BOUGE PAS —
+  // 493 des deux côtés. C'est la mesure la plus lisible du lot sur ce test : à
+  // durée strictement égale, l'assaut d'infanterie griffe davantage les
+  // bâtiments du camp, parce que la garnison qui le tenait cesse de se déplacer
+  // pour aller chercher plus loin ce qu'elle avait déjà sous le canon. Le même
+  // nombre se lit dans `repli.test.js T6` et dans `roster.test.js T6`, sur le
+  // même raid C. Le calibrage revient à Ethan ; rien n'a été compensé.
+  assert.equal(budgetes[2].butin.quartz, 10_493);
+  assert.notEqual(budgetes[2].butin.quartz, 6486,
+    'le butin d\'avant le lot FREIN est revenu');
 
   // Ce que le préréglage figé aligne et que le budget refuse — deux unités que
   // le joueur ne peut pas posséder au niveau 15. C'est ce qui fait raser B, de

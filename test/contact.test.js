@@ -474,12 +474,38 @@ test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé 
   // les bornes que l'écrasement en quatre ticks du lot CONTACT-2 a posées, et
   // ce lot-ci ne les touche pas : il réduit le NOMBRE d'épisodes (9 → 4), pas
   // leur forme.
-  const ATTENDUS = { A: 14 };
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT FREIN (14/09) : **14 → 13**, ET C'EST LA TROISIÈME FOIS
+  // QUE LA FAMILLE A MAIGRIT SANS QU'UNE LIGNE DE L'ÉCRASEMENT NE BOUGE. Le lot
+  // ne touche ni `peutEcraser`, ni `bloqueuseSur`, ni `margeDeContact`, ni les
+  // masses — il freine le pas LATÉRAL d'une défenseuse qui a sa prédilection à
+  // portée, lui fait tenir sa cible de décalage, et la ramène à son poste quand
+  // il n'en reste aucune. Ce qui change est donc encore QUI se trouve devant qui.
+  //
+  //   montage                CONTACT-2   PRÉDILECTION   FREIN
+  //   camp/n5/g1                     4              4       4
+  //   avantPoste/n20/g2             15              6       6
+  //   base/n35/g3                    4              4       0
+  //   base/n50/g4                    3              0       3
+  //   TOTAL                         26             14      13
+  //
+  // ⚠⚠ ET LA BASCULE EST LA MOITIÉ QUI COMPTE : `base/n35/g3` TOMBE À ZÉRO ET
+  // `base/n50/g4` REVIENT À TROIS. Un total qui descend de un en cachant deux
+  // mouvements de quatre et de trois n'est pas un « léger mieux » ; c'est une
+  // autre scène. Les deux clés RESTENT dans la table, y compris celle à zéro,
+  // pour la raison écrite au lot précédent — un montage qui ne produit plus rien
+  // a une place où son zéro doit tomber si une paire y revient.
+  //
+  // ⚠ ET LA PROFONDEUR, LA DURÉE ET LE NOMBRE D'ÉPISODES NE BOUGENT PAS D'UN
+  // MILLIÈME — **138 millièmes, 4 ticks et 4 épisodes**, mesurés des DEUX côtés
+  // sur le même filtre. Ce sont les bornes que l'écrasement en quatre ticks du
+  // lot CONTACT-2 a posées ; ce lot-ci ne les touche pas non plus.
+  const ATTENDUS = { A: 13 };
   const PAR_MONTAGE = {
     'camp/n5/g1': { A: 4 },
     'avantPoste/n20/g2': { A: 6 },
-    'base/n35/g3': { A: 4 },
-    'base/n50/g4': { A: 0 },
+    'base/n35/g3': { A: 0 },
+    'base/n50/g4': { A: 3 },
   };
 
   let paires = 0;
@@ -553,4 +579,8 @@ test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé 
     'le compte de la famille A a bougé : remesurer et réécrire le pavé ci-dessus, '
     + 'jamais relever le nombre pour faire passer le lot');
   assert.deepEqual(parMontage, PAR_MONTAGE, 'la répartition par montage a bougé');
+  // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DU COMPTE D'HIER : un lot qui
+  // déferait les trois étages du frein rendrait 14, et il repasserait au vert
+  // sous une assertion qui ne dirait que « au plus quatorze ».
+  assert.notEqual(comptes.A, 14, 'le compte d\'avant le lot FREIN est revenu');
 });

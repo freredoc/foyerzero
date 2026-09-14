@@ -35,6 +35,8 @@ import {
   COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS,
   COMBATS_DEPLACES_PAR_PREDILECTION,
   COMBATS_DEPLACES_PAR_PREDILECTION_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_FREIN,
+  COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -196,6 +198,11 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
     // sinon CONTACT-2, sinon CONTACT, sinon BARÈME-ET-REJEU, sinon le témoin
     // d'APPROCHE.
     const deplacesPredilection = COMBATS_DEPLACES_PAR_PREDILECTION[i] ?? {};
+    // ⚠⚠ ET LE LOT FREIN EN EMPILE UNE CINQUIÈME, IL N'EN REMPLACE AUCUNE.
+    // Même doctrine, même ordre de lecture : la plus récente l'emporte, sinon
+    // PRÉDILECTION, sinon CONTACT-2, sinon CONTACT, sinon BARÈME-ET-REJEU,
+    // sinon le témoin d'APPROCHE.
+    const deplacesFrein = COMBATS_DEPLACES_PAR_FREIN[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
       let reference = attendu[c];
       let couvert = false;
@@ -213,6 +220,10 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
       }
       if (Object.prototype.hasOwnProperty.call(deplacesPredilection, c)) {
         reference = deplacesPredilection[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesFrein, c)) {
+        reference = deplacesFrein[c];
         couvert = true;
       }
       if (couvert) surcharges += 1;
@@ -272,19 +283,40 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
   // ⚠ ET SEPT COMBATS SEULEMENT SONT INTACTS, contre vingt-trois au lot
   // CONTACT-2 : la prédilection mord partout où une pièce avait plus d'une cible
   // valide à portée, c'est-à-dire presque partout.
-  assert.equal(surcharges, 1179, `champs surchargés : ${surcharges}`);
-  assert.notEqual(surcharges, 1153, 'la couche de PRÉDILECTION a disparu');
+  //
+  // ⚠⚠ LOT FREIN (14/09) : LA SURCHARGE PASSE DE 1 179 À **1 213**, ET IL RESTE
+  // **387 CHAMPS GARDÉS** contre la capture d'APPROCHE. La couche neuve déplace
+  // **1 053 champs sur 1 600** et en ajoute **TRENTE-QUATRE** à l'union.
+  //
+  // ⚠⚠ ET **AUCUN DES DEUX CENTS COMBATS N'EST INTACT**, là où PRÉDILECTION en
+  // laissait sept et CONTACT-2 vingt-trois. Le lot change le déplacement LATÉRAL
+  // de toute pièce de garnison qui a une prédilection, et il n'existe aucun site
+  // généré qui n'en porte aucune.
+  //
+  // ⚠⚠ MAIS **DEUX CAUSES DE FIN SEULEMENT BASCULENT**, contre huit au lot
+  // PRÉDILECTION : c'est la mesure qui dit que ce lot-ci ne touche PAS au
+  // ciblage. `ciblage`, `doitSArreter` et `cibleIndice` n'ont pas une ligne de
+  // changée — ce qui bouge est OÙ une défenseuse se tient, jamais QUI elle vise.
+  // Les **173 ticks de fin** déplacés disent le reste : les combats durent
+  // autrement, ils ne se terminent pas autrement. Un lot qui prétendrait ne
+  // freiner que le pas latéral et ferait basculer huit causes mentirait.
+  assert.equal(surcharges, 1213, `champs surchargés : ${surcharges}`);
+  assert.notEqual(surcharges, 1179, 'la couche de FREIN a disparu');
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_2).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_PREDILECTION).length, 200);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_FREIN).length, 200);
   assert.equal(
     Object.values(COMBATS_DEPLACES_PAR_CONTACT_2).filter((d) => Object.keys(d).length > 0).length,
     177, 'la couche de CONTACT-2 a changé de largeur');
   assert.equal(
     Object.values(COMBATS_DEPLACES_PAR_PREDILECTION).filter((d) => Object.keys(d).length > 0).length,
     193, 'la couche de PRÉDILECTION a changé de largeur');
-  assert.equal(champs - surcharges, 421, 'le compte des champs encore gardés a changé');
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_FREIN).filter((d) => Object.keys(d).length > 0).length,
+    200, 'la couche de FREIN a changé de largeur');
+  assert.equal(champs - surcharges, 387, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------
@@ -369,6 +401,13 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
           // n'a que trois couches : **vingt-six champs neufs**. Voir le pavé de
           // la table dans `temoins-combat.js`.
           const deplacesPredilection = COMBATS_DEPLACES_PAR_PREDILECTION_AVANT_PAQUETS[i] ?? {};
+          // ⚠⚠ ET LE LOT FREIN EN AJOUTE UNE DIXIÈME. Même doctrine, dixième
+          // fois : on empile, on ne remplace pas. ⚠ Elle déplace 1 030 champs et
+          // n'en ajoute que **QUATRE** à la surcharge — 1 026 étaient déjà
+          // couverts par l'une des neuf d'avant. La mesure comparable est dans
+          // `T1`, dont la pile n'a que quatre couches : **trente-quatre champs
+          // neufs**. Voir le pavé de la table dans `temoins-combat.js`.
+          const deplacesFrein = COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
@@ -396,6 +435,9 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
             if (Object.prototype.hasOwnProperty.call(deplacesPredilection, c)) {
               reference = deplacesPredilection[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesFrein, c)) {
+              reference = deplacesFrein[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
@@ -407,7 +449,8 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
               || Object.prototype.hasOwnProperty.call(deplacesBareme, c)
               || Object.prototype.hasOwnProperty.call(deplacesContact, c)
               || Object.prototype.hasOwnProperty.call(deplacesContact2, c)
-              || Object.prototype.hasOwnProperty.call(deplacesPredilection, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesPredilection, c)
+              || Object.prototype.hasOwnProperty.call(deplacesFrein, c)) surcharges += 1;
           }
           i += 1;
     }
@@ -499,8 +542,21 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
   // placement fait naître les vagues sur le front de la bande de déploiement,
   // donc les pièces arrivent plus groupées et le choix de cible discrimine moins.
   // Dix combats sont intacts ici, sept dans `T1`.
-  assert.equal(surcharges, 1337, `champs surchargés : ${surcharges}`);
-  assert.notEqual(surcharges, 1335, 'la couche de PRÉDILECTION a disparu');
+  //
+  // ⚠⚠ LOT FREIN (14/09) : LA DIXIÈME COUCHE DÉPLACE **1 030 CHAMPS** ET LA
+  // SURCHARGE MONTE DE **1 337 À 1 341**, LES GARDÉS DE 263 À **259**. Quatre
+  // champs neufs — plus que les un ou deux des six lots de FILE, moins que les
+  // trente-quatre de `T1`, dont la pile ne porte que quatre couches.
+  //
+  // ⚠⚠ ET QUATRE CAUSES DE FIN BASCULENT ICI CONTRE **DEUX** DANS `T1` — le seul
+  // compte du lot où l'ancien placement bouge PLUS que le neuf. Les vagues y
+  // naissent sur le front de la bande de déploiement, donc elles arrivent
+  // groupées : une défenseuse qui cesse de courir y change davantage l'issue
+  // qu'une défenseuse qui cesse de courir devant des vagues étalées.
+  //
+  // ⚠ **AUCUN DES DEUX CENTS COMBATS N'EST INTACT**, des deux côtés.
+  assert.equal(surcharges, 1341, `champs surchargés : ${surcharges}`);
+  assert.notEqual(surcharges, 1337, 'la couche de FREIN a disparu');
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CIBLES_RANGEES).length, 200);
@@ -510,6 +566,7 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_AVANT_PAQUETS).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_PREDILECTION_AVANT_PAQUETS).length, 200);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS).length, 200);
   assert.equal(
     Object.values(COMBATS_DEPLACES_PAR_CONTACT_2_AVANT_PAQUETS)
       .filter((d) => Object.keys(d).length > 0).length,
@@ -518,7 +575,11 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
     Object.values(COMBATS_DEPLACES_PAR_PREDILECTION_AVANT_PAQUETS)
       .filter((d) => Object.keys(d).length > 0).length,
     190, 'la couche de PRÉDILECTION a changé de largeur');
-  assert.ok(champs - surcharges === 263, 'le compte des champs encore gardés a changé');
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS)
+      .filter((d) => Object.keys(d).length > 0).length,
+    200, 'la couche de FREIN a changé de largeur');
+  assert.ok(champs - surcharges === 259, 'le compte des champs encore gardés a changé');
 });
 
 // ---------------------------------------------------------------------------

@@ -811,6 +811,33 @@ function ajouterEntite(
   // courante et rien d'autre.
   if (embarquee === true) entite.embarquee = true;
   if (moduleActif(etat, entite, p, 'bouclier')) entite.bouclierMilli = pvMaxMilli;
+  // ⚠⚠ LES DEUX CHAMPS DU LOT FREIN NE SE POSENT QUE SUR CE QUI SE DÉCALE POUR
+  // DE BON, ET C'EST LA DOCTRINE D'`embarquee` CI-DESSUS APPLIQUÉE À LA LETTRE.
+  // `normaliser` énumère les clés : un champ écrit sur TOUTES les entités entre
+  // dans `serialiserEtat`, donc dans l'empreinte d'état des deux cents témoins.
+  // Le prédicat est exactement celui des pièces que `seDecaler` fait bouger —
+  // camp défense (l'aiguillage de `deplacement`), vitesse non nulle (son
+  // `continue`), prédilection non nulle (la garde de `colonneDuDecalage`).
+  // ⚠ Les deux cents témoins bougent de toute façon à ce lot-ci, PAR LE
+  // COMPORTEMENT ; ce n'est pas une raison d'arroser, la doctrine vaut pour le
+  // lot suivant.
+  //
+  // ⚠⚠ `colonneDePoseMilli` SE POSE AU MONTAGE, PAS AU PREMIER TICK. Au premier
+  // tick la pièce a déjà pu se décaler, et le « poste » serait alors la première
+  // case qu'elle vient de fuir.
+  // ⚠ `cibleDecalageIndice` NAÎT À `null` ET NON ABSENT : l'hystérésis de C3
+  // distingue « pas encore de cible retenue » de « champ non posé », et c'est
+  // cette distinction qui laisse `colonneDuDecalage` ne rien écrire sur une
+  // entité qui n'a rien à retenir.
+  // ⚠⚠ ET `SAVE_VERSION` NE BOUGE PAS — le précédent est `bouclierMilli`, né
+  // exactement ainsi : « il ne se recharge jamais et ne survit pas au raid,
+  // aucune sauvegarde ne le lit ». Une entité de combat naît de `creerCombat` et
+  // meurt avec le montage. **Démontré par un aller-retour de sérialisation au
+  // rapport du lot, pas déduit du précédent.**
+  if (camp !== 'attaque' && p.vitesseMilli !== 0 && p.colonnePredilection !== null) {
+    entite.colonneDePoseMilli = entite.colonneMilli;
+    entite.cibleDecalageIndice = null;
+  }
   // ⚠⚠ EN MILLI-CASES, PUIS AU CARRÉ — jamais l'inverse. Une case vaut 1 000
   // milli, et `distanceCarree` compare des carrés de milli-cases : deux cases
   // voisines sont à 1 000 000. On ajoute donc la case AVANT d'élever au carré.
@@ -2996,6 +3023,30 @@ function vitesseLaterale(etat, e, p, obstacles, rangee, frein) {
  * ⚠ AUCUNE CONDITION DE PORTÉE. « Peu importe si elle se bloque » : elle veut y
  * aller, qu'elle puisse tirer ou non.
  */
+/**
+ * « Cette entité-là est-elle une cible de décalage valide pour `e` ? »
+ *
+ * ⚠⚠ ELLE EST EXTRAITE POUR QUE `cibleDuDecalage` ET `colonneDuDecalage` NE
+ * PUISSENT PAS DIVERGER. La première ÉLIT la plus proche, la seconde VÉRIFIE que
+ * celle qu'on avait retenue l'est encore : deux écritures de la même question
+ * finiraient par ne plus poser la même — une cible morte encore élue d'un côté,
+ * lâchée de l'autre, et le bégaiement que l'étage C3 existe pour fermer.
+ *
+ * ⚠⚠ ET LA GARDE DE NULLITÉ EST ÉCRITE ICI AUSSI, ALORS QUE LES DEUX APPELANTS
+ * LA PORTENT DÉJÀ. Ce n'est pas une redondance de confort : la comparaison
+ * `profil(c).colonneMatrice === p.colonnePredilection` serait VRAIE quand les
+ * deux valent `null` — c'est l'avertissement que `degatsContre`, `doitSArreter`
+ * et `ensembleCamoufles` portent chacun en toutes lettres —, et un prédicat
+ * total ne se relit pas en remontant à ses appelants. `ARRÊT T10` l'exige de
+ * chacun des huit sites, et c'est la DISCIPLINE qui est partagée, pas le code.
+ */
+function cibleDeDecalageValide(e, p, c) {
+  if (p.colonnePredilection === null) return false;
+  if (c === undefined || c === null) return false;
+  if (!estActive(c) || c.camp === e.camp) return false;
+  return profil(c).colonneMatrice === p.colonnePredilection;
+}
+
 function cibleDuDecalage(etat, e, p) {
   if (p.colonnePredilection === null) return null;
   let meilleure = null;
@@ -3003,8 +3054,7 @@ function cibleDuDecalage(etat, e, p) {
   let meilleureColonne = Infinity;
   let meilleureRangee = Infinity;
   for (const c of etat.entites) {
-    if (!estActive(c) || c.camp === e.camp) continue;
-    if (profil(c).colonneMatrice !== p.colonnePredilection) continue;
+    if (!cibleDeDecalageValide(e, p, c)) continue;
     const d2 = distanceCarreeMilli(
       e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
     );
@@ -3024,6 +3074,81 @@ function cibleDuDecalage(etat, e, p) {
 }
 
 /**
+ * La COLONNE, en millièmes, vers laquelle une défenseuse veut se décaler — ou
+ * `null` si elle n'a rien à viser. C'est l'étage **C3** puis l'étage **β** du
+ * lot FREIN, dans cet ordre ; l'étage **A** est le frein, et il vit dans
+ * `seDecaler` parce qu'il décide de BOUGER, pas de VISER.
+ *
+ * ⚠⚠ ELLE REND UNE COLONNE ET PLUS UNE ENTITÉ, ET C'EST β QUI L'EXIGE. Le poste
+ * de pose n'est pas une entité : il n'y a rien à y cibler, seulement une abscisse
+ * où rentrer. `seDecaler` ne lisait de toute façon la cible que par
+ * `colonneMilli`, DEUX fois — pour le sens puis pour l'écart —, vérifié ligne à
+ * ligne avant de changer le type. ⚠ **Aucun objet-leurre `{ colonneMilli }` n'a
+ * été écrit** : il aurait fait passer le prototype en masquant une lecture
+ * oubliée.
+ *
+ * ⚠⚠ C3 — L'HYSTÉRÉSIS, ET C'EST TOUT CE QUI DIVISE LE VOYAGE PAR DEUX. Tant que
+ * la cible retenue reste VALIDE on continue vers elle ; on n'en réélit une que
+ * lorsqu'elle cesse de l'être. Sans cette mémoire la défenseuse réélit la plus
+ * PROCHE à chaque tick : mesuré sur le montage d'Ethan du 13/09, elle descendait
+ * de la colonne 5 à la 2, sa cible mourait, et elle **retraversait toute la
+ * grille** jusqu'à la 7 — 99 ticks de voyage pour 32 ticks de tir, et une
+ * inversion de sens en plein trajet.
+ *
+ * ⚠⚠ « VALIDE » SE LIT AVEC LE PRÉDICAT DE `cibleDuDecalage`, JAMAIS AVEC UNE
+ * SECONDE ÉCRITURE. `cibleDeDecalageValide` est extraite pour ça : deux écritures
+ * de la même question divergeraient au premier réglage, et la divergence se
+ * lirait comme un défaut d'équilibrage. ⚠ **Et sans condition de portée**, comme
+ * l'élection : « peu importe si elle se bloque » — elle veut y aller, qu'elle
+ * puisse tirer ou non.
+ *
+ * ⚠ CE N'EST PAS `e.cibleIndice`, ET LES DEUX NE FUSIONNENT PAS. Celle-là est la
+ * cible du TIR, choisie par `ciblage` avec la portée, le camouflage et
+ * l'approche. Elles se ressemblent depuis le lot PRÉDILECTION ; elles ne sont pas
+ * la même grandeur.
+ *
+ * ⚠⚠⚠ β — ET CE QUE LE BRIEF DISAIT DE SON DÉCLENCHEUR EST FAUX, MESURÉ. Il
+ * annonçait « un repositionnement entre vagues » : la pièce rentrerait pendant le
+ * creux, et la vague suivante la trouverait à son poste. **Il n'y a pas de creux
+ * du point de vue de β** — `cibleDuDecalage` ne filtre PAS sur `estEnApproche`,
+ * donc une unité encore dans la voie d'approche, hors écran, est DÉJÀ une cible
+ * de décalage valide. Le déclencheur réel est plus étroit, et c'est la phrase
+ * d'Ethan à la lettre : **toute la colonne de prédilection a quitté le raid alors
+ * que d'autres attaquants restent.** Une pièce anti-véhicule dont les blindés
+ * sont morts ou repliés, face à une infanterie qui continue, rentre à son poste.
+ *
+ * ⚠ ET `cibleDuDecalage` NE GAGNE PAS CE FILTRE POUR ÉLARGIR β. Ce serait changer
+ * ce que la défense POURSUIT — un arbitrage qu'Ethan n'a pas rendu — sous couvert
+ * d'implanter celui qu'il a rendu.
+ *
+ * ⚠ LE POSTE PEUT MANQUER, ET ALORS ON NE RENTRE NULLE PART. `colonneDePoseMilli`
+ * n'est posé que sur les pièces qui se décalent pour de bon (voir
+ * `ajouterEntite`) ; son absence rend `null`, c'est-à-dire le comportement
+ * d'avant le lot. La garde de nullité de l'indice retenu est de la même famille :
+ * sans elle, `etat.entites[undefined]` rendrait `undefined` et le prédicat
+ * partagé aurait à s'en défendre deux fois.
+ */
+function colonneDuDecalage(etat, e, p) {
+  if (p.colonnePredilection === null) return null;
+  // C3 — la cible retenue, tant qu'elle est valide.
+  const retenue = e.cibleDecalageIndice;
+  if (retenue !== null && retenue !== undefined
+    && cibleDeDecalageValide(e, p, etat.entites[retenue])) {
+    return etat.entites[retenue].colonneMilli;
+  }
+  const neuve = cibleDuDecalage(etat, e, p);
+  if (neuve !== null) {
+    if (e.cibleDecalageIndice !== undefined) e.cibleDecalageIndice = neuve.indice;
+    return neuve.colonneMilli;
+  }
+  // β — plus une seule cible de prédilection sur la grille : on rentre au poste.
+  if (e.cibleDecalageIndice !== undefined && e.cibleDecalageIndice !== null) {
+    e.cibleDecalageIndice = null;
+  }
+  return e.colonneDePoseMilli ?? null;
+}
+
+/**
  * Le déplacement LATÉRAL d'une pièce de garnison — lot COLONNE.
  *
  * ⚠⚠ IL NE PORTE NI REPLI, NI ÉCRASEUR, NI SORTIE. Les quatre mécanismes que
@@ -3038,11 +3163,24 @@ function cibleDuDecalage(etat, e, p) {
  * ⚠ ET `ticksInutiles` N'EST PAS TOUCHÉ ICI, même pas remis à zéro. Il ne sert
  * qu'au repli ; l'écrire côté défense mettrait dans l'état une grandeur que
  * personne ne lit, et inviterait le lot suivant à brancher le repli dessus.
+ *
+ * ⚠⚠ TROIS ÉTAGES DEPUIS LE LOT FREIN, ET LEUR ORDRE EST LA RÈGLE :
+ *
+ *     A   une cible de prédilection est à portée          → on ne bouge pas
+ *     C3  sinon, la cible retenue est encore valide       → on va vers elle
+ *     β   sinon, plus une cible de prédilection en jeu    → on rentre au poste
+ *
+ * ⚠⚠ **LE RETOUR EN DERNIER, ET CE N'EST PAS UN DÉTAIL DE STYLE.** Une pièce en
+ * chemin vers son poste doit s'arrêter dès qu'une cible entre à portée. L'ordre
+ * inverse produirait une sentinelle qui rentre en ignorant ce qu'elle a sous le
+ * canon. C3 et β vivent dans `colonneDuDecalage` ; A est le `doitSArreter`
+ * ci-dessous, et sa PLACE dans la fonction est l'arbitrage du lot — voir le pavé
+ * qui le porte.
  */
 function seDecaler(etat, e, p, occupation, obstacles) {
-  const cible = cibleDuDecalage(etat, e, p);
-  if (cible === null) return;
-  const sens = Math.sign(cible.colonneMilli - e.colonneMilli);
+  const colonneVisee = colonneDuDecalage(etat, e, p);
+  if (colonneVisee === null) return;
+  const sens = Math.sign(colonneVisee - e.colonneMilli);
   if (sens === 0) return;
 
   const rangee = caseDepuisMilli(e.rangeeMilli);
@@ -3074,9 +3212,44 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
   // ⚠⚠ LES DÉGÂTS SE PAIENT ICI, AVANT TOUT `return`, PARCE QUE LE CONTACT EST UN
   // FAIT DE POSITION ET NON UNE CONSÉQUENCE DU DÉPLACEMENT. Une décaleuse qui ne
-  // bougera pas ce tick-ci — cible atteinte, pas nul, sortie latérale refusée —
-  // touche quand même ce qu'elle broie.
+  // bougera pas ce tick-ci — cible atteinte, pas nul, sortie latérale refusée,
+  // **et depuis le lot FREIN : pièce qui freine** — touche quand même ce qu'elle
+  // broie. La quatrième entrée de cette liste est la raison pour laquelle le
+  // frein sort SOUS cette ligne et non au-dessus.
   for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
+  // ⚠⚠⚠ LE FREIN — ÉTAGE A DU LOT FREIN, ET IL SORT **APRÈS** LE PAIEMENT DU
+  // CONTACT, PAS AVANT. Ethan, 13/09 : « les unités défensives en déplacement
+  // latéral semblent aller très vite », arbitrage **A** — une pièce qui a une
+  // cible de prédilection à portée NE BOUGE PLUS. Mesuré sur son montage, elle
+  // passait 99 ticks à voyager pour 32 ticks de tir.
+  //
+  // ⚠⚠ LA QUESTION NE SE RÉÉCRIT PAS : ELLE **EST** `doitSArreter`. Depuis le lot
+  // PRÉDILECTION, `ciblage` élit la prédilection à portée avant tout le reste, si
+  // bien que « une cible de prédilection est-elle à portée ? » et « la cible
+  // courante est-elle de prédilection ? » sont devenues la même question. Un
+  // second prédicat ici serait la seconde vérité qu'`ARRÊT T10` refuse.
+  // ⚠ `e.aTire` est posé à l'étape 5 et celle-ci est l'étape 7 : la lecture est
+  // dans le bon ordre. Et deux des quatre gardes de `doitSArreter` sont
+  // INATTEIGNABLES côté défense — aucun aérien n'a `defense.present`, et l'attaque
+  // n'a pas de bâtiment —, démontré au rapport du lot plutôt que supposé.
+  //
+  // ⚠⚠⚠ ET LA PLACE DE CE `return` EST L'ARBITRAGE DU LOT, PAS UN DÉTAIL. Le
+  // poser en TÊTE de la fonction aurait fait du frein une QUATRIÈME sortie
+  // précoce, donc aurait supprimé le balayage, donc les écrasements que la
+  // décaleuse paie en glissant — **seize sur les quatre raids réels, mesurés
+  // avant d'écrire une ligne**. CONTACT-2 a posé dix lignes plus haut que le
+  // contact est un fait de POSITION et non une conséquence du déplacement, et il
+  // énumère déjà trois pièces qui ne bougent pas et broient quand même ; une
+  // pièce qui freine en est la quatrième, de la même nature. Sorti d'ici, le
+  // frein tient l'arbitrage d'Ethan — la pièce ne se déplace pas — SANS renverser
+  // celui de CONTACT-2 : les deux invariants sont honorés, aucun n'est choisi
+  // contre l'autre.
+  //
+  // ⚠ CE QUE ÇA COÛTE SE DIT : l'indice retenu par C3 continue de se rafraîchir
+  // pendant le frein, `colonneDuDecalage` ayant déjà tourné. C'est le
+  // comportement voulu — quand le frein lève, la pièce part vers une cible
+  // qu'elle voit, pas vers celle qu'elle voyait quarante ticks plus tôt.
+  if (doitSArreter(etat, e, p)) return;
   // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
   // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
   // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
@@ -3089,7 +3262,7 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   // L'AUTRE BOUT : là-bas le DESSIN dépassait sa destination, ici c'est le
   // MODÈLE. Les deux naissent du même fait — la colonne a cessé d'être
   // monotone — et le lot doit les corriger toutes les deux.
-  const ecart = Math.abs(cible.colonneMilli - e.colonneMilli);
+  const ecart = Math.abs(colonneVisee - e.colonneMilli);
   const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee, frein), ecart, marge);
   const destinationMilli = e.colonneMilli + sens * pas;
   if (estSortiParLeCote(destinationMilli)) return;

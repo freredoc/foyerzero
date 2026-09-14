@@ -475,7 +475,24 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // cheveu, et c'est la seule que ce test mesure : UNE seule durée, sur neuf
   // niveaux.** L'invariance en miroir ne dit pas QUELLE est la durée, elle dit
   // qu'elle ne dépend pas du niveau.
-  assert.deepEqual([...ticks], [200], `durées observées : ${[...ticks].join(', ')}`);
+  // ⚠⚠ LOT FREIN (14/09) : 200 → **199**, CINQUIÈME RÉANCRAGE PAR LE DÉROULÉ
+  // SEUL, ET LE PLUS ÉTROIT DE LEUR HISTOIRE — UN TICK. Le site est composé et
+  // disposé exactement comme hier ; ce qui change est que la garnison ne quitte
+  // plus son poste tant qu'une cible de sa prédilection est à portée, donc elle
+  // tire au lieu de courir. Un tick, parce que cet assaut-ci est LOURD : ses
+  // six pièces sont des véhicules et des structures, et les défenseurs qui les
+  // freinent ne sont pas ceux qui les tuent. **La propriété, elle, ne bouge pas
+  // d'un cheveu, et c'est la seule que ce test mesure : UNE seule durée, sur
+  // neuf niveaux.** ⚠ Et c'est exactement l'asymétrie que ce test existe pour
+  // attraper : les trois étages ne lisent que `colonnePredilection`,
+  // `colonneMatrice`, `camp` et `porteeCarree`, dont aucun ne dépend du niveau —
+  // les PV et les dégâts montent ensemble, la portée ne monte pas. Un frein qui
+  // aurait mordu au niveau 1 et pas au niveau 50 aurait rendu neuf durées.
+  assert.deepEqual([...ticks], [199], `durées observées : ${[...ticks].join(', ')}`);
+  assert.notDeepEqual(
+    [...ticks], [200],
+    'la durée d\'avant ne doit pas revenir sans qu\'on l\'ait remesurée',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -653,15 +670,47 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     //       `assaut.test.js T7`, sur le même raid C.
     // ⚠ Aucun barème n'a été touché ; le calibrage revient à Ethan, et
     // `rapports/RAPPORT-lotPREDILECTION.md` §5 le porte avec ses trois options.
-    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 727, butin: { quartz: 254_470, scorie: 84_823 }, survivants: 6 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 424, butin: { quartz: 32_823, scorie: 10_941 }, survivants: 8 },
+    // ⚠⚠ LOT FREIN (14/09) : LES TROIS RAIDS BOUGENT, ET POUR LA PREMIÈRE FOIS
+    // ILS NE BOUGENT PAS DANS LE MÊME SENS — c'est ce contraste-là qui attribue
+    // le déplacement. Le lot ne touche QUE le décalage LATÉRAL de la défense :
+    // trois étages sur `seDecaler`, aucune ligne de `ciblage`, de `doitSArreter`
+    // ni d'`avancer`, et `src/data/` n'a pas un caractère au diff.
+    //   A : 727 → **695** ticks (−32), butin 254 470 / 84 823 →
+    //       **24 987 / 8 329** (−90,2 %), survivants 6 → **3**. C'est le
+    //       déplacement le plus lourd des trois, et il DÉFAIT celui de
+    //       PRÉDILECTION : l'assaut d'infanterie budgété ne franchit plus la
+    //       bande de l'avant-poste, donc il ne vide plus les bâtiments. La
+    //       garnison qui le laissait passer courait après lui ; elle tire.
+    //   B : cause **`attaquants` → `duree`**, 424 → **900**, butin
+    //       32 823 / 10 941 → **33 380 / 11 126** (+1,7 %), survivants 8 → **9**.
+    //       L'assaut lourd budgété touche le plafond pour la première fois de son
+    //       histoire — voir l'assertion de plafond plus bas, qui est RETOURNÉE et
+    //       non assouplie, et `assaut.test.js T7`, qui porte le même raid.
+    //       ⚠ **ET CE N'EST PAS UN GEL**, vérifié comme les neuf fois
+    //       précédentes en levant le plafond : à `maxTicks` porté à 20 000 il se
+    //       conclut par `attaquants` au tick **2 629**, soit **2,92 fois** le
+    //       plafond. À comparer aux précédents — 4 645 au lot CARTE, 5 478 au lot
+    //       COLONNE, 2 618 au lot MUR, 1 973 au lot PRÉDILECTION.
+    //   C : le tick **NE BOUGE PAS** — 493 des deux côtés, même cause — et son
+    //       butin monte de 6 486 / 2 162 à **10 493 / 3 497** (+61,8 %),
+    //       survivants 5 → **6**. C'est la lecture la plus nette du lot : à durée
+    //       identique, la garnison tire au lieu de courir, donc elle tue ce
+    //       qu'elle vise et laisse franchir le reste. Le même couple se lit dans
+    //       `repli.test.js T6` et dans `assaut.test.js T7`, sur le même raid C.
+    // ⚠ **C'est le contraste qui attribue** : un frein qui n'aurait fait que
+    // ralentir la défense aurait déplacé les trois dans le même sens. Ici A perd
+    // 90 % de son butin, C en gagne 62 %, et B ne bouge que d'un pour cent en
+    // partant au plafond. Aucun barème n'a été touché ; le calibrage revient à
+    // Ethan, et `rapports/RAPPORT-lotFREIN.md` §9 le porte.
+    { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 695, butin: { quartz: 24_987, scorie: 8_329 }, survivants: 3 },
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'duree', tick: TICKS_MAX_COMBAT, butin: { quartz: 33_380, scorie: 11_126 }, survivants: 9 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
     // bougent pas. C'est l'invariance en miroir : les PV et les dégâts partagent
     // la même courbe, donc changer la courbe ne change pas l'issue du combat,
     // seulement l'arrondi du butin qui s'en déduit.
-    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 493, butin: { quartz: 6_486, scorie: 2_162 }, survivants: 5 },
+    { nom: 'C', type: 'camp', assaut: 'infanterie', cause: 'attaquants', tick: 493, butin: { quartz: 10_493, scorie: 3_497 }, survivants: 6 },
   ];
   for (const c of cas) {
     const r = executerRaidComplet({
@@ -672,7 +721,17 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     assert.deepEqual(r.butin, c.butin, `raid ${c.nom} : butin`);
     assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, c.survivants,
       `raid ${c.nom} : survivants`);
-    assert.ok(r.nbTicks < TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
+    // ⚠⚠ LOT FREIN : CETTE ASSERTION EST RETOURNÉE, JAMAIS ASSOUPLIE. Elle
+    // exigeait des TROIS raids qu'ils se concluent avant le plafond ; B ne le
+    // fait plus. Écrire `<=` aurait effacé la propriété pour les trois, alors
+    // que deux la tiennent encore : elle les NOMME donc, et elle exige de B
+    // l'égalité STRICTE au plafond. Un B qui reviendrait sous la barre fait
+    // tomber le test, et c'est ce qu'on lui demande.
+    if (c.nom === 'B') {
+      assert.equal(r.nbTicks, TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
+    } else {
+      assert.ok(r.nbTicks < TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
+    }
   }
 
   // Le fait qui compte : à assaut budgété, B ne rase PLUS la Souche. Le

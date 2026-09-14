@@ -793,17 +793,33 @@ test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 e
   // 50 000 : laisser l'ancienne ancre aurait passé au VERT en faisant mentir la
   // §0 de `CLAUDE.md`, qui annonce l'autre nombre. C'est très exactement la
   // dérive LENTE que la dernière assertion de ce test existe pour refuser.
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT FREIN — SEPTIÈME FOIS, ET LE COÛT EST DE 593 OCTETS.
+  // `main` pristine à `d6732fa` rend **9 386 114**, le nombre que la §0
+  // annonçait, retrouvé à l'octet dans un `git worktree` ; l'arbre du lot rend
+  // **9 386 707**. Ventilé poste par poste contre ce pristine-là : **JavaScript
+  // +593 · feuille +0 · balisage +0 · images +0 · audio +0**, la partition
+  // tombant EXACTEMENT sur le total des DEUX côtés — écart **0 · 0** —, et
+  // **306 URI / 307 lignes `data:` de part et d'autre**. Le lot ne touche
+  // qu'`src/sim/combat.js` : la borne NE BOUGE PAS.
+  //
+  // ⚠ ET 593 OCTETS VALENT UN QUATRE-VINGT-QUATRIÈME DE LA TOLÉRANCE DE 50 000 :
+  // laisser l'ancienne ancre aurait passé au VERT en faisant mentir la §0 de
+  // `CLAUDE.md`, qui annonce l'autre nombre. C'est très exactement la dérive
+  // LENTE que la dernière assertion de ce test existe pour refuser.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_386_114;          // remesuré au lot PRÉDILECTION, base `a5dbd5a`
-  const MARGE = BORNE - MESURE;      // 213 886 octets — 214 003 écrits par ÉCRANS
-  assert.equal(MARGE, 213_886);
+  const MESURE = 9_386_707;          // remesuré au lot FREIN, base `d6732fa`
+  const MARGE = BORNE - MESURE;      // 213 293 octets — 213 886 écrits par PRÉDILECTION
+  assert.equal(MARGE, 213_293);
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
   assert.notEqual(MARGE, 214_592,
     'la marge est celle de CONTACT-2 seul : la fusion avec ÉCRANS a été défaite');
   assert.notEqual(MARGE, 214_003,
     'la marge est celle d\'avant PRÉDILECTION : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.23);
+  assert.notEqual(MARGE, 213_886,
+    'la marge est celle d\'avant FREIN : le réancrage a été défait');
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.22);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

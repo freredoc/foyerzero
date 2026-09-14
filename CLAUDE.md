@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **13/09/2026**, version 0.99.58 · build 160.
+Dernière révision : **14/09/2026**, version 0.99.59 · build 161.
 
 ---
 
@@ -42,7 +42,197 @@ Dernière révision : **13/09/2026**, version 0.99.58 · build 160.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 13/09/2026 (après le lot PRÉDILECTION), à confronter :**
+**Référence au 14/09/2026 (après le lot FREIN), à confronter :**
+⚠⚠ **UNE DÉFENSEUSE CESSE DE COURIR DÈS QU'ELLE A DE QUOI TIRER, ET LE FREIN
+N'ÉCRIT AUCUN PRÉDICAT — IL APPELLE `doitSArreter`.** Ethan, 13/09, point 1 :
+« Les unités défensives en déplacement latéral semblent aller très vite » —
+arbitrage **A** (frein) et **C3** (hystérésis) —, puis « Défense : les unités
+reviennent à leur position initiale si leur cible de prédilection est morte »,
+lu **β** : le retour au poste n'a lieu que lorsqu'il ne reste **AUCUNE** cible de
+prédilection sur la grille. **Mesuré avant d'écrire une ligne, sur le montage du
+§3 du brief : la pièce passait 99 ticks à voyager pour 32 ticks de tir.** Elle
+en passe **50 pour 31**. `npm test` rend **1613 pass / 0 fail** au sens de la
+garde de `documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict
+mesuré est **1612 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. `npm run build` → `dist/index.html`,
+**9 386 707 octets**, 0 référence externe. Coût **+593 octets, ENTIÈREMENT DU
+JAVASCRIPT**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` sur l'arbre pristine de `main` = `d6732fa` (**9 386 114**, le
+nombre que la §0 précédente annonçait, retrouvé à l'octet) : **JavaScript +593 ·
+feuille +0 · balisage +0 · images +0 · audio +0**, la partition tombant
+EXACTEMENT sur le total des DEUX côtés — écart **0 · 0** —, et **306 URI / 307
+lignes `data:` de part et d'autre**. Borne T10 **inchangée à 9 600 000**, marge
+**213 293 octets, 2,22 %**. Version et build passent à **0.99.59 · build 161** —
+et **les deux restent des CHAÎNES**, vérifié au type. Le lot touche
+**`src/sim/combat.js` et lui seul** dans `src/`, plus `package.json`,
+`CLAUDE.md`, **quinze** fichiers de `test/` — les DEUX témoins compris —, et fait
+entrer `test/frein.test.js` et `rapports/RAPPORT-lotFREIN.md`. **Pas une ligne de
+`src/data/`, `src/render/`, `src/ui/`, `src/son/`, `tools/` ni `art/`** — vérifié
+au diff.
+⚠⚠ **LES TROIS ÉTAGES SONT DANS CET ORDRE, ET LE RETOUR EST LE DERNIER.**
+`A` — une cible de prédilection est à portée → **on ne bouge pas** ;
+`C3` — sinon, la cible de décalage retenue est encore valide → **on va vers
+elle** ; `β` — sinon, il n'en reste aucune sur la grille → **on rentre au
+poste**. Une pièce qui rentre s'arrête donc à l'instant où une cible entre dans
+sa portée : l'ordre inverse la ferait rentrer jusqu'au bout sous le feu.
+⚠⚠ **`doitSArreter` N'A PAS UNE LIGNE DE CHANGÉE, ET C'EST TOUT LE FREIN.**
+Depuis le lot PRÉDILECTION elle répond exactement à « une cible de prédilection
+est-elle à portée ? » ; `seDecaler` l'APPELLE. Un second prédicat à côté aurait
+été deux vérités pour une même question — la route écartée du lot précédent,
+commise un lot plus tard.
+⚠⚠⚠ **ET LE FREIN EST APRÈS LE PAIEMENT DE L'ÉCRASEMENT, PAS AVANT — C'EST
+L'INVARIANT DE CONTACT-2, ET IL SE MESURE.** Ce lot-là exige que les dégâts
+d'écrasement soient payés **avant tout `return`** de `seDecaler`. **Mesuré sur
+les quatre raids réels : 16 écrasements latéraux sur `main`, 16 sur l'arbre du
+lot — identiques.** Contre-épreuve, le frein remonté en tête de la fonction :
+**`seDecaler` en paie ZÉRO** (`avancer` 26), soit **seize sur seize détruits**.
+Aucun des deux invariants n'est choisi contre l'autre ; c'est la POSITION de
+trois lignes qui les tient ensemble.
+⚠⚠ **DEUX CHAMPS NEUFS ENTRENT SUR L'ENTITÉ, ET ILS NE SONT POSÉS QUE SUR CE QUI
+DÉCALE VRAIMENT.** `colonneDePoseMilli` et `cibleDecalageIndice` naissent sous
+`camp !== 'attaque' && p.vitesseMilli !== 0 && p.colonnePredilection !== null`.
+C'est la doctrine d'`embarquee` du lot FORMATION-ET-GARNISON, reprise au mot :
+`normaliser` trie les clés PROPRES, donc **un champ posé partout entrerait dans
+`serialiserEtat`, donc dans l'empreinte d'état des 200 témoins**, et les deux
+cents rougiraient sur des montages où pas une pièce ne se décale. ⚠ Et
+`ajouterEntite` destructure une **LISTE FERMÉE** : les deux champs sont ajoutés
+aux DEUX endroits, sans quoi ils disparaîtraient en silence.
+⚠⚠ **ET LA SAUVEGARDE NE GROSSIT PAS D'UN OCTET — MESURÉ, PAS DÉDUIT.** Une
+entité de combat naît de `creerCombat` et meurt avec le montage ; le témoin de
+BASES-0 le confirme par l'autre bout, **la taille de la sauvegarde étant
+identique sur 25 graines sur 25**.
+⚠⚠ **`cibleDeDecalageValide` EST EXTRAITE POUR QUE `cibleDuDecalage` ET
+`colonneDuDecalage` NE PUISSENT PAS DIVERGER**, et elle porte la garde de
+nullité en tête : `p.colonnePredilection === null` sort AVANT toute lecture de
+`profil(c).colonneMatrice`, faute de quoi deux `null` se compareraient égaux —
+l'avertissement que `degatsContre`, `doitSArreter` et `ciblage` portent déjà en
+toutes lettres.
+⚠⚠ **ET `colonneDuDecalage` REND UNE COLONNE, JAMAIS UNE ENTITÉ.** β a besoin
+d'un **POSTE**, pas d'une cible : lui faire rendre une entité obligerait
+l'appelant à retrouver le poste par un second chemin, et les deux divergeraient
+au premier réglage. Elle rend `e.colonneDePoseMilli ?? null` quand il ne reste
+rien à viser.
+⚠⚠ **LE §1.3 DU BRIEF EST FAUX SUR LA CAUSE : C'EST `A` QUI FERME LA
+RETRAVERSÉE, PAS `C3`.** Il attribue à l'hystérésis la disparition des
+demi-tours ; **mesuré en isolant les trois étages sur le montage du §3, `A`
+SEUL rend inversions 0** — la pièce n'a plus le temps de traverser, elle freine
+dès la première cible à portée. `C3` reste écrit, et il mord ailleurs : c'est
+lui qui empêche une pièce déjà en route de changer d'avis à chaque tick.
+⚠⚠ **LE §7 DU BRIEF SE CONTREDIT LUI-MÊME, ET SON ASSERTION EST REMPLACÉE.** Il
+demande `voyage < tir` ; **sa propre table du §3 annonce 50 contre 31**, donc
+l'assertion serait tombée sur le code qu'elle est censée garder. `FREIN T1`
+asserte `voyage < 2 × tirs`, plus les six valeurs EXACTES — voyage 50, tirs 31,
+inversions 0, parcours 4 000 millièmes, cases `[5, 4, 3, 2, 1]`, colonne finale
+1 000 — et **quatre contre-assertions `notEqual`** qui refusent le retour de 99,
+32, 7 920 et 7 000.
+⚠⚠ **`FREIN T1` ET `FREIN T2` ONT ÉTÉ VUS ROUGES SUR `main` AVANT D'ÊTRE
+ÉCRITS.** `T1` y tombe sur « voyage 99 » et « inversions 7 » ; `T2` sur
+« colonne finale 9 000 » — la défenseuse restait collée à la colonne de sa
+dernière cible morte au lieu de rentrer. **Le compte passe de 1 611 à 1 613.**
+⚠ **ET `FREIN T2` PROUVE SA PRÉMISSE AVANT D'ASSERTER QUOI QUE CE SOIT** :
+`ecartMax` vaut **4 × MILLI_PAR_CASE**, donc la pièce EST partie de son poste
+avant d'y revenir. Sans cette assertion, une défenseuse qui n'aurait jamais bougé
+passerait le test.
+⚠⚠ **TROIS DES SIX SORTIES DE `doitSArreter` NE PEUVENT PAS TIRER AU SITE DU
+FREIN, ET C'EST MESURÉ PLUTÔT QUE RAISONNÉ.** Instrumenté sur **72 raids et
+86 024 appels**, trois branches seulement sortent : `pas-de-tir` **63 659
+(74,00 %)**, `hors-prédilection` **12 533 (14,57 %)**, `ARRÊT` **9 832
+(11,43 %)**. Les gardes **aérienne**, **bâtiment** et **prédilection nulle**
+rendent zéro, et la structure le confirme : aucune unité `traversant` n'a
+`defense.present`, aucune `DEFENSES` n'est traversante, `creerCombat` donne
+toujours `camp: 'defense'` à un bâtiment, et `colonneDuDecalage` sort AVANT le
+frein quand la prédilection est nulle. **Elles sont laissées telles quelles** —
+`doitSArreter` sert aussi `avancer`, où elles mordent.
+⚠⚠ **LE LOT REND LES ASSAUTS PLUS FAIBLES, ET C'EST L'INVERSE EXACT DE
+PRÉDILECTION.** Balayage des cinquante-quatre raids : attaquants détruits
+**388 → 398**, bâtiments tombés **44 → 28**, défenseurs tombés **606 → 586**,
+somme des ticks **29 169 → 28 458**. Une défenseuse qui cesse de courir tire
+plus tôt et meurt moins ; **aucun barème n'a été touché, le calibrage revient à
+Ethan.**
+⚠⚠ **ET LE RAID B DE `roster T6` EXPIRE DÉSORMAIS AU PLAFOND DE 900 TICKS.**
+`T6` est **RETOURNÉ** plutôt qu'assoupli : écrire `<=` pour les trois aurait
+effacé la propriété pour A et C. Une branche NOMMÉE exige l'égalité STRICTE au
+plafond pour B et l'inégalité stricte pour les deux autres. ⚠ **Et ce n'est PAS
+un gel**, vérifié comme les neuf fois précédentes en levant le plafond : le
+combat se conclut par `attaquants` au tick **2 629**, soit **2,92 fois le
+plafond**. À comparer aux précédents — 4 645 au lot CARTE, 5 478 au lot COLONNE,
+2 618 au lot MUR, 1 973 au lot PRÉDILECTION. **Le §9 du brief interdit de
+trancher : le fait est porté au rapport, rien n'est décidé.**
+⚠⚠ **LES DEUX TÉMOINS SONT SURCHARGÉS, JAMAIS RECAPTURÉS, ET LEURS DEUX COMPTES
+NE MESURENT PAS LA MÊME CHOSE.** `COMBATS_DEPLACES_PAR_FREIN` déplace **1 053
+champs sur 1 600** et n'en ajoute que **trente-quatre** à la surcharge —
+1 179 → **1 213**, 387 gardés ;
+`COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS` en déplace **1 030** et n'en ajoute
+que **QUATRE** — 1 337 → **1 341**, 259 gardés. **Le nombre de champs NEUFS
+mesure l'épaisseur de la pile, pas l'ampleur du lot** : ce sont les mêmes champs
+vus sous quatre couches d'un côté et neuf de l'autre. ⚠ Le brief annonçait
+« 1 053 champs, 200 combats » : le premier nombre tombe au champ près, et **aucun
+des deux cents combats n'est intact** — là où PRÉDILECTION en laissait sept et
+CONTACT-2 vingt-trois.
+⚠⚠ **ET C'EST LA CAUSE DE FIN QUI DIT QUE LE LOT NE TOUCHE PAS AU CIBLAGE : DEUX
+BASCULENT DANS `T1`, QUATRE DANS `T1 bis`**, contre huit à PRÉDILECTION. Les
+**173 ticks de fin** déplacés disent le reste — les combats durent autrement,
+ils ne se terminent pas autrement.
+⚠⚠ **LE TÉMOIN DE BASES-0 PREND SA VINGT-SEPTIÈME COUCHE — 36 COUPLES SUR 350**,
+six champs, phases **p07 à p14**, les six premières identiques AU BIT. ⚠⚠ **ET LE
+RAID DE PROXIMITÉ BOUGE SUR DIX-NEUF GRAINES SUR 25, CELUI DE L'OUVRAGE SUR
+VINGT ET UNE — L'INVERSE EXACT DE PRÉDILECTION**, qui n'en déplaçait aucun. Le
+motif se lit dans les deux règles : la prédilection ne mord que là où une pièce a
+plus d'une CLASSE de cible à portée, et le camp de la phase 7 porte trois `meute`
+et rien d'autre ; le frein, lui, ne demande qu'UNE cible de la bonne classe.
+⚠ **AUCUN DES DIX-SEPT SCALAIRES NE BOUGE**, sur 25 graines sur 25, la taille de
+la sauvegarde comprise. ⚠ Le `??` de `bases.test.js` reste NÉCESSAIRE : les
+graines **8 et 15** tombent à l'octet — deux parties où aucune pièce de garnison
+n'a jamais eu à se décaler.
+⚠⚠ **QUINZE FICHIERS DE `test/` SONT TOUCHÉS, ET AUCUNE ASSERTION N'A ÉTÉ RETIRÉE
+NI ASSOUPLIE.** Chaque réancrage écrit le nombre d'avant à côté de celui d'après
+et porte une contre-assertion `notEqual` qui refuse le retour de l'ancien.
+⚠⚠ **ET LA GARDE DE `raid.test.js` A CHANGÉ EXACTEMENT COMME SON PROPRE MESSAGE
+L'ANNONÇAIT : LA DÉCROISSANCE STRICTE DE LA DÉFENSE REVIENT.** Elle avait été
+abandonnée au lot COLONNE, la première passe rasant déjà tout. Mesuré : la
+première passe laisse **40 ‰**, la seconde **0**. Deux assertions de prémisse
+encadrent le retour — sans le `notEqual(un.restantDefense, 0)`, la décroissance
+stricte redeviendrait vacueuse le jour où la première passe raserait à nouveau.
+⚠⚠ **`generateur T12` VOIT SA COUVERTURE MONTER POUR LA DEUXIÈME FOIS** —
+`ecarts.length` **460 → 480**, paires sautées **40 → 20**, combats au plafond
+**20 → 10** : le lot RACCOURCIT encore les combats miroirs que le plafond de 900
+tronquait. ⚠⚠ **ET `ecartMax` REMONTE DE 0 À 1, SUR UNE INVERSION DE STRUCTURE
+QUE LE DÉPÔT N'AVAIT JAMAIS VUE : le niveau 1 SEUL contre les quatre autres** —
+`camp` graine 23, montage `mixte/5`, 299 contre 300 ticks, écart relatif
+**0,334 %**. La contre-assertion est **RETOURNÉE** : elle refusait le un, elle
+refuse le zéro.
+⚠ **`POI T18` EST RÉANCRÉ, ET L'ÉCART QU'IL MESURE SE RESSERRE** — butin sans POI
+**62/20 → 40/13**, avec POI **87/29 → 44/14**, durée **451** ticks des deux
+côtés. L'écart relatif passe de **+40,3 % à +10,0 %** : une majoration de dégâts
+ne paie que sur ce qu'on atteint, et l'assaut atteint moins.
+⚠ **`repli T6` GARDE SON TICK 493 ET VOIT SON BUTIN MONTER DE 61,8 %** —
+6 486/2 162 → **10 493/3 497**, survivants **5 → 6**. Deuxième fois de l'histoire
+de ce seuil qu'un lot déplace le butin sans la durée, après CONTACT-2, et par le
+mécanisme INVERSE. ⚠ `roster T5` passe de **[200] à [199]**.
+⚠ **`PIC T7` EST RÉANCRÉ POUR LA SEPTIÈME FOIS** : 9 386 114 → **9 386 707**,
+marge 213 886 → **213 293**, 2,23 % → **2,22 %**. Les 593 octets valent un
+quatre-vingt-quatrième de sa tolérance de 50 000 : le laisser aurait passé au
+VERT en faisant mentir cette §0. Une quatrième contre-assertion `notEqual` refuse
+l'ancre de PRÉDILECTION.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — démontré et non supposé :
+`src/sim/state.js` n'apparaît pas au diff, et **cinq parties menées jusqu'à
+quatre raids chacune** se sérialisent sous `"version":33`, se rechargent et se
+resérialisent **identiques à l'octet**.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
+se VOIT — une garnison qui cesse de traverser la grille en courant, et qui
+regagne son poste quand il n'y a plus rien à viser — et rien n'a été ouvert dans
+un navigateur : tout est mesuré sur `colonneMilli` et des fonctions PURES.
+**À regarder au premier essai** : que le retour au poste ne se lise pas comme une
+fuite, et que les défenseuses ne paraissent pas figées maintenant qu'elles ne
+courent plus.
+⚠ **ET LE LOT N'EST PAS SUR UNE BRANCHE NOMMÉE PAR LE BRIEF** — il demande
+`claude/[descriptive]` ; l'environnement d'exécution épingle la session à
+`claude/new-session-j500j0` et interdit de pousser ailleurs sans autorisation
+explicite.
+
+**Auparavant, après le lot PRÉDILECTION :**
 ⚠⚠ **LA CIBLE DE PRÉDILECTION PASSE EN TÊTE DE L'ORDRE DE CIBLAGE, ET LA RÈGLE
 D'ARRÊT N'A PAS UNE LIGNE DE CHANGÉE.** Ethan, 13/09, point 3 : « L'épervier ne
 s'est pas arrêté pour cibler le fendeur. D'autres situations comme ça ? » — **OUI,
@@ -12713,7 +12903,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   73 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   74 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -12725,7 +12915,7 @@ test/                   73 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
-  bareme-et-rejeu  contact  predilection
+  bareme-et-rejeu  contact  predilection  frein
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
