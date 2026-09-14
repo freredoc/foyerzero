@@ -119,11 +119,9 @@ import {
   DEPLACES_PAR_CONTACT_2, EMPREINTES_PAR_GRAINE_CONTACT_2,
   DEPLACES_PAR_PREDILECTION, EMPREINTES_PAR_GRAINE_PREDILECTION,
   RAPPORTS_OUVRAGE_PREDILECTION,
+  DEPLACES_PAR_FREIN, EMPREINTES_PAR_GRAINE_FREIN,
+  RAPPORTS_PROCHE_FREIN, RAPPORTS_OUVRAGE_FREIN,
   RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
-  DEPLACES_PAR_ECHELLE_RECHERCHE,
-  EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE,
-  RAPPORTS_PROCHE_ECHELLE_RECHERCHE,
-  RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -286,16 +284,20 @@ function empreinteAttendue(phase, champ) {
   // mord que là où une pièce avait plus d'une CLASSE de cible valide à portée.**
   // ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
   // de la sauvegarde comprise.
-  // ⚠⚠ VINGT-SEPTIÈME COUCHE — lot ÉCHELLE-RECHERCHE, 14/09. **SEIZE couples sur
-  // 350**, deux champs — `recherche` et `rapports` —, phases p07 à p14 : les SIX
-  // PREMIÈRES PHASES sont identiques AU BIT, un solde de points ne bougeant que
-  // par un raid. ⚠⚠ ET `butin` NE BOUGE PAS, sur les quatorze phases : le butin
-  // lit `BUTIN` par `butinPlein`, la recherche lit `POINTS_RECHERCHE.echelle`,
-  // et les deux grandeurs ne partagent plus aucun facteur. C'est cette moitié-là
-  // qui prouve que le lot recale UN barème et rien d'autre. ⚠⚠ AUCUN SCALAIRE
-  // NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille de la sauvegarde
-  // comprise.
-  return DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
+  // ⚠⚠ VINGT-SEPTIÈME COUCHE — lot FREIN, 14/09. **Trente-six couples sur
+  // 350**, six champs, phases p07 à p14 : les SIX PREMIÈRES PHASES sont encore
+  // identiques AU BIT. Une défenseuse cesse de courir dès qu'une cible de
+  // prédilection est à portée, tient sa cible de décalage tant qu'elle est
+  // valide, et rentre à son poste quand il n'en reste aucune.
+  // ⚠⚠ LE RAID DE PROXIMITÉ BOUGE SUR **19 GRAINES SUR 25**, celui de l'Ouvrage
+  // sur **21** — l'INVERSE exact du lot PRÉDILECTION, qui n'en déplaçait aucun
+  // côté proximité. La prédilection ne mord que là où une pièce a plus d'une
+  // CLASSE de cible à portée ; le frein ne demande qu'UNE cible de la bonne
+  // classe, et il n'existe aucun camp qui n'en porte aucune.
+  // ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
+  // de la sauvegarde comprise : les deux champs neufs de l'entité de combat ne
+  // traversent donc PAS `serialiser`, et `SAVE_VERSION` n'avait pas à bouger.
+  return DEPLACES_PAR_FREIN[phase]?.[champ]
     ?? DEPLACES_PAR_PREDILECTION[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT_2[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT[phase]?.[champ]
@@ -739,11 +741,12 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // la garnison que l'Ouvrage attaque n'offre jamais deux classes de cible à
     // portée d'un même assaillant. Le `??` reste donc NÉCESSAIRE, comme aux lots
     // MUR, VITESSE, BARÈME-ET-REJEU, CONTACT et CONTACT-2.
-    // ⚠⚠ ÉCHELLE-RECHERCHE (14/09) DÉPLACE LES VINGT-CINQ, ET IL NE POUVAIT PAS
-    // EN LAISSER : le solde de points entre dans l'empreinte de toute partie, et
-    // les deux raids du scénario cassent quelque chose sur les vingt-cinq. Le
-    // `??` reste NÉCESSAIRE pour les couches d'avant, qu'il chaîne.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
+    // ⚠⚠ FREIN (14/09) EN DÉPLACE **VINGT-TROIS SUR VINGT-CINQ**. Les deux qui
+    // tombent à l'octet sur `PREDILECTION` — **8 et 15** — sont des parties où
+    // aucune pièce de garnison n'a jamais eu à se décaler au cours des deux raids
+    // du scénario : les trois étages n'y ont rien à changer. Le `??` reste donc
+    // NÉCESSAIRE, comme aux six lots d'avant.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_FREIN[g]
       ?? EMPREINTES_PAR_GRAINE_PREDILECTION[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT_2[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT[g]
@@ -942,8 +945,17 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // même raison : la base du joueur est clairsemée, donc deux pièces ne s'y
       // croisent presque jamais en travers. Une table PLEINE voudrait dire que le
       // lot déplace le résultat de tout raid, ce qu'il ne fait pas.
+      // ⚠⚠ ET LE LOT FREIN LES DÉPLACE TOUS LES DEUX — **19 sur 25 côté
+      // proximité, 21 sur 25 côté Ouvrage** —, ce qui est l'INVERSE exact de la
+      // forme du lot PRÉDILECTION, dont la table proche était VIDE. Le motif se
+      // lit dans les deux règles : la prédilection ne mord que là où une pièce a
+      // plus d'une CLASSE de cible à portée, quand le frein ne demande qu'UNE
+      // cible de la bonne classe — et il n'existe aucun camp qui n'en porte
+      // aucune. ⚠ Et les deux tables ne sont PAS pleines : sur six parties côté
+      // proximité et quatre côté Ouvrage, aucune pièce de garnison n'a eu à se
+      // décaler, donc les trois étages n'y changent rien.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE[g]
+        ? (RAPPORTS_OUVRAGE_FREIN[g]
           ?? RAPPORTS_OUVRAGE_PREDILECTION[g]
           ?? RAPPORTS_OUVRAGE_CONTACT_2[g]
           ?? RAPPORTS_OUVRAGE_CONTACT[g]
@@ -966,7 +978,7 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         // porte trois `meute` et rien d'autre, donc aucun attaquant n'a jamais
         // deux CLASSES de cible à portée — zéro couple (entité, tick) sur les
         // 483 ticks du combat.
-        : (RAPPORTS_PROCHE_ECHELLE_RECHERCHE[g]
+        : (RAPPORTS_PROCHE_FREIN[g]
           ?? RAPPORTS_PROCHE_CONTACT_2[g]
           ?? RAPPORTS_PROCHE_CONTACT[g]
           ?? RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]
