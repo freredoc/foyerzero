@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **14/09/2026**, version 0.99.59 · build 161.
+Dernière révision : **14/09/2026**, version 0.99.60 · build 162.
 
 ---
 
@@ -42,7 +42,75 @@ Dernière révision : **14/09/2026**, version 0.99.59 · build 161.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 14/09/2026 (après le lot FREIN), à confronter :**
+**Référence au 14/09/2026 (après le REVERT du lot ÉCHELLE-RECHERCHE), à
+confronter :**
+⚠⚠ **LE LOT ÉCHELLE-RECHERCHE A ÉCRASÉ LE LOT FREIN, ET `main` ÉTAIT ROUGE
+DEPUIS.** Quatre commits « Add files via upload » du 14/09, 12:09–12:10 —
+`f7266ee` le rapport, `1be68b3` `src/data/sites.js`, `9b92a62`
+`src/sim/combat.js`, `a2a0755` huit fichiers de `test/` dont les DEUX témoins.
+Ils sont **tous les quatre annulés**, et l'arbre redevient celui d'`ab4cb78`.
+⚠⚠ **LE `combat.js` TÉLÉVERSÉ ÉTAIT BÂTI SUR UN ARBRE D'AVANT FREIN — MESURÉ,
+PAS DÉDUIT.** Contre l'arbre de PRÉDILECTION (`d6732fa`) il ne vaut que **+60 /
+−8** ; contre celui de FREIN (`ab4cb78`), **+68 / −189**. Le téléversement n'a
+donc pas FUSIONNÉ, il a REMPLACÉ : les quatre symboles du lot —
+`cibleDeDecalageValide`, `colonneDuDecalage`, `colonneDePoseMilli`,
+`cibleDecalageIndice` — avaient disparu du fichier, et les trois étages de
+`seDecaler` (A, C3, β) avec eux.
+⚠⚠ **ET LA SUITE LE DISAIT DÉJÀ, SANS QU'ON AIT EU À LIRE UN DIFF.** Mesuré sur
+`main` = `a2a0755` **avant d'écrire une ligne** : **1613 déclarés · 1601 pass ·
+11 fail · 1 skipped**, `npm run check` en **1**. Les onze rouges nomment le lot
+effacé — `FREIN T1` et `FREIN T2` en tête, plus `ARRÊT T10` (qui compte les
+lecteurs de `colonnePredilection`, deux de moins sans FREIN), `CONTACT-2 T2`,
+`CIBLE T5`, `POI T18`, `roster T6`, `repli T6` et quatre mesures réancrées.
+⚠⚠ **LES QUATRE SONT ANNULÉS ENSEMBLE, ET LE SEUL `combat.js` NE SUFFISAIT
+PAS.** Les huit fichiers de `test/` du lot ont été RECAPTURÉS contre le moteur
+sans FREIN : rendre le moteur sans rendre les témoins laisserait la suite rouge
+par l'autre bout. **Un lot se révoque comme il a atterri — d'un bloc.**
+⚠⚠ **ET LA RÉVOCATION SE PROUVE À L'ARBRE, PAS AU DIFF LU** : `git diff ab4cb78`
+est **VIDE**. C'est la seule chose qui dise qu'elle est complète.
+`npm test` rend **1613 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1612 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en **0**. `npm run build` → `dist/index.html`,
+**9 386 707 octets**, 0 référence externe, **307 lignes `data:`** — le nombre
+même que la §0 de FREIN annonce, retrouvé à l'octet.
+⚠⚠ **MAIS LA VERSION MONTE, ET C'EST LA SEULE CHOSE QUE CE LOT AJOUTE À
+`ab4cb78`.** **0.99.60 · build 162**, les deux restant des CHAÎNES, vérifié au
+type. Rendre le livrable de FREIN sous son build 161 d'origine ne l'aurait
+livré à PERSONNE : `PolitiqueVersion.miseAJourAcceptable` de `android/maj/`
+s'écrit `buildManifeste > buildInstalle` — **un build inférieur OU ÉGAL à
+l'installé est ignoré**, lu dans le code et non de mémoire. Un appareil qui a
+déjà pris le 161 écrasé serait resté dessus pour toujours.
+⚠⚠ **C'EST LE PIÈGE DU LOT ÉCRANS, VU PAR L'AUTRE BOUT.** `pictogramme.test.js`
+l'écrit depuis le 10/09 : « deux livrables différents sous le même
+`config.build` seraient lus comme un seul par l'enveloppe Android ». Le build
+161 a été publié DEUX fois, avec deux contenus — le téléversement l'a commis
+sans toucher `package.json`. Le bump referme la correspondance.
+⚠ **ET `PIC T7` NE BOUGE PAS D'UN OCTET** : « 0.99.59 » → « 0.99.60 » et
+« 161 » → « 162 » ont la même longueur, donc son ancre de **9 386 707** tient,
+et la marge reste **213 293 octets, 2,22 %** sous la borne T10 de 9 600 000.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — `src/sim/state.js`
+n'apparaît pas au diff, ni à celui des quatre commits annulés.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : ni
+`art/` ni un outil de `tools/` n'apparaît au diff des quatre commits.
+⚠⚠ **LE LOT ÉCHELLE-RECHERCHE N'EST PAS JUGÉ, IL EST DÉCROCHÉ.** Son travail
+propre — l'échelle de `src/data/sites.js`, les points de recherche — n'a rien
+de fautif ; ce qui l'est, c'est d'être arrivé par un téléversement bâti sur un
+arbre périmé. Il se rejoue sur `ab4cb78`, et `RAPPORT-lotECHELLE-RECHERCHE.md`
+revient avec lui. **Ethan tranche** sur l'ordre des deux lots.
+⚠⚠ **ET LA LEÇON EST CELLE DU 27/08, SOUS UN AUTRE NOM : UN TÉLÉVERSEMENT NE
+FUSIONNE RIEN.** « Add files via upload » REMPLACE le fichier par celui du
+disque de l'appareil qui l'envoie ; si cet arbre-là a une heure de retard, il
+emporte tout ce qui a atterri entre-temps, **sans conflit et sans un mot**.
+C'est le même mécanisme que l'écrasement de `src/sim/combat.js` par la table de
+`src/data/` du même nom court, et le même remède : **ne jamais téléverser un
+fichier de `src/` sans avoir remesuré l'arbre contre `origin/main` d'abord.**
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE DEMANDÉE — ÉCART DÉCLARÉ.** La demande
+nomme `claude/revert-echelle-recherche` ; l'environnement d'exécution épingle la
+session à `claude/revert-echelle-recherche-plbgnu` et interdit de pousser
+ailleurs sans autorisation explicite.
+
+**Auparavant, après le lot FREIN :**
 ⚠⚠ **UNE DÉFENSEUSE CESSE DE COURIR DÈS QU'ELLE A DE QUOI TIRER, ET LE FREIN
 N'ÉCRIT AUCUN PRÉDICAT — IL APPELLE `doitSArreter`.** Ethan, 13/09, point 1 :
 « Les unités défensives en déplacement latéral semblent aller très vite » —
