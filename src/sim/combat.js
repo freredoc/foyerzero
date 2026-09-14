@@ -439,15 +439,24 @@ export function verifierArithmetique() {
     PROFILS_BATIMENT[id] = profilBatimentJoueur(id, b);
   }
 
-  // Les points de recherche suivent la courbe économique. Le produit le plus
-  // lourd du barème est bareme × facteurEconomiqueMilli(plafond) × bonus : il
-  // doit rester un entier sûr. L'asserter plutôt que le supposer.
+  // Les points de recherche suivent LEUR PROPRE échelle depuis le 14/09/2026.
+  // Le produit le plus lourd du barème est
+  // bareme × facteurRechercheMilli(plafond) × bonus : il doit rester un entier
+  // sûr. L'asserter plutôt que le supposer.
+  //
+  // ⚠ ET C'EST BIEN `facteurRechercheMilli` QU'IL FAUT BORNER ICI, PAS
+  // `facteurEconomiqueMilli`. Le garde-fou existe parce que la chaîne a déjà
+  // débordé l'entier sûr du temps du 2^(n−1) ; le laisser sur la courbe de butin
+  // le rendrait muet sur la grandeur qu'il est censé surveiller. La nouvelle
+  // échelle est PLUS LÉGÈRE au plafond que l'ancienne — 392 976 879 contre
+  // 480 941 681 — et la marge de l'entier sûr passe de 260 à 318 fois. Mesuré,
+  // pas supposé : une pente plus douce partant plus haut finit plus bas.
   const bareme = Math.max(...Object.values(POINTS_RECHERCHE.parCible));
   const bonus = MILLE + Math.round(MILLE * POINTS_RECHERCHE.bonusModuleDebloque);
-  const plafond = bareme * facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond) * bonus;
+  const plafond = bareme * facteurRechercheMilli(GEOGRAPHIE.niveauPlafond) * bonus;
   if (!Number.isSafeInteger(plafond)) {
     throw new Error(
-      `combat : ${bareme} × ${facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond)} × ${bonus} `
+      `combat : ${bareme} × ${facteurRechercheMilli(GEOGRAPHIE.niveauPlafond)} × ${bonus} `
       + `= ${plafond} n'est pas un entier sûr`,
     );
   }
@@ -811,6 +820,33 @@ function ajouterEntite(
   // courante et rien d'autre.
   if (embarquee === true) entite.embarquee = true;
   if (moduleActif(etat, entite, p, 'bouclier')) entite.bouclierMilli = pvMaxMilli;
+  // ⚠⚠ LES DEUX CHAMPS DU LOT FREIN NE SE POSENT QUE SUR CE QUI SE DÉCALE POUR
+  // DE BON, ET C'EST LA DOCTRINE D'`embarquee` CI-DESSUS APPLIQUÉE À LA LETTRE.
+  // `normaliser` énumère les clés : un champ écrit sur TOUTES les entités entre
+  // dans `serialiserEtat`, donc dans l'empreinte d'état des deux cents témoins.
+  // Le prédicat est exactement celui des pièces que `seDecaler` fait bouger —
+  // camp défense (l'aiguillage de `deplacement`), vitesse non nulle (son
+  // `continue`), prédilection non nulle (la garde de `colonneDuDecalage`).
+  // ⚠ Les deux cents témoins bougent de toute façon à ce lot-ci, PAR LE
+  // COMPORTEMENT ; ce n'est pas une raison d'arroser, la doctrine vaut pour le
+  // lot suivant.
+  //
+  // ⚠⚠ `colonneDePoseMilli` SE POSE AU MONTAGE, PAS AU PREMIER TICK. Au premier
+  // tick la pièce a déjà pu se décaler, et le « poste » serait alors la première
+  // case qu'elle vient de fuir.
+  // ⚠ `cibleDecalageIndice` NAÎT À `null` ET NON ABSENT : l'hystérésis de C3
+  // distingue « pas encore de cible retenue » de « champ non posé », et c'est
+  // cette distinction qui laisse `colonneDuDecalage` ne rien écrire sur une
+  // entité qui n'a rien à retenir.
+  // ⚠⚠ ET `SAVE_VERSION` NE BOUGE PAS — le précédent est `bouclierMilli`, né
+  // exactement ainsi : « il ne se recharge jamais et ne survit pas au raid,
+  // aucune sauvegarde ne le lit ». Une entité de combat naît de `creerCombat` et
+  // meurt avec le montage. **Démontré par un aller-retour de sérialisation au
+  // rapport du lot, pas déduit du précédent.**
+  if (camp !== 'attaque' && p.vitesseMilli !== 0 && p.colonnePredilection !== null) {
+    entite.colonneDePoseMilli = entite.colonneMilli;
+    entite.cibleDecalageIndice = null;
+  }
   // ⚠⚠ EN MILLI-CASES, PUIS AU CARRÉ — jamais l'inverse. Une case vaut 1 000
   // milli, et `distanceCarree` compare des carrés de milli-cases : deux cases
   // voisines sont à 1 000 000. On ajoute donc la case AVANT d'élever au carré.
@@ -1402,6 +1438,7 @@ function ciblage(etat) {
     // masquer évite un test de camp par candidat.
     const masque = e.camp === 'defense' ? camoufles : null;
     let meilleur = null;
+    let meilleurePredilection = false;
     let meilleureDistance = 0;
     let meilleureColonne = 0;
     let meilleureRangee = 0;
@@ -1425,14 +1462,48 @@ function ciblage(etat) {
       // Batterie de matrice {0, 0, 1} passe le raid à viser l'infanterie qui la
       // serre de plus près, et toute la couche anti-aérienne est inerte.
       if (degatsContre(etat, e, p, c) === 0) continue;
+      // ⚠⚠ LA PRÉDILECTION PASSE EN TÊTE DE L'ORDRE — ETHAN, 13/09 : « l'épervier
+      // ne s'est pas arrêté pour cibler le fendeur ». Le défaut n'était pas dans la
+      // règle d'arrêt, qui demande déjà si la cible COURANTE est de prédilection :
+      // il était ici, où la cible courante s'élisait à la seule DISTANCE. Une cible
+      // hors prédilection plus proche raflait le ciblage, et `doitSArreter` ne
+      // pouvait plus jamais répondre oui. Mesuré sur le montage de
+      // `PRÉDILECTION T1` : l'Épervier prenait le Chasseur vingt ticks trop tard,
+      // et seulement parce qu'il l'avait DOUBLÉ — pas parce qu'il l'avait préféré.
+      //
+      // ⚠⚠ ET C'EST TOUT L'ARBITRAGE : `doitSArreter` N'A PAS ÉTÉ TOUCHÉ. La route
+      // écartée ajoutait une règle d'arrêt à côté de celle-ci — deux vérités pour une
+      // question —, et elle arrêtait l'Épervier en le laissant tirer sur
+      // l'infanterie, 4 de dégâts là où il en fait 20. Ici l'arrêt suit tout seul :
+      // dès qu'une cible de prédilection est à portée, elle EST la cible, donc
+      // `pc.colonneMatrice === p.colonnePredilection` est vrai.
+      //
+      // ⚠ LES TROIS AUTRES CRITÈRES NE BOUGENT PAS — ils départagent À L'INTÉRIEUR
+      // de chaque classe. Une entité SANS prédilection retombe donc exactement sur
+      // l'ordre d'hier : le critère de tête est uniformément faux, et les trois
+      // autres décident seuls. Aucune n'est dans ce cas au roster d'aujourd'hui —
+      // `peutTirer` a déjà écarté celles qui ne tirent pas —, et la garde est
+      // écrite quand même.
+      //
+      // ⚠ LA GARDE DE NULLITÉ VIENT D'ABORD, ET ELLE COURT-CIRCUITE. Sans elle,
+      // `p.colonnePredilection === profil(c).colonneMatrice` serait VRAI quand les
+      // deux valent `null` — l'avertissement que `degatsContre` et `doitSArreter`
+      // portent déjà, et qu'`ARRÊT T10` interdit par assertion. Elle épargne aussi
+      // un `profil(c)` par candidat à qui n'a pas de prédilection.
+      const predilection = p.colonnePredilection !== null
+        && profil(c).colonneMatrice === p.colonnePredilection;
       if (
         meilleur === null
-        || d2 < meilleureDistance
-        || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
-        || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
-            && c.rangeeMilli < meilleureRangee)
+        || (predilection && !meilleurePredilection)
+        || (predilection === meilleurePredilection && (
+          d2 < meilleureDistance
+          || (d2 === meilleureDistance && c.colonneMilli < meilleureColonne)
+          || (d2 === meilleureDistance && c.colonneMilli === meilleureColonne
+              && c.rangeeMilli < meilleureRangee)
+        ))
       ) {
         meilleur = c.indice;
+        meilleurePredilection = predilection;
         meilleureDistance = d2;
         meilleureColonne = c.colonneMilli;
         meilleureRangee = c.rangeeMilli;
@@ -2149,8 +2220,8 @@ function retirerLesMorts(etat) {
  * rien n'a changé — elles ne s'arrêtent pas au sens de cette fonction, mais
  * `peutAvancer` les retient et elles TIRENT, donc `nuit(e)`, c'est-à-dire
  * `aTire`, remet `ticksInutiles` à zéro et elles ne se replient pas. Ce qui a
- * changé pour elles est ailleurs : elles se RANGENT désormais sur leur case au
- * lieu de fluer dans le mur — voir `structureImmobileSur`, lu par les deux axes.
+ * changé pour elles est ailleurs : leur pas se BORNE désormais au contact au lieu
+ * de fluer dans le mur — voir `margeDeContact`, lue par les deux axes.
  *
  * ⚠⚠ ET LE REPLI NE PEUT TOUJOURS PAS EMPIRER PAR CETTE FONCTION, PAR
  * CONSTRUCTION — vérifié explicitement au lot COLONNE plutôt que reconduit, et
@@ -2393,6 +2464,47 @@ function masseEffective(etat, e, p, po) {
 const ECRASEUR_PCT_PAR_TICK = 1;
 
 /**
+ * En combien de ticks de CONTACT un écrasement tue une victime intacte, et par
+ * combien la vitesse de l'écraseuse est divisée pendant qu'il dure.
+ *
+ * Ethan, 13/09/2026, sur le §9 du rapport CONTACT : « On prend c plus vitesse
+ * divisée par quatre. » Une victime perdait TOUS ses PV en un tick, au
+ * franchissement de l'index de case ; elle en perd désormais
+ * `ceil(pvMax / ECRASEMENT_TICKS)` par tick de contact.
+ *
+ * ⚠⚠ LE QUART SE PREND SUR LES PV MAXIMAUX, JAMAIS SUR LES COURANTS. Sur les
+ * courants la suite serait géométrique et ne tuerait **jamais** — trois quarts
+ * de trois quarts de trois quarts ne valent pas zéro. Sur les maximaux, c'est
+ * exactement quatre ticks quel que soit le niveau de la victime, ses PV maximaux
+ * croissant avec lui. Une victime déjà entamée meurt plus tôt, ce qui est le
+ * comportement voulu.
+ *
+ * ⚠⚠ ET CE SONT DEUX CONSTANTES POUR DEUX GRANDEURS, MÊME SI ELLES VALENT LE
+ * MÊME NOMBRE. L'une est une fraction de PV, l'autre une fraction de VITESSE :
+ * les fondre en une seule ferait qu'un réglage de l'une déplacerait l'autre sans
+ * que personne l'ait demandé. Ce qui doit rester UNIQUE est le PRÉDICAT qui les
+ * déclenche toutes les deux, et il l'est — voir `margeDeContact`.
+ *
+ * ⚠⚠⚠ ET `ECRASEUR_PCT_PAR_TICK` NE BOUGE PAS — §6 du brief, hors lot. Le
+ * forçage d'une STRUCTURE par l'Écraseur reste à 1 % des PV max par tick, soit
+ * 100 ticks, 10 s sur les 90 du combat. Le ÷4 d'Ethan porte sur l'écrasement
+ * d'une UNITÉ ; l'appliquer aussi au forçage porterait la brèche à 40 s, 44 % du
+ * combat, ce qui n'a pas été demandé.
+ *
+ * ⚠ ELLES VIVENT ICI ET NON DANS `src/data/`, comme `ECRASEUR_PCT_PAR_TICK`
+ * au-dessus et pour la même raison : ce sont des constantes de MOTEUR — la forme
+ * d'une règle de tick —, pas du calibrage que le jeu se règle en changeant un
+ * nombre. Le §6 du brief l'écrit de face : « Aucune ligne de `src/data/`. »
+ *
+ * ⚠ LES DEUX SONT EXPORTÉES, ET C'EST L'IDIOME DE `TICKS_AVANT_REPLI` :
+ * `CONTACT-2 T1` dérive de là le nombre de ticks qu'un écrasement prend et le
+ * pas freiné qu'il coûte, au lieu de retaper 4 — une seule table fait foi par
+ * grandeur, et un test qui recopie un nombre ne garde plus que lui-même.
+ */
+export const ECRASEMENT_TICKS = 4;
+export const ECRASEMENT_FREIN = 4;
+
+/**
  * L'entité qu'une unité à Écraseur est en train de FORCER — ou `undefined`.
  *
  * ⚠ SUR LES PV MAXIMAUX, PAS SUR LES PV RESTANTS. Sur les restants, une
@@ -2419,43 +2531,283 @@ function structureForcee(etat, e, p, occupation, caseDestination) {
 }
 
 /**
- * La case VISÉE porte-t-elle une STRUCTURE IMMOBILE — celle qui empêche de
- * passer, et devant laquelle une unité doit se ranger plutôt que de fluer ?
+ * Qui OCCUPE cette case — l'entité qui y est enregistrée, ou `null` ?
  *
- * ⚠⚠ UNE SEULE ÉCRITURE, DEUX LECTEURS, ET C'EST LE SECOND GESTE DU LOT MUR.
- * Elle a servi `avancer` seule pendant un premier jet ; `seDecaler` porte le
- * MÊME défaut sur l'axe des COLONNES, et Ethan a demandé de le corriger le
- * 10/09 après l'avoir vu mesuré. Une seconde fonction « à côté » aurait été
- * deux lectures de la même grandeur, dont une seule recevrait la prochaine
- * correction. L'appelant nomme la case qu'il regarde — `caseDevant, colonne`
- * pour la verticale, `rangee, caseACote` pour la latérale — et rien d'autre ne
- * change.
+ * ⚠⚠ ELLE REMPLACE `chevauchementInterditSur`, ET LE CHANGEMENT EST DE NATURE.
+ * Celle-là rendait un BOOLÉEN — « range-toi sur ta case » — et c'est très
+ * exactement ce qu'Ethan a refusé le 13/09/2026 : « Je ne veux pas de saut, ni de
+ * chevauchement. » Un rangement est un SAUT, parce que `milliDepuisCase` rend
+ * toujours le bord GAUCHE de la case : vers la droite c'est un recul jusqu'à
+ * −999 millièmes, vers la gauche c'est une PROJECTION EN AVANT, dans le sens où
+ * la pièce allait déjà. Mesuré sur le montage d'Ethan — deux Éclaireurs de
+ * garnison qui convergent — **920 millièmes en un tick contre un pas nominal de
+ * 80**, soit ×11,5. Il faut donc une POSITION, pas un booléen : le pas se BORNE
+ * au point de contact au lieu de se corriger après coup.
  *
- * ⚠⚠ « UNE STRUCTURE IMMOBILE », PAS « N'IMPORTE QUEL BLOCAGE », ET C'EST UNE
- * MESURE, PAS UN CHOIX D'ÉCRITURE. Ranger l'entité dès que la case devant est
- * occupée — alliée comprise — déplace 1 041 champs sur 1 600 et 198 combats sur
- * 200 : tout embouteillage de colonne se met à claquer, et ce n'est pas ce
- * qu'Ethan a nommé le 10/09. Restreint aux occupantes de `vitesseMilli === 0`
- * il en déplace 339. `MUR T4` garde ce périmètre par sa moitié utile — deux
- * alliées dans la même colonne, et la seconde GARDE sa position intermédiaire.
- * `MUR T6 bis` garde le même périmètre sur l'axe latéral, avec une alliée
- * mobile à côté au lieu d'un merlon.
+ * ⚠⚠ ET LE PÉRIMÈTRE S'ÉLARGIT À L'ENNEMIE MOBILE, CE QUI RENVERSE LE LOT MUR.
+ * Il écrivait : « face à une ennemie, fluer jusqu'au contact EST le dessin juste
+ * — le corps à corps se joue au bord des cases ». C'est le mot « contact » qui
+ * était faux, pas l'intention : `T7 b` de `test/combat.test.js` assertait un
+ * Ratisseur figé à **2 960** contre un Bélier posé en **3 000**, c'est-à-dire
+ * **960 millièmes de recouvrement**, assertés au dépôt depuis le lot 4A. Le
+ * corps à corps se joue maintenant au contact POUR DE BON, à 1 000 d'écart.
  *
- * ⚠ LE DISCRIMINANT EST LA VITESSE, PAS LE GENRE, ET C'EST GRATUIT.
- * `profilDefense` et `profilBatiment` posent tous deux `vitesseMilli: 0` :
- * murs, barrières, tourelles, artilleries et bâtiments y tombent tous, sans
- * qu'une table de genres soit écrite une seconde fois. C'est la même lecture
- * que le `if (p.vitesseMilli === 0) continue;` de l'étape 7.
+ * ⚠⚠⚠ ET ELLE NE JUGE PLUS DE L'ÉCRASEMENT — LOT CONTACT-2, 13/09/2026. Elle
+ * appelait `peutEcraser` et rendait `null` sur une occupante écrasable, « ce qui
+ * sauve l'écrasement » : la borne ne se posait pas, la destination entrait dans
+ * la case de la victime, et la branche de franchissement tuait. **Cette règle-là
+ * n'a pas changé ; c'est l'ENDROIT où elle se lit qui a changé.** Le §2.3 du
+ * brief l'exige : le ÷4 de dégâts et le ÷4 de vitesse doivent être commandés par
+ * le MÊME prédicat, évalué UNE FOIS — et cette fonction-ci « calcule
+ * `peutEcraser` puis JETTE l'information en rendant `null` ». Elle rend donc
+ * l'occupante telle quelle, et `margeDeContact` — qui est la seule appelante —
+ * pose la question une fois et en tire ses DEUX conséquences.
  *
- * ⚠ L'AVIATION N'EST JAMAIS RANGÉE : `!p.bloquant` sort en tête. Elle ignore
- * l'occupation partout ailleurs — `peutAvancer`, `avancer` et `seDecaler` —, et
- * la ranger devant un mur qu'elle survole serait un défaut neuf.
+ * ⚠ CE QU'ELLE A PERDU N'EST PAS UNE RÈGLE, C'EST UNE DÉCISION : elle ne répond
+ * plus « qui borne le pas » mais « qui occupe cette case ». Le camp et
+ * l'écrasabilité se lisent chez son appelante, où ils servent DEUX fois.
+ *
+ * ⚠ L'AVIATION N'EST NI BLOQUÉE NI BLOQUANTE : `!p.bloquant` sort en tête, comme
+ * dans `peutAvancer`, `avancer` et `seDecaler`. Masse nulle, elle survole.
+ *
+ * ⚠⚠ ET ELLE NE DÉCIDE PLUS DU REPLI — `allieeDevant` reste une fonction À PART.
+ * C'est une SECONDE question — « attendre son tour n'est pas être inutile », lot
+ * BARÈME-ET-REJEU — et son propre commentaire dit déjà pourquoi elle ne se dérive
+ * pas d'ici : ce prédicat-ci est vrai AUSSI devant une structure immobile, où
+ * `TICKS_AVANT_REPLI` DOIT mordre. Elle ne se dérivera pas davantage de la marge.
  */
-function structureImmobileSur(etat, p, occupation, rangee, colonne) {
+function bloqueuseSur(etat, e, p, occupation, rangee, colonne) {
+  if (!p.bloquant) return null;
+  const indice = occupantDe(occupation, rangee, colonne);
+  if (indice === undefined) return null;
+  return etat.entites[indice];
+}
+
+/**
+ * Retire à une victime son quart de PV, et la tue si elle tombe à zéro.
+ *
+ * ⚠⚠⚠ C'EST LE SEUL ÉCRIVAIN DE LA MORT PAR ÉCRASEMENT, ET IL A REMPLACÉ DEUX
+ * SITES — lot CONTACT-2. `seDecaler` et `avancer` portaient chacun leur
+ * `occupante.pvMilli = 0` au franchissement de l'index de case ; les deux sont
+ * partis. Le §2.2 du brief l'interdit nommément : « Ne pas laisser subsister un
+ * `pvMilli = 0` de secours "au cas où" : ce serait la quatrième mort du moteur,
+ * et personne ne la verrait. »
+ *
+ * ⚠⚠ LE JOURNAL S'ACCROCHE ICI, ET C'EST LA LEÇON DE JOURNAL-DE-COMBAT PAYÉE
+ * UNE FOIS. Un écrasement tue à l'étape 7, donc APRÈS `retirerLesMorts` : sans
+ * ce `push`, une pièce sur vingt-trois manquait au journal sur la graine 9, et
+ * rien d'autre ne l'aurait dit.
+ *
+ * ⚠ ET LA POSITION ENREGISTRÉE EST CELLE DE L'ÉCRASÉE AU TICK QUI LA TUE —
+ * `faitDeLEntite` lit sa position COURANTE. « Elle meurt là où elle était » ;
+ * avec quatre ticks de contact elle a pu se décaler entre-temps, et c'est la
+ * dernière position qui compte, pas celle du premier contact.
+ *
+ * ⚠⚠ SA CASE SE LIBÈRE DANS LE MÊME GESTE, ET C'EST CE QUI FAIT DU
+ * FRANCHISSEMENT UN NON-ÉVÉNEMENT. `construireOccupation` DÉRIVE la carte des
+ * positions à chaque tick, mais on est au milieu de l'étape 7 : la carte du tick
+ * courant est déjà construite, et `poser` est un `Map.set` qui ÉCRASE EN
+ * SILENCE. Deux vivantes enregistrées dans la même cellule perdraient l'une des
+ * deux sans qu'aucune erreur ne le dise.
+ *
+ * ⚠ ELLE NE FAIT RIEN SUR UNE VICTIME DÉJÀ MORTE : deux écraseuses peuvent
+ * toucher la même victime au même tick, et la seconde ne doit ni la retuer ni la
+ * repousser dans le journal.
+ */
+function ecraserAuContact(etat, occupation, victime) {
+  if (victime.pvMilli <= 0) return;
+  const degats = Math.ceil(victime.pvMaxMilli / ECRASEMENT_TICKS);
+  victime.pvMilli = Math.max(0, victime.pvMilli - degats);
+  if (victime.pvMilli > 0) return;
+  victime.vivant = false;
+  victime.ecrase = true;
+  etat.journal.destructions.push(faitDeLEntite(victime));
+  retirer(occupation, caseDepuisMilli(victime.rangeeMilli), caseColonne(victime));
+}
+
+/**
+ * Les deux axes du déplacement, en DONNÉE et non en chaîne de caractères.
+ *
+ * ⚠⚠ UN `axe === 'rangee'` ÉCRIT DANS `margeDeContact` AURAIT ÉTÉ LA SECONDE
+ * VÉRITÉ QUE §4 INTERDIT : le sens de lecture d'une position serait dit une fois
+ * par le nom de l'axe et une fois par le champ qu'on va chercher, et rien
+ * n'obligerait les deux à s'accorder. Ici l'accesseur EST l'axe.
+ *
+ * ⚠ ELLES SONT AU NIVEAU DU MODULE, PAS DANS LA FONCTION : l'étape 7 passe sur
+ * chaque entité à chaque tick, et deux fermetures allouées par appel y seraient
+ * deux allocations par entité et par tick, pour deux fonctions constantes.
+ */
+const AXE_RANGEE = {
+  dRangee: 1, dColonne: 0, milliDe: (x) => x.rangeeMilli, perpDe: (x) => x.colonneMilli,
+};
+const AXE_COLONNE = {
+  dRangee: 0, dColonne: 1, milliDe: (x) => x.colonneMilli, perpDe: (x) => x.rangeeMilli,
+};
+
+/**
+ * De combien de millièmes le pas peut-il avancer AVANT le contact — `Infinity`
+ * si rien ne borne ? Et, dans le même balayage, QUI l'écraseuse touche.
+ *
+ * ⚠⚠ `ecrasees` EST UN PARAMÈTRE DE SORTIE, ET C'EST DÉLIBÉRÉ. Le §2.3 du brief
+ * exige que les dégâts et le frein de vitesse soient commandés par le même
+ * prédicat évalué UNE FOIS ; un second balayage recalculerait `peutEcraser` sur
+ * chacune des six cellules, et un objet `{ marge, ecrasees }` rendu en retour
+ * ferait DEUX allocations par entité et par tick là où le tableau de l'appelante
+ * en fait une. Ce que la fonction REND est toujours la marge ; ce qu'elle
+ * REMPLIT est la liste des victimes au contact.
+ *
+ * Une entité en position `m` occupe l'intervalle `[m, m + MILLI_PAR_CASE)` :
+ * `yDeRangeeMilli` le dit en toutes lettres (« la position m d'une entité est le
+ * bas de sa case ») et `xDeColonneMilli` projette de la même façon. Deux
+ * bloquantes ne se chevauchent donc pas si et seulement si leurs positions
+ * diffèrent d'au moins `MILLI_PAR_CASE` sur l'axe considéré — d'où la marge :
+ * **l'écart SIGNÉ dans le sens du pas, moins une case.**
+ *
+ * ⚠⚠ `Math.max(0, …)` EST LÀ POUR LE SENS UNIQUE, ET IL N'EST PAS DÉCORATIF. Si
+ * une position héritée chevauche déjà, la marge vaut zéro et la pièce RESTE OÙ
+ * ELLE EST : elle n'est jamais repoussée. Sans ce plancher, l'expression rendrait
+ * un pas NÉGATIF — c'est-à-dire le saut d'aujourd'hui, réintroduit par l'autre
+ * bout, et cette fois sans qu'aucun rangement ne le nomme.
+ *
+ * ⚠⚠⚠ DEUX CASES DANS LE SENS DU PAS, ET C'EST DÉMONTRÉ, PAS CHOISI. Écrite sur
+ * la SEULE case voisine, cette fonction rouvre le défaut qu'elle corrige :
+ * mesuré sur `ARRÊT T7`, le Broyeur part de 4 970 — case 4 —, la case 5 est
+ * LIBRE, le merlon est en case 6 ; la marge vaut `Infinity`, le pas complet
+ * passe, et il atterrit à **5 060, soit 60 millièmes DANS la case du mur**. Au
+ * tick suivant la marge vaut zéro : trop tard, il est dedans. La borne vient de
+ * la bloqueuse la plus proche DEVANT, et « devant » n'est pas « dans la case
+ * voisine ». Comme un pas fait toujours moins de `MILLI_PAR_CASE` millièmes, une
+ * bloqueuse en `mo` ne peut borner le pas en cours que si
+ * `mo < m + 2 × MILLI_PAR_CASE` : son index est donc `case + sens` **ou**
+ * `case + 2 × sens`, jamais au-delà.
+ *
+ * ⚠⚠⚠ ET TROIS CASES EN TRAVERS, CE QUI FAIT **SIX** CELLULES ET NON DEUX — LOT
+ * CONTACT-2. C'est la famille B du §9 du rapport CONTACT : « les deux axes se
+ * scannent SÉPARÉMENT, chacun sur son propre index ». Une entité à une position
+ * fractionnaire est à cheval sur deux index de l'axe PERPENDICULAIRE aussi, et
+ * l'ancienne fenêtre ne regardait que la sienne. Relevé : une Meute décalée en
+ * colonne **1 720** et une Carapace montée en rangée **7 020**, masses égales
+ * donc aucun écrasement, chacune hors de l'index que l'autre inspecte — **22
+ * paires, toutes dans `avantPoste/n20/g2`**.
+ *
+ * La déduction, et elle ne se devine pas. Soit `M` en `(mr, mc)` qui avance d'un
+ * pas `< MILLI_PAR_CASE` sur l'axe des rangées, et `B` en `(br, bc)`. `B` borne
+ * `M` si et seulement si les deux intervalles se recouvrent :
+ *
+ *   - **en travers** : `|mc − bc| < MILLI_PAR_CASE`, donc
+ *     `floor(bc) ∈ { cM − 1, cM, cM + 1 }` — **trois** colonnes ;
+ *   - **dans le sens du pas** : `mr < br < mr + 2 × MILLI_PAR_CASE`, donc
+ *     `floor(br) ∈ { rM + 1, rM + 2 }` — **deux** rangées.
+ *
+ * ⚠⚠ LE BRIEF EN ANNONÇAIT HUIT, ET IL AVAIT TORT DE DEUX : il ajoutait la
+ * rangée `rM` elle-même, « le cas le moins intuitif », en écrivant qu'une
+ * bloqueuse enregistrée dans la MÊME rangée-index peut être devant `M` de moins
+ * de mille millièmes. Elle le peut ; elle ne la BORNE pas pour autant. Une
+ * bloqueuse d'index `rM` a `br < (rM + 1) × MILLI_PAR_CASE ≤ mr + MILLI_PAR_CASE`,
+ * donc `br − mr < MILLI_PAR_CASE`, donc son écart signé moins une case est
+ * NÉGATIF : la marge vaudrait **zéro**, et `M` serait figée pour toujours dans un
+ * chevauchement hérité qu'elle était en train de quitter. Le `Math.max(0, …)`
+ * ci-dessous existe précisément pour ne jamais REPOUSSER personne ; l'inclure
+ * reviendrait à changer ce plancher en prison. Et un chevauchement NEUF
+ * demande `br ≥ mr + MILLI_PAR_CASE`, ce qui place `B` en `rM + 1` ou `rM + 2`
+ * — jamais en `rM`. Six cellules, et la mesure du §1.3 le confirme : B tombe à
+ * zéro.
+ *
+ * ⚠ LES DEUX DÉPLACEMENTS SE COMPOSENT PAR ÉCHANGE DES DELTAS, ET C'EST CE QUI
+ * ÉVITE UNE SECONDE TABLE D'AXES : l'un des deux `d*` vaut 1, l'autre 0, donc les
+ * échanger donne la perpendiculaire. Écrire quatre offsets en dur aurait été la
+ * seconde vérité que `AXE_RANGEE` / `AXE_COLONNE` existent pour empêcher.
+ *
+ * ⚠⚠⚠ ET CE LOT DÉPEND DE L'INVARIANT « AUCUNE VITESSE N'ATTEINT 1 000 MILLIÈMES
+ * PAR TICK », IL NE L'AJOUTE PAS. Il est écrit dans `peutAvancer` (« 300 au plus,
+ * pour le Frappeur ») et gardé des deux côtés — `MODULES-A T6` sur la donnée,
+ * `COL T14` sur le latéral. Le jour où une vitesse boostée franchirait le
+ * millier, la fenêtre de deux cases deviendrait fausse **en silence** : une
+ * bloqueuse en troisième case borne alors le pas, et personne ne la regarde.
+ */
+function margeDeContact(etat, e, p, occupation, rangee, colonne, axe, sens, ecrasees) {
+  const m = axe.milliDe(e);
+  const perp = axe.perpDe(e);
+  let marge = Infinity;
+  for (let k = 1; k <= 2; k += 1) {
+    for (let j = -1; j <= 1; j += 1) {
+      const b = bloqueuseSur(
+        etat, e, p, occupation,
+        rangee + k * axe.dRangee * sens + j * axe.dColonne,
+        colonne + k * axe.dColonne * sens + j * axe.dRangee,
+      );
+      if (b === null) continue;
+      // ⚠ L'AXE PERPENDICULAIRE SÉPARE, OU IL NE SÉPARE PAS. Deux pavés d'une
+      // case ne se recouvrent que si les DEUX intervalles se recouvrent : une
+      // bloqueuse dont la colonne est à une case pleine de la mienne ne me borne
+      // jamais, quelle que soit sa rangée. À `j === 0` ce test est TOUJOURS vrai
+      // — les deux positions sont dans la même bande de mille millièmes —, donc
+      // la fenêtre élargie ne peut qu'AJOUTER des bornes, jamais en retirer.
+      if (Math.abs(axe.perpDe(b) - perp) >= MILLI_PAR_CASE) continue;
+      const ecart = Math.max(0, sens * (axe.milliDe(b) - m) - MILLI_PAR_CASE);
+      // ⚠⚠⚠ LE PRÉDICAT UNIQUE, ET SES DEUX CONSÉQUENCES. Une occupante
+      // écrasable est TRANSPARENTE à la marge — c'est la règle du lot CONTACT,
+      // inchangée, « sinon l'écrasement meurt en silence » — et c'est la MÊME
+      // lecture qui dit qu'elle prend des dégâts quand elle est au contact.
+      // Écrites séparément, les deux dériveraient au premier réglage, et le
+      // symptôme serait une écraseuse qui ralentit sans mordre, ou qui mord sans
+      // ralentir — indiscernable d'un défaut d'équilibrage (§2.3 du brief).
+      if (b.camp !== e.camp && peutEcraser(etat, e, p, b, profil(b))) {
+        // ⚠ « AU CONTACT » EST `ecart === 0`, ET C'EST LA MÊME ARITHMÉTIQUE QUE
+        // LA MARGE, PAS UNE SECONDE. Elle vaut zéro dès que l'écart signé tombe
+        // à une case ou moins, c'est-à-dire dès que les deux pavés se touchent.
+        // ⚠⚠ ET LE TOUCHER COMPTE, IL N'EST PAS EXCLU. Avec un `< MILLI_PAR_CASE`
+        // strict, l'écraseuse ferait un pas PLEIN dans le pavé de sa victime
+        // avant de freiner — mesuré sur le Bélier de référence, 120 millièmes de
+        // pénétration au premier tick au lieu de 30, soit la profondeur que le
+        // §4 du brief prédit pour QUATRE ticks atteinte dès le premier.
+        if (ecart === 0) ecrasees.push(b);
+        continue;
+      }
+      if (ecart < marge) marge = ecart;
+    }
+  }
+  return marge;
+}
+
+/**
+ * La case VISÉE est-elle tenue par une ALLIÉE — c'est-à-dire par quelqu'un qui
+ * finira par s'en aller, et dont l'attente ne doit donc pas compter comme de
+ * l'inutilité ?
+ *
+ * ⚠⚠ ELLE NE SE DÉDUIT NI DE `bloqueuseSur` NI DE LA MARGE, ET LE CONFONDRE
+ * FERAIT DISPARAÎTRE LE REPLI. Ces prédicats-là sont vrais AUSSI devant une
+ * structure immobile ; or devant un mur, l'attente est éternelle — c'est très
+ * exactement le cas où `TICKS_AVANT_REPLI` doit mordre, et le lot ARRÊT l'a
+ * mesuré. Deux questions voisines, deux réponses, deux fonctions. Le lot CONTACT
+ * a changé la première d'un booléen en une POSITION et n'a pas touché celle-ci.
+ *
+ * ⚠⚠ LE GEL EST UN ARBITRAGE D'ETHAN DU 12/09/2026, ET IL VIENT DE CE QU'IL A
+ * VU : « puis ils ont disparu. Mais 0 détruit. » Ce sont ses véhicules qui se
+ * REPLIAIENT — `sorti = true`, donc comptés parmi les survivants et absents du
+ * décompte des pertes. Une unité bloquée derrière une alliée ne progresse pas,
+ * ne nuit pas — elle tire sur ce qu'elle a à portée, et une alliée devant elle
+ * n'est pas une cible — et ne force rien : au trentième tick elle rentrait à la
+ * base, PARCE QU'UNE DES SIENNES LUI BARRAIT LE PASSAGE.
+ *
+ * ⚠ ET C'EST LE MÊME RAISONNEMENT QUE LE GEL DE LA VOIE D'APPROCHE, ÉLARGI À
+ * TOUTE LA GRILLE. Le lot APPROCHE gelait le compteur sous `estEnApproche` pour
+ * exactement cette raison — « elle quitterait le raid SANS Y ÊTRE JAMAIS
+ * ENTRÉE » —, et il n'avait aucune raison de s'arrêter à la rangée 1. Les deux
+ * gels coexistent : l'approche couvre l'entrée, celui-ci couvre l'embouteillage.
+ *
+ * ⚠ DEVANT UNE STRUCTURE, ON NE GÈLE PAS. Un mur ne s'en va pas, et une unité
+ * qui ne sait pas l'abattre doit pouvoir rentrer : c'est ce que `MUR T3` et
+ * `ARRÊT T8` mesurent, et le gel les ferait tomber. Devant une ENNEMIE mobile
+ * non plus — elle est une cible, donc `nuit(e)` remet le compteur à zéro tout
+ * seul quand la pièce peut la frapper, et l'entité qui ne peut pas la frapper
+ * doit se replier.
+ */
+function allieeDevant(etat, e, p, occupation, rangee, colonne) {
   if (!p.bloquant) return false;
   const indice = occupantDe(occupation, rangee, colonne);
   if (indice === undefined) return false;
-  return profil(etat.entites[indice]).vitesseMilli === 0;
+  return etat.entites[indice].camp === e.camp;
 }
 
 /**
@@ -2572,8 +2924,12 @@ function deplacement(etat) {
 }
 
 /**
- * La vitesse d'un tick, obstacle et Booster appliqués — la valeur d'où PART le
- * déplacement, quel que soit son axe.
+ * La vitesse BRUTE d'un tick, obstacle et Booster appliqués — la valeur d'où
+ * PARTENT les deux axes, avant le ×2/3 latéral et avant le frein d'écrasement.
+ *
+ * ⚠ ELLE A ÉTÉ EXTRAITE DE `vitesseDuTick` AU LOT CONTACT-2, et le motif est
+ * arithmétique : les deux axes doivent appliquer LEUR facteur et le frein dans
+ * le même quotient, sous un `Math.floor` unique. Voir `vitesseLaterale`.
  *
  * ⚠ L'OBSTACLE SE LIT SUR LA CASE OÙ L'ENTITÉ EST, jamais sur celle où elle va :
  * c'est le terrain qu'elle traverse qui la ralentit.
@@ -2592,7 +2948,7 @@ function deplacement(etat) {
  * sans qu'aucun test n'échoue. Un test de données garde ce seuil
  * (`recherche.test.js`, MODULES-A T6), et `COL T14` le garde LATÉRALEMENT.
  */
-function vitesseDuTick(etat, e, p, obstacles, rangee) {
+function vitesseBruteDuTick(etat, e, p, obstacles, rangee) {
   let vitesse = p.vitesseMilli;
   const type = typeObstacleSur(obstacles, rangee, caseColonne(e));
   if (type !== undefined && obstacleConcerne(type, p.chassis)) {
@@ -2600,6 +2956,24 @@ function vitesseDuTick(etat, e, p, obstacles, rangee) {
   }
   if (boosterActif(e)) vitesse *= BOOSTER_FACTEUR;
   return vitesse;
+}
+
+/**
+ * La vitesse VERTICALE d'un tick : la brute, freinée.
+ *
+ * ⚠⚠ LE FREIN VIENT EN DERNIER, APRÈS L'OBSTACLE ET APRÈS LE BOOSTER, ET C'EST
+ * LE MÊME ORDRE QUE LE ×2/3 LATÉRAL — lot CONTACT-2. Posé avant l'obstacle, il
+ * ferait cesser l'obstacle de ralentir une écraseuse ; posé avant le Booster,
+ * il rendrait le rapport des deux faux. En dernier, TOUS les rapports d'amont
+ * sont gardés : 120 → 30 en écrasement, 48 sous obstacle → 12, 1 200 boosté
+ * → 300.
+ *
+ * ⚠ `frein` VAUT 1 QUAND RIEN N'ÉCRASE, et la division rend alors la valeur
+ * d'hier au caractère près — `Math.floor(x / 1) === x` sur un entier. C'est ce
+ * qui rend ce lot NEUTRE sur tout ce qui n'écrase pas.
+ */
+function vitesseDuTick(etat, e, p, obstacles, rangee, frein) {
+  return Math.floor(vitesseBruteDuTick(etat, e, p, obstacles, rangee) / frein);
 }
 
 /**
@@ -2611,6 +2985,17 @@ function vitesseDuTick(etat, e, p, obstacles, rangee) {
  * il rendrait le rapport des deux faux. En dernier, TOUS les rapports sont
  * gardés : 60 → 40, 24 sous obstacle → 16, 600 boosté → 400.
  *
+ * ⚠⚠⚠ ET LE FREIN D'ÉCRASEMENT ENTRE DANS LE MÊME QUOTIENT, PAS APRÈS LUI —
+ * LOT CONTACT-2. C'est la consigne « un seul `Math.floor`, en bout de chaîne »
+ * du §3.2 du brief, et elle n'est pas décorative : arrondir au milieu perdrait
+ * la fraction que le ×2/3 vient d'introduire. Mesuré sur le Percheron, dont la
+ * vitesse brute vaut 90 — `floor(90 / 4) = 22` puis `floor(22 × 2 / 3) = 14`,
+ * quand `floor(90 × 2 / (3 × 4)) = 15`. La table du §3.2 annonce **15** : c'est
+ * la seconde forme qui la rend, et c'est pourquoi cette fonction repart de la
+ * vitesse BRUTE au lieu d'appeler `vitesseDuTick`. Les quatre lignes de cette
+ * table sont reproduites au millième — Pionnier 80 → 20, Percheron 60 → 15,
+ * Fusiliers 40 → 10, Foudre 160 → 40.
+ *
  * ⚠ LE QUOTIENT EST ENTIER PAR CONSTRUCTION, ET `COL T13` LE GARDE. Les quatre
  * vitesses du relevé sont divisibles par 3, et les deux transformations d'amont
  * conservent cette divisibilité — l'obstacle divise par 2,5 en multipliant par
@@ -2619,9 +3004,11 @@ function vitesseDuTick(etat, e, p, obstacles, rangee) {
  * une vitesse indivisible entrerait, le moteur reste entier et le TEST de
  * données le dise, plutôt qu'un flottant ne se glisse dans `colonneMilli`.
  */
-function vitesseLaterale(etat, e, p, obstacles, rangee) {
+function vitesseLaterale(etat, e, p, obstacles, rangee, frein) {
   const { numerateur, denominateur } = GRILLE.lateral;
-  return Math.floor((vitesseDuTick(etat, e, p, obstacles, rangee) * numerateur) / denominateur);
+  return Math.floor(
+    (vitesseBruteDuTick(etat, e, p, obstacles, rangee) * numerateur) / (denominateur * frein),
+  );
 }
 
 /**
@@ -2645,6 +3032,30 @@ function vitesseLaterale(etat, e, p, obstacles, rangee) {
  * ⚠ AUCUNE CONDITION DE PORTÉE. « Peu importe si elle se bloque » : elle veut y
  * aller, qu'elle puisse tirer ou non.
  */
+/**
+ * « Cette entité-là est-elle une cible de décalage valide pour `e` ? »
+ *
+ * ⚠⚠ ELLE EST EXTRAITE POUR QUE `cibleDuDecalage` ET `colonneDuDecalage` NE
+ * PUISSENT PAS DIVERGER. La première ÉLIT la plus proche, la seconde VÉRIFIE que
+ * celle qu'on avait retenue l'est encore : deux écritures de la même question
+ * finiraient par ne plus poser la même — une cible morte encore élue d'un côté,
+ * lâchée de l'autre, et le bégaiement que l'étage C3 existe pour fermer.
+ *
+ * ⚠⚠ ET LA GARDE DE NULLITÉ EST ÉCRITE ICI AUSSI, ALORS QUE LES DEUX APPELANTS
+ * LA PORTENT DÉJÀ. Ce n'est pas une redondance de confort : la comparaison
+ * `profil(c).colonneMatrice === p.colonnePredilection` serait VRAIE quand les
+ * deux valent `null` — c'est l'avertissement que `degatsContre`, `doitSArreter`
+ * et `ensembleCamoufles` portent chacun en toutes lettres —, et un prédicat
+ * total ne se relit pas en remontant à ses appelants. `ARRÊT T10` l'exige de
+ * chacun des huit sites, et c'est la DISCIPLINE qui est partagée, pas le code.
+ */
+function cibleDeDecalageValide(e, p, c) {
+  if (p.colonnePredilection === null) return false;
+  if (c === undefined || c === null) return false;
+  if (!estActive(c) || c.camp === e.camp) return false;
+  return profil(c).colonneMatrice === p.colonnePredilection;
+}
+
 function cibleDuDecalage(etat, e, p) {
   if (p.colonnePredilection === null) return null;
   let meilleure = null;
@@ -2652,8 +3063,7 @@ function cibleDuDecalage(etat, e, p) {
   let meilleureColonne = Infinity;
   let meilleureRangee = Infinity;
   for (const c of etat.entites) {
-    if (!estActive(c) || c.camp === e.camp) continue;
-    if (profil(c).colonneMatrice !== p.colonnePredilection) continue;
+    if (!cibleDeDecalageValide(e, p, c)) continue;
     const d2 = distanceCarreeMilli(
       e.rangeeMilli, e.colonneMilli, c.rangeeMilli, c.colonneMilli,
     );
@@ -2673,6 +3083,81 @@ function cibleDuDecalage(etat, e, p) {
 }
 
 /**
+ * La COLONNE, en millièmes, vers laquelle une défenseuse veut se décaler — ou
+ * `null` si elle n'a rien à viser. C'est l'étage **C3** puis l'étage **β** du
+ * lot FREIN, dans cet ordre ; l'étage **A** est le frein, et il vit dans
+ * `seDecaler` parce qu'il décide de BOUGER, pas de VISER.
+ *
+ * ⚠⚠ ELLE REND UNE COLONNE ET PLUS UNE ENTITÉ, ET C'EST β QUI L'EXIGE. Le poste
+ * de pose n'est pas une entité : il n'y a rien à y cibler, seulement une abscisse
+ * où rentrer. `seDecaler` ne lisait de toute façon la cible que par
+ * `colonneMilli`, DEUX fois — pour le sens puis pour l'écart —, vérifié ligne à
+ * ligne avant de changer le type. ⚠ **Aucun objet-leurre `{ colonneMilli }` n'a
+ * été écrit** : il aurait fait passer le prototype en masquant une lecture
+ * oubliée.
+ *
+ * ⚠⚠ C3 — L'HYSTÉRÉSIS, ET C'EST TOUT CE QUI DIVISE LE VOYAGE PAR DEUX. Tant que
+ * la cible retenue reste VALIDE on continue vers elle ; on n'en réélit une que
+ * lorsqu'elle cesse de l'être. Sans cette mémoire la défenseuse réélit la plus
+ * PROCHE à chaque tick : mesuré sur le montage d'Ethan du 13/09, elle descendait
+ * de la colonne 5 à la 2, sa cible mourait, et elle **retraversait toute la
+ * grille** jusqu'à la 7 — 99 ticks de voyage pour 32 ticks de tir, et une
+ * inversion de sens en plein trajet.
+ *
+ * ⚠⚠ « VALIDE » SE LIT AVEC LE PRÉDICAT DE `cibleDuDecalage`, JAMAIS AVEC UNE
+ * SECONDE ÉCRITURE. `cibleDeDecalageValide` est extraite pour ça : deux écritures
+ * de la même question divergeraient au premier réglage, et la divergence se
+ * lirait comme un défaut d'équilibrage. ⚠ **Et sans condition de portée**, comme
+ * l'élection : « peu importe si elle se bloque » — elle veut y aller, qu'elle
+ * puisse tirer ou non.
+ *
+ * ⚠ CE N'EST PAS `e.cibleIndice`, ET LES DEUX NE FUSIONNENT PAS. Celle-là est la
+ * cible du TIR, choisie par `ciblage` avec la portée, le camouflage et
+ * l'approche. Elles se ressemblent depuis le lot PRÉDILECTION ; elles ne sont pas
+ * la même grandeur.
+ *
+ * ⚠⚠⚠ β — ET CE QUE LE BRIEF DISAIT DE SON DÉCLENCHEUR EST FAUX, MESURÉ. Il
+ * annonçait « un repositionnement entre vagues » : la pièce rentrerait pendant le
+ * creux, et la vague suivante la trouverait à son poste. **Il n'y a pas de creux
+ * du point de vue de β** — `cibleDuDecalage` ne filtre PAS sur `estEnApproche`,
+ * donc une unité encore dans la voie d'approche, hors écran, est DÉJÀ une cible
+ * de décalage valide. Le déclencheur réel est plus étroit, et c'est la phrase
+ * d'Ethan à la lettre : **toute la colonne de prédilection a quitté le raid alors
+ * que d'autres attaquants restent.** Une pièce anti-véhicule dont les blindés
+ * sont morts ou repliés, face à une infanterie qui continue, rentre à son poste.
+ *
+ * ⚠ ET `cibleDuDecalage` NE GAGNE PAS CE FILTRE POUR ÉLARGIR β. Ce serait changer
+ * ce que la défense POURSUIT — un arbitrage qu'Ethan n'a pas rendu — sous couvert
+ * d'implanter celui qu'il a rendu.
+ *
+ * ⚠ LE POSTE PEUT MANQUER, ET ALORS ON NE RENTRE NULLE PART. `colonneDePoseMilli`
+ * n'est posé que sur les pièces qui se décalent pour de bon (voir
+ * `ajouterEntite`) ; son absence rend `null`, c'est-à-dire le comportement
+ * d'avant le lot. La garde de nullité de l'indice retenu est de la même famille :
+ * sans elle, `etat.entites[undefined]` rendrait `undefined` et le prédicat
+ * partagé aurait à s'en défendre deux fois.
+ */
+function colonneDuDecalage(etat, e, p) {
+  if (p.colonnePredilection === null) return null;
+  // C3 — la cible retenue, tant qu'elle est valide.
+  const retenue = e.cibleDecalageIndice;
+  if (retenue !== null && retenue !== undefined
+    && cibleDeDecalageValide(e, p, etat.entites[retenue])) {
+    return etat.entites[retenue].colonneMilli;
+  }
+  const neuve = cibleDuDecalage(etat, e, p);
+  if (neuve !== null) {
+    if (e.cibleDecalageIndice !== undefined) e.cibleDecalageIndice = neuve.indice;
+    return neuve.colonneMilli;
+  }
+  // β — plus une seule cible de prédilection sur la grille : on rentre au poste.
+  if (e.cibleDecalageIndice !== undefined && e.cibleDecalageIndice !== null) {
+    e.cibleDecalageIndice = null;
+  }
+  return e.colonneDePoseMilli ?? null;
+}
+
+/**
  * Le déplacement LATÉRAL d'une pièce de garnison — lot COLONNE.
  *
  * ⚠⚠ IL NE PORTE NI REPLI, NI ÉCRASEUR, NI SORTIE. Les quatre mécanismes que
@@ -2687,33 +3172,93 @@ function cibleDuDecalage(etat, e, p) {
  * ⚠ ET `ticksInutiles` N'EST PAS TOUCHÉ ICI, même pas remis à zéro. Il ne sert
  * qu'au repli ; l'écrire côté défense mettrait dans l'état une grandeur que
  * personne ne lit, et inviterait le lot suivant à brancher le repli dessus.
+ *
+ * ⚠⚠ TROIS ÉTAGES DEPUIS LE LOT FREIN, ET LEUR ORDRE EST LA RÈGLE :
+ *
+ *     A   une cible de prédilection est à portée          → on ne bouge pas
+ *     C3  sinon, la cible retenue est encore valide       → on va vers elle
+ *     β   sinon, plus une cible de prédilection en jeu    → on rentre au poste
+ *
+ * ⚠⚠ **LE RETOUR EN DERNIER, ET CE N'EST PAS UN DÉTAIL DE STYLE.** Une pièce en
+ * chemin vers son poste doit s'arrêter dès qu'une cible entre à portée. L'ordre
+ * inverse produirait une sentinelle qui rentre en ignorant ce qu'elle a sous le
+ * canon. C3 et β vivent dans `colonneDuDecalage` ; A est le `doitSArreter`
+ * ci-dessous, et sa PLACE dans la fonction est l'arbitrage du lot — voir le pavé
+ * qui le porte.
  */
 function seDecaler(etat, e, p, occupation, obstacles) {
-  const cible = cibleDuDecalage(etat, e, p);
-  if (cible === null) return;
-  const sens = Math.sign(cible.colonneMilli - e.colonneMilli);
+  const colonneVisee = colonneDuDecalage(etat, e, p);
+  if (colonneVisee === null) return;
+  const sens = Math.sign(colonneVisee - e.colonneMilli);
   if (sens === 0) return;
 
   const rangee = caseDepuisMilli(e.rangeeMilli);
   const colonne = caseColonne(e);
-  // ⚠⚠ LA CASE À CÔTÉ, NOMMÉE UNE FOIS — le pendant exact de `caseDevant` dans
-  // `avancer`. Elle se prend dans le SENS DU DÉPLACEMENT et non à droite : une
-  // défenseuse se décale vers sa cible, qui peut être de l'un ou l'autre bord.
-  // Hors grille, `occupantDe` rend `undefined` et la garde tombe d'elle-même.
+  // ⚠⚠⚠ LA MARGE REMPLACE LA CASE À CÔTÉ, ET CE COMMENTAIRE-CI EN REMPLACE UN QUI
+  // SE TROMPAIT — LOT CONTACT, 13/09/2026. Il affirmait qu'« une pièce qui se
+  // décale vers la gauche depuis sa case ne rampe donc jamais » et que `+ sens`
+  // était indistinguable de `+ 1`, mesure déclarée à l'appui : « soixante ticks,
+  // 6 000 → 6 000, une seule position distincte ». **Cette mesure avait été prise
+  // sur une pièce posée EXACTEMENT sur une frontière de case — le seul état où le
+  // défaut est invisible.** Le commentaire l'avait lui-même anticipé : « la
+  // symétrie cessera d'être gratuite le jour où une pièce partira d'un milieu de
+  // case. » Ce jour est le PREMIER TICK : une décaleuse partie de 9 000 tombe à
+  // 8 920 au premier pas, et se trouve en milieu de case à tous les suivants.
+  // Mesuré sur le montage d'Ethan — deux Éclaireurs qui convergent —, la seconde
+  // était PROJETÉE de 6 920 à 6 000 en un tick, soit **920 millièmes contre un pas
+  // nominal de 80**. Le pas se borne désormais au contact, et plus rien d'autre
+  // n'écrit la position : ni saut, ni chevauchement.
   //
-  // ⚠⚠ ET AUCUN TEST NE PEUT DISTINGUER `+ sens` DE `+ 1` AUJOURD'HUI — MESURÉ,
-  // ET DÉCLARÉ PLUTÔT QUE TU. Le flottement n'existe QUE vers la droite : une case
-  // couvre `[c × 1 000, c × 1 000 + 999]`, donc le bord extrême dans le sens du pas
-  // vaut `+999` à droite mais EXACTEMENT la position rangée à gauche. Une pièce qui
-  // se décale vers la gauche depuis sa case ne rampe donc jamais : son premier pas
-  // franchit déjà la frontière, et il est refusé. Mesuré des deux côtés, soixante
-  // ticks : `6 000 → 6 000`, une seule position distincte, avec `+ sens` comme avec
-  // `+ 1`. On écrit quand même `+ sens`, parce que c'est ce que la ligne VEUT dire
-  // et que la symétrie cessera d'être gratuite le jour où une pièce partira d'un
-  // milieu de case. *Un test qui ne peut tomber sur aucun état d'aujourd'hui se
-  // déclare, il ne se compte pas.*
-  const caseACote = colonne + sens;
-  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, rangee, caseACote);
+  // ⚠ HORS GRILLE, `occupantDe` REND `undefined` ET LA BORNE NE SE POSE PAS — la
+  // sortie latérale reste gardée par `estSortiParLeCote`, comme hier.
+  // ⚠⚠⚠ LE BALAYAGE VIENT AVANT LA VITESSE, ET C'EST UNE CONTRAINTE — LOT
+  // CONTACT-2. C'est lui qui dit s'il y a un écrasement en cours, donc lui qui
+  // décide du frein, donc il ne peut pas venir après la vitesse qu'il freine.
+  const ecrasees = [];
+  const marge = margeDeContact(
+    etat, e, p, occupation, rangee, colonne, AXE_COLONNE, sens, ecrasees,
+  );
+  const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
+  // ⚠⚠ LES DÉGÂTS SE PAIENT ICI, AVANT TOUT `return`, PARCE QUE LE CONTACT EST UN
+  // FAIT DE POSITION ET NON UNE CONSÉQUENCE DU DÉPLACEMENT. Une décaleuse qui ne
+  // bougera pas ce tick-ci — cible atteinte, pas nul, sortie latérale refusée,
+  // **et depuis le lot FREIN : pièce qui freine** — touche quand même ce qu'elle
+  // broie. La quatrième entrée de cette liste est la raison pour laquelle le
+  // frein sort SOUS cette ligne et non au-dessus.
+  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
+  // ⚠⚠⚠ LE FREIN — ÉTAGE A DU LOT FREIN, ET IL SORT **APRÈS** LE PAIEMENT DU
+  // CONTACT, PAS AVANT. Ethan, 13/09 : « les unités défensives en déplacement
+  // latéral semblent aller très vite », arbitrage **A** — une pièce qui a une
+  // cible de prédilection à portée NE BOUGE PLUS. Mesuré sur son montage, elle
+  // passait 99 ticks à voyager pour 32 ticks de tir.
+  //
+  // ⚠⚠ LA QUESTION NE SE RÉÉCRIT PAS : ELLE **EST** `doitSArreter`. Depuis le lot
+  // PRÉDILECTION, `ciblage` élit la prédilection à portée avant tout le reste, si
+  // bien que « une cible de prédilection est-elle à portée ? » et « la cible
+  // courante est-elle de prédilection ? » sont devenues la même question. Un
+  // second prédicat ici serait la seconde vérité qu'`ARRÊT T10` refuse.
+  // ⚠ `e.aTire` est posé à l'étape 5 et celle-ci est l'étape 7 : la lecture est
+  // dans le bon ordre. Et deux des quatre gardes de `doitSArreter` sont
+  // INATTEIGNABLES côté défense — aucun aérien n'a `defense.present`, et l'attaque
+  // n'a pas de bâtiment —, démontré au rapport du lot plutôt que supposé.
+  //
+  // ⚠⚠⚠ ET LA PLACE DE CE `return` EST L'ARBITRAGE DU LOT, PAS UN DÉTAIL. Le
+  // poser en TÊTE de la fonction aurait fait du frein une QUATRIÈME sortie
+  // précoce, donc aurait supprimé le balayage, donc les écrasements que la
+  // décaleuse paie en glissant — **seize sur les quatre raids réels, mesurés
+  // avant d'écrire une ligne**. CONTACT-2 a posé dix lignes plus haut que le
+  // contact est un fait de POSITION et non une conséquence du déplacement, et il
+  // énumère déjà trois pièces qui ne bougent pas et broient quand même ; une
+  // pièce qui freine en est la quatrième, de la même nature. Sorti d'ici, le
+  // frein tient l'arbitrage d'Ethan — la pièce ne se déplace pas — SANS renverser
+  // celui de CONTACT-2 : les deux invariants sont honorés, aucun n'est choisi
+  // contre l'autre.
+  //
+  // ⚠ CE QUE ÇA COÛTE SE DIT : l'indice retenu par C3 continue de se rafraîchir
+  // pendant le frein, `colonneDuDecalage` ayant déjà tourné. C'est le
+  // comportement voulu — quand le frein lève, la pièce part vers une cible
+  // qu'elle voit, pas vers celle qu'elle voyait quarante ticks plus tôt.
+  if (doitSArreter(etat, e, p)) return;
   // ⚠⚠ LE PAS NE DÉPASSE JAMAIS SA CIBLE, ET SANS CETTE BORNE ELLE TREMBLERAIT.
   // Trouvé à la relecture hostile du §7, pas à l'écriture. Un attaquant ne
   // change pas de colonne : sa colonne est FIXE, et une défenseuse qui la
@@ -2726,38 +3271,23 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   // L'AUTRE BOUT : là-bas le DESSIN dépassait sa destination, ici c'est le
   // MODÈLE. Les deux naissent du même fait — la colonne a cessé d'être
   // monotone — et le lot doit les corriger toutes les deux.
-  const ecart = Math.abs(cible.colonneMilli - e.colonneMilli);
-  const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee), ecart);
+  const ecart = Math.abs(colonneVisee - e.colonneMilli);
+  const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee, frein), ecart, marge);
   const destinationMilli = e.colonneMilli + sens * pas;
   if (estSortiParLeCote(destinationMilli)) return;
 
   const caseDestination = caseDepuisMilli(destinationMilli);
   if (caseDestination === colonne) {
-    // ⚠⚠⚠ ELLE NE FLUE PLUS DANS LE MUR NON PLUS — ETHAN, 10/09, LE JUMEAU
-    // LATÉRAL DU POINT 2. Le premier jet du lot MUR n'a corrigé qu'`avancer`,
-    // donc le camp qui ATTAQUE ; la défense des DEUX camps passe ici depuis le
-    // lot COLONNE, et cette branche-ci portait EXACTEMENT le même défaut, tourné
-    // de quatre-vingt-dix degrés. Elle est le raccourci « je bouge dans ma
-    // propre case » : elle écrivait `colonneMilli` SANS jamais regarder
-    // l'occupation, si bien que la pièce rampait jusqu'au bord extrême de sa
-    // case, puis calait quand le pas suivant aurait franchi la frontière.
+    // ⚠⚠ PLUS DE RANGEMENT ICI — LOT CONTACT. Cette branche portait, depuis le lot
+    // MUR, un `colonneMilli = milliDepuisCase(colonne)` qui ramenait la pièce au
+    // bord GAUCHE de sa case dès qu'une bloqueuse était à côté. C'était le jumeau
+    // latéral du rangement vertical, et c'était le saut qu'Ethan a refusé : vers
+    // la gauche, ce « rangement » PROJETAIT la pièce en avant de 920 millièmes.
+    // La marge a déjà borné le pas au contact quinze lignes plus haut ; il ne
+    // reste qu'à écrire la position.
     //
-    // ⚠⚠ MESURÉ AVANT DE TOUCHER UNE LIGNE, défenseuse en colonne 4, merlon en
-    // colonne 5, cible en colonne 8 : elle partait de 4 000 et se figeait à
-    // **4 960** — 96 % dans la case du merlon. Le MÊME 960 millièmes que le
-    // Meute à la verticale, qui montait à 2 960. Trois montages sur trois
-    // (`meute`, `guetteur`, `ratisseur`) rendent le même nombre.
-    //
-    // ⚠ ET LE PÉRIMÈTRE EST CELUI DE LA VERTICALE, PAS UN AUTRE : on ne se range
-    // que devant une STRUCTURE IMMOBILE. Ethan nomme « un mur, tourelles,
-    // structure » — les trois sont à `vitesseMilli === 0`. Devant une alliée
-    // MOBILE, la case se libérera d'elle-même, et ranger lui coûterait à chaque
-    // fois les millièmes qu'elle vient de gagner. `MUR T6 bis` mesure les deux.
-    if (bloqueeParUneStructure) {
-      e.colonneMilli = milliDepuisCase(colonne);
-      return;
-    }
-    // Elle se décale À L'INTÉRIEUR de sa case : rien à réserver, rien à libérer.
+    // ⚠ ET ELLE NE RÉSERVE NI NE LIBÈRE RIEN : elle se décale À L'INTÉRIEUR de sa
+    // case, l'occupation ne bouge pas.
     e.colonneMilli = destinationMilli;
     return;
   }
@@ -2777,21 +3307,34 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   }
   const occupante = etat.entites[indiceOccupante];
   const po = profil(occupante);
-  if (peutEcraser(etat, e, p, occupante, po)) {
-    occupante.pvMilli = 0;
-    occupante.vivant = false;
-    occupante.ecrase = true;
-    // ⚠ LA TROISIÈME MORT DU MOTEUR, ET ELLE EST DU MÊME GENRE QUE LA DEUXIÈME :
-    // un écrasement tue à l'étape 7, donc APRÈS `retirerLesMorts`. Le journal
-    // s'y accroche ici comme il s'y accroche dans `avancer`, faute de quoi une
-    // mort latérale manquerait au relevé — c'est la faute que le lot
-    // JOURNAL-DE-COMBAT a payée une fois.
-    etat.journal.destructions.push(faitDeLEntite(occupante));
-    retirer(occupation, rangee, caseDestination);
-    retirer(occupation, rangee, colonne);
-    poser(occupation, rangee, caseDestination, e.indice);
-    e.colonneMilli = destinationMilli;
+  if (peutEcraser(etat, e, p, occupante, po) && !ecrasees.includes(occupante)) {
+    // ⚠⚠⚠ LA VICTIME DE DERNIÈRE MINUTE — §2.2 du brief, et le seul chemin qui
+    // reste au franchissement. Une écrasable peut PARAÎTRE dans la case visée
+    // sans avoir jamais été au contact : une vague qui entre, une passagère qui
+    // débarque, une voisine qui arrive par le côté. Elle prend son quart comme
+    // les autres, **et l'écraseuse n'entre pas ce tick-là** : elle entrera quand
+    // la cellule sera libre.
+    //
+    // ⚠⚠ LE `includes` N'EST PAS UNE PRÉCAUTION, IL EMPÊCHE UN DOUBLE COUP. La
+    // case visée est `colonne + sens`, donc elle EST dans la fenêtre du
+    // balayage : une occupante déjà au contact y a déjà payé son quart quinze
+    // lignes plus haut. Sans ce test, une écraseuse assez rapide pour franchir
+    // depuis le contact tuerait en DEUX ticks au lieu de quatre.
+    ecraserAuContact(etat, occupation, occupante);
   }
+  // ⚠⚠⚠ ET PLUS AUCUN DÉPLACEMENT ICI — LOT CONTACT-2. Cette branche portait la
+  // TROISIÈME mort du moteur : `occupante.pvMilli = 0`, puis l'échange de cases
+  // dans la foulée. Elle est partie avec sa jumelle d'`avancer` ; `ecraserAuContact`
+  // est désormais le seul écrivain, et il ne déplace personne. Le franchissement
+  // devient un NON-ÉVÉNEMENT : quand la victime meurt, sa cellule se libère dans
+  // le même geste, `occupantDe` rend `undefined` au tick suivant, et l'écraseuse
+  // entre par la branche ordinaire quinze lignes plus haut.
+  //
+  // ⚠⚠ ENTRER MALGRÉ UNE OCCUPANTE VIVANTE CORROMPRAIT LA CARTE D'OCCUPATION, ET
+  // EN SILENCE : `poser` est un `Map.set`, donc la seconde entrée ÉCRASE la
+  // première, et l'entité perdue cesse de border qui que ce soit sans qu'aucune
+  // erreur ne le dise.
+  //
   // Masse égale ou inférieure : blocage, aucun décalage. « Peu importe si elle
   // se bloque » — Ethan, 06/09. Elle reste où elle est et retentera au tick
   // suivant.
@@ -2807,22 +3350,63 @@ function seDecaler(etat, e, p, occupation, obstacles) {
 function avancer(etat, e, p, occupation, obstacles) {
   const rangee = caseDepuisMilli(e.rangeeMilli);
   const colonne = caseColonne(e);
-  const vitesse = vitesseDuTick(etat, e, p, obstacles, rangee);
 
-  const destinationMilli = e.rangeeMilli + vitesse;
-  const caseDestination = caseDepuisMilli(destinationMilli);
   // ⚠⚠⚠ LA CASE DEVANT, NOMMÉE UNE FOIS ET DONNÉE À SES DEUX LECTEURS — LE
   // PIÈGE DE L'ÉCRASEUR, TROUVÉ PAR EXÉCUTION ET PAS PAR RELECTURE.
-  // `caseDestination` NE la désigne pas : une entité RANGÉE sur sa case repart
-  // de `rangee * 1 000`, donc `caseDestination` revaut `rangee` tant que la
-  // vitesse est sous 1 000 millièmes — et aucune ne l'atteint, 300 au plus.
-  // Laissé au forçage, il ferait chercher la structure SOUS l'entité
-  // elle-même : `structureForcee` y trouverait l'entité, la refuserait sur
+  // `caseDestination` NE la désigne pas : une entité au CONTACT ne bouge plus
+  // d'un millième, donc `caseDestination` revaut `rangee` tant que la vitesse est
+  // sous 1 000 millièmes — et aucune ne l'atteint, 300 au plus. Laissé au
+  // forçage, il ferait chercher la structure SOUS l'entité elle-même :
+  // `structureForcee` y trouverait l'entité, la refuserait sur
   // `occupante.camp === e.camp`, et l'Écraseur cesserait d'ouvrir la brèche EN
   // SILENCE. `ARRÊT T7` tombe si on l'ignore, `MUR T5` le double côté « case
   // devant ».
   const caseDevant = rangee + 1;
-  const bloqueeParUneStructure = structureImmobileSur(etat, p, occupation, caseDevant, colonne);
+
+  // ⚠⚠⚠ L'ORDRE DE CES QUATRE `const` EST UNE CONTRAINTE, PAS UN GOÛT — LOT
+  // CONTACT. La vitesse se calcule avant la marge, la marge avant le pas, le pas
+  // avant `destinationMilli`, et `destinationMilli` avant `caseDestination`. Les
+  // deux dernières étaient déclarées PLUS HAUT, avant `caseDevant`, et les
+  // déplacer sans retirer les anciennes produit un `SyntaxError` franc ; laisser
+  // l'ancienne VALEUR en place produit une destination NON BORNÉE et aucune
+  // erreur — c'est-à-dire le saut d'hier, sous une marge qui a l'air calculée.
+  // ⚠⚠⚠ ET LE BALAYAGE PASSE DEVANT LA VITESSE — LOT CONTACT-2. La vitesse se
+  // déclarait ici même, DEUX lignes plus haut, avant `caseDevant` ; elle ne le
+  // peut plus : c'est le balayage qui dit s'il y a un écrasement en cours, donc
+  // lui qui décide du frein, donc il vient avant ce qu'il freine. L'ordre est
+  // désormais balayage → frein → vitesse → dégâts → pas.
+  const ecrasees = [];
+  const marge = margeDeContact(
+    etat, e, p, occupation, rangee, colonne, AXE_RANGEE, 1, ecrasees,
+  );
+  const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
+  const vitesse = vitesseDuTick(etat, e, p, obstacles, rangee, frein);
+  // ⚠⚠ LES DÉGÂTS SE PAIENT AVANT TOUT `return`, ET IL Y EN A CINQ EN DESSOUS —
+  // l'arrêt, le repli, la case inchangée, le fond, l'aviation. Le contact est un
+  // fait de POSITION : une unité arrêtée pour tirer sur un bâtiment, ou qui se
+  // replie ce tick-ci, écrase quand même ce qu'elle touche. Les compter plus bas
+  // rendrait l'écrasement dépendant d'une décision qui n'a rien à voir avec lui.
+  //
+  // ⚠⚠ ET C'EST AUSSI CE QUI FAIT DU FRANCHISSEMENT UN NON-ÉVÉNEMENT : la
+  // victime qui tombe ici libère sa cellule AVANT que la branche d'occupation ne
+  // la lise, donc l'écraseuse entre par le chemin ordinaire.
+  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
+  const pas = Math.min(vitesse, marge);
+  const destinationMilli = e.rangeeMilli + pas;
+  const caseDestination = caseDepuisMilli(destinationMilli);
+
+  // ⚠⚠⚠ LA MARGE NULLE, ET SURTOUT PAS LA MARGE — C'EST LA LEÇON DU LOT MUR,
+  // REPRISE TELLE QUELLE. `progresse` ne commande pas que l'avance : il commande
+  // l'ÉCRASEUR et le REPLI. Une pièce qui FERME encore l'écart progresse pour de
+  // vrai — elle avance, c'est exact —, et une pièce AU CONTACT ne progresse plus,
+  // ce qui rend le forçage et le repli atteignables exactement comme hier.
+  // Substituer la marge elle-même — ou la retirer — rendrait `progresse` VRAI
+  // pour toujours devant le mur (`peutAvancer` rend vrai dès que
+  // `caseDestination === rangee`), `structureForcee` ne serait jamais calculée,
+  // et la brèche ne s'ouvrirait plus. En silence. `ARRÊT T8` et `MUR T5` tombent
+  // tous les deux si cette garde descend d'un cran.
+  const bloqueeAuContact = marge === 0;
+  const gelParUneAlliee = allieeDevant(etat, e, p, occupation, caseDevant, colonne);
 
   // Une unité arrêtée pour casser un bâtiment ne PROGRESSE pas : elle a choisi
   // de combattre plutôt que d'avancer. Son tir porte forcément — `doitSArreter`
@@ -2844,7 +3428,7 @@ function avancer(etat, e, p, occupation, obstacles) {
   // qu'elle fait toujours. `ARRÊT T8` le mesure sur les deux pièces — celle qui
   // force et celle qui ne fait que tirer.
   const arrete = doitSArreter(etat, e, p);
-  const progresse = !arrete && !bloqueeParUneStructure
+  const progresse = !arrete && !bloqueeAuContact
     && peutAvancer(etat, e, p, occupation, rangee, caseDestination);
 
   // ÉCRASEUR — forcer la structure qui barre la colonne.
@@ -2892,9 +3476,34 @@ function avancer(etat, e, p, occupation, obstacles) {
   // ⚠ ON NE REMET PAS À ZÉRO, ON N'INCRÉMENTE PAS : le compteur est LAISSÉ TEL
   // QUEL, pour qu'une unité qui entre déjà bloquée reprenne son décompte là où
   // la grille commence, et non trente ticks plus tard.
+  //
+  // ⚠⚠ ET IL EST GELÉ DERRIÈRE UNE ALLIÉE, PARTOUT SUR LA GRILLE — LOT
+  // BARÈME-ET-REJEU, 12/09. C'est le SECOND gel, et il ne remplace pas celui de
+  // la voie d'approche : celui-là tient une case précise, celui-ci une RELATION.
+  // Ethan, sur une vraie partie : « les véhicules étaient à 80 % sur
+  // l'infanterie, plutôt que d'attendre derrière. Puis ils ont disparu. Mais 0
+  // détruit. » Les deux moitiés de la phrase sont deux règles distinctes — le
+  // chevauchement, corrigé par `margeDeContact` plus haut, et la DISPARITION,
+  // qui est ce gel-ci. Une unité qui attend derrière une alliée ne progresse pas,
+  // ne nuit pas et ne force rien : au trentième tick elle passait `sorti = true`
+  // et quittait le raid, ce qu'Ethan lisait « elles ont disparu, mais 0
+  // détruit ». **Attendre son tour n'est pas être inutile.**
+  //
+  // ⚠⚠ ET IL NE VAUT QUE DERRIÈRE UNE ALLIÉE, JAMAIS DEVANT UNE STRUCTURE. Les
+  // deux prédicats sont donc DEUX fonctions, et `allieeDevant` ne se dérive pas
+  // de `bloqueuseSur` : celle-ci répond aussi sur une structure
+  // immobile, et c'est très exactement le cas où `TICKS_AVANT_REPLI` DOIT mordre
+  // — une unité plantée devant un mur qu'elle ne sait pas ouvrir doit rentrer, et
+  // `MUR T6 bis` le garde. Deux questions voisines, deux fonctions ; les fondre
+  // rendrait le repli inatteignable devant un mur.
+  //
+  // ⚠ ET IL NE GÈLE PAS DEVANT UNE ENNEMIE NON PLUS : `allieeDevant` compare les
+  // CAMPS. Une attaquante bloquée par une défenseuse qu'elle ne peut pas viser
+  // rentre à la base comme avant — c'est le montage de `test/combat.test.js`, un
+  // Ratisseur derrière un Bélier, et il est resté vert sans qu'une ligne y change.
   if (progresse || nuit(e) || forcee !== undefined) {
     e.ticksInutiles = 0;
-  } else if (!estEnApproche(e.rangeeMilli)) {
+  } else if (!estEnApproche(e.rangeeMilli) && !gelParUneAlliee) {
     e.ticksInutiles += 1;
     if (e.ticksInutiles >= TICKS_AVANT_REPLI) {
       e.sorti = true;
@@ -2907,24 +3516,20 @@ function avancer(etat, e, p, occupation, obstacles) {
   if (arrete) return;
 
   if (caseDestination === rangee) {
-    // ⚠⚠ ELLE NE FLUE PLUS DANS LE MUR — ETHAN, 10/09, POINT 2 : « Un mur,
-    // tourelles, structure bloque. Donc une unité s'arrête avant, pas dedans.
-    // Ou peut-être que la hitbox est mal faite ? » CE N'EST PAS LA HITBOX,
-    // C'EST LA POSITION. `MILLI_PAR_CASE` vaut 1 000 et `caseDepuisMilli` est
-    // un `floor` : cette branche faisait avancer l'entité À L'INTÉRIEUR de sa
-    // propre case, jusqu'à 999 millièmes, sans jamais regarder si la case
-    // suivante était franchissable. Une unité arrêtée à 5 900 est en case 5
-    // pour le moteur et DESSINÉE à 90 % sur la case 6 — celle du mur — par
-    // `yDeRangeeMilli`, qui projette la position et non l'index.
+    // ⚠⚠ PLUS DE RANGEMENT ICI NON PLUS — LOT CONTACT, 13/09/2026. Le lot MUR
+    // avait posé ici un `rangeeMilli = milliDepuisCase(rangee)` pour que l'unité
+    // cesse de fluer jusqu'à 999 millièmes DANS la case du mur. Le diagnostic
+    // était juste et le remède était un SAUT : vers l'avant le rangement RECULE
+    // l'entité jusqu'à 999 millièmes d'un coup. Mesuré sur un Éclaireur qui
+    // rattrape un Obusier dans sa colonne — il avance neuf ticks, **RECULE de
+    // 80**, se fige six ticks, repart — et il freinait alors qu'il lui restait
+    // 460 millièmes de marge réelle : une demi-case trop tôt, à reculons.
     //
-    // ⚠ ET ELLE SE RANGE, ELLE NE S'IMMOBILISE PAS : `rangeeMilli` retombe sur
-    // le multiple exact, donc l'entité repart de sa case entière dès que la
-    // structure tombe. Rien n'est mémorisé, aucun champ n'entre dans l'état, et
-    // `SAVE_VERSION` n'a pas à bouger.
-    if (bloqueeParUneStructure) {
-      e.rangeeMilli = milliDepuisCase(rangee);
-      return;
-    }
+    // ⚠ LA MARGE A DÉJÀ BORNÉ LE PAS AU CONTACT : il ne reste qu'à écrire la
+    // position, et l'entité COLLE à ce qui la bloque au lieu de s'arrêter au bord
+    // de sa case. Rien n'est mémorisé, aucun champ n'entre dans l'état, et
+    // `SAVE_VERSION` n'a pas à bouger — `rangeeMilli` portait déjà des valeurs
+    // non multiples de `MILLI_PAR_CASE`, c'est tout le sujet.
     e.rangeeMilli = destinationMilli;
     return;
   }
@@ -2952,25 +3557,31 @@ function avancer(etat, e, p, occupation, obstacles) {
   }
   const occupante = etat.entites[indiceOccupante];
   const po = profil(occupante);
-  if (peutEcraser(etat, e, p, occupante, po)) {
-    occupante.pvMilli = 0;
-    occupante.vivant = false;
-    occupante.ecrase = true;
-    // ⚠⚠ LA SECONDE MORT DU MOTEUR, ET ELLE A ÉTÉ TROUVÉE PAR UN TEST, PAS PAR
-    // RELECTURE. Le premier jet du lot JOURNAL-DE-COMBAT n'accrochait le journal
-    // qu'à `retirerLesMorts` en écrivant que c'était « la seule ligne qui fasse
-    // passer `vivant` à faux » — c'était FAUX, un écrasement tue à l'étape 7.
-    // Mesuré : une pièce sur vingt-trois manquait au journal sur la graine 9,
-    // et rien d'autre ne l'aurait dit.
+  if (peutEcraser(etat, e, p, occupante, po) && !ecrasees.includes(occupante)) {
+    // ⚠⚠⚠ LA VICTIME DE DERNIÈRE MINUTE — §2.2 du brief, et le seul chemin qui
+    // reste au franchissement. La case visée est `rangee + 1`, donc elle EST dans
+    // la fenêtre du balayage : une écrasable qui n'y figure pas est une écrasable
+    // qui n'était PAS au contact au début du tick — une vague qui vient d'entrer,
+    // une passagère qui vient de débarquer. Elle prend son quart comme les
+    // autres, **et l'écraseuse n'entre pas ce tick-là.**
     //
-    // ⚠ ET LA POSITION EST CELLE DE L'ÉCRASÉE, PAS DE L'ÉCRASEUSE : elle meurt
-    // là où elle était, sur la case que l'autre vient de lui prendre.
-    etat.journal.destructions.push(faitDeLEntite(occupante));
-    retirer(occupation, caseDestination, colonne);
-    retirer(occupation, rangee, colonne);
-    poser(occupation, caseDestination, colonne, e.indice);
-    e.rangeeMilli = destinationMilli;
+    // ⚠⚠ LE `includes` EMPÊCHE UN DOUBLE COUP, il n'est pas décoratif : sans lui,
+    // une écraseuse assez rapide pour franchir depuis le contact paierait deux
+    // quarts dans le même tick et tuerait en DEUX ticks au lieu de quatre.
+    ecraserAuContact(etat, occupation, occupante);
   }
+  // ⚠⚠⚠ ET PLUS AUCUNE AVANCE ICI — LOT CONTACT-2. Cette branche portait la
+  // SECONDE mort du moteur, `occupante.pvMilli = 0`, et l'échange de cases qui
+  // suivait. Les deux sites sont partis ensemble ; `ecraserAuContact` est le seul
+  // écrivain, et il ne déplace personne.
+  //
+  // ⚠⚠ ENTRER SUR UNE OCCUPANTE VIVANTE CORROMPRAIT LA CARTE D'OCCUPATION, EN
+  // SILENCE : `poser` est un `Map.set`, la seconde entrée ÉCRASE la première, et
+  // l'entité perdue cesse de borner qui que ce soit sans qu'aucune erreur ne le
+  // dise. L'écraseuse entrera au tick où la cellule sera libre — c'est-à-dire au
+  // tick qui suit la mort, `retirerLesMorts` ou le geste ci-dessus l'ayant
+  // retirée de la carte.
+  //
   // Masse égale ou inférieure : blocage, aucune avance. La structure forcée,
   // elle, a déjà encaissé ses 1 % plus haut : elle tombera, et l'unité
   // avancera au tick suivant — `retirerLesMorts` passe avant `deplacement`.
@@ -3250,6 +3861,36 @@ export function facteurEconomiqueMilli(niveau) {
 }
 
 /**
+ * Facteur d'échelle des POINTS DE RECHERCHE, en MILLIÈMES.
+ *
+ *   facteurRechercheMilli(n) = round(1000 × ancrage × pente^(n−1))
+ *
+ * ⚠ UNE TROISIÈME COURBE, ET ELLE EST NÉCESSAIRE. Le combat a la sienne
+ * (`facteurMilli`), l'économie la sienne (`facteurEconomique`, 1,259 puis 1,32).
+ * Les points de recherche empruntaient la seconde depuis le 25/08/2026, et
+ * c'était faux pour une raison de granularité : le barème s'applique PAR CIBLE,
+ * alors que la courbe économique décrit le total d'un SITE. Entre les deux,
+ * `DENSITE` et `GARNISON` ajoutaient leur propre croissance — le total montait
+ * de ×1,44 par niveau au lieu de ×1,32, et partait 7,4 fois trop bas. Voir
+ * `POINTS_RECHERCHE.echelle` de `data/sites.js`, qui porte les deux nombres et
+ * leur provenance.
+ *
+ * ⚠ NE PAS LA RÉALIGNER SUR `facteurEconomique` PAR SOUCI DE SYMÉTRIE. La
+ * divergence est le correctif, pas un oubli.
+ *
+ * ⚠ `ancrage` EST LE FACTEUR DU NIVEAU 1. La fonction rend donc 8 875 au niveau
+ * 1, et non 1 000 comme ses deux sœurs. C'est volontaire et c'est là que vit
+ * l'ancrage ; le barème par cible, lui, reste une répartition inchangée.
+ *
+ * @param {number} niveau
+ * @returns {number} entier de millièmes.
+ */
+export function facteurRechercheMilli(niveau) {
+  const { ancrage, pente } = POINTS_RECHERCHE.echelle;
+  return Math.round(MILLE * ancrage * pente ** (niveau - 1));
+}
+
+/**
  * Butin plein d'un bâtiment, avant proportionnalité aux dégâts.
  * butinPlein = ancrage × indice × penteBasse^(min(n,12)−1) × penteHaute^max(n−12,0)
  *
@@ -3344,11 +3985,21 @@ export function butin(resultat, montage) {
  * départ si la Souche tombe ; les bâtiments ne rapportent rien. Casser des murs
  * rapporte 2 : ce n'est pas une erreur, c'est le point du modèle.
  *
- * ⚠ POURQUOI UN BigInt. Le barème double par niveau de cible quand tout le
- * reste croît en ×1,32 : `bareme × 1000 × 2^(niveau−1)` dépasse
+ * ⚠ POURQUOI UN BigInt. Le barème doublait par niveau de cible quand tout le
+ * reste croissait en ×1,32 : `bareme × 1000 × 2^(niveau−1)` dépassait
  * Number.MAX_SAFE_INTEGER dès le niveau 39 pour le Broyeur. Un Number
  * deviendrait alors approximatif — un compteur de points ne peut pas l'être.
  * BigInt est exact quelle que soit la taille.
+ *
+ * ⚠ ET IL RESTE OBLIGATOIRE SOUS L'ÉCHELLE DU 14/09. `facteurRechercheMilli`
+ * monte moins vite que l'ancien 2^(n−1), mais il part 8 875 millièmes au niveau
+ * 1 au lieu de 1 000 : le produit COMPLET, avec `pvPerdusMilli`, reste hors de
+ * portée d'un Number.
+ *
+ * ⚠ L'ÉCHELLE EST CELLE DE LA RECHERCHE, PAS CELLE DU BUTIN. `butin` passe par
+ * `butinPlein`, qui lit `BUTIN` directement : les deux grandeurs ne partagent
+ * plus aucun facteur, et c'est ce qui permet de recaler l'une sans déplacer
+ * l'autre d'une unité.
  *
  * ⚠ JSON.stringify LÈVE sur un BigInt. Il reste donc confiné à cette valeur de
  * retour : il n'entre ni dans l'état du combat, ni dans l'objet rendu par
@@ -3391,10 +4042,10 @@ export function pointsRecherche(resultat, montage) {
     const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
     // zéro : sur des grandeurs positives, c'est exactement le plancher voulu.
-    // Le facteur économique est en millièmes, d'où le MILLE au dénominateur ;
+    // Le facteur de recherche est en millièmes, d'où le MILLE au dénominateur ;
     // il est placé là, avec l'autre division, pour que TOUS les produits se
     // fassent avant la moindre troncature.
-    total += (BigInt(bareme) * BigInt(facteurEconomiqueMilli(d.niveau)) * facteur
+    total += (BigInt(bareme) * BigInt(facteurRechercheMilli(d.niveau)) * facteur
       * BigInt(pvRemuneres)) / (BigInt(d.pvMaxMilli) * mille);
   }
   return total;
