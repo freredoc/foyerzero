@@ -3463,7 +3463,7 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   // reste ce qu'il a toujours été — la mesure du démêlage de MODULES-D, prise
   // des DEUX côtés et identique. Le canal armé se mesure en MODULES-F T12/T14.
   const jeu = raidDeReference([]);
-  assert.equal(jeu.points, 2059722n, 'les points du raid de référence ont bougé');
+  assert.equal(jeu.points, 10376040n, 'les points du raid de référence ont bougé');
   // ⚠ LOT ARRÊT : 110 au lieu de 120. Le montage ne change pas, la règle
   // d'arrêt si — et les POINTS, eux, ne bougent pas d'une unité : c'est
   // exactement ce que cette ligne existe pour dire.
@@ -3478,6 +3478,12 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   // trois fois et 2 106 166 deux fois, exactement comme avant le lot. **C’est la
   // troisième fois que la règle de déplacement bouge sous ce montage sans que les
   // points bronchent**, et c’est tout ce que cette ligne existe pour dire.
+  // ⚠⚠ LOT ÉCHELLE-RECHERCHE (14/09) : LES CINQ NOMBRES BOUGENT, ET C'EST LA
+  // PREMIÈRE FOIS. Les points de recherche quittent la courbe de BUTIN pour la
+  // leur (`POINTS_RECHERCHE.echelle`, ancrage 8,875 · pente 1,244) : 2 059 722 →
+  // **10 376 040**, 2 106 166 → **10 600 850**. Le TICK, lui, ne bouge pas d'une
+  // unité, et c'est l'inverse exact de ce que les trois lots d'avant mesuraient
+  // ici : un lot d'échelle qui ferait bouger le tick aurait touché au combat.
   // ⚠ ATTRIBUÉ PAR ISOLATION : la fenêtre de balayage ramenée à deux cellules
   // rend **121 aussi** — elle n’y est donc pour rien — et l’écrasement instantané
   // sous la fenêtre de six rend **120**. Le tick de plus est l’écrasement en
@@ -3487,15 +3493,15 @@ test('MODULES-D T4 — les points de recherche ne bougent pas, au point près', 
   // ⚠ ET LE MONTAGE N'EST PAS VIDE. Le Merlon porte `pvPlusVingt` côté Ouvrage :
   // débloquer ce module-là majore bien les points. Sans cette ligne, l'égalité
   // ci-dessous passerait sur un barème qui ne majore jamais rien.
-  assert.equal(raidDeReference(['pvPlusVingt']).points, 2106166n);
+  assert.equal(raidDeReference(['pvPlusVingt']).points, 10600850n);
 
   // ⚠⚠ LA MESURE DU LOT. Avant le démêlage, la Meute et les Perceurs de
   // l'Ouvrage étaient crédités du module de garnison DU JOUEUR — 2 291 944 et
   // 2 193 000 mesurés sur `origin/main`. Ils portent maintenant leur
   // `moduleOuvrage`, qui est nul : plus aucune majoration ne leur revient.
-  assert.equal(raidDeReference(['flashbang']).points, 2059722n);
-  assert.equal(raidDeReference(['tirDeBarrage']).points, 2059722n);
-  assert.equal(raidDeReference(['flashbang', 'tirDeBarrage', 'pvPlusVingt']).points, 2106166n);
+  assert.equal(raidDeReference(['flashbang']).points, 10376040n);
+  assert.equal(raidDeReference(['tirDeBarrage']).points, 10376040n);
+  assert.equal(raidDeReference(['flashbang', 'tirDeBarrage', 'pvPlusVingt']).points, 10600850n);
 
   // Et les deux unités de garnison rapportent bien quelque chose : sans cela,
   // les trois égalités ci-dessus tiendraient parce que rien n'est compté.
@@ -4913,9 +4919,9 @@ test('MODULES-E T5 — l\'ancienne forme plate LÈVE, et nomme le propriétaire'
 test('MODULES-E T6 — les points de recherche lisent la branche DÉFENSE, au point près', () => {
   // ⚠ MÊME RELEVÉ QU'À MODULES-D T4, ET C'EST VOULU. Ce lot ne doit déplacer
   // aucun point : le raid de référence rend les mêmes nombres, à l'unité.
-  assert.equal(raidDeReference([]).points, 2059722n,
+  assert.equal(raidDeReference([]).points, 10376040n,
     'les points du raid de référence ont bougé');
-  assert.equal(raidDeReference(['pvPlusVingt']).points, 2106166n,
+  assert.equal(raidDeReference(['pvPlusVingt']).points, 10600850n,
     'le bonus de 20 % de l\'Ouvrage a bougé');
 
   // ⚠ ET C'EST BIEN `montage.proprietaireDefense` QUI DÉSIGNE LA LISTE, pas la
@@ -4928,19 +4934,19 @@ test('MODULES-E T6 — les points de recherche lisent la branche DÉFENSE, au po
     return pointsRecherche(resoudre(creerCombat(montage), { maxTicks: 600 }), montage);
   };
   const vide = { offense: [], defense: [] };
-  assert.equal(chezLeJoueur({ ouvrage: vide, joueur: vide }), 2059722n,
+  assert.equal(chezLeJoueur({ ouvrage: vide, joueur: vide }), 10376040n,
     'le raid de référence ne rend plus le même total quand le joueur défend');
   assert.equal(chezLeJoueur({ ouvrage: vide, joueur: { offense: [], defense: troisNoms } }),
-    2471666n, '`pointsRecherche` ne lit plus la liste du DÉFENSEUR');
+    12451248n, '`pointsRecherche` ne lit plus la liste du DÉFENSEUR');
 
   // ⚠ LES DEUX CONTRE-CAS, ET ILS SONT DISTINCTS. La branche d'abord : les
   // mêmes noms rangés en `offense` ne majorent rien. Le propriétaire ensuite :
   // rangés chez l'Ouvrage, qui ATTAQUE ici, ils ne majorent rien non plus —
   // c'est ce que ferait un `'ouvrage'` repris en dur.
   assert.equal(chezLeJoueur({ ouvrage: vide, joueur: { offense: troisNoms, defense: [] } }),
-    2059722n, 'la branche offense majore les points : la fuite est ouverte');
+    10376040n, 'la branche offense majore les points : la fuite est ouverte');
   assert.equal(chezLeJoueur({ ouvrage: { offense: [], defense: troisNoms }, joueur: vide }),
-    2059722n, 'la liste de l\'ATTAQUANT majore les points : le propriétaire est en dur');
+    10376040n, 'la liste de l\'ATTAQUANT majore les points : le propriétaire est en dur');
 });
 
 test('MODULES-E T7 — contre-épreuve : le même nom dans l\'AUTRE branche ne rapporte rien', () => {
@@ -4968,7 +4974,7 @@ test('MODULES-E T7 — contre-épreuve : le même nom dans l\'AUTRE branche ne r
   const resultat = resoudre(creerCombat(montage), { maxTicks: 600 });
   // ⚠ LA MÊME RÉSOLUTION, LE MÊME MODULE, L'AUTRE BRANCHE : rien ne bouge, ni
   // les PV du Merlon, ni les points. Sous l'union, ce montage rendait 2 106 166.
-  assert.equal(pointsRecherche(resultat, montage), 2059722n,
+  assert.equal(pointsRecherche(resultat, montage), 10376040n,
     'la branche offense de l\'Ouvrage majore encore les points de recherche');
   // ⚠ LOT ARRÊT : 110 au lieu de 120, comme à MODULES-D T4 et pour la même
   // raison — la règle d'arrêt a changé, le montage non.
@@ -5947,13 +5953,19 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // compare est la PROPRIÉTÉ, et elle ne bouge pas — armé et vide rendent le même
   // nombre au niveau 20, sur les trois graines, parce qu'aucun module n'est armé
   // sous 28.
+  // ⚠ RÉANCRÉ AU LOT ÉCHELLE-RECHERCHE (14/09), MÊMES GRAINES : 4 225 153 ·
+  // 7 185 767 · 2 665 613 → **20 451 490 · 34 782 081 · 12 902 675**. Ici les
+  // valeurs SE comparent, les graines n'ayant pas changé, et le rapport est le
+  // même sur les trois — c'est un facteur d'échelle, pas un combat qui se
+  // déroule autrement. La PROPRIÉTÉ gardée ne bouge pas : armé et vide rendent
+  // le même nombre au niveau 20, aucun module n'étant armé sous 28.
   // ⚠ RÉANCRÉ AU LOT FREIN. La graine 1 sort, la 9 entre : 12 990 000 ·
   // 10 028 009 · 2 665 090 → **4 225 153 · 7 185 767 · 2 665 613**. Les valeurs
   // ne se comparent pas d'un lot à l'autre sur la graine qui change ; sur les
   // deux qui tiennent, elles bougent, et c'est un constat. Ce qui se compare est
   // la PROPRIÉTÉ, et elle ne bouge pas — armé et vide rendent le même nombre au
   // niveau 20, sur les trois graines, parce qu'aucun module n'est armé sous 28.
-  const apres20 = { 9: 4_225_153n, 36: 7_185_767n, 39: 2_665_613n };
+  const apres20 = { 9: 20_451_490n, 36: 34_782_081n, 39: 12_902_675n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -6014,7 +6026,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // pour-cent, là où le lot PRÉDILECTION n'avait rien sous 1,6 % ; il discrimine
   // encore, et **le jour où il tombera sous zéro c'est la prémisse qui sera à
   // réparer, pas l'assertion**.
-  const apres38 = { 9: 1_778_393_323n, 36: 820_121_721n, 39: 474_790_516n };
+  const apres38 = { 9: 2_960_363_423n, 36: 1_365_197_628n, 39: 790_349_617n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -6071,7 +6083,7 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // Vol de vie et le Rayon minimum −1 sont armés à ce niveau-là, et une garnison
   // qui cesse de traverser la grille pour rejoindre une cible qu'elle avait déjà
   // à portée les fait travailler tout le combat.
-  const apres50 = { 9: 44_429_976_952n, 36: 21_968_630_813n, 39: 26_466_085_261n };
+  const apres50 = { 9: 36_303_681_644n, 36: 17_950_542_267n, 39: 21_625_406_980n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **14/09/2026**, version 0.99.60 · build 162.
+Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
 
 ---
 
@@ -42,8 +42,70 @@ Dernière révision : **14/09/2026**, version 0.99.60 · build 162.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 14/09/2026 (après le REVERT du lot ÉCHELLE-RECHERCHE), à
+**Référence au 14/09/2026 (après le lot ÉCHELLE-RECHERCHE, refait), à
 confronter :**
+⚠⚠ **LES POINTS DE RECHERCHE QUITTENT LA COURBE DU BUTIN POUR LA LEUR, ET LE LOT
+S'EMPILE SUR FREIN AU LIEU DE L'ÉCRASER.** C'est le lot que le téléversement du
+matin avait fait atterrir sur un arbre d'avant FREIN, et que la PR #144 a
+décroché ; il revient **par un patch bâti sur `main` APRÈS le revert**, appliqué
+à `6de495d`. `npm test` rend **1613 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests déclarés ; le verdict mesuré
+est **1612 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0.
+⚠⚠ **ET LA PREUVE QUE FREIN SURVIT EST DANS LE FICHIER, PAS DANS LE RÉCIT.** Les
+quatre symboles du lot — `cibleDeDecalageValide`, `colonneDuDecalage`,
+`colonneDePoseMilli`, `cibleDecalageIndice` — comptent **21 occurrences** dans
+`src/sim/combat.js` après application, et `FREIN T1` comme `FREIN T2` sont
+VERTS. Les lignes de CONTEXTE du patch lisent `DEPLACES_PAR_FREIN` : il ne
+POUVAIT pas s'appliquer sur un arbre qui ne l'aurait pas.
+⚠⚠ **`git apply` A ÉTÉ JOUÉ À BLANC AVANT D'ÊTRE JOUÉ.** `--check` sur les onze
+fichiers, sortie 0, avant toute écriture. C'est ce qui distingue ce chemin du
+téléversement : un patch REFUSE quand son contexte a bougé, un téléversement
+REMPLACE sans un mot.
+⚠⚠ **LE LOT REND 51 OCTETS, ENTIÈREMENT DU JAVASCRIPT.** `npm run build` →
+`dist/index.html`, **9 386 656 octets**, 0 référence externe. Mesuré poste par
+poste contre le livrable rebâti dans un `git worktree` sur l'arbre pristine de
+`main` = `6de495d` (**9 386 707**, le nombre que FREIN annonçait, retrouvé à
+l'octet après le revert) : **JavaScript −51 · feuille +0 · balisage +0 ·
+images +0 · audio +0**, la partition tombant EXACTEMENT sur le total des DEUX
+côtés — écart **0 · 0** —, et **306 URI / 307 lignes `data:` de part et
+d'autre**. Borne T10 **inchangée à 9 600 000**, marge **213 344 octets, 2,22 %**.
+⚠⚠ **ET `PIC T7` A ÉTÉ RÉANCRÉ PAR LA MESURE, PAS PAR LE PATCH — QUI N'Y
+TOUCHAIT PAS.** Son ancre écrivait **9 386 707** quand le disque en rend
+**9 386 656** : **51 octets**, soit un neuf-cent-quatre-vingt-dixième de sa
+tolérance de 50 000, donc **VERT et faux**. C'est la dérive la plus fine que ce
+test ait eu à réancrer, et exactement celle que sa dernière assertion existe
+pour refuser. Une cinquième contre-assertion `notEqual` refuse le retour de
+l'ancre de FREIN.
+⚠ **LE POURCENTAGE NE BOUGE PAS** : 213 344 / 9 600 000 s'arrondit à **2,22 %**
+comme 213 293 — l'assertion de `PIC T7` sur la décimale tient sans être touchée.
+⚠⚠ **VERSION ET BUILD PASSENT À 0.99.61 · BUILD 163, ET LES DEUX RESTENT DES
+CHAÎNES**, vérifié au type. Le livrable change de 51 octets, donc §5 demande le
+bump ; et la leçon de la veille tient toujours —
+`PolitiqueVersion.miseAJourAcceptable` refuse un build inférieur OU ÉGAL à
+l'installé, donc republier sous 162 ne livrerait ce lot à aucun appareil qui a
+déjà pris le 162.
+⚠ **LE LOT TOUCHE `src/data/sites.js` ET `src/sim/combat.js` DANS `src/`**, plus
+`package.json`, `CLAUDE.md`, **huit** fichiers de `test/` — les DEUX témoins
+compris —, `test/pictogramme.test.js`, et fait entrer
+`RAPPORT-lotECHELLE-RECHERCHE.md`. **Pas une ligne de `src/render/`, `src/ui/`,
+`src/son/`, `tools/` ni `art/`** — vérifié au diff.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 33** — `src/sim/state.js` n'apparaît
+pas au diff.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
+est un BARÈME — les points de recherche rapportés par un raid — et rien n'a été
+ouvert dans un navigateur. **À regarder au premier essai** : que le nombre
+annoncé au rapport de raid reste lisible aux hauts niveaux, l'échelle ayant
+changé de courbe.
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE L'ENVIRONNEMENT ÉPINGLE — ÉCART
+DÉCLARÉ, ET IL EST DANS L'AUTRE SENS QUE D'HABITUDE.** La session est épinglée à
+`claude/revert-echelle-recherche-plbgnu`, déjà fusionnée ; Ethan a nommé
+`claude/echelle-recherche` en toutes lettres, et c'est cette autorisation
+explicite qui a tranché.
+
+**Auparavant, après le REVERT du lot ÉCHELLE-RECHERCHE :**
 ⚠⚠ **LE LOT ÉCHELLE-RECHERCHE A ÉCRASÉ LE LOT FREIN, ET `main` ÉTAIT ROUGE
 DEPUIS.** Quatre commits « Add files via upload » du 14/09, 12:09–12:10 —
 `f7266ee` le rapport, `1be68b3` `src/data/sites.js`, `9b92a62`
