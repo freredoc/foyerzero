@@ -562,7 +562,7 @@ test('ARRÊT T9 — aucune tourelle ne retient plus, et aucune n\'est non bloqua
 // ARRÊT T10 — `colonnePredilection` n'est pas devenu un champ mort
 // ---------------------------------------------------------------------------
 
-test('ARRÊT T10 — `colonnePredilection` garde ses DIX lecteurs', () => {
+test('ARRÊT T10 — `colonnePredilection` garde ses TREIZE lecteurs', () => {
   // ⚠ LE BRIEF DU LOT ARRÊT LE DEMANDAIT PAR GREP, ET C'EST LA BONNE FORME : un
   // champ qu'on laisserait sans lecteur serait un commentaire menteur en
   // puissance. Le compte SE RESSERRE au lot COLONNE, il ne s'assouplit pas — le
@@ -576,19 +576,29 @@ test('ARRÊT T10 — `colonnePredilection` garde ses DIX lecteurs', () => {
   // bâtiment et la colonne pour la prédilection.
   const code = sansCommentaires(readFileSync(join(RACINE, 'src/sim/combat.js'), 'utf8'));
   const lectures = code.match(/[\w.]*colonnePredilection/g) ?? [];
-  // Treize occurrences : trois écritures de profil, et DIX lectures — une pour
+  // Seize occurrences : trois écritures de profil, et TREIZE lectures — une pour
   // la munition spéciale et sa garde de nullité (2), deux pour le camouflage,
-  // deux pour `doitSArreter` (garde puis comparaison), deux pour
-  // `cibleDuDecalage` (garde puis comparaison), et DEUX POUR `ciblage` DEPUIS LE
-  // LOT PRÉDILECTION — sa garde de nullité puis sa comparaison.
+  // deux pour `doitSArreter` (garde puis comparaison), deux pour `ciblage`
+  // (garde puis comparaison), une pour la garde d'entrée de `cibleDuDecalage`,
+  // et QUATRE DEPUIS LE LOT FREIN.
   //
-  // ⚠⚠ LE NOUVEAU LECTEUR EST NOMMÉ, PAS SEULEMENT COMPTÉ. Ethan, 13/09 :
-  // « l'épervier ne s'est pas arrêté pour cibler le fendeur ». Le défaut était
-  // dans `ciblage`, qui élisait à la seule DISTANCE : une cible hors prédilection
-  // plus proche raflait le ciblage, et `doitSArreter` — qui interroge la cible
-  // COURANTE — ne pouvait plus jamais répondre oui. La prédilection passe donc en
-  // tête de l'ordre du ciblage, et `doitSArreter` n'a PAS été touché.
-  assert.equal(lectures.length, 13, `occurrences trouvées : ${lectures.join(', ')}`);
+  // ⚠⚠ LES TROIS NOUVEAUX LECTEURS SONT NOMMÉS, PAS SEULEMENT COMPTÉS — 14/09.
+  // Ethan, 13/09 : « les unités défensives en déplacement latéral semblent aller
+  // très vite », et la mesure disait 99 ticks de trajet pour 32 ticks de tir.
+  // (1) `cibleDeDecalageValide`, le prédicat partagé par l'élection et par la
+  // vérification de la cible retenue — garde de nullité PUIS comparaison, donc
+  // deux occurrences ; (2) `colonneDuDecalage`, sa garde d'entrée, qui décide de
+  // l'étage β — rentrer au poste — et doit refuser les entités sans prédilection
+  // avant tout ; (3) `ajouterEntite`, qui n'est pas une comparaison mais une
+  // POSE : les deux champs de décalage ne s'écrivent que sur une pièce de
+  // garnison mobile ET qui a une prédilection, faute de quoi ils entreraient dans
+  // l'empreinte d'état des deux cents témoins pour ne rien dire.
+  //
+  // ⚠ ET `doitSArreter` N'A TOUJOURS PAS ÉTÉ TOUCHÉ, deux lots de suite : le
+  // frein l'APPELLE, il ne réécrit pas la question. C'est la moitié qui fait que
+  // ce test-ci reste le garde-fou de l'arbitrage du 10/09.
+  assert.equal(lectures.length, 16, `occurrences trouvées : ${lectures.join(', ')}`);
+  assert.notEqual(lectures.length, 13, 'les trois lecteurs du lot FREIN ont disparu');
   assert.ok(code.includes('pc.colonneMatrice !== p.colonnePredilection'),
     'la munition spéciale ne lit plus la prédilection');
   assert.ok(code.includes('profil(c).colonneMatrice !== p.colonnePredilection'),
@@ -613,7 +623,9 @@ test('ARRÊT T10 — `colonnePredilection` garde ses DIX lecteurs', () => {
   // une cible qu'on ne peut pas blesser — ce que `T5` de `cible.test.js` a fermé.
   // Ce qui se partage est la DISCIPLINE, et c'est ce test qui la tient.
   for (const site of ['function ciblage', 'function ensembleCamoufles',
-    'function doitSArreter', 'function cibleDuDecalage', 'function degatsContre']) {
+    'function doitSArreter', 'function cibleDuDecalage', 'function degatsContre',
+    'function cibleDeDecalageValide', 'function colonneDuDecalage',
+    'function ajouterEntite']) {
     const bloc = code.match(new RegExp(`${site}[\\s\\S]*?\\n}`));
     assert.ok(bloc !== null, `${site} est introuvable`);
     assert.ok(bloc[0].includes('colonnePredilection'),

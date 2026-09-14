@@ -717,10 +717,44 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   //
   // **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan. Trois issues
   // sont au rapport ; aucune n'est prise ici.
+  //
+  // ⚠⚠ LOT FREIN (14/09) : IL Y EN A TOUJOURS UN, ET CE N'EST PLUS LE MÊME.
+  // `infanterie/base/3` SORT — il se conclut désormais sous le plafond — et
+  // `blindeLourd/camp/1` entre. La liste bouge des DEUX côtés, ce qu'un
+  // allongement uniforme ne ferait pas : une défenseuse qui cesse de courir dès
+  // qu'une cible de prédilection est à portée passe ses ticks à TIRER, donc les
+  // files se dénouent autrement — un raid qui traînait s'achève, un raid qui
+  // s'achevait traîne.
+  //
+  // ⚠⚠ ET CE N'EST PAS UN GEL, vérifié comme les fois précédentes en portant
+  // `maxTicks` à 20 000 : il se conclut par `attaquants` au tick **2 629**, soit
+  // **2,92 fois le plafond**. C'est le pire dépassement depuis le lot MUR, et le
+  // sixième du genre — 4 645 au lot CARTE, 5 478 au lot COLONNE, 3 539 au lot
+  // DISPOSITION-OUVRAGE, 2 618 au lot MUR, 940 au lot APPROCHE, 1 018 au lot
+  // BARÈME-ET-REJEU, 1 020 au lot CONTACT, 1 973 au lot PRÉDILECTION. Ce n'est
+  // pas un combat sans issue, c'est un combat trois fois trop long.
+  //
+  // ⚠⚠⚠ ET LE SENS DE LA CAUSE EST L'INVERSE DE CELUI DU LOT PRÉCÉDENT — MESURÉ,
+  // PAS DÉDUIT. PRÉDILECTION rendait les assauts plus FORTS et c'est pour ça
+  // qu'ils duraient ; FREIN les rend plus FAIBLES, et le raid qui traîne y traîne
+  // pour la raison opposée. Sur les cinquante-quatre raids : attaquants détruits
+  // **388 → 398**, bâtiments tombés **44 → 28**, défenseurs tombés **606 → 586**,
+  // somme des ticks **29 169 → 28 458**. Les combats RACCOURCISSENT en moyenne et
+  // l'assaut casse moins : une garnison qui reste en place tire au lieu de
+  // courir. ⚠ Et `blindeLourd/camp/1` ne fait tomber **AUCUN** de ses quatorze
+  // bâtiments, même à plafond levé — là où `infanterie/base/3` en abattait quatre
+  // sur vingt et un.
+  //
+  // **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan.
   assert.deepEqual(
-    expires.sort(), ['infanterie/base/3'],
+    expires.sort(), ['blindeLourd/camp/1'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
+  // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DE LA LISTE D'HIER : un lot qui
+  // déferait les trois étages du frein rendrait `['infanterie/base/3']`, et il
+  // repasserait au vert sous une assertion qui ne dirait que « exactement un ».
+  assert.notDeepEqual(expires.sort(), ['infanterie/base/3'],
+    'la liste d\'avant le lot FREIN est revenue');
   assert.equal(plusLong, 900, 'le plus long des cinquante-quatre — il EST le raid au plafond');
   // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DE LA LISTE VIDE : un lot qui
   // déferait la préférence de prédilection rendrait `[]` et 895, et il repasserait

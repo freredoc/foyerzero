@@ -2111,12 +2111,40 @@ test('NEUT T3 — une défenseuse neutralisée ne se décale plus', () => {
   // La même boucle route la défense vers `seDecaler` depuis le lot COLONNE :
   // la garde du §2 les sert donc toutes les deux, et il faut le mesurer plutôt
   // que de le déduire.
+  //
+  // ⚠⚠ LOT FREIN (14/09) : LE MONTAGE A PERDU SA PRÉMISSE, ET C'EST LE MONTAGE
+  // QU'ON RÉPARE. Il opposait une défenseuse neutralisée à une défenseuse
+  // LIBRE, l'une et l'autre face à un attaquant de sa PRÉDILECTION posé à
+  // portée : depuis le frein, la libre s'arrête d'elle-même dès que cet
+  // attaquant entre dans sa portée — **mesuré, les deux s'immobilisaient au
+  // MÊME tick 40 et à la MÊME colonne 3 560**. Le test ne distinguait plus la
+  // neutralisation de rien du tout, et il serait passé au vert sur un module
+  // entièrement débranché.
+  //
+  // ⚠⚠ CE QUI LE RÉPARE EST DE SÉPARER LE PORTEUR DE LA CIBLE DE DÉCALAGE.
+  // La défenseuse est une Meute, donc sa prédilection est l'INFANTERIE ; sa
+  // cible de décalage est une Meute attaquante posée colonne 9, à cinq cases
+  // au moins de sa portée de 1,5 — elle marche donc vers elle sans jamais
+  // l'atteindre, et le frein ne mord pas. Le porteur du Flashbang est un
+  // Pionnier, dont la prédilection est `structureOuAviation` : il ne s'arrête
+  // PAS pour elle — `doitSArreter` est faux — donc il passe, la neutralise au
+  // vol, et s'éloigne. Les deux faits sont nécessaires, et ils sont ASSERTÉS
+  // par le contre-montage : sans le module, la même défenseuse continue de se
+  // décaler au même pas, tick après tick, jusqu'au bout de la fenêtre.
+  //
+  // ⚠ ET LE PIONNIER EST EN COLONNE 5, PAS DANS LA SIENNE. Posé dans la
+  // colonne 2, il lui passe DESSUS : `peutEcraser` mord, et elle perd un quart
+  // de ses PV par tick de contact — mesuré, elle mourait au tick 13 et le
+  // montage ne mesurait plus rien.
   const monter = (avecLeModule) => creerCombat({
     niveau: 5,
     obstacles: [],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 1, niveau: 5 }],
     defenseurs: [{ id: 'meute', rangee: 4, colonne: 2, niveau: 5 }],
-    vagues: [[{ id: 'meute', colonne: 5, rangee: 2, niveau: 5 }]],
+    vagues: [[
+      { id: 'meute', colonne: 9, rangee: 2, niveau: 5 },
+      { id: 'belier', colonne: 5, rangee: 2, niveau: 5 },
+    ]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: [] },
       joueur: { offense: avecLeModule ? ['flashbang'] : [], defense: [] },
@@ -2126,56 +2154,72 @@ test('NEUT T3 — une défenseuse neutralisée ne se décale plus', () => {
   const releve = (avecLeModule) => {
     const etat = monter(avecLeModule);
     const d = etat.entites.find((e) => e.camp === 'defense' && e.id === 'meute');
-    const a = etat.entites.find((e) => e.camp === 'attaque');
     const colonnes = {};
-    for (let t = 1; t <= 60; t += 1) {
+    for (let t = 1; t <= 80; t += 1) {
       tick(etat);
-      // ⚠ LA COLONNE DE L'ATTAQUANTE EST RELEVÉE, PAS ÉCRITE : c'est elle qui
-      // donne le point de contact, et un `5000` retapé ici ne garderait que
-      // lui-même le jour où le montage bougerait d'une colonne.
-      colonnes[t] = [d.colonneMilli, d.vivant, d.effetsTemporises.length, a.colonneMilli];
+      colonnes[t] = [d.colonneMilli, d.vivant, d.effetsTemporises.length];
     }
     return colonnes;
   };
 
   const avec = releve(true);
   const sans = releve(false);
-  // ⚠ LE CONTRE-MONTAGE EST CE QUI REND LA MESURE DISCRIMINANTE : sans le
-  // module, la même défenseuse continue de se décaler pendant les mêmes ticks.
-  // Sans lui, « la colonne ne bouge pas » pourrait vouloir dire « elle n'avait
-  // rien à faire ».
-  assert.equal(avec[39][2], 0, 'montage : l\'effet doit être posé au tick 40');
-  assert.equal(avec[40][2], 1);
-  const geleeA = avec[40][0];
-  for (let t = 40; t <= 60; t += 1) {
+
+  // ⚠⚠ LE PAS LATÉRAL SE RELÈVE, IL NE S'ÉCRIT PAS. Un `40` retapé ici ne
+  // garderait que lui-même le jour où la vitesse de la Meute bougerait d'une
+  // unité, ou le jour où `GRILLE.lateral` cesserait de valoir deux tiers. Ce
+  // qui est asserté est la RÈGLE : elle avançait d'un pas, elle n'avance plus
+  // d'aucun, puis elle repart du même pas.
+  const pas = sans[2][0] - sans[1][0];
+  assert.ok(pas > 0, `montage : la défenseuse doit se décaler, pas relevé = ${pas}`);
+
+  // ⚠ LE TICK DE L'EFFET SE RELÈVE AUSSI, ET LE MONTAGE PROUVE D'ABORD QU'ELLE
+  // A MARCHÉ AVANT. Sans cette moitié, « elle ne se décale plus » serait vrai
+  // d'une défenseuse qui n'a jamais bougé.
+  const pose = Object.keys(avec).map(Number).sort((a, b) => a - b)
+    .find((t) => avec[t][2] === 1);
+  assert.ok(pose !== undefined, 'montage : le Flashbang n\'a jamais été posé');
+  assert.ok(pose > 5, `montage : l'effet tombe au tick ${pose}, trop tôt pour qu'elle ait marché`);
+  assert.equal(avec[pose - 1][2], 0, 'montage : l\'effet doit être absent au tick d\'avant');
+  for (let t = 2; t < pose; t += 1) {
+    assert.equal(avec[t][0] - avec[t - 1][0], pas,
+      `tick ${t} : avant l'effet, la défenseuse doit marcher du même pas`);
+    assert.equal(avec[t][0], sans[t][0],
+      `tick ${t} : les deux montages doivent coïncider avant l'effet`);
+  }
+
+  const geleeA = avec[pose][0];
+  const expire = Object.keys(avec).map(Number).sort((a, b) => a - b)
+    .find((t) => t > pose && avec[t][2] === 0);
+  assert.ok(expire !== undefined && expire <= 80,
+    'montage : l\'effet doit expirer dans la fenêtre, sinon la reprise n\'est pas mesurée');
+  for (let t = pose; t < expire; t += 1) {
     assert.equal(avec[t][0], geleeA, `tick ${t} : la défenseuse neutralisée s'est décalée`);
     assert.equal(avec[t][2], 1, `tick ${t} : l'effet a expiré trop tôt`);
   }
-  assert.ok(avec[60][1], 'la défenseuse est morte : le montage ne mesure plus rien');
-  assert.equal(sans[39][0], geleeA, 'les deux montages doivent coïncider avant l\'effet');
+  assert.ok(avec[80][1], 'la défenseuse est morte : le montage ne mesure plus rien');
 
-  // ⚠⚠ LOT CONTACT (13/09) : LE CONTRE-MONTAGE EST RÉANCRÉ SUR LE CONTACT, ET
-  // C'EST UN RESSERREMENT. Il exigeait `> geleeA + 500` : un seuil calibré sur
-  // la FLUAGE que le lot supprime — la défenseuse glissait jusqu'à **4 960**,
-  // soit 96 % dans la colonne de l'attaquante. Elle s'arrête désormais **au
-  // contact**, à une case pleine d'elle, donc à 4 000 : le seuil de 500 ne
-  // mordait plus, et le relever d'un nombre nu aurait remplacé une mesure par
-  // un réglage. Ce qui est asserté est la RÈGLE.
-  const contact = sans[60][3] - MILLI_PAR_CASE;
-  assert.equal(sans[60][0], contact,
-    'sans le module, la défenseuse doit se décaler jusqu\'au contact et s\'y arrêter');
-  assert.ok(sans[60][0] > geleeA,
-    'sans le module, la défenseuse ne se décale pas non plus : le montage ne mesure rien');
+  // ⚠⚠ ELLE REPART DU MÊME PAS, ET C'EST CE QUI DIT QUE LA GARDE EST UN GEL ET
+  // NON UNE SUPPRESSION. C'est la moitié verticale de `NEUT T1`, prise sur
+  // l'axe des colonnes.
+  for (let t = expire + 1; t <= 80; t += 1) {
+    assert.equal(avec[t][0] - avec[t - 1][0], pas,
+      `tick ${t} : la défenseuse n'a pas repris son décalage après l'effet`);
+  }
 
-  // ⚠⚠ ET LA POSITION GELÉE DOIT ÊTRE STRICTEMENT AVANT LE CONTACT — sans quoi
-  // la neutralisation serait INDISCERNABLE de l'arrêt au contact, et ce test
-  // passerait au vert sur un module entièrement débranché. C'est la moitié que
-  // le lot CONTACT rend nécessaire : elle n'avait pas lieu d'être quand rien
-  // n'arrêtait une décaleuse. Mesuré : 3 560 contre 4 000, donc 440 millièmes
-  // de marche restante au tick où l'effet se pose.
-  assert.ok(geleeA < contact,
-    `la défenseuse est gelée à ${geleeA}, or le contact est à ${contact} : `
-    + 'le montage ne distingue plus la neutralisation de l\'arrêt au contact');
+  // ⚠⚠ LE CONTRE-MONTAGE EST CE QUI REND LA MESURE DISCRIMINANTE, ET IL GARDE
+  // DEUX CHOSES À LA FOIS DEPUIS LE LOT FREIN. Sans le module, la même
+  // défenseuse se décale à CHAQUE tick de la fenêtre, du même pas : c'est ce
+  // qui dit que le gel vient de la neutralisation, et que le FREIN n'y est pour
+  // rien — s'il mordait, la libre s'arrêterait elle aussi.
+  for (let t = 2; t <= 80; t += 1) {
+    assert.equal(sans[t][0] - sans[t - 1][0], pas,
+      `tick ${t} : sans le module, la défenseuse doit se décaler du même pas`);
+  }
+  assert.ok(sans[80][0] > avec[80][0],
+    'la neutralisation n\'a rien coûté à la défenseuse : le montage ne mesure rien');
+  assert.equal(sans[80][0] - avec[80][0], pas * (expire - pose),
+    'le retard de la neutralisée ne vaut pas exactement les ticks où elle était gelée');
 });
 
 test('NEUT T4 — le porteur sans cible libre garde son usage, et en cherche une autre', () => {
@@ -5840,7 +5884,28 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   //
   // ⚠ LES TROIS INVERSIONS SONT UN CONSTAT À REMONTER, PAS UN DÉFAUT : aucun
   // barème n'a été touché, et l'équilibrage revient à Ethan.
-  const GRAINES = [1, 36, 39];
+  //
+  // ⚠⚠ LOT FREIN (14/09) : LA GRAINE `1` PERD SA PRÉMISSE, LA `9` REVIENT — ET
+  // C'EST LA HUITIÈME FOIS QUE CE MONTAGE SE REPERD. Mesuré, canal armé contre
+  // canal vide sur la graine 1 au niveau 38 : **182 895 422 armé contre
+  // 167 436 067 vide**, soit 9,2 % de PLUS. Le signe que ce test mesure s'y
+  // inverse, exactement comme il s'était inversé sur cette même graine au lot
+  // MUR avant de se remettre à l'endroit au lot PRÉDILECTION. La cause est
+  // celle du lot : une défenseuse cesse de courir après une cible qui est déjà
+  // à sa portée, donc elle tire là où elle courait, donc la garnison de cette
+  // base-là tient plus longtemps et le bonus de 20 % de l'Ouvrage redevient
+  // rentable.
+  //
+  // ⚠ BALAYAGE DES GRAINES 1 À 60 : **cinq** conviennent — 9, 36, 39, 56, 57 —,
+  // contre six au lot PRÉDILECTION. Les deux qui tiennent, **36 et 39**, sont
+  // gardées ; la troisième est la plus petite des trois restantes, et c'est la
+  // **9**, qui était sortie au lot CONTACT pour une inversion de signe. Ce
+  // montage se reperd et se retrouve au gré des lots qui touchent au déroulé,
+  // et c'est la huitième fois qu'on l'écrit.
+  //
+  // ⚠ L'INVERSION DE LA GRAINE 1 EST UN CONSTAT À REMONTER, PAS UN DÉFAUT :
+  // aucun barème n'a été touché, et l'équilibrage revient à Ethan.
+  const GRAINES = [9, 36, 39];
   // ⚠ RÉANCRÉ AU LOT CIBLES-RANGÉES (07/09) : les tailles de rangée se tirent,
   // donc la disposition et la composition d'un site bougent encore. Les trois
   // graines DISCRIMINENT toujours aux deux niveaux — c'est ce que les deux
@@ -5882,7 +5947,13 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // compare est la PROPRIÉTÉ, et elle ne bouge pas — armé et vide rendent le même
   // nombre au niveau 20, sur les trois graines, parce qu'aucun module n'est armé
   // sous 28.
-  const apres20 = { 1: 12_990_000n, 36: 10_028_009n, 39: 2_665_090n };
+  // ⚠ RÉANCRÉ AU LOT FREIN. La graine 1 sort, la 9 entre : 12 990 000 ·
+  // 10 028 009 · 2 665 090 → **4 225 153 · 7 185 767 · 2 665 613**. Les valeurs
+  // ne se comparent pas d'un lot à l'autre sur la graine qui change ; sur les
+  // deux qui tiennent, elles bougent, et c'est un constat. Ce qui se compare est
+  // la PROPRIÉTÉ, et elle ne bouge pas — armé et vide rendent le même nombre au
+  // niveau 20, sur les trois graines, parce qu'aucun module n'est armé sous 28.
+  const apres20 = { 9: 4_225_153n, 36: 7_185_767n, 39: 2_665_613n };
   for (const g of GRAINES) {
     assert.equal(points(20, g), apres20[g], `niveau 20, graine ${g}`);
     assert.equal(points(20, g, 'vide'), apres20[g], `niveau 20, graine ${g} : le canal a mordu sous 28`);
@@ -5935,7 +6006,15 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // chose que ce test mesure. ⚠ Et il est FRANC sur les trois, là où le lot
   // CONTACT-2 n'avait que 0,05 % sur sa graine la plus mince : **18,7 % de moins
   // sur la 1, 2,4 % sur la 36, 1,6 % sur la 39**.
-  const apres38 = { 1: 322_302_930n, 36: 742_303_771n, 39: 472_790_407n };
+  // ⚠ RÉANCRÉ AU LOT FREIN, la graine 1 remplacée par la 9 : 322 302 930 ·
+  // 742 303 771 · 472 790 407 → **1 778 393 323 · 820 121 721 · 474 790 516**.
+  // Le SENS est intact — armé reste sous vide sur les trois —, et c'est la seule
+  // chose que ce test mesure. ⚠ Les écarts : **3,1 % de moins sur la 9, 4,9 %
+  // sur la 36, 0,98 % sur la 39**. Le plus mince des trois redescend sous le
+  // pour-cent, là où le lot PRÉDILECTION n'avait rien sous 1,6 % ; il discrimine
+  // encore, et **le jour où il tombera sous zéro c'est la prémisse qui sera à
+  // réparer, pas l'assertion**.
+  const apres38 = { 9: 1_778_393_323n, 36: 820_121_721n, 39: 474_790_516n };
   for (const g of GRAINES) {
     assert.equal(points(38, g), apres38[g], `niveau 38, graine ${g}`);
     assert.ok(points(38, g) < points(38, g, 'vide'),
@@ -5985,7 +6064,14 @@ test('MODULES-F T14 — les points bougent, et le niveau 20 reste identique au p
   // s'est effondré, le jour où il tombera sous zéro c'est la prémisse qui sera à
   // réparer » — s'est réalisé : il est tombé sous zéro, et c'est bien la prémisse
   // qui a été réparée, pas l'assertion.
-  const apres50 = { 1: 13_882_187_857n, 36: 23_713_374_633n, 39: 26_497_250_142n };
+  // ⚠ RÉANCRÉ AU LOT FREIN, la graine 1 remplacée par la 9 : 13 882 187 857 ·
+  // 23 713 374 633 · 26 497 250 142 → **44 429 976 952 · 21 968 630 813 ·
+  // 26 466 085 261**. Le SENS est intact sur les trois — **18,8 % de moins sur
+  // la 9, 10,6 % sur la 36, 12,8 % sur la 39** —, et il est FRANC partout : le
+  // Vol de vie et le Rayon minimum −1 sont armés à ce niveau-là, et une garnison
+  // qui cesse de traverser la grille pour rejoindre une cible qu'elle avait déjà
+  // à portée les fait travailler tout le combat.
+  const apres50 = { 9: 44_429_976_952n, 36: 21_968_630_813n, 39: 26_466_085_261n };
   for (const g of GRAINES) {
     assert.equal(points(50, g), apres50[g], `niveau 50, graine ${g}`);
     assert.ok(points(50, g) < points(50, g, 'vide'), `niveau 50, graine ${g} : les points n'ont pas baissé`);

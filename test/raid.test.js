@@ -380,9 +380,29 @@ test('deux raids — le second part sur ce que le premier a laissé', () => {
   // donc plus l'observable — mais on n'assouplit pas : on ASSERTE le zéro, ce
   // qui est plus fort, et on garde la décroissance stricte là où elle a encore
   // un sens, sur les bâtiments.
-  assert.equal(un.restantDefense, 0,
-    'la première passe ne rase plus toute la défense : la garde ci-dessous change');
-  assert.equal(deux.restantDefense, 0, 'la défense est revenue entre deux passes');
+  // ⚠⚠ LOT FREIN (14/09) : LA GARDE CHANGE EXACTEMENT COMME ELLE L'AVAIT
+  // ANNONCÉ, ET ELLE SE RESSERRE. Son message disait « la première passe ne rase
+  // plus toute la défense : la garde ci-dessous change » ; c'est arrivé.
+  // **Mesuré : la première passe laisse 40 ‰ de défense au lieu de zéro, et la
+  // seconde la rase.** La DÉCROISSANCE STRICTE sur la défense — l'observable que
+  // ce test portait avant le lot COLONNE et que ce lot-là avait dû abandonner
+  // faute de marge — redevient donc mesurable, et elle revient. Ce n'est pas un
+  // assouplissement : on avait le zéro, on a le zéro ET la décroissance.
+  // ⚠ LA CAUSE EST LE FREIN, ET ELLE SE LIT DANS LE BON SENS : la garnison du
+  // camp ne quitte plus son poste tant qu'une cible de sa prédilection est à
+  // portée, donc elle tire au lieu de courir, donc les six Meutes ne
+  // l'achèvent plus en une passe. Il leur en faut deux — ce que le titre de ce
+  // test dit depuis le premier jour.
+  assert.equal(un.restantDefense, 40,
+    'la première passe ne laisse plus 40 ‰ de défense : la garde ci-dessous change');
+  assert.notEqual(un.restantDefense, 0,
+    'la première passe rase de nouveau toute la défense : la décroissance stricte ci-dessous redevient vacueuse');
+  assert.equal(deux.restantDefense, 0, 'la seconde passe ne rase plus la défense');
+  assert.ok(deux.restantDefense < un.restantDefense,
+    `second raid : défense restante ${deux.restantDefense} contre ${un.restantDefense}`);
+  // ⚠ ET LA DÉCROISSANCE SUR LES BÂTIMENTS NE BOUGE PAS — 93 puis 87 sur le lot,
+  // 95 puis 87 sur l'arbre d'avant : c'est la moitié que ce test a toujours
+  // tenue, et elle tient encore.
   assert.ok(deux.restantBatiments < un.restantBatiments || deux.rase,
     `second raid : bâtiments restants ${deux.restantBatiments} contre ${un.restantBatiments}`);
 });

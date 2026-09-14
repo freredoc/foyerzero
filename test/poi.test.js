@@ -891,12 +891,30 @@ test('POI T18 — un raid du joueur emporte ses POI, et ça se mesure sur la cib
   // **L’ÉCART RELATIF — ce que ce test mesure — passe de +33,3 % à +40,3 %**, et
   // **les durées coïncident toujours des deux côtés, à 451 ticks**, ce qui est la
   // moitié qui dit que le montage emporte encore les POI.
-  assert.deepEqual(rNu.butin, { quartz: 62, scorie: 20 });
-  assert.deepEqual(rAvec.butin, { quartz: 87, scorie: 29 });
-  assert.notDeepEqual(rNu.butin, { quartz: 69, scorie: 23 },
-    'le butin sans POI est revenu à sa valeur d’avant CONTACT-2 : la fenêtre a rétréci');
+  // ⚠⚠ LOT FREIN (14/09) : 62 · 20 → **40 · 13**, ET 87 · 29 → **44 · 14**. LES
+  // DEUX BUTINS BAISSENT ENSEMBLE, ET LA DURÉE NE BOUGE PAS D'UN TICK — 451 des
+  // deux côtés, comme aux quatre lots précédents. Le lot ne touche QUE le
+  // décalage LATÉRAL de la défense : la garnison du camp visé ne quitte plus son
+  // poste tant qu'une cible de sa prédilection est à portée, donc elle tire au
+  // lieu de courir, donc les six Meutes griffent moins les bâtiments.
+  // ⚠⚠ ET L'ÉCART RELATIF — CE QUE CE TEST MESURE — TOMBE DE +40,3 % À
+  // **+10,0 %**, ET C'EST LA PREMIÈRE FOIS QU'IL BOUGE FRANCHEMENT. Il tenait à
+  // +33,3 % / +40,3 % depuis quatre lots, et à +16,6 % pendant trois avant eux ;
+  // ce lot-ci le divise par quatre. Ce n'est pas un défaut du montage : le bonus
+  // de POI majore les DÉGÂTS des escouades, or ce qui borne désormais ce raid
+  // n'est plus ce que les six Meutes infligent mais le fait qu'elles
+  // n'atteignent presque plus les bâtiments. Un bonus de dégâts ne rapporte que
+  // sur ce qu'on atteint.
+  // ⚠ CE QUE CE TEST EXISTE POUR TENIR NE BOUGE PAS, et c'est ce qui compte : les
+  // deux butins DIFFÈRENT encore, les durées coïncident encore, et le site est
+  // laissé dans deux états distincts. Le jour où l'écart tomberait à zéro, la
+  // première assertion de ce bloc le dirait — et elle est au-dessus, intacte.
+  assert.deepEqual(rNu.butin, { quartz: 40, scorie: 13 });
+  assert.deepEqual(rAvec.butin, { quartz: 44, scorie: 14 });
+  assert.notDeepEqual(rNu.butin, { quartz: 62, scorie: 20 },
+    'le butin sans POI est revenu à sa valeur d’avant FREIN : la défense s’est remise à courir');
   assert.equal(rAvec.ticks, rNu.ticks, 'la durée a cessé de coïncider : relire le montage');
-  assert.equal(rNu.ticks, 451, 'la durée des deux raids, réancrée au lot CONTACT-2');
+  assert.equal(rNu.ticks, 451, 'la durée des deux raids, réancrée au lot CONTACT-2 et inchangée depuis');
   assert.notEqual(
     JSON.stringify(nu.sitesEntames), JSON.stringify(avec.sitesEntames),
     'le raid laisse le site dans le même état avec et sans POI',
