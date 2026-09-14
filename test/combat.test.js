@@ -842,7 +842,7 @@ function abimerLigne(ligne, perdus) {
   ligne.detruit = ligne.pvMilli <= 0;
 }
 
-test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points', () => {
+test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-points', () => {
   const montage = {
     niveau: 3,
     saveur: null,
@@ -892,17 +892,27 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
   //   avant : 2 × 1000 × 2^(3−1)            × 0,5 = 4 000 milli-points
   //   après : 2 × 1000 × facteurEconomiqueMilli(3)/1000 × 0,5
   //         = 2 × 1000 × 1,585              × 0,5 = 1 585 milli-points
-  // Le niveau 3 perd donc 60 % de son rendement — c'est le prix à payer pour
-  // que le niveau 50 cesse de déborder l'entier sûr, et le rendement reste
-  // strictement croissant en niveau.
+  //
+  // ⚠⚠ ET LE 14/09/2026 LES POINTS DE RECHERCHE ONT QUITTÉ LA COURBE DE BUTIN
+  // POUR LA LEUR, `POINTS_RECHERCHE.echelle` — ancrage 8,875 au niveau 1, pente
+  // 1,244 par niveau. La raison est une raison de GRANULARITÉ, pas d'équilibrage :
+  // le barème s'applique par CIBLE, la courbe économique décrit un SITE, et la
+  // densité des défenses et l'enrichissement de la garnison s'ajoutaient entre
+  // les deux. Confronté à trois relevés de Tiberium Alliances, le total d'un site
+  // partait 7,4 fois trop bas et montait 9 % trop vite par niveau.
+  //   maintenant : 2 × 1000 × facteurRechercheMilli(3)/1000 × 0,5
+  //             = 2 × 1000 × 13,734            × 0,5 = 13 734 milli-points
+  // Le rendement reste strictement croissant en niveau, et le plafond du barème
+  // tient toujours l'entier sûr — plus large qu'avant, même : 318 fois au lieu
+  // de 260. C'est le T13 de generateur.test.js qui le mesure.
   //
   // BigInt reste OBLIGATOIRE malgré tout : le produit intermédiaire du calcul,
-  // barème × facteur × bonus × pvPerdusMilli, atteint encore 5,2 × 10²¹ au
-  // niveau 50. C'est le T13 de generateur.test.js qui le mesure.
-  assert.equal(pointsRecherche(resultat, montage), 1585n);
+  // barème × facteur × bonus × pvPerdusMilli, atteint encore 4,2 × 10²¹ au
+  // niveau 50. C'est le même T13 qui le mesure.
+  assert.equal(pointsRecherche(resultat, montage), 13734n);
 
   // Avec le module de la cible débloqué (Merlon côté Ouvrage : pvPlusVingt),
-  // × 1,2 → 1 902, À FRACTION DÉTRUITE ÉGALE.
+  // × 1,2 → 16 480, À FRACTION DÉTRUITE ÉGALE.
   //
   // ⚠⚠ ET LE MÊME DÉBLOCAGE MAJORE MAINTENANT LES PV DE LA CIBLE — lot
   // MODULES-D. Le Merlon passe de 2 420 000 à 2 904 000 milli-PV, si bien que
@@ -917,20 +927,20 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points
   const merlonBoost = resultatModule.defenses.find(parId('merlon'));
   assert.equal(merlonBoost.pvMaxMilli, 2_904_000, 'le module ne majore plus les PV');
   abimerLigne(merlonBoost, merlonBoost.pvMaxMilli / 2);
-  assert.equal(pointsRecherche(resultatModule, avecModule), 1902n);
+  assert.equal(pointsRecherche(resultatModule, avecModule), 16480n);
 
   // ⚠ LES DEUX EFFETS S'ANNULENT À DÉGÂTS ABSOLUS ÉGAUX, et c'est mesuré : un
   // même nombre de milli-PV arrachés rapporte le MÊME nombre de points, module
   // débloqué ou non — on casse une fraction plus petite d'une pièce plus
   // grosse, majorée de 20 %. Le bonus ne se voit qu'au bout : détruire le
-  // Merlon ENTIER rapporte 3 170 sans le module et 3 804 avec.
+  // Merlon ENTIER rapporte 27 468 sans le module et 32 961 avec.
   const memeDegat = resoudre(creerCombat(avecModule), { maxTicks: 1 });
   abimerLigne(memeDegat.defenses.find(parId('merlon')), 1_210_000);
-  assert.equal(pointsRecherche(memeDegat, avecModule), 1585n);
+  assert.equal(pointsRecherche(memeDegat, avecModule), 13734n);
   const entier = resoudre(creerCombat(avecModule), { maxTicks: 1 });
   const aRaser = entier.defenses.find(parId('merlon'));
   abimerLigne(aRaser, aRaser.pvMaxMilli);
-  assert.equal(pointsRecherche(entier, avecModule), 3804n);
+  assert.equal(pointsRecherche(entier, avecModule), 32961n);
 
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.
   assert.equal(resultat.batiments.length, 1);

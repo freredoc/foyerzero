@@ -5050,118 +5050,131 @@ export const RAPPORTS_OUVRAGE_PREDILECTION = {
 };
 
 /**
- * LA VINGT-SEPTIÈME COUCHE — LOT FREIN, 14/09/2026.
+ * ⚠⚠ VINGT-SEPTIÈME COUCHE — lot ÉCHELLE-RECHERCHE, 14/09/2026. **SEIZE COUPLES
+ * SUR 350**, deux champs seulement — `recherche` et `rapports` —, phases p07 à
+ * p14. Les SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT : le scénario ne raide
+ * pas avant la phase 7, et un solde de points ne bouge que par un raid.
  *
- * ⚠⚠ **TRENTE-SIX COUPLES SUR 350**, six champs, phases **p07 à p14** — **les
- * SIX PREMIÈRES PHASES sont identiques AU BIT**, le scénario ne combattant pas
- * avant son premier raid. Trois étages sur le décalage d'une défenseuse : elle
- * cesse de courir quand une cible de prédilection est à portée, elle tient sa
- * cible de décalage tant que celle-ci est valide, et elle rentre à son poste
- * quand il n'en reste aucune sur la grille.
+ * Ce que le lot change : les points de recherche quittent la courbe de BUTIN
+ * pour la leur, `POINTS_RECHERCHE.echelle` — ancrage 8,875 au niveau 1, pente
+ * 1,244 par niveau, lue par `facteurRechercheMilli` de `sim/combat.js`.
  *
- * ⚠⚠ **LE RAID DE PROXIMITÉ BOUGE SUR DIX-NEUF GRAINES SUR 25, CELUI DE
- * L'OUVRAGE SUR VINGT ET UNE — ET C'EST L'INVERSE EXACT DU LOT PRÉDILECTION**,
- * qui ne déplaçait AUCUN rapport de proximité. Le motif se lit dans les deux
- * règles : la prédilection ne mord que là où une pièce a plus d'une CLASSE de
- * cible valide à portée — et le camp de la phase 7 porte trois `meute` et rien
- * d'autre, mesuré tick par tick au lot précédent. Le frein, lui, ne demande
- * qu'UNE cible de la bonne classe : toute garnison qui en a une freine, et il
- * n'existe aucun camp qui n'en porte aucune.
+ * ⚠⚠ ET CE QUI NE BOUGE PAS EST L'ATTRIBUTION ELLE-MÊME. Vingt et un des
+ * vingt-trois champs relevés tombent à l'octet sur les couches d'avant, `butin`
+ * et `economie` COMPRIS : le butin passe par `butinPlein`, qui lit `BUTIN`
+ * directement, et les deux grandeurs ne partagent plus aucun facteur. `attaque`,
+ * `disposition`, `garnison`, `position`, `satellites`, `sitesEntames` et les
+ * dix-sept scalaires ne bougent pas non plus — ce lot ne touche ni le combat, ni
+ * la carte, ni l'économie, ni la pose, ni le choix de cible. Il ne change qu'un
+ * barème, et la couche le dit.
  *
- * ⚠ VINGT-TROIS GRAINES SUR VINGT-CINQ sont déplacées ; les deux qui tombent à
- * l'octet sur la couche de PRÉDILECTION — **8 et 15** — sont des parties où
- * aucune pièce de garnison n'a jamais eu à se décaler. Le `??` reste donc
- * NÉCESSAIRE, comme aux lots MUR, VITESSE, BARÈME-ET-REJEU, CONTACT, CONTACT-2
- * et PRÉDILECTION.
- *
- * ⚠⚠ ET AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
- * de la sauvegarde comprise : ni les gestes de construction, ni ceux d'armement,
- * ni les cases atteignables, ni le déplacement, ni les bases attaquantes, ni le
- * nombre de cibles, ni la cible retenue, ni l'équivalence des deux chemins.
- * C'est ce qui dit que le lot ne touche ni la carte, ni l'économie, ni la pose,
- * ni le choix de CIBLE DE RAID — et, la taille de la sauvegarde ne bougeant pas
- * d'un octet, que les deux champs neufs de l'entité ne traversent PAS
- * `serialiser`.
+ * ⚠ `rapports` BOUGE PARCE QU'UN RAPPORT DE RAID PORTE SES POINTS, pas parce que
+ * l'issue du raid a changé : les deux tables de rapports ci-dessous sont PLEINES
+ * — 25 graines sur 25, des deux côtés — alors qu'aucune empreinte de combat des
+ * deux cents témoins de `temoins-combat.js` ne bouge. C'est la signature d'un
+ * changement de barème, et l'inverse de celle d'un changement de déroulé.
  */
-export const DEPLACES_PAR_FREIN = {
-  p07_raidProcheApres: { armee: "560f0123ec3faa1d", economie: "1f016914d530a88a", rapports: "7bc540c2dc4cd583", sitesEntames: "87310952a45f9b06" },
-  p08_100ticks: { armee: "560f0123ec3faa1d", economie: "6101c13d3a10d786", rapports: "7bc540c2dc4cd583", sitesEntames: "87310952a45f9b06" },
-  p09_deplace: { armee: "560f0123ec3faa1d", economie: "6101c13d3a10d786", rapports: "7bc540c2dc4cd583", sitesEntames: "87310952a45f9b06" },
-  p10_montee: { armee: "560f0123ec3faa1d", economie: "6101c13d3a10d786", rapports: "7bc540c2dc4cd583", sitesEntames: "87310952a45f9b06" },
-  p11_raidOuvrageApres: { armee: "a796088b7444c2f9", economie: "6101c13d3a10d786", rapports: "4b0a59bf8b49efb2", recherche: "db2690586a323a98", sitesEntames: "1513232eaa95fe29" },
-  p12_veilleDuRaid: { armee: "a796088b7444c2f9", economie: "6101c13d3a10d786", rapports: "4b0a59bf8b49efb2", recherche: "db2690586a323a98", sitesEntames: "16067440c33fb4cf" },
-  p13_apresLeRaid: { armee: "a796088b7444c2f9", disposition: "e052310d5b156c66", economie: "ae10940734c5d81a", rapports: "4a675bdfdfd95b40", recherche: "db2690586a323a98", sitesEntames: "387338f8370dbcf3" },
-  p14_sousLeFeu: { armee: "a796088b7444c2f9", rapports: "86e80ba13050554e", recherche: "db2690586a323a98", sitesEntames: "69ceea7bdce80379" },
+export const DEPLACES_PAR_ECHELLE_RECHERCHE = {
+  p07_raidProcheApres: { rapports: "3f6225e6beda0ea2", recherche: "3703b074b5b4f5ec" },
+  p08_100ticks: { rapports: "3f6225e6beda0ea2", recherche: "3703b074b5b4f5ec" },
+  p09_deplace: { rapports: "3f6225e6beda0ea2", recherche: "3703b074b5b4f5ec" },
+  p10_montee: { rapports: "3f6225e6beda0ea2", recherche: "3703b074b5b4f5ec" },
+  p11_raidOuvrageApres: { rapports: "25b73ab7eb6f9ed4", recherche: "72b5766aa2e6bbd1" },
+  p12_veilleDuRaid: { rapports: "25b73ab7eb6f9ed4", recherche: "72b5766aa2e6bbd1" },
+  p13_apresLeRaid: { rapports: "bc228bc63dac86ec", recherche: "72b5766aa2e6bbd1" },
+  p14_sousLeFeu: { rapports: "5f06fdda38b4153a", recherche: "72b5766aa2e6bbd1" },
 };
 
-export const EMPREINTES_PAR_GRAINE_FREIN = {
-  1: "97f2c9bea9f359c7",
-  2: "c46b5b74339e23be",
-  3: "f94bad17e44f6d66",
-  4: "c0c21ca3a541a3db",
-  5: "4f98193ab48418a2",
-  6: "ae90e4dc7dbc0a0f",
-  7: "a33c1b46c3a26643",
-  9: "f5f9b27eda64e8d2",
-  10: "0869c9831c842271",
-  11: "33e94c2c23095ba4",
-  12: "302e66d02d8a29bf",
-  13: "2b373026700fb1c7",
-  14: "503481a9f6a6af98",
-  16: "46803c2e4a677d75",
-  17: "295c4dd8833651b1",
-  18: "527878efea29d3e6",
-  19: "6f62a100b0c62ffc",
-  20: "70ff0197eb1ca675",
-  21: "f739732e38517d68",
-  22: "706b3d1b4c181dd2",
-  23: "95287f5f392bcf62",
-  24: "ebbdad6c7c4f1abc",
-  25: "b82b822df07af551",
+/** Les empreintes par graine, lot ÉCHELLE-RECHERCHE — les 25 sur 25 : tout raid rapporte. */
+export const EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE = {
+  1: "1a4a16a236e2bcf7",
+  2: "61cd82a27e4f7e4a",
+  3: "9f190ed4ba9ce903",
+  4: "a826efcd85a8ef94",
+  5: "decb6acca8b65aad",
+  6: "aa7cdd7481f5b8f3",
+  7: "7a8afbbd454e3b40",
+  8: "1d66d08dbd542700",
+  9: "4c6752da4e0f1de9",
+  10: "5b206315c39d8a5f",
+  11: "a2b3ace666496639",
+  12: "0eec98a33f638774",
+  13: "11936c441e76e13b",
+  14: "48b81d1791365b75",
+  15: "7a47f9e6e6f36e6a",
+  16: "16d689b90963bc5b",
+  17: "db437b1369c8b7e6",
+  18: "7dcd059992994fb7",
+  19: "7e1c78f127748a5f",
+  20: "a18885b43f0b8f66",
+  21: "f734bfa5306e08fc",
+  22: "81cc572b024c7395",
+  23: "60404444806c5cd6",
+  24: "88f0d185d78854a1",
+  25: "e36008a27eb43a63",
 };
 
-export const RAPPORTS_PROCHE_FREIN = {
-  1: "667b9e4f4816954b",
-  2: "0ec6bde3ebfd2828",
-  4: "44e2435fb0436f4d",
-  6: "a95a84d8b0124ecc",
-  7: "88f140e019fa7caa",
-  9: "05a228464fb4c741",
-  10: "bd9155479a2e8ff4",
-  13: "5254c42d47da5fff",
-  14: "c25403cc7e6c1f8b",
-  16: "b6ce4e3a8ace5bb2",
-  17: "f6af04017fd3974f",
-  18: "3c2c6a0fce164283",
-  19: "ec586a96c8d085eb",
-  20: "88f33f29a670f757",
-  21: "4599c2c3be2b546c",
-  22: "96f7701c004a96a3",
-  23: "cef2ae5535310e29",
-  24: "840a331129caa525",
-  25: "6e47c51fea5324de",
+/**
+ * Le rapport du raid de PROXIMITÉ, lot ÉCHELLE-RECHERCHE — **25 graines sur 25**.
+ *
+ * ⚠ UNE TABLE PLEINE ICI N'A PAS LE MÊME SENS QUE POUR UN LOT DE DÉROULÉ. Le
+ * rapport porte les points du raid ; un barème qui change les déplace donc tous,
+ * sans qu'une seule pièce se soit déplacée autrement. Une table CREUSE serait
+ * l'anomalie : elle voudrait dire qu'un raid sur deux n'a rien cassé.
+ */
+export const RAPPORTS_PROCHE_ECHELLE_RECHERCHE = {
+  1: "fbd32b6db79596a7",
+  2: "829e7715b9ee6034",
+  3: "69f1f1951b2dac22",
+  4: "576bbb3a04a4644a",
+  5: "9580ccc0296718bd",
+  6: "04460f2b56db23d5",
+  7: "07860075bd6925c4",
+  8: "1fd8ebb5ded0b6f1",
+  9: "c9d5af9b3f1e2463",
+  10: "3772926d0b5b75e8",
+  11: "a422bbc5a9816392",
+  12: "680c3a5ff34a5899",
+  13: "7d0a0e2e1adf798d",
+  14: "8fad949f889ee367",
+  15: "f42f28d3dabc456b",
+  16: "f74d4625920700b8",
+  17: "b18b6c696a3f050c",
+  18: "49cc9b45fb5f377c",
+  19: "9177f57a30f4e67a",
+  20: "3b6b1760e714073f",
+  21: "eef8ab4944fd149a",
+  22: "b303bca39b7bc5d8",
+  23: "3f4798b8f8337f49",
+  24: "e6d772ab131ab380",
+  25: "14588e76d519ec42",
 };
 
-export const RAPPORTS_OUVRAGE_FREIN = {
-  1: "4367f8607d91cd55",
-  2: "9ae6aab50305a94d",
-  4: "a915d6f59e7f4403",
-  5: "533f32d6e2b5de67",
-  6: "d5855d378fa80233",
-  7: "49e0735e58509c16",
-  9: "3c585056ea135f20",
-  10: "fbe9f2b2e003fe98",
-  12: "c79c18efd0ab72ee",
-  13: "e0b3b67aada930b2",
-  14: "2aae8019e9fb70cc",
-  16: "ba268504f8ddf8f8",
-  17: "adf311e99d54d20b",
-  18: "f2114cb59ebeafca",
-  19: "c8a67ef444998d92",
-  20: "5f36799c683cff98",
-  21: "4f574900f83ad271",
-  22: "941d7218e7a071e1",
-  23: "b9832bb8651e10d4",
-  24: "1275a50077e68787",
-  25: "bf3f9c7b6d162b4b",
+/** Le rapport du raid de l'OUVRAGE, lot ÉCHELLE-RECHERCHE — **25 graines sur 25**, même raison. */
+export const RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE = {
+  1: "c13dd7d55c4bc102",
+  2: "972d0146256f8e23",
+  3: "b2fd793fe601928e",
+  4: "afc282cdcb0bd9cd",
+  5: "330244a7a880bc26",
+  6: "83708cbf7647f35d",
+  7: "db62e0c69a7e20fd",
+  8: "ed43158b3b435378",
+  9: "502ff1ac4a08cc99",
+  10: "9e289f132faeeaa1",
+  11: "2a37c03ab06f8198",
+  12: "95350dedcd787182",
+  13: "73fa6d1a6d4d1d83",
+  14: "8948ebe215f40a31",
+  15: "4b21ef73b0aa9e9b",
+  16: "2a092d99a3f84566",
+  17: "87f134be73b56be4",
+  18: "125f995ab0a0aea8",
+  19: "8db844b334781403",
+  20: "74821b1a1de51d85",
+  21: "f3773b71837a8a75",
+  22: "ec2bbfdc9dfe3411",
+  23: "d1ea5cabea1e4027",
+  24: "072e1d634dbce308",
+  25: "74655906d89ab713",
 };

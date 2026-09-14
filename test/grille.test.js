@@ -35,7 +35,7 @@ import {
   DIVISEUR_OBSTACLE_MILLI,
 } from '../src/sim/grille.js';
 import {
-  verifierArithmetique, TICKS_MAX_COMBAT, TICKS_PAR_VAGUE, facteurEconomiqueMilli,
+  verifierArithmetique, TICKS_MAX_COMBAT, TICKS_PAR_VAGUE, facteurRechercheMilli,
 } from '../src/sim/combat.js';
 
 test('G1 — conversions en milli-cases, exactes et réversibles', () => {
@@ -255,19 +255,23 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
   );
 
   // Le produit le plus lourd du barème, celui que garde `verifierArithmetique` :
-  // 60 (Broyeur) × 480 941 681 (facteur économique au niveau 50) × 1200 (module
-  // débloqué) = 34 627 801 032 000, soit 260 fois sous
+  // 60 (Broyeur) × 392 976 879 (facteur de RECHERCHE au niveau 50) × 1200
+  // (module débloqué) = 28 294 335 288 000, soit 318 fois sous
   // Number.MAX_SAFE_INTEGER = 9 007 199 254 740 991. Sous l'ancien barème le
   // même produit valait 4 × 10¹⁹ : il débordait de 4 500 fois.
+  //
+  // ⚠ LE FACTEUR EST CELUI DE LA RECHERCHE DEPUIS LE 14/09/2026, et il doit
+  // rester celui-là : c'est la grandeur que le garde-fou surveille. Le remettre
+  // sur `facteurEconomiqueMilli` laisserait ce test vert sans rien garder.
   const bareme = Math.max(...Object.values(POINTS_RECHERCHE.parCible));
   assert.equal(bareme, 60, 'le Broyeur est la cible la mieux payée');
   const bonus = 1000 + Math.round(1000 * POINTS_RECHERCHE.bonusModuleDebloque);
   assert.equal(bonus, 1200);
-  const plafond = bareme * facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond) * bonus;
-  assert.equal(facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond), 480_941_681);
-  assert.equal(plafond, 34_627_801_032_000);
+  const plafond = bareme * facteurRechercheMilli(GEOGRAPHIE.niveauPlafond) * bonus;
+  assert.equal(facteurRechercheMilli(GEOGRAPHIE.niveauPlafond), 392_976_879);
+  assert.equal(plafond, 28_294_335_288_000);
   assert.ok(Number.isSafeInteger(plafond), 'le plafond du barème doit rester un entier sûr');
-  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 260, 'la marge du barème est de 260×');
+  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 318, 'la marge du barème est de 318×');
 
   // Et le moteur assied les mêmes invariants à son chargement.
   assert.equal(verifierArithmetique(), true);
