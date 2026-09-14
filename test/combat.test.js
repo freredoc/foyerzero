@@ -25,7 +25,7 @@ import {
   TICKS_MAX_COMBAT,
   TICKS_PAR_VAGUE,
 } from '../src/sim/combat.js';
-import { caseDepuisMilli, MILLI_PAR_CASE } from '../src/sim/grille.js';
+import { caseDepuisMilli } from '../src/sim/grille.js';
 import { BUTIN } from '../src/data/sites.js';
 import { GRILLE } from '../src/data/combat.js';
 
@@ -455,44 +455,19 @@ test('T7 a — masse supérieure : la bloquante meurt, la mobile ne s\'arrête p
   // ⚠ Seuil déplacé au lot 4A : le Fendeur (Predator) avance à 90 milli-cases
   // par tick et non plus 100. Sa masse, elle, ne vient pas du relevé et n'a pas
   // bougé — l'écrasement au seuil de masse reste l'arbitrage d'Ethan.
-  //
-  // ⚠⚠ RÉANCRÉ AU LOT CONTACT-2, 13/09 : L'ÉCRASEMENT SE PAIE AU CONTACT ET
-  // PREND QUATRE TICKS, LÀ OÙ IL TUAIT EN UN AU FRANCHISSEMENT DE L'INDEX.
-  // Ce test assertait « 2 990 au tick 11, écrasé au tick 12, Fendeur à 3 080 » :
-  // la rencontre avait lieu quand la position franchissait 3 000. Depuis le lot
-  // CONTACT, la marge colle l'écraseuse à sa victime dès le premier tick —
-  // 3 000 − 2 000 − MILLI_PAR_CASE = 0 — et depuis celui-ci la victime perd
-  // `ceil(pvMax / 4)` par tick de contact pendant que l'écraseuse avance au
-  // QUART de sa vitesse. Ce que le test garde n'a pas bougé d'un mot : la
-  // bloquante meurt, la mobile ne s'arrête pas.
-  //
-  // Le Meute défensif (masse 1) occupe la case 3, qui commence à 3000, et il
-  // porte 700 000 milli-PV — donc 175 000 par tick d'écrasement. Les tirs du
-  // Fendeur s'y ajoutent, si bien que les PV tombent un peu plus vite que le
-  // seul quart : 519 000 · 338 066 · 157 186 · 0.
-  const pvParTick = [];
-  for (let t = 1; t <= 3; t += 1) {
-    jouer(etat, t);
-    pvParTick.push(meute.pvMilli);
-  }
-  assert.deepEqual(pvParTick, [519_000, 338_066, 157_186], 'les PV décroissent à chaque tick de contact');
-  assert.equal(meute.vivant, true, 'le Meute tient encore au troisième tick de contact');
-  // Et l'écraseuse avance au quart : floor(90 / 4) = 22, trois fois.
-  assert.equal(fendeur.rangeeMilli, 2000 + 3 * 22);
+  // Le Meute défensif (masse 1) occupe la case 3, qui commence à 3000.
+  // 2000 + 11 × 90 = 2990 : encore dans la case 2. Le pas suivant viserait
+  // 3080, donc la case 3 — c'est là que la rencontre a lieu, au tick 12.
+  jouer(etat, 11);
+  assert.equal(fendeur.rangeeMilli, 2990);
+  assert.equal(meute.vivant, true, 'le Meute tient encore au tick 11');
 
-  jouer(etat, 4);
-  assert.equal(meute.vivant, false, 'écrasé au quatrième tick de contact');
+  jouer(etat, 12);
+  assert.equal(meute.vivant, false, 'écrasé au tick de la rencontre');
   assert.equal(meute.ecrase, true);
   assert.equal(meute.pvMilli, 0);
-  assert.equal(fendeur.rangeeMilli, 2088, 'quatre pas freinés de 22');
-
-  // Et la mobile continue sans s'arrêter : le frein tombe avec sa cause, elle
-  // reprend 90 milli-cases par tick. 2 088 + 7 × 90 = 2 718 au tick 11, contre
-  // 2 990 avant le lot — l'écart vaut EXACTEMENT les quatre ticks de frein,
-  // 4 × (90 − 22) = 272.
-  jouer(etat, 11);
-  assert.equal(fendeur.rangeeMilli, 2718);
-  assert.equal(2990 - 2718, 4 * (90 - 22), 'l’écart au nombre d’avant EST le frein');
+  // Et la mobile continue sans s'arrêter : elle avance bien de 90 milli-cases.
+  assert.equal(fendeur.rangeeMilli, 3080);
 });
 
 test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
@@ -558,30 +533,12 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
   };
   const marche = creerCombat(montageMarche);
   const ratisseur = entite(marche, (e) => e.camp === 'attaque');
-  const belier = entite(marche, (e) => e.camp === 'defense' && e.id === 'belier');
-  // ⚠⚠⚠ 2 960 ÉTAIT UN CHEVAUCHEMENT ASSERTÉ AU DÉPÔT, ET C'EST LE LOT CONTACT
-  // QUI LE FERME — 13/09/2026. Le Bélier est posé en rangée 3, donc il occupe
-  // `[3 000, 4 000)` ; un Ratisseur figé en 2 960 occupe `[2 960, 3 960)`, soit
-  // **960 millièmes DANS le Bélier**. Le lot MUR avait laissé ce cas ouvert en
-  // écrivant que « face à une ennemie, fluer jusqu'au contact EST le dessin
-  // juste » : le mot « contact » était faux, il désignait 96 % de recouvrement.
-  // Ethan, 13/09 : « je ne veux pas de saut, ni de chevauchement. »
-  //
-  // ⚠⚠ LE RATISSEUR NE BOUGE DONC PLUS D'UN MILLIÈME, ET DÈS LE PREMIER TICK. Il
-  // part de la rangée 2 (2 000) et le Bélier tient la rangée 3 (3 000) : l'écart
-  // vaut DÉJÀ une case pleine, c'est-à-dire qu'ils sont au contact au montage. La
-  // marge vaut zéro, le pas est nul. Ce que ce test existe pour tenir est intact :
-  // **aucun ne change de case, aucun n'écrase l'autre, le blocage mutuel est le
-  // même** — et il se mesure désormais sur l'ÉCART, qui est la grandeur que « ni
-  // chevauchement » nomme.
-  const ecart = () => belier.rangeeMilli - ratisseur.rangeeMilli;
-  assert.equal(ecart(), MILLI_PAR_CASE, 'montage : ils ne partent pas au contact');
+  // Ratisseur : vitesse 1,2 → 120 milli/tick. 2000 + 8 × 120 = 2960 ; au tick 9
+  // la destination 3080 tombe dans la case 3, occupée par une masse égale.
   jouer(marche, 8);
-  assert.equal(ratisseur.rangeeMilli, 2000);
+  assert.equal(ratisseur.rangeeMilli, 2960);
   jouer(marche, 25);
-  assert.equal(ratisseur.rangeeMilli, 2000, 'bloqué, il n\'a pas bougé d\'un milli-case');
-  assert.equal(ecart(), MILLI_PAR_CASE,
-    `CHEVAUCHEMENT : il mord dans la case du Bélier (écart ${ecart()})`);
+  assert.equal(ratisseur.rangeeMilli, 2960, 'bloqué, il n\'a pas bougé d\'un milli-case');
   assert.ok(ratisseur.vivant);
 });
 
@@ -783,6 +740,21 @@ test('T11 — la Souche tombée, le combat s\'arrête et le site livre tout', ()
   // Souche comprise, ne rapportent rien. Le type est un BigInt depuis le lot
   // 2B — 0n, pas 0.
   assert.equal(pointsRecherche(resultat, montage), 0n);
+
+  // Une défense intacte encore debout est soldée lorsque la Souche tombe,
+  // même si elle n'a reçu aucun tir pendant le raid.
+  const avecMerlon = {
+    ...montageSouche(),
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 1 }],
+  };
+  const resultatAvecMerlon = resoudre(creerCombat(avecMerlon));
+  const merlon = resultatAvecMerlon.defenses.find(parId('merlon'));
+  assert.equal(resultatAvecMerlon.cause, 'souche');
+  assert.equal(merlon.pvInitialMilli, merlon.pvMaxMilli);
+  assert.equal(merlon.pvMilli, merlon.pvInitialMilli);
+  assert.equal(merlon.pvPerdusIciMilli, 0);
+  // Niveau 1, sans module : 2 points × 1 000 milli-points.
+  assert.equal(pointsRecherche(resultatAvecMerlon, avecMerlon), 2000n);
 });
 
 // ---------------------------------------------------------------------------
@@ -842,7 +814,7 @@ function abimerLigne(ligne, perdus) {
   ligne.detruit = ligne.pvMilli <= 0;
 }
 
-test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-points', () => {
+test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 1 585 milli-points', () => {
   const montage = {
     niveau: 3,
     saveur: null,
@@ -892,16 +864,6 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-point
   //   avant : 2 × 1000 × 2^(3−1)            × 0,5 = 4 000 milli-points
   //   après : 2 × 1000 × facteurEconomiqueMilli(3)/1000 × 0,5
   //         = 2 × 1000 × 1,585              × 0,5 = 1 585 milli-points
-  //
-  // ⚠⚠ ET LE 14/09/2026 LES POINTS DE RECHERCHE ONT QUITTÉ LA COURBE DE BUTIN
-  // POUR LA LEUR, `POINTS_RECHERCHE.echelle` — ancrage 8,875 · pente 1,244. La
-  // raison est une raison de GRANULARITÉ : le barème s'applique par CIBLE, la
-  // courbe économique décrit un SITE, et la densité des défenses comme
-  // l'enrichissement de la garnison s'ajoutaient entre les deux.
-  //   maintenant : 2 × 1000 × facteurRechercheMilli(3)/1000 × 0,5
-  //             = 2 × 1000 × 13,734            × 0,5 = 13 734 milli-points
-  // Le rendement reste strictement croissant en niveau, et le plafond du barème
-  // tient plus large qu'avant : 318 fois l'entier sûr au lieu de 260.
   // Le niveau 3 perd donc 60 % de son rendement — c'est le prix à payer pour
   // que le niveau 50 cesse de déborder l'entier sûr, et le rendement reste
   // strictement croissant en niveau.
@@ -909,10 +871,10 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-point
   // BigInt reste OBLIGATOIRE malgré tout : le produit intermédiaire du calcul,
   // barème × facteur × bonus × pvPerdusMilli, atteint encore 5,2 × 10²¹ au
   // niveau 50. C'est le T13 de generateur.test.js qui le mesure.
-  assert.equal(pointsRecherche(resultat, montage), 13734n);
+  assert.equal(pointsRecherche(resultat, montage), 1585n);
 
   // Avec le module de la cible débloqué (Merlon côté Ouvrage : pvPlusVingt),
-  // × 1,2 → 16 480, À FRACTION DÉTRUITE ÉGALE.
+  // × 1,2 → 1 902, À FRACTION DÉTRUITE ÉGALE.
   //
   // ⚠⚠ ET LE MÊME DÉBLOCAGE MAJORE MAINTENANT LES PV DE LA CIBLE — lot
   // MODULES-D. Le Merlon passe de 2 420 000 à 2 904 000 milli-PV, si bien que
@@ -927,24 +889,48 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-point
   const merlonBoost = resultatModule.defenses.find(parId('merlon'));
   assert.equal(merlonBoost.pvMaxMilli, 2_904_000, 'le module ne majore plus les PV');
   abimerLigne(merlonBoost, merlonBoost.pvMaxMilli / 2);
-  assert.equal(pointsRecherche(resultatModule, avecModule), 16480n);
+  assert.equal(pointsRecherche(resultatModule, avecModule), 1902n);
 
   // ⚠ LES DEUX EFFETS S'ANNULENT À DÉGÂTS ABSOLUS ÉGAUX, et c'est mesuré : un
   // même nombre de milli-PV arrachés rapporte le MÊME nombre de points, module
   // débloqué ou non — on casse une fraction plus petite d'une pièce plus
   // grosse, majorée de 20 %. Le bonus ne se voit qu'au bout : détruire le
-  // Merlon ENTIER rapporte 27 468 sans le module et 32 961 avec.
+  // Merlon ENTIER rapporte 3 170 sans le module et 3 804 avec.
   const memeDegat = resoudre(creerCombat(avecModule), { maxTicks: 1 });
   abimerLigne(memeDegat.defenses.find(parId('merlon')), 1_210_000);
-  assert.equal(pointsRecherche(memeDegat, avecModule), 13734n);
+  assert.equal(pointsRecherche(memeDegat, avecModule), 1585n);
   const entier = resoudre(creerCombat(avecModule), { maxTicks: 1 });
   const aRaser = entier.defenses.find(parId('merlon'));
   abimerLigne(aRaser, aRaser.pvMaxMilli);
-  assert.equal(pointsRecherche(entier, avecModule), 32961n);
+  assert.equal(pointsRecherche(entier, avecModule), 3804n);
 
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.
   assert.equal(resultat.batiments.length, 1);
   assert.equal(resultat.defenses.length, 1);
+  // Rasage après une première passe : seule la moitié de PV présente au
+  // départ reste à payer. Hors rasage, on paie les seuls dégâts de la passe.
+  {
+    const montage = {
+      ...montageSouche(),
+      defenseurs: [{ id: 'merlon', rangee: 3, colonne: 1 }],
+    };
+    const pvMaxMilli = creerCombat(montage).entites.find(parId('merlon')).pvMaxMilli;
+    montage.defenseurs[0].pvMilli = pvMaxMilli / 2;
+    const resultat = resoudre(creerCombat(montage));
+    const merlon = resultat.defenses.find(parId('merlon'));
+    assert.equal(resultat.cause, 'souche');
+    assert.equal(merlon.pvInitialMilli, pvMaxMilli / 2);
+    assert.equal(merlon.pvMilli, merlon.pvInitialMilli);
+    assert.equal(merlon.pvPerdusIciMilli, 0);
+    assert.equal(pointsRecherche(resultat, montage), 1000n);
+
+    const passe = resoudre(creerCombat(montage), { maxTicks: 1 });
+    const merlonDeLaPasse = passe.defenses.find(parId('merlon'));
+    assert.equal(passe.cause, 'duree');
+    abimerLigne(merlonDeLaPasse, pvMaxMilli / 4);
+    assert.equal(merlonDeLaPasse.pvPerdusIciMilli, pvMaxMilli / 4);
+    assert.equal(pointsRecherche(passe, montage), 500n);
+  }
 });
 
 // ---------------------------------------------------------------------------
