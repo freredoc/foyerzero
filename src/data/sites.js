@@ -490,12 +490,52 @@ export const RESTE_APRES_DESTRUCTION = {
 // reste suivait 1,259/1,32 — d'où un débordement de l'entier sûr dès le niveau
 // 39, consigné et jamais réparé. Arbitré par Ethan le 25/08/2026 : les points de
 // recherche sont une récompense ÉCONOMIQUE, ils suivent donc la courbe
-// économique, celle de BUTIN ci-dessus. Une table fait foi par grandeur, et il
-// n'y a plus de constante ici — `facteurEconomiqueMilli` de sim/combat.js lit
-// BUTIN directement.
+// économique, celle de BUTIN ci-dessus.
+//
+// ⚠⚠ ET DEPUIS LE 14/09/2026 ILS ONT LEUR PROPRE ÉCHELLE DE NIVEAU, `echelle`
+// CI-DESSOUS, QUI REMPLACE LA COURBE DE BUTIN POUR CETTE SEULE GRANDEUR.
+// Pourquoi : le barème est un barème PAR CIBLE, et le total d'un site le
+// multiplie ensuite par DEUX croissances que la courbe économique ne connaît
+// pas — le nombre de défenses (8 au niveau 10, 25 au niveau 40, DENSITE) et
+// l'enrichissement de la garnison (barème moyen 10,7 au niveau 10, 26,1 au
+// niveau 50, GARNISON). Le total d'un site montait donc de ×1,44 par niveau là
+// où la courbe économique monte de ×1,32, et il partait 7,4 fois trop bas.
+//
+// ⚠ LES DEUX NOMBRES SONT AJUSTÉS SUR TROIS RELEVÉS DE *TIBERIUM ALLIANCES*
+// dictés par Ethan — camp niveau 10 : 5 000 · camp niveau 26 : 827 000 ·
+// avant-poste niveau 44 : 85 000 000 — confrontés au total mesuré du générateur
+// sur 40 tirages par niveau. Ajustement minimax en logarithme : l'écart maximal
+// est de ±7,4 % (+7,4 / −6,9 / +7,4).
+//
+// ⚠ CES 7 % NE SE RATTRAPENT PAS, ET IL NE FAUT PAS ESSAYER. La pente qu'exigent
+// les deux camps est 1,2552 ; celle qu'exige le passage camp 26 → avant-poste 44
+// est 1,2341. Un second régime les rendrait exacts tous les trois — au prix
+// d'une bascule inventée pour trois points, alors que le tirage d'un site fait
+// déjà varier son total de ±20 % d'une graine à l'autre. Le résidu est plus
+// petit que le bruit qu'il prétendrait corriger.
+//
+// ⚠ ET LE POINT 44 EST UN AVANT-POSTE, PAS UN CAMP — il porte 35 défenses là où
+// le camp en porte 25. Le comparer à la structure d'un camp fait croire à un
+// ajustement à moins de 1 % qui n'existe pas. Vérifié : la structure nue vaut
+// 861,3 pour l'avant-poste 44 contre 620,1 pour le camp du même niveau.
+//
+// ⚠ LE BARÈME PAR CIBLE NE BOUGE PAS D'UN POINT. Il reste ce qu'il est : la
+// RÉPARTITION entre les cibles — un Broyeur vaut trente Merlons. Seule l'échelle
+// par niveau change. L'ancrage n'est donc pas « ×7,42 sur le barème », il est
+// dans l'échelle, où un seul nombre le porte.
+//
+// ⚠ L'AVANT-POSTE 44 TOMBE SUR LA COURBE DES CAMPS extrapolée depuis les deux
+// camps. `TYPES_SITE.multiplicateurButin` ne s'applique donc PAS aux points de
+// recherche, et l'y étendre contredirait le relevé.
 export const POINTS_RECHERCHE = {
   bonusModuleDebloque: 0.2,
   proportionnelAuxDegats: true,
+  // Échelle de niveau propre aux points de recherche, lue par
+  // `facteurRechercheMilli` de sim/combat.js :
+  //   facteurRechercheMilli(n) = round(1000 × ancrage × pente^(n−1))
+  // Vaut donc 8 875 au niveau 1 — et non 1 000 : l'ancrage EST le facteur du
+  // niveau 1, il n'y a pas de second nombre caché ailleurs.
+  echelle: { ancrage: 8.875, pente: 1.244 },
   parCible: {
     merlon: 2, herse: 2, ronce: 2,
     meute: 10, perceurs: 10,
