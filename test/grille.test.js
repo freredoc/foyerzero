@@ -35,7 +35,7 @@ import {
   DIVISEUR_OBSTACLE_MILLI,
 } from '../src/sim/grille.js';
 import {
-  verifierArithmetique, TICKS_MAX_COMBAT, TICKS_PAR_VAGUE, facteurEconomiqueMilli,
+  verifierArithmetique, TICKS_MAX_COMBAT, TICKS_PAR_VAGUE, facteurRechercheMilli,
 } from '../src/sim/combat.js';
 
 test('G1 — conversions en milli-cases, exactes et réversibles', () => {
@@ -263,11 +263,14 @@ test('T16 — cohérence arithmétique de tout le calibrage', () => {
   assert.equal(bareme, 60, 'le Broyeur est la cible la mieux payée');
   const bonus = 1000 + Math.round(1000 * POINTS_RECHERCHE.bonusModuleDebloque);
   assert.equal(bonus, 1200);
-  const plafond = bareme * facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond) * bonus;
-  assert.equal(facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond), 480_941_681);
-  assert.equal(plafond, 34_627_801_032_000);
+  // ⚠ LE FACTEUR EST CELUI DE LA RECHERCHE DEPUIS LE 14/09/2026, et il doit
+  // rester celui-là : c'est la grandeur que le garde-fou surveille. Le remettre
+  // sur `facteurEconomiqueMilli` laisserait ce test vert sans rien garder.
+  const plafond = bareme * facteurRechercheMilli(GEOGRAPHIE.niveauPlafond) * bonus;
+  assert.equal(facteurRechercheMilli(GEOGRAPHIE.niveauPlafond), 392_976_879);
+  assert.equal(plafond, 28_294_335_288_000);
   assert.ok(Number.isSafeInteger(plafond), 'le plafond du barème doit rester un entier sûr');
-  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 260, 'la marge du barème est de 260×');
+  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 318, 'la marge du barème est de 318×');
 
   // Et le moteur assied les mêmes invariants à son chargement.
   assert.equal(verifierArithmetique(), true);

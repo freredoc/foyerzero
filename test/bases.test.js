@@ -121,6 +121,8 @@ import {
   RAPPORTS_OUVRAGE_PREDILECTION,
   DEPLACES_PAR_FREIN, EMPREINTES_PAR_GRAINE_FREIN,
   RAPPORTS_PROCHE_FREIN, RAPPORTS_OUVRAGE_FREIN,
+  DEPLACES_PAR_ECHELLE_RECHERCHE, EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE,
+  RAPPORTS_PROCHE_ECHELLE_RECHERCHE, RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE,
   RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
 } from './temoins-bases-0.js';
 
@@ -297,7 +299,15 @@ function empreinteAttendue(phase, champ) {
   // ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25, la taille
   // de la sauvegarde comprise : les deux champs neufs de l'entité de combat ne
   // traversent donc PAS `serialiser`, et `SAVE_VERSION` n'avait pas à bouger.
-  return DEPLACES_PAR_FREIN[phase]?.[champ]
+  // ⚠⚠ VINGT-HUITIÈME COUCHE — lot ÉCHELLE-RECHERCHE, 14/09. **SEIZE couples sur
+  // 350**, deux champs — `recherche` et `rapports` —, phases p07 à p14 : les SIX
+  // PREMIÈRES PHASES sont identiques AU BIT. ⚠⚠ ET `butin` NE BOUGE PAS, sur les
+  // quatorze phases : le butin lit `BUTIN` par `butinPlein`, la recherche lit
+  // `POINTS_RECHERCHE.echelle`, et les deux grandeurs ne partagent plus aucun
+  // facteur. C'est cette moitié-là qui prouve que le lot recale UN barème et rien
+  // d'autre. ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25.
+  return DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
+    ?? DEPLACES_PAR_FREIN[phase]?.[champ]
     ?? DEPLACES_PAR_PREDILECTION[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT_2[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT[phase]?.[champ]
@@ -746,7 +756,11 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // aucune pièce de garnison n'a jamais eu à se décaler au cours des deux raids
     // du scénario : les trois étages n'y ont rien à changer. Le `??` reste donc
     // NÉCESSAIRE, comme aux six lots d'avant.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_FREIN[g]
+    // ⚠⚠ ÉCHELLE-RECHERCHE (14/09) DÉPLACE LES VINGT-CINQ, ET IL NE POUVAIT PAS
+    // EN LAISSER : le solde de points entre dans l'empreinte de toute partie, et
+    // les deux raids du scénario cassent quelque chose sur les vingt-cinq.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
+      ?? EMPREINTES_PAR_GRAINE_FREIN[g]
       ?? EMPREINTES_PAR_GRAINE_PREDILECTION[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT_2[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT[g]
@@ -955,7 +969,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // proximité et quatre côté Ouvrage, aucune pièce de garnison n'a eu à se
       // décaler, donc les trois étages n'y changent rien.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_FREIN[g]
+        ? (RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE[g]
+          ?? RAPPORTS_OUVRAGE_FREIN[g]
           ?? RAPPORTS_OUVRAGE_PREDILECTION[g]
           ?? RAPPORTS_OUVRAGE_CONTACT_2[g]
           ?? RAPPORTS_OUVRAGE_CONTACT[g]
@@ -978,7 +993,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         // porte trois `meute` et rien d'autre, donc aucun attaquant n'a jamais
         // deux CLASSES de cible à portée — zéro couple (entité, tick) sur les
         // 483 ticks du combat.
-        : (RAPPORTS_PROCHE_FREIN[g]
+        : (RAPPORTS_PROCHE_ECHELLE_RECHERCHE[g]
+          ?? RAPPORTS_PROCHE_FREIN[g]
           ?? RAPPORTS_PROCHE_CONTACT_2[g]
           ?? RAPPORTS_PROCHE_CONTACT[g]
           ?? RAPPORTS_PROCHE_REJEU[g] ?? RAPPORTS_PROCHE_BAREME_ET_REJEU[g] ?? RAPPORTS_PROCHE_APPROCHE[g]

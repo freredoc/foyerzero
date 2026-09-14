@@ -5165,3 +5165,130 @@ export const RAPPORTS_OUVRAGE_FREIN = {
   24: "1275a50077e68787",
   25: "bf3f9c7b6d162b4b",
 };
+
+/**
+ * ⚠⚠ VINGT-HUITIÈME COUCHE — lot ÉCHELLE-RECHERCHE, 14/09/2026. **SEIZE COUPLES
+ * SUR 350**, deux champs — `recherche` et `rapports` —, phases p07 à p14. Les
+ * SIX PREMIÈRES PHASES SONT IDENTIQUES AU BIT : le scénario ne raide pas avant
+ * la phase 7, et un solde de points ne bouge que par un raid.
+ *
+ * Ce que le lot change : les points de recherche quittent la courbe de BUTIN
+ * pour la leur, `POINTS_RECHERCHE.echelle` — ancrage 8,875 · pente 1,244, lue
+ * par `facteurRechercheMilli` de `sim/combat.js`.
+ *
+ * ⚠⚠ ET CE QUI NE BOUGE PAS EST L'ATTRIBUTION ELLE-MÊME. Vingt et un des
+ * vingt-trois champs relevés tombent à l'octet sur les couches d'avant, `butin`
+ * et `economie` COMPRIS : le butin passe par `butinPlein`, qui lit `BUTIN`
+ * directement, et les deux grandeurs ne partagent plus aucun facteur. `attaque`,
+ * `disposition`, `garnison`, `position`, `satellites`, `sitesEntames` et les
+ * dix-sept scalaires ne bougent pas non plus.
+ *
+ * ⚠ `rapports` BOUGE PARCE QU'UN RAPPORT PORTE SES POINTS, pas parce que l'issue
+ * du raid a changé : les deux tables ci-dessous sont PLEINES — 25 sur 25 des
+ * deux côtés — alors qu'aucune empreinte de combat des deux cents témoins de
+ * `temoins-combat.js` ne bouge. C'est la signature d'un changement de barème, et
+ * l'inverse de celle du lot FREIN.
+ */
+export const DEPLACES_PAR_ECHELLE_RECHERCHE = {
+  p07_raidProcheApres: { rapports: "7c799a39e0e32ff8", recherche: "3703b074b5b4f5ec" },
+  p08_100ticks: { rapports: "7c799a39e0e32ff8", recherche: "3703b074b5b4f5ec" },
+  p09_deplace: { rapports: "7c799a39e0e32ff8", recherche: "3703b074b5b4f5ec" },
+  p10_montee: { rapports: "7c799a39e0e32ff8", recherche: "3703b074b5b4f5ec" },
+  p11_raidOuvrageApres: { rapports: "55a184e8e5e26457", recherche: "e41fd1bf798557a4" },
+  p12_veilleDuRaid: { rapports: "55a184e8e5e26457", recherche: "e41fd1bf798557a4" },
+  p13_apresLeRaid: { rapports: "e85c5c2e7e62451b", recherche: "e41fd1bf798557a4" },
+  p14_sousLeFeu: { rapports: "afed5eba53006429", recherche: "e41fd1bf798557a4" },
+};
+
+/** Empreintes par graine, lot ÉCHELLE-RECHERCHE — les 25 sur 25 : tout raid rapporte. */
+export const EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE = {
+  1: "f45b386609fe9af2",
+  2: "71ed965905da02cf",
+  3: "d2cac35cc795b7b7",
+  4: "f32f2ec2c16f4e8b",
+  5: "7ae46f6261471972",
+  6: "13aebbe4a9a080da",
+  7: "fcd5cb1f4b064953",
+  8: "1d66d08dbd542700",
+  9: "d93a0f7a45887da0",
+  10: "c05b97cf34dd8f51",
+  11: "ff3a5a832e081ebf",
+  12: "3f50cc823bf26142",
+  13: "6bcfad4d4d1fc46c",
+  14: "922951440f8e7318",
+  15: "7a47f9e6e6f36e6a",
+  16: "5919f44886e8aa8f",
+  17: "17f2476964adbd59",
+  18: "eafaa8400237e2c4",
+  19: "6b23872932944b5a",
+  20: "4d1f171bdcefe675",
+  21: "113d81dd07031777",
+  22: "2e2eaf428a19044f",
+  23: "d1be24c2aefde579",
+  24: "28a3e947ce663646",
+  25: "ee096eba63af0892",
+};
+
+/**
+ * Le rapport du raid de PROXIMITÉ, lot ÉCHELLE-RECHERCHE — **25 graines sur 25**.
+ *
+ * ⚠ UNE TABLE PLEINE ICI N'A PAS LE SENS QU'ELLE AURAIT POUR UN LOT DE DÉROULÉ :
+ * un barème qui change déplace tous les rapports sans qu'une pièce se soit
+ * déplacée autrement. Une table CREUSE serait l'anomalie.
+ */
+export const RAPPORTS_PROCHE_ECHELLE_RECHERCHE = {
+  1: "57caa6d25d6b18d0",
+  2: "052df332e6d56818",
+  3: "69f1f1951b2dac22",
+  4: "19abf2d06e9b71a1",
+  5: "9580ccc0296718bd",
+  6: "526050f263347df4",
+  7: "6f7c8c088d49674f",
+  8: "1fd8ebb5ded0b6f1",
+  9: "dba5812516b81396",
+  10: "32ba2fd6dbf0bdf4",
+  11: "a422bbc5a9816392",
+  12: "680c3a5ff34a5899",
+  13: "5fc9eb753ad10087",
+  14: "24b289428026ba4a",
+  15: "f42f28d3dabc456b",
+  16: "0f8339b24194fc24",
+  17: "15ecabc35977cf84",
+  18: "a7c86316b4102156",
+  19: "f5db678be9ecbfdc",
+  20: "06ce9f2ed731bd55",
+  21: "deb4ce6cdd07290f",
+  22: "8b685a0e0aa77341",
+  23: "2a6a21f47c44f7b4",
+  24: "1186cbc973fee43e",
+  25: "1f269e81f075f0f5",
+};
+
+/** Le rapport du raid de l'OUVRAGE, lot ÉCHELLE-RECHERCHE — **25 sur 25**, même raison. */
+export const RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE = {
+  1: "c31787846a707dcc",
+  2: "d588a66629347ff0",
+  3: "b2fd793fe601928e",
+  4: "1ad5f371e4b2c5d7",
+  5: "987393de7225bfc3",
+  6: "cc8b9dcbac8bdfcc",
+  7: "d6c5a9a95d7f9a7b",
+  8: "ed43158b3b435378",
+  9: "c028101e5398d452",
+  10: "6b5723e13fc893eb",
+  11: "2a37c03ab06f8198",
+  12: "ba177bcba50b5dc8",
+  13: "c3011d33488d11ab",
+  14: "2f71729408f4559c",
+  15: "4b21ef73b0aa9e9b",
+  16: "5e37529da6a00c02",
+  17: "7d7bf4b3d7c99cb8",
+  18: "1574581244638b3c",
+  19: "99f3cca6efe3e3a3",
+  20: "6498b33bf64e3f91",
+  21: "219ab671650bc9f1",
+  22: "42d83a0424842408",
+  23: "ff67b5253d3e1db2",
+  24: "7104e011028ad192",
+  25: "297c839eb32648f9",
+};

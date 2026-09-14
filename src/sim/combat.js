@@ -439,15 +439,24 @@ export function verifierArithmetique() {
     PROFILS_BATIMENT[id] = profilBatimentJoueur(id, b);
   }
 
-  // Les points de recherche suivent la courbe économique. Le produit le plus
-  // lourd du barème est bareme × facteurEconomiqueMilli(plafond) × bonus : il
-  // doit rester un entier sûr. L'asserter plutôt que le supposer.
+  // Les points de recherche suivent LEUR PROPRE échelle depuis le 14/09/2026.
+  // Le produit le plus lourd du barème est
+  // bareme × facteurRechercheMilli(plafond) × bonus : il doit rester un entier
+  // sûr. L'asserter plutôt que le supposer.
+  //
+  // ⚠ ET C'EST BIEN `facteurRechercheMilli` QU'IL FAUT BORNER ICI, PAS
+  // `facteurEconomiqueMilli`. Le garde-fou existe parce que la chaîne a déjà
+  // débordé l'entier sûr du temps du 2^(n−1) ; le laisser sur la courbe de butin
+  // le rendrait muet sur la grandeur qu'il est censé surveiller. La nouvelle
+  // échelle est PLUS LÉGÈRE au plafond que l'ancienne — 392 976 879 contre
+  // 480 941 681 — et la marge de l'entier sûr passe de 260 à 318 fois. Mesuré,
+  // pas supposé : une pente plus douce partant plus haut finit plus bas.
   const bareme = Math.max(...Object.values(POINTS_RECHERCHE.parCible));
   const bonus = MILLE + Math.round(MILLE * POINTS_RECHERCHE.bonusModuleDebloque);
-  const plafond = bareme * facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond) * bonus;
+  const plafond = bareme * facteurRechercheMilli(GEOGRAPHIE.niveauPlafond) * bonus;
   if (!Number.isSafeInteger(plafond)) {
     throw new Error(
-      `combat : ${bareme} × ${facteurEconomiqueMilli(GEOGRAPHIE.niveauPlafond)} × ${bonus} `
+      `combat : ${bareme} × ${facteurRechercheMilli(GEOGRAPHIE.niveauPlafond)} × ${bonus} `
       + `= ${plafond} n'est pas un entier sûr`,
     );
   }
@@ -3852,6 +3861,36 @@ export function facteurEconomiqueMilli(niveau) {
 }
 
 /**
+ * Facteur d'échelle des POINTS DE RECHERCHE, en MILLIÈMES.
+ *
+ *   facteurRechercheMilli(n) = round(1000 × ancrage × pente^(n−1))
+ *
+ * ⚠ UNE TROISIÈME COURBE, ET ELLE EST NÉCESSAIRE. Le combat a la sienne
+ * (`facteurMilli`), l'économie la sienne (`facteurEconomique`, 1,259 puis 1,32).
+ * Les points de recherche empruntaient la seconde depuis le 25/08/2026, et
+ * c'était faux pour une raison de granularité : le barème s'applique PAR CIBLE,
+ * alors que la courbe économique décrit le total d'un SITE. Entre les deux,
+ * `DENSITE` et `GARNISON` ajoutaient leur propre croissance — le total montait
+ * de ×1,44 par niveau au lieu de ×1,32, et partait 7,4 fois trop bas. Voir
+ * `POINTS_RECHERCHE.echelle` de `data/sites.js`, qui porte les deux nombres et
+ * leur provenance.
+ *
+ * ⚠ NE PAS LA RÉALIGNER SUR `facteurEconomique` PAR SOUCI DE SYMÉTRIE. La
+ * divergence est le correctif, pas un oubli.
+ *
+ * ⚠ `ancrage` EST LE FACTEUR DU NIVEAU 1. La fonction rend donc 8 875 au niveau
+ * 1, et non 1 000 comme ses deux sœurs. C'est volontaire et c'est là que vit
+ * l'ancrage ; le barème par cible, lui, reste une répartition inchangée.
+ *
+ * @param {number} niveau
+ * @returns {number} entier de millièmes.
+ */
+export function facteurRechercheMilli(niveau) {
+  const { ancrage, pente } = POINTS_RECHERCHE.echelle;
+  return Math.round(MILLE * ancrage * pente ** (niveau - 1));
+}
+
+/**
  * Butin plein d'un bâtiment, avant proportionnalité aux dégâts.
  * butinPlein = ancrage × indice × penteBasse^(min(n,12)−1) × penteHaute^max(n−12,0)
  *
@@ -3946,11 +3985,21 @@ export function butin(resultat, montage) {
  * rapportent rien. Casser des murs rapporte 2 : ce n'est pas une erreur, c'est
  * le point du modèle.
  *
- * ⚠ POURQUOI UN BigInt. Le barème double par niveau de cible quand tout le
- * reste croît en ×1,32 : `bareme × 1000 × 2^(niveau−1)` dépasse
+ * ⚠ POURQUOI UN BigInt. Le barème doublait par niveau de cible quand tout le
+ * reste croissait en ×1,32 : `bareme × 1000 × 2^(niveau−1)` dépassait
  * Number.MAX_SAFE_INTEGER dès le niveau 39 pour le Broyeur. Un Number
  * deviendrait alors approximatif — un compteur de points ne peut pas l'être.
  * BigInt est exact quelle que soit la taille.
+ *
+ * ⚠ ET IL RESTE OBLIGATOIRE SOUS L'ÉCHELLE DU 14/09. `facteurRechercheMilli`
+ * monte moins vite que l'ancien 2^(n−1), mais il part 8 875 millièmes au niveau
+ * 1 au lieu de 1 000 : le produit COMPLET, avec `pvPerdusMilli`, reste hors de
+ * portée d'un Number.
+ *
+ * ⚠ L'ÉCHELLE EST CELLE DE LA RECHERCHE, PAS CELLE DU BUTIN. `butin` passe par
+ * `butinPlein`, qui lit `BUTIN` directement : les deux grandeurs ne partagent
+ * plus aucun facteur, et c'est ce qui permet de recaler l'une sans déplacer
+ * l'autre d'une unité.
  *
  * ⚠ JSON.stringify LÈVE sur un BigInt. Il reste donc confiné à cette valeur de
  * retour : il n'entre ni dans l'état du combat, ni dans l'objet rendu par
@@ -3998,7 +4047,7 @@ export function pointsRecherche(resultat, montage) {
     // Le facteur économique est en millièmes, d'où le MILLE au dénominateur ;
     // il est placé là, avec l'autre division, pour que TOUS les produits se
     // fassent avant la moindre troncature.
-    total += (BigInt(bareme) * BigInt(facteurEconomiqueMilli(d.niveau)) * facteur
+    total += (BigInt(bareme) * BigInt(facteurRechercheMilli(d.niveau)) * facteur
       * BigInt(perduIci)) / (BigInt(d.pvMaxMilli) * mille);
   }
   return total;

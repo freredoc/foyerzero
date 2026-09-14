@@ -19,7 +19,7 @@ import {
   rangeeLaPlusAvanceeQuiTire,
 } from '../src/sim/generateur.js';
 import {
-  creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurEconomiqueMilli,
+  creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurRechercheMilli,
 } from '../src/sim/combat.js';
 import { GRILLE, OBSTACLES, UNITES, DEFENSES } from '../src/data/combat.js';
 import {
@@ -1098,11 +1098,19 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   //   sûr, là où l'ancien barème le dépassait de 4 500 fois.
   const bareme = 60;
   const bonus = 1200;
-  const plafond = bareme * facteurEconomiqueMilli(NIVEAU.plafond) * bonus;
-  assert.equal(facteurEconomiqueMilli(NIVEAU.plafond), 480_941_681);
-  assert.equal(plafond, 34_627_801_032_000);
+  // ⚠⚠ ET C'EST `facteurRechercheMilli` QU'IL FAUT BORNER ICI DEPUIS LE
+  // 14/09/2026 — ce paragraphe est le MIROIR du garde-fou de
+  // `verifierArithmetique`, et le laisser sur la courbe de butin l'aurait laissé
+  // VERT tout en ne surveillant plus la grandeur qui peut déborder. Un test qui
+  // passe sans rien garder est pire qu'un test absent.
+  //   60 × 392 976 879 × 1200 = 28 294 335 288 000, soit 318 fois sous l'entier
+  //   sûr — plus de marge qu'avant (260), parce qu'une pente plus douce partant
+  //   plus haut finit plus bas.
+  const plafond = bareme * facteurRechercheMilli(NIVEAU.plafond) * bonus;
+  assert.equal(facteurRechercheMilli(NIVEAU.plafond), 392_976_879);
+  assert.equal(plafond, 28_294_335_288_000);
   assert.ok(Number.isSafeInteger(plafond), 'le barème ne déborde plus');
-  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 260);
+  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 318);
 
   // ⚠ ET POURTANT BigInt RESTE OBLIGATOIRE — c'est le point que ce test tient
   // désormais, et il n'est pas évident. Le PLAFOND DU BARÈME tient, mais le
@@ -1138,18 +1146,18 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   broyeur.pvPerdusIciMilli = broyeur.pvInitialMilli - broyeur.pvMilli;
   assert.equal(broyeur.pvPerdusMilli, perdus);
 
-  const fe = BigInt(facteurEconomiqueMilli(50));
+  const fe = BigInt(facteurRechercheMilli(50));
   const exact = (60n * fe * 1000n * BigInt(perdus)) / (BigInt(2000 * facteur) * 1000n);
-  assert.equal(exact, 24_377_381_190n);
+  assert.equal(exact, 19_918_729_352n);
   assert.equal(pointsRecherche(resultat, montage), exact);
 
   // Le produit intermédiaire, lui, sort de l'entier sûr : c'est la preuve que
   // BigInt n'est pas une précaution décorative. Que le Number retombe ICI sur le
   // même quotient est une coïncidence de cette division-là — l'asserter serait
   // asserter une chance.
-  const intermediaire = 60 * facteurEconomiqueMilli(50) * 1000 * perdus;
+  const intermediaire = 60 * facteurRechercheMilli(50) * 1000 * perdus;
   assert.ok(!Number.isSafeInteger(intermediaire), 'BigInt reste obligatoire');
-  assert.ok(intermediaire > 5e21);
+  assert.ok(intermediaire > 4e21);
 });
 
 // ---------------------------------------------------------------------------
