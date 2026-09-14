@@ -19,7 +19,7 @@ import {
   rangeeLaPlusAvanceeQuiTire,
 } from '../src/sim/generateur.js';
 import {
-  creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurRechercheMilli,
+  creerCombat, resoudre, tick, pointsRecherche, facteurMilli, facteurEconomiqueMilli,
 } from '../src/sim/combat.js';
 import { GRILLE, OBSTACLES, UNITES, DEFENSES } from '../src/data/combat.js';
 import {
@@ -821,9 +821,22 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 paires', 
   // CIBLE, donc il raccourcit des combats que le plafond tronquait — un combat
   // de moins au plafond, donc quatre paires de moins sautées, donc quatre
   // comparaisons de plus. Le plancher de 450 ci-dessous n'a pas eu à bouger.
-  assert.equal(ecarts.length, 460, `${ecarts.length} comparaisons au lieu de 460`);
-  assert.equal(pairesSautees, 40, `${pairesSautees} paires écartées au lieu de 40`);
-  assert.equal(combatsAuPlafond, 20, `${combatsAuPlafond} combats au plafond de 900 au lieu de 20`);
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT FREIN (14/09) : **460 → 480 comparées, 40 → 20 sautées,
+  // 20 → 10 au plafond**, ET LA COUVERTURE REMONTE POUR LA SECONDE FOIS
+  // D'AFFILÉE — DE MOITIÉ CETTE FOIS. C'est le meilleur relevé de l'histoire de
+  // ce test : dix combats au plafond au lieu des vingt d'hier et des vingt et un
+  // de CONTACT-2, donc vingt paires sautées au lieu de quarante, donc vingt
+  // comparaisons de plus. Le lot ne touche ni au générateur, ni à la courbe de
+  // niveau, ni à un barème : il empêche la garnison de quitter son poste tant
+  // qu'une cible de sa prédilection est à portée, donc les combats que le
+  // plafond tronquait se concluent d'eux-mêmes. Le plancher de 450 ci-dessous
+  // n'a pas eu à bouger, et il a désormais trente comparaisons de marge.
+  assert.equal(ecarts.length, 480, `${ecarts.length} comparaisons au lieu de 480`);
+  assert.equal(pairesSautees, 20, `${pairesSautees} paires écartées au lieu de 20`);
+  assert.equal(combatsAuPlafond, 10, `${combatsAuPlafond} combats au plafond de 900 au lieu de 10`);
+  assert.notEqual(ecarts.length, 460,
+    'la couverture est revenue à sa valeur d’avant FREIN sans qu’on l’ait remesurée');
   // ⚠ ET LA COUVERTURE NE DOIT PAS FONDRE : neuf dixièmes des paires au moins.
   // Sans ce plancher, les trois égalités ci-dessus se réancreraient lot après lot
   // jusqu'à ce qu'il ne reste plus rien à comparer, chaque réancrage étant
@@ -966,9 +979,51 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 paires', 
   // pristine de `src/sim/combat.js`, le même montage rend **1** ; sous le
   // prototype, **0**. C'est le lot qui déplace la mesure, pas une couverture qui
   // aurait fondu — les 460 comparaisons le disent au-dessus.
-  assert.equal(ecartMax, 0, `écart maximal ${ecartMax} ticks au lieu du 0 mesuré`);
-  // Contre-assertion RETOURNÉE : le 1 du lot CONTACT-2 ne doit pas revenir en silence.
-  assert.notEqual(ecartMax, 1, 'écart d’un tick : le miroir rééchantillonne l’arrondi, remesurer');
+  //
+  // ⚠⚠ LOT FREIN (14/09) : 0 → 1, SIXIÈME BASCULE DE CETTE MESURE, ET C'EST LE
+  // MOUVEMENT DES LOTS MUR ET CONTACT À L'IDENTIQUE. Le lot ne touche ni au
+  // générateur, ni à la courbe de niveau, ni à un barème : il empêche la
+  // garnison de quitter son poste, donc il échantillonne d'autres fins de
+  // combat, et l'arrondi redevient visible là où PRÉDILECTION l'avait rendu
+  // invisible. **La borne relative de 1 % cesse d'être vacueuse.**
+  //
+  // ⚠⚠ MAIS LA STRUCTURE DE L'ÉCART S'INVERSE, ET C'EST LA PREMIÈRE FOIS —
+  // C'EST LE NIVEAU **1** QUI EST SEUL CONTRE LES QUATRE AUTRES, PAS LE 2.
+  // Aux lots MUR, CONTACT et CONTACT-2, la cellule fautive opposait toujours le
+  // niveau 2 aux quatre autres ; ici c'est **`camp` graine 23, `mixte/5`, niveau
+  // 1 à 299 ticks contre 300 aux niveaux 2, 10, 30 et 50**. Le reste ne bouge
+  // pas d'un cheveu : **quatre comparaisons** au-dessus de zéro, **UNE cellule
+  // sur cinquante**, médiane **0**, 0,8 % des comparaisons contre 5 % permis.
+  // L'arrondi déplace **0,334 %** d'un combat contre 1 % permis — 3,0 fois de
+  // marge, contre 4,7 au lot CONTACT-2 et 6,8 au lot CONTACT.
+  //
+  // ⚠ ET L'INVERSION EST ATTENDUE, PAS SUSPECTE : le niveau 1 est le seul des
+  // cinq où `facteurMilli` vaut exactement 1 000, donc le seul où les dégâts ne
+  // subissent aucun arrondi d'échelle. Il n'était pas la cellule fautive tant
+  // que le combat se jouait ailleurs ; il l'est dès que le montage échantillonne
+  // une fin de combat que les quatre autres niveaux franchissent d'un tick.
+  //
+  // ⚠ `entitesQuiBasculent` VAUT TOUJOURS 0 et `residuPpmMax` aussi — inchangés
+  // depuis le lot PAQUETS —, donc le seuil de résidu reste vacueux sur ce
+  // montage, et c'est sans rapport avec la bascule ci-dessus : ce qui redevient
+  // visible est l'écart de TICK, pas le sort d'une entité.
+  //
+  // ⚠⚠ ET LA CONTRE-ASSERTION EST RETOURNÉE, JAMAIS RETIRÉE — pour la sixième
+  // fois, et toujours sur le même axe. Elle refusait le retour du **1** de
+  // CONTACT-2 ; ce 1 est mesuré, donc elle ne peut plus être honorée en l'état.
+  // Elle refuse désormais le retour du **0** de PRÉDILECTION. La propriété
+  // qu'elle défend n'a pas changé d'un mot — un écart qui reviendrait à sa
+  // valeur d'avant sans qu'on l'ait mesuré passerait en silence —, seul le
+  // nombre refusé bascule avec elle.
+  //
+  // ⚠ ET LE UN A ÉTÉ MESURÉ DES DEUX CÔTÉS AVANT D'ÊTRE CRU : sur l'arbre
+  // pristine de `src/sim/combat.js`, le même montage rend **0** ; sous le lot,
+  // **1**. C'est le lot qui déplace la mesure, pas une couverture qui aurait
+  // fondu — les 480 comparaisons le disent au-dessus, et elles sont VINGT de
+  // plus qu'hier.
+  assert.equal(ecartMax, 1, `écart maximal ${ecartMax} ticks au lieu du 1 mesuré`);
+  // Contre-assertion RETOURNÉE : le 0 du lot PRÉDILECTION ne doit pas revenir en silence.
+  assert.notEqual(ecartMax, 0, 'écart nul : le miroir a cessé d’échantillonner l’arrondi, remesurer');
 
   // 5) Et le résidu observé doit rester loin sous son plafond, sinon le seuil
   // du §4 aurait été choisi trop juste sans qu'on le sache.
@@ -1037,31 +1092,23 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   // et non réparé depuis le lot 2B.
   //
   // Ethan a arbitré que les points de recherche sont une récompense ÉCONOMIQUE
-  // et doivent suivre une courbe économique. Le barème n'a plus de multiplicateur
-  // propre, et le produit le plus lourd tient désormais très largement.
-  //
-  // ⚠⚠ ET C'EST `facteurRechercheMilli` QU'IL FAUT BORNER ICI, PAS
-  // `facteurEconomiqueMilli` — lot du 14/09/2026, où les points de recherche ont
-  // reçu leur propre échelle (`POINTS_RECHERCHE.echelle`). Ce paragraphe est le
-  // MIROIR du garde-fou de `verifierArithmetique` ; le laisser sur la courbe de
-  // butin l'aurait laissé VERT tout en ne surveillant plus la grandeur qui peut
-  // déborder. Un test qui passe sans rien garder est pire qu'un test absent.
-  //   60 × 392 976 879 × 1200 = 28 294 335 288 000, soit 318 fois sous l'entier
-  //   sûr — plus de marge qu'avant (260), parce qu'une pente plus douce partant
-  //   plus haut finit plus bas : 392 976 879 contre 480 941 681 au plafond.
+  // et doivent suivre la courbe économique. Le barème n'a plus de multiplicateur
+  // propre, et le produit le plus lourd tient désormais très largement :
+  //   60 × 480 941 681 × 1200 = 34 627 801 032 000, soit 260 fois sous l'entier
+  //   sûr, là où l'ancien barème le dépassait de 4 500 fois.
   const bareme = 60;
   const bonus = 1200;
-  const plafond = bareme * facteurRechercheMilli(NIVEAU.plafond) * bonus;
-  assert.equal(facteurRechercheMilli(NIVEAU.plafond), 392_976_879);
-  assert.equal(plafond, 28_294_335_288_000);
+  const plafond = bareme * facteurEconomiqueMilli(NIVEAU.plafond) * bonus;
+  assert.equal(facteurEconomiqueMilli(NIVEAU.plafond), 480_941_681);
+  assert.equal(plafond, 34_627_801_032_000);
   assert.ok(Number.isSafeInteger(plafond), 'le barème ne déborde plus');
-  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 318);
+  assert.ok(Number.MAX_SAFE_INTEGER / plafond > 260);
 
   // ⚠ ET POURTANT BigInt RESTE OBLIGATOIRE — c'est le point que ce test tient
   // désormais, et il n'est pas évident. Le PLAFOND DU BARÈME tient, mais le
   // PRODUIT COMPLET du calcul ne tient pas : il multiplie encore par
   // pvPerdusMilli, qui vaut jusqu'à 2000 × facteurMilli(50) = 213 438 000.
-  // 60 × 392 976 879 × 1000 × 180 308 053 = 4,3 × 10²¹, toujours hors de
+  // 60 × 480 941 681 × 1000 × 180 308 053 = 5,2 × 10²¹, toujours hors de
   // l'entier sûr. Passer ce calcul en Number serait une régression silencieuse.
   //
   // Cas concret : un Broyeur de niveau 50 ayant perdu 180 308 053 milli-PV sur
@@ -1091,18 +1138,18 @@ test('T13 — au niveau 50 rien ne déborde, et les points de recherche restent 
   broyeur.pvPerdusIciMilli = broyeur.pvInitialMilli - broyeur.pvMilli;
   assert.equal(broyeur.pvPerdusMilli, perdus);
 
-  const fe = BigInt(facteurRechercheMilli(50));
+  const fe = BigInt(facteurEconomiqueMilli(50));
   const exact = (60n * fe * 1000n * BigInt(perdus)) / (BigInt(2000 * facteur) * 1000n);
-  assert.equal(exact, 19_918_729_352n);
+  assert.equal(exact, 24_377_381_190n);
   assert.equal(pointsRecherche(resultat, montage), exact);
 
   // Le produit intermédiaire, lui, sort de l'entier sûr : c'est la preuve que
   // BigInt n'est pas une précaution décorative. Que le Number retombe ICI sur le
   // même quotient est une coïncidence de cette division-là — l'asserter serait
   // asserter une chance.
-  const intermediaire = 60 * facteurRechercheMilli(50) * 1000 * perdus;
+  const intermediaire = 60 * facteurEconomiqueMilli(50) * 1000 * perdus;
   assert.ok(!Number.isSafeInteger(intermediaire), 'BigInt reste obligatoire');
-  assert.ok(intermediaire > 4e21);
+  assert.ok(intermediaire > 5e21);
 });
 
 // ---------------------------------------------------------------------------
