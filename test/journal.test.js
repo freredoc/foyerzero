@@ -39,6 +39,7 @@ import {
   COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS,
   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE,
   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_RASAGE_RECHERCHE,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -208,6 +209,9 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
     // ⚠⚠ ET LE LOT ÉCHELLE-RECHERCHE EN EMPILE UNE SIXIÈME, IL N'EN REMPLACE
     // AUCUNE. Même doctrine, même ordre de lecture : la plus récente l'emporte.
     const deplacesRecherche = COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE[i] ?? {};
+    // Le rasage ne change que les points, sur les combats terminés par la
+    // Souche. Cette couche vient après l'échelle et ne retouche aucun témoin.
+    const deplacesRasage = COMBATS_DEPLACES_PAR_RASAGE_RECHERCHE[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
       let reference = attendu[c];
       let couvert = false;
@@ -233,6 +237,12 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
       }
       if (Object.prototype.hasOwnProperty.call(deplacesRecherche, c)) {
         reference = deplacesRecherche[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesRasage, c)) {
+        assert.equal(c, 6, 'le rasage a déplacé autre chose que la recherche');
+        assert.equal(vu[3], 'souche', 'la couche de rasage couvre un autre motif de fin');
+        reference = deplacesRasage[c];
         couvert = true;
       }
       if (couvert) surcharges += 1;
@@ -324,6 +334,11 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
   assert.equal(surcharges, 1240, `champs surchargés : ${surcharges}`);
   assert.notEqual(surcharges, 1213, 'la couche d\'ÉCHELLE-RECHERCHE a disparu');
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE).length, 200);
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_RASAGE_RECHERCHE).length, 18);
+  assert.deepEqual(
+    [...new Set(Object.values(COMBATS_DEPLACES_PAR_RASAGE_RECHERCHE)
+      .flatMap((d) => Object.keys(d)))],
+    ['6'], 'la couche de rasage touche une colonne autre que les points');
   assert.deepEqual(
     [...new Set(Object.values(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE)
       .flatMap((d) => Object.keys(d)))],

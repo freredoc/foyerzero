@@ -446,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 est de 2,23 %', () => {
+test('PIC T7 — le livrable pèse 9 386 714 octets, la marge sur la borne T10 est de 2,22 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -821,9 +821,9 @@ test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 e
   // Le patch du lot ne touchait pas ce fichier — le réancrage est venu de la
   // MESURE, pas du patch.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_386_656;          // remesuré au lot ÉCHELLE-RECHERCHE, base `6de495d`
-  const MARGE = BORNE - MESURE;      // 213 344 octets — 213 293 écrits par FREIN
-  assert.equal(MARGE, 213_344);
+  const MESURE = 9_386_714;          // remesuré au correctif de rasage, depuis 9 386 656
+  const MARGE = BORNE - MESURE;      // 213 286 octets
+  assert.equal(MARGE, 213_286);
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
   assert.notEqual(MARGE, 214_592,

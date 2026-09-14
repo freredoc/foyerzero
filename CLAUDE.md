@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
+Dernière révision : **14/09/2026**, version 0.99.62 · build 164.
 
 ---
 
@@ -41,6 +41,24 @@ Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 14/09/2026 (après le correctif RECHERCHE-AU-RASAGE), à
+confronter :**
+⚠⚠ **LE RASAGE SOLDE LES PV PRÉSENTS AU DÉBUT DU RAID, PAS LE PLEIN NOMINAL.**
+`pointsRecherche` lit `pvInitialMilli` quand la cause est `souche` ; hors rasage,
+il garde les dégâts de la passe. T11 garde une défense intacte encore debout,
+T13 une défense déjà entamée à 50 % et la contre-épreuve hors rasage. Aucun
+barème ni aucune ligne de `POINTS_RECHERCHE.echelle` n'a changé.
+⚠⚠ **LES DEUX FICHIERS DU MOTEUR ONT ÉTÉ RESTAURÉS DEPUIS `178b69e` AVANT
+D'APPLIQUER LE CORRECTIF.** Les uploads `0e5fc03` et `5b4b7ed` avaient écrasé
+les fonctions FREIN et la nouvelle échelle de recherche. Le témoin du journal
+empile 18 champs, tous en colonne 6 et tous sur des rasages, sans recapture.
+`npm test` rend **1613 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
+mesuré est **1612 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
+produit **9 386 714 octets**, version **0.99.62 · build 164**, soit **+58 octets**
+sur le livrable du commit `178b69e`. Détails et commandes dans
+`RAPPORT-lotCORRECTIF-RECHERCHE-RASAGE.md`.
 
 **Référence au 14/09/2026 (après le lot ÉCHELLE-RECHERCHE, refait), à
 confronter :**
