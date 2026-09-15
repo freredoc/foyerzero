@@ -2125,13 +2125,17 @@
     background-size: cover; background-position: center top; background-repeat: no-repeat;
   }
   #offense-vagues::-webkit-scrollbar { display: none; }
-  #ecran-offense .vague { flex: 0 0 auto; position: relative; }
+  #ecran-offense .vague {
+    flex: 0 0 auto; position: relative; width: 70%; margin-inline: auto;
+  }
   #ecran-offense .vague h2 {
     position: absolute; z-index: 1; top: 1px; left: 34%; margin: 0;
     font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #68727E;
   }
   /* Les neuf emplacements d'une vague se plient comme sur la capture validée
      à 360 px : trois en haut à gauche, trois au centre, trois en bas à droite.
+     La vague occupe les 70 % centraux du bassin afin de rester entièrement sur
+     le rectangle orange, entre les deux murs peints dans le fond.
      Ils restent sur une grille de neuf colonnes : aucune translation ne sépare
      le dessin de la zone touchée. `ui/offense.js` fournit le nombre de colonnes
      depuis NB_COLONNES ainsi que l'étage de chaque case.

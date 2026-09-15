@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **15/09/2026**, version 0.99.66 · build 168.
+Dernière révision : **15/09/2026**, version 0.99.67 · build 169.
 
 ---
 
@@ -55,11 +55,13 @@ composition. Le quinconce validé à 360 px plie chaque vague en trois groupes :
 trois unités en haut, trois au centre et trois en bas, en conservant les neuf
 colonnes de combat. Les pistes se recouvrent d'une demi-case entre des groupes
 aux colonnes disjointes ; les quatre vagues tiennent ainsi dans les 324 px du
-bassin à 360 × 640. La pièce offensive est bornée à 96 % de sa case.
+bassin à 360 × 640. Chaque vague occupe les 70 % centraux du bassin pour garder
+les unités dans le rectangle orange, entre les murs latéraux. La pièce offensive
+est bornée à 96 % de sa case.
 `npm test` rend **1627 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
 mesuré est **1626 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
-produit **9 391 301 octets**, version **0.99.66 · build 168**, soit **+4 587
+produit **9 391 340 octets**, version **0.99.67 · build 169**, soit **+4 626
 octets** sur `main` à `1aca789`. Détails, mesures et liste des tests dans
 `RAPPORT-lotRAID-REPRISE-FORMATIONS.md`.
 

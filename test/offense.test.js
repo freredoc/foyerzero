@@ -420,6 +420,10 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   // ci-dessus ne tiendrait plus.
   const vague = feuille.match(/#ecran-offense \.vague \{([^}]*)\}/)[1];
   assert.match(vague, /flex:\s*0 0 auto/, 'une vague peut encore se faire écraser');
+  assert.match(vague, /width:\s*70%/,
+    'les unités débordent de nouveau du rectangle orange sur les murs latéraux');
+  assert.match(vague, /margin-inline:\s*auto/,
+    'la formation ne reste plus centrée entre les deux murs');
   assert.match(bassin, /overflow-y:\s*auto/, 'le bassin ne défile plus quand il déborde');
 });
 
@@ -949,13 +953,17 @@ test('offense — chaque vague plie ses neuf colonnes en trois, trois et trois �
   assert.doesNotMatch(source, /translateX/,
     'une translation décrocherait le doigt de la case qu\'il vise');
 
-  // À 360 px, le bassin garde 348 px après ses marges internes. Huit écarts de
-  // 3 px laissent neuf cases de 36 px : aucune ne sort de la largeur utile.
+  // À 360 px, la vague prend les 70 % centraux des 348 px utiles : ses bords
+  // restent à 58,2 et 301,8 px, dans le rectangle orange et hors des murs.
   const largeurBassin = 360 - 2 * 6;
-  const largeurCase = (largeurBassin - (NB_COLONNES - 1) * 3) / NB_COLONNES;
-  assert.equal(largeurCase, 36);
+  const largeurVague = largeurBassin * 0.7;
+  const retrait = (360 - largeurVague) / 2;
+  assert.equal(retrait, 58.2);
+  assert.equal(360 - retrait, 301.8);
+  const largeurCase = (largeurVague - (NB_COLONNES - 1) * 3) / NB_COLONNES;
+  assert.ok(Math.abs(largeurCase - 24.4) < 1e-9);
   const hauteurVague = 3 * (largeurCase / 2) + largeurCase / 2;
-  assert.equal(hauteurVague, 72,
+  assert.ok(Math.abs(hauteurVague - 48.8) < 1e-9,
     'la diagonale ne tient plus ses quatre vagues dans le bassin in-game');
 
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
