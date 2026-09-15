@@ -1215,7 +1215,8 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  assert.equal(SAVE_VERSION, 35,
+    'la compatibilité avec la sauvegarde v34 publiée exige le maillon v34 → v35');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

@@ -54,10 +54,15 @@ lorsque son texte change.
 réussite, un refus ou un toucher vide. Le second clic sur le bouton actif le
 désarme ; choisir l'autre mode remplace le premier. « Tout réparer » suit le
 même état.
-`npm test` rend **1617 pass / 0 fail** au sens de la garde de
+⚠⚠ **`SAVE_VERSION` VAUT 35 POUR RELIRE LA V34 DÉJÀ PUBLIÉE.** Le maillon
+34 → 35 supprime uniquement `raidEnCours`, puis le chargement reprend sur le
+modèle d'avant la PR #147. Si son rapport attend encore, il entre une fois dans
+le journal ; coût, dégâts et butin, déjà appliqués, ne sont pas rejoués. Les
+tests `COMPAT-147 T1/T2` couvrent les états absent, en attente et déjà publié.
+`npm test` rend **1619 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
-mesuré est **1616 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
-produit **9 387 607 octets**, version **0.99.69 · build 171**, soit 212 393
+mesuré est **1618 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
+produit **9 388 040 octets**, version **0.99.69 · build 171**, soit 211 960
 octets de marge (2,21 %) sous la borne T10. Le contrôle visuel dans Chromium à
 360 × 640 place le chrono dans le titre, entre x = 327,375 et x = 352, dans un
 parent large de 360 px ; il n'a ni position absolue ni fond propre.

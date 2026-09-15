@@ -155,6 +155,42 @@ test('état — une partie neuve ouvre sur la base du joueur, à sa position', (
   assert.equal(etat.horloge.nbTicks, TICKS_PAR_HEURE);
 });
 
+test('COMPAT-147 T1 — une sauvegarde Android v34 se charge sans perdre la partie', () => {
+  const jsonCourant = serialiser(creerEtat(34), T0);
+  const v34 = JSON.parse(jsonCourant);
+  v34.version = 34;
+  v34.raidEnCours = null;
+
+  const attendue = charger(jsonCourant, T0);
+  const chargee = charger(JSON.stringify(v34), T0);
+  assert.deepEqual(chargee, attendue,
+    'la compatibilité v34 a modifié autre chose que le champ raidEnCours retiré');
+  assert.equal(chargee.version, 35);
+  assert.equal(Object.hasOwn(chargee, 'raidEnCours'), false,
+    'le raid sérialisé de la PR 147 a survécu à sa migration de retrait');
+});
+
+test('COMPAT-147 T2 — le rapport v34 en attente est conservé exactement une fois', () => {
+  const rapport = { sens: 'offense', ticks: 100, cible: { rangee: 7, colonne: 8 } };
+  for (const publie of [false, true]) {
+    const v34 = JSON.parse(serialiser(creerEtat(147), T0));
+    v34.version = 34;
+    if (publie) v34.rapports.push({ ...rapport, tick: 12 });
+    v34.raidEnCours = {
+      debutMs: T0 - 5_000,
+      echeanceMs: T0 + 5_000,
+      tickRapport: 12,
+      publie,
+      rapport,
+    };
+
+    const chargee = charger(JSON.stringify(v34), T0);
+    assert.deepEqual(chargee.rapports, [{ ...rapport, tick: 12 }],
+      `le rapport ${publie ? 'déjà publié' : 'en attente'} n’est pas conservé une fois`);
+    assert.equal(Object.hasOwn(chargee, 'raidEnCours'), false);
+  }
+});
+
 test('test 11 — le rattrapage reproduit la boucle sur 1 h et 2 h', () => {
   // ⚠ LES HORIZONS ONT ÉTÉ RABOTÉS DE 24 h ET 72 h À 2 h LE 26/08, et ce n'est
   // pas une baisse d'exigence. Le triple 1/24/72 venait du moteur du lot 1, qui
@@ -2547,7 +2583,8 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  assert.equal(SAVE_VERSION, 35,
+    'la compatibilité avec la sauvegarde v34 publiée exige le maillon v34 → v35');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
