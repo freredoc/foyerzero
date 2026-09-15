@@ -34,6 +34,9 @@ Réparer armé.
 - `dist/index.html` : 9 388 040 octets, version 0.99.70, build 172. Le build 172
   est strictement supérieur au 171 déjà installé, condition exigée par
   l'auto-update Android pour servir la migration v35.
+- Le démarrage Android écarte aussi un HTML téléchargé plus ancien que l'asset
+  de l'APK. Le test JVM reproduit un fichier interne 171 conservé lors de
+  l'installation manuelle de l'APK 172 et exige que l'asset v35 soit servi.
 
 ## Tests
 

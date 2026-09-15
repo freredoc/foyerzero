@@ -62,6 +62,21 @@ class GestionnaireVersions(
      * jamais dans cette décision.
      */
     fun htmlAuDemarrage(): ByteArray {
+        // ⚠⚠ UNE INSTALLATION MANUELLE D'APK CONSERVE `filesDir`. Si le disque
+        // porte encore le HTML téléchargé d'un ancien build, le tester seulement
+        // par `isFile` sert ce vieux jeu à la place de l'asset neuf de l'APK.
+        // C'est exactement ce qui a laissé tourner SAVE_VERSION 33 après
+        // l'installation manuelle du build 172, pourtant embarqué en v35.
+        //
+        // Un marqueur absent est traité comme non fiable : l'installation
+        // atomique écrit le HTML avant le marqueur, donc l'écarter après une
+        // interruption ne perd aucune version validée et permet son nouveau
+        // téléchargement. Un fichier au build supérieur ou égal reste prioritaire.
+        val buildTelecharge = if (fichierInstalle.isFile) lireEntier(fichierBuild) else null
+        if (fichierInstalle.isFile
+            && (buildTelecharge == null || buildEmbarque > buildTelecharge)) {
+            restaurerEmbarque()
+        }
         if (echecsConsecutifs() >= seuilEchecs) {
             restaurerEmbarque()
         }

@@ -77,6 +77,30 @@ class GestionnaireVersionsTest {
     }
 
     @Test
+    fun `un APK manuel plus recent remplace le vieux HTML telecharge`() {
+        // Reproduction du 15/09 : la mise à jour 171 avait laissé son HTML dans
+        // filesDir. Installer manuellement l'APK 172 conserve ce répertoire ;
+        // l'ancien code resservait donc le jeu v33 malgré l'asset v35 embarqué.
+        val ancien = GestionnaireVersions(
+            repertoire = dossier.root,
+            copieEmbarquee = { "<html>apk 170</html>".toByteArray() },
+            buildEmbarque = 170,
+        )
+        ancien.installerNouvelleVersion("<html>jeu v33 téléchargé</html>".toByteArray(), build = 171)
+
+        val apkManuel = GestionnaireVersions(
+            repertoire = dossier.root,
+            copieEmbarquee = { "<html>jeu v35 embarqué</html>".toByteArray() },
+            buildEmbarque = 172,
+        )
+        assertEquals("<html>jeu v35 embarqué</html>", String(apkManuel.htmlAuDemarrage()))
+        assertEquals(172, apkManuel.buildServi())
+        assertEquals(172, apkManuel.buildInstalle())
+        assertFalse(apkManuel.fichierInstalle.exists(),
+            "le vieux HTML téléchargé reste prioritaire sur l'APK manuel")
+    }
+
+    @Test
     fun `test 10 - apres N echecs de demarrage consecutifs, la copie embarquee est restauree`() {
         val g = gestionnaire(seuil = 2)
         g.installerNouvelleVersion("<html>version corrompue qui ne démarre pas</html>".toByteArray(), build = 3)
