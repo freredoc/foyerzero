@@ -31,7 +31,9 @@ Réparer armé.
 - `node --test test/raid-ecran.test.js` sous Node 22 : 56 tests, 56 réussis.
 - `npm run check` sous Node 22 : 1 619 tests déclarés, 1 618 réussis,
   0 échec, 1 ignoré (`LIMITE T8`).
-- `dist/index.html` : 9 388 040 octets, version 0.99.69, build 171.
+- `dist/index.html` : 9 388 040 octets, version 0.99.70, build 172. Le build 172
+  est strictement supérieur au 171 déjà installé, condition exigée par
+  l'auto-update Android pour servir la migration v35.
 
 ## Tests
 
