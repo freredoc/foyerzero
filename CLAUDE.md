@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **15/09/2026**, version 0.99.63 · build 165.
+Dernière révision : **15/09/2026**, version 0.99.64 · build 166.
 
 ---
 
@@ -51,12 +51,13 @@ montre le rapport déjà dû. Le simulateur montre son résultat immédiatement 
 ne lance son rejeu que sur demande.
 ⚠⚠ **LA COMPOSITION DES RAIDS DE L'OUVRAGE EST INCHANGÉE SUR 320 TÉMOINS.** Un
 flux salé distinct varie l'affectation aux 18 cases sans toucher aux tirages de
-composition. La maquette quinconce 360 px reste dans `rapports/`, hors de
-`src/`, en attente de validation.
+composition. Le quinconce validé à 360 px plie chaque vague en trois unités sur
+la ligne haute puis six sur la ligne basse, en conservant les neuf colonnes de
+combat ; la pièce offensive est bornée à 96 % de sa case.
 `npm test` rend **1627 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
 mesuré est **1626 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
-produit **9 391 258 octets**, version **0.99.63 · build 165**, soit **+4 544
+produit **9 391 154 octets**, version **0.99.64 · build 166**, soit **+4 440
 octets** sur `main` à `1aca789`. Détails, mesures et liste des tests dans
 `RAPPORT-lotRAID-REPRISE-FORMATIONS.md`.
 

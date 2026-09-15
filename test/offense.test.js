@@ -406,22 +406,12 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   assert.match(piece, /--jeton-part:\s*\d+%/,
     'la pièce ne se mesure plus en pourcentage de sa case');
 
-  // ⚠⚠ ET LE PREMIER EMPLACEMENT FAIT LA MÊME LARGEUR QUE LES HUIT AUTRES —
-  // DÉFAUT ANTÉRIEUR AU LOT, TROUVÉ AU BOOT SANS TÊTE, PAS À LA RELECTURE.
-  // `grid-column: span 2` est le raccourci de `grid-column-start: span 2` +
-  // `grid-column-end: auto` : la règle qui posait ensuite `grid-column-start: 1`
-  // écrasait le `span 2` du START et laissait le END à `auto`, donc UNE colonne.
-  // Mesuré dans Chromium à 360 px CSS : première case 15,5 px, les huit autres
-  // 34, et 37 px perdus au bord droit. Les deux règles écrivent donc la position
-  // ET la portée d'un coup.
-  for (const regle of [/\.emplacements \.emplacement:first-child \{([^}]*)\}/,
-    /\.emplacements\.decalee \.emplacement:first-child \{([^}]*)\}/]) {
-    const bloc = feuille.match(regle)[1];
-    assert.match(bloc, /grid-column:\s*\d+ \/ span 2/,
-      `le premier emplacement perd sa portée : ${bloc.trim()}`);
-    assert.doesNotMatch(bloc, /grid-column-start/,
-      'la position seule écrase la portée — c\'est le défaut du 03/09');
-  }
+  // La grille occupe maintenant deux lignes physiques par vague. Les cases
+  // restent carrées et la vague ne gagne donc que la hauteur nécessaire aux
+  // deux rangées de sprites.
+  const emplacements = feuille.match(/#ecran-offense \.emplacements\s*\{([^}]*)\}/)[1];
+  assert.match(emplacements, /grid-template-rows:\s*repeat\(2,\s*auto\)/,
+    'une vague n\'a plus ses deux lignes physiques');
 
   // ⚠ ET UNE VAGUE NE SE LAISSE PAS ÉCRASER : sans ça, quatre vagues dans un
   // bassin trop court rétréciraient au lieu de faire défiler, et le carré
@@ -932,54 +922,44 @@ test('offense — l\'écran porte le bassin, et il est INLINÉ', () => {
     'un bassin qui se répète ferait une couture au milieu de l\'écran');
 });
 
-test('offense — les neuf sont en quinconce, et le décalage passe par la GRILLE', () => {
-  // ⚠⚠ ETHAN, 03/09 : « toujours 4 rangées de 9, mais les neuf tu les mets en
-  // quinconce pour que ça passe à peu près ». Une rangée sur deux est décalée
-  // d'une DEMI-case.
-  //
-  // ⚠⚠ ET LE DÉCALAGE NE SE FAIT PAS PAR UN `transform`. Un `translateX`
-  // déplacerait le dessin sans déplacer la géométrie du pointage, et le doigt
-  // cesserait de tomber sur l'emplacement qu'il vise — c'est exactement ce que
-  // le dépôt refuse depuis toujours sur la grille du Chantier. On compte donc
-  // en demi-colonnes.
-  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+test('offense — chaque vague plie ses neuf colonnes en trois puis six à 360 px', () => {
+  const { doc, parId } = fauxDocumentOffense();
+  initialiserEcranOffense(doc);
 
-  const pose = ecran.match(/gridTemplateColumns = `repeat\(\$\{([^}]+)\}, 1fr\)`/);
-  assert.ok(pose, 'l\'écran ne pose plus le nombre de colonnes des vagues');
+  const vagues = parId.get('offense-vagues').children;
+  assert.equal(vagues.length, NB_VAGUES);
+  for (const vague of vagues) {
+    const rangee = vague.children.find((e) => e.classList.contains('emplacements'));
+    assert.equal(rangee.style.gridTemplateColumns,
+      `repeat(${NB_COLONNES}, minmax(0, 1fr))`);
+    assert.equal(rangee.children.length, NB_COLONNES);
+    assert.deepEqual(rangee.children.map((e) => e.style.gridColumn),
+      Array.from({ length: NB_COLONNES }, (_, i) => String(i + 1)),
+      'une colonne visuelle ne correspond plus à sa colonne de combat');
+    assert.deepEqual(rangee.children.map((e) => e.style.gridRow),
+      ['1', '1', '1', '2', '2', '2', '2', '2', '2'],
+      'la vague ne suit plus le placement trois en haut, six en bas');
+  }
 
-  // ⚠ LE NOMBRE SE CALCULE, IL NE SE RECOPIE PAS. Écrire `19` passerait cette
-  // égalité aujourd'hui et mentirait le jour où une vague changerait de
-  // largeur : on exige donc que l'expression NOMME la donnée.
-  assert.match(pose[1], /NB_COLONNES/,
-    'le nombre de demi-colonnes est écrit en dur : il ne suivrait plus NB_COLONNES');
-  const demiColonnes = Function('NB_COLONNES', `return ${pose[1]};`)(NB_COLONNES);
-  assert.equal(demiColonnes, NB_COLONNES * 2 + 1,
-    `${demiColonnes} demi-colonnes pour ${NB_COLONNES} emplacements : sans la demi-case`
-    + ' de mou, la rangée décalée déborde ; avec deux, elle n\'est plus au ras du bord');
+  const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
+  assert.match(source, /Math\.ceil\(NB_COLONNES \/ 3\)/,
+    'le pli de la vague ne suit plus le nombre de colonnes');
+  assert.doesNotMatch(source, /translateX/,
+    'une translation décrocherait le doigt de la case qu\'il vise');
 
-  // La rangée décalée est marquée dans le balisage, pas devinée par sa place
-  // dans le document : `:nth-child` aurait lié le quinconce à la structure du
-  // DOM, qu'un titre inséré un jour aurait décalée en silence.
-  assert.match(ecran, /classList\.add\('decalee'\)/,
-    'plus rien ne marque la rangée décalée');
-  assert.doesNotMatch(ecran, /transform/,
-    'un `transform` décrocherait le doigt de l\'emplacement qu\'il vise');
+  // À 360 px, le bassin garde 348 px après ses marges internes. Huit écarts de
+  // 3 px laissent neuf cases de 36 px : aucune ne sort de la largeur utile.
+  const largeurBassin = 360 - 2 * 6;
+  const largeurCase = (largeurBassin - (NB_COLONNES - 1) * 3) / NB_COLONNES;
+  assert.equal(largeurCase, 36);
 
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
-  const bloc = feuille.slice(feuille.indexOf('#ecran-offense .emplacements'),
-    feuille.indexOf('aspect-ratio: 1', feuille.indexOf('#ecran-offense .emplacements')));
-  assert.match(bloc, /grid-column:\s*span 2/,
-    'un emplacement n\'occupe plus deux demi-colonnes');
-  // ⚠ CETTE ASSERTION A CHANGÉ DE FORME LE 03/09, ET ELLE S'EST RESSERRÉE. Elle
-  // cherchait `grid-column-start: 2` — la position SEULE, qui écrasait la portée
-  // et rendait le premier emplacement deux fois trop étroit (voir le test des
-  // quatre vagues). Elle exige maintenant la position ET la portée.
-  assert.match(bloc, /\.decalee \.emplacement:first-child \{ grid-column: 2 \/ span 2/,
-    'la rangée décalée ne commence plus une demi-case plus loin, ou perd sa portée');
-  assert.doesNotMatch(bloc, /repeat\(\s*\d/,
-    'le nombre de demi-colonnes est écrit dans la feuille : c\'est une seconde vérité');
+  const cadrage = feuille.match(
+    /#ecran-offense \.emplacement \.piece \{\s*--jeton-part:\s*(\d+)%/,
+  );
+  assert.ok(cadrage, 'le cadrage propre au quinconce offensif a disparu');
+  assert.equal(Number(cadrage[1]) * 1.2, 96,
+    'le grossissement dépasse la case et peut rogner le sprite ou son niveau');
 });
 
 test('offense — la sélection survit à l\'amélioration, et la ligne ne dit pas une demi-phrase', () => {

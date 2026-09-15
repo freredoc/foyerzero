@@ -446,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 391 258 octets, la marge sur la borne T10 est de 2,17 %', () => {
+test('PIC T7 — le livrable pèse 9 391 154 octets, la marge sur la borne T10 est de 2,18 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -821,12 +821,13 @@ test('PIC T7 — le livrable pèse 9 391 258 octets, la marge sur la borne T10 e
   // Le patch du lot ne touchait pas ce fichier — le réancrage est venu de la
   // MESURE, pas du patch.
   // ⚠⚠ RÉANCRÉ AU LOT RAID-REPRISE-ET-FORMATIONS, 15/09. Le livrable de `main`
-  // pesait 9 386 714 octets ; l'horloge persistante, les panneaux du simulateur
-  // et le placement séparé ajoutent 4 544 octets, sans image ni son nouveau.
+  // pesait 9 386 714 octets ; l'horloge persistante, les panneaux du simulateur,
+  // le placement séparé et le quinconce validé ajoutent 4 440 octets, sans image
+  // ni son de production nouveau.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_391_258;          // mesuré en version 0.99.63 · build 165
-  const MARGE = BORNE - MESURE;      // 208 742 octets
-  assert.equal(MARGE, 208_742);
+  const MESURE = 9_391_154;          // mesuré en version 0.99.64 · build 166
+  const MARGE = BORNE - MESURE;      // 208 846 octets
+  assert.equal(MARGE, 208_846);
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
   assert.notEqual(MARGE, 214_592,
@@ -839,7 +840,7 @@ test('PIC T7 — le livrable pèse 9 391 258 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
   assert.notEqual(MARGE, 213_286,
     'la marge est celle d\'avant RAID-REPRISE-ET-FORMATIONS : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.17);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.18);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

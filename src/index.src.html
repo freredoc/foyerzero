@@ -2129,33 +2129,15 @@
   #ecran-offense .vague h2 {
     margin: 0 0 3px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #68727E;
   }
-  /* ⚠⚠ LES NEUF EMPLACEMENTS SONT EN QUINCONCE — Ethan, 03/09 : « toujours 4
-     rangées de 9, mais les neuf tu les mets en quinconce pour que ça passe ».
-     Une rangée sur deux est décalée d'une DEMI-case.
-     ⚠ LE DÉCALAGE SE FAIT PAR LA GRILLE, JAMAIS PAR UN `transform`. Un
-     `translateX` déplacerait le dessin sans déplacer la géométrie du pointage,
-     et le doigt cesserait de tomber sur l'emplacement qu'il vise — c'est
-     exactement ce que le dépôt refuse depuis toujours sur la grille du
-     Chantier. On compte donc en DEMI-cases : chaque emplacement en occupe deux,
-     et il y en a une de plus que nécessaire. La rangée `decalee` commence à la
-     demi-colonne 2, l'autre à la 1 ; les neuf tiennent dans les deux cas, et la
-     demi-case qui reste au bout EST le décalage.
-     ⚠ LE NOMBRE DE DEMI-COLONNES N'EST PAS ÉCRIT ICI. `NB_COLONNES` est une
-     donnée, et la feuille ne sait pas la lire : c'est `ui/offense.js` qui pose
-     `repeat(NB_COLONNES × 2 + 1, 1fr)`. Écrire « 19 » dans cette feuille en
-     ferait une seconde vérité, qui mentirait le jour où une vague changerait de
-     largeur. */
-  /* ⚠⚠ LE PREMIER EMPLACEMENT DE CHAQUE VAGUE FAISAIT LA MOITIÉ DES AUTRES, ET
-     C'ÉTAIT UNE CASCADE. `grid-column: span 2` est le RACCOURCI de
-     `grid-column-start: span 2` + `grid-column-end: auto` ; la règle suivante
-     posait `grid-column-start: 1`, ce qui remplaçait le `span 2` du START et
-     laissait le END à `auto` — donc UNE seule colonne. Mesuré dans Chromium à
-     360 px CSS : première case 15,5 px, les huit autres 34, et 37 px de vide
-     perdus au bord droit. On écrit donc la position ET la portée d'un coup. */
-  #ecran-offense .emplacements { display: grid; gap: 3px; }
-  #ecran-offense .emplacement { grid-column: span 2; }
-  #ecran-offense .emplacements .emplacement:first-child { grid-column: 1 / span 2; }
-  #ecran-offense .emplacements.decalee .emplacement:first-child { grid-column: 2 / span 2; }
+  /* Les neuf emplacements d'une vague se plient comme sur la capture validée
+     à 360 px : les colonnes 1 à 3 occupent la ligne haute, les colonnes 4 à 9
+     la ligne basse. Elles restent sur une grille de neuf colonnes : aucune
+     translation ne sépare le dessin de la zone touchée, et la seconde ligne
+     commence exactement sous la quatrième colonne. `ui/offense.js` fournit le
+     nombre de colonnes depuis NB_COLONNES ainsi que la ligne de chaque case. */
+  #ecran-offense .emplacements {
+    display: grid; grid-template-rows: repeat(2, auto); gap: 3px;
+  }
   #ecran-offense .emplacement {
     /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — voir `.emplacement .niveau`.
        La vignette, elle, garde son propre `relative` : c'est ELLE qui reste
@@ -2206,6 +2188,10 @@
     background-color: transparent; background-repeat: no-repeat;
     image-rendering: pixelated;
   }
+  /* Dans le quinconce offensif, 80 % grossis de 20 % donnent 96 % : la partie
+     utile et la pastille de niveau restent toutes deux dans la case. La grille
+     du raid conserve son cadrage propre. */
+  #ecran-offense .emplacement .piece { --jeton-part: 80%; }
 
   /* ⚠⚠ LE NIVEAU D'UNE PIÈCE OFFENSIVE SE LIT — Ethan, 06/09 : « le niveau des
      unités offensives ne s'affiche pas dans l'ui ». Il était dans le `title`, et
