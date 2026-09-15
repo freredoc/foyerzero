@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **15/09/2026**, version 0.99.69 · build 171.
+Dernière révision : **15/09/2026**, version 0.99.70 · build 172.
 
 ---
 
@@ -62,7 +62,7 @@ tests `COMPAT-147 T1/T2` couvrent les états absent, en attente et déjà publi�
 `npm test` rend **1619 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
 mesuré est **1618 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
-produit **9 388 040 octets**, version **0.99.69 · build 171**, soit 211 960
+produit **9 388 040 octets**, version **0.99.70 · build 172**, soit 211 960
 octets de marge (2,21 %) sous la borne T10. Le contrôle visuel dans Chromium à
 360 × 640 place le chrono dans le titre, entre x = 327,375 et x = 352, dans un
 parent large de 360 px ; il n'a ni position absolue ni fond propre.
