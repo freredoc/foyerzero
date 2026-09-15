@@ -50,6 +50,7 @@ import {
 import { baseCourante } from './base-courante.js';
 import { batimentDeProductionManquant } from './batiment-de-production.js';
 import { messageSansBatiment, BASE_BATIMENTS } from '../data/base.js';
+import { TICK_MS } from './clock.js';
 
 /** Un millier — l'échelle des milli-PV et des milli-unités. */
 const MILLE = 1000;
@@ -249,6 +250,9 @@ export function composerLesVagues(etat, formation = null) {
  */
 export function problemesDuRaid(etat, baseAttaquante, cible, formation = null) {
   const problemes = [];
+  if (etat.raidEnCours !== null && etat.raidEnCours !== undefined) {
+    return [{ code: 'raid-en-cours', message: 'Un raid est déjà en cours.' }];
+  }
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
   if (site === null) {
     problemes.push({ code: 'sans-cible', message: 'Il n\'y a rien à attaquer sur cette case.' });
@@ -602,9 +606,11 @@ export function pourLeRejeu(montageComplet) {
  * @param {object} etat modifié en place
  * @param {object} rapport
  */
-export function garderLeRapport(etat, rapport) {
+export function garderLeRapport(etat, rapport, tick = etat.horloge.nbTicks) {
   if (!Array.isArray(etat.rapports)) etat.rapports = [];
-  etat.rapports.push({ ...rapport, tick: etat.horloge.nbTicks });
+  const index = etat.rapports.findIndex((ancien) => ancien.tick > tick);
+  if (index < 0) etat.rapports.push({ ...rapport, tick });
+  else etat.rapports.splice(index, 0, { ...rapport, tick });
   while (etat.rapports.length > APRES_RAID.rapportsGardes) etat.rapports.shift();
 }
 
@@ -757,8 +763,42 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   // positions et les PV de chaque entité à chaque tick, c'est-à-dire le combat
   // déroulé, qui ne se rejoue pas puisqu'il est déjà fini. Le premier se
   // reconstruit en un appel, le second serait une bande vidéo.
-  garderLeRapport(etat, rapport);
+  if (options.journaliser !== false) garderLeRapport(etat, rapport);
   return rapport;
+}
+
+/** Engage un seul raid réel et conserve son échéance dans la sauvegarde. */
+export function engagerRaidReel(etat, base, cible, instantMs, options = {}) {
+  if (!Number.isInteger(instantMs) || instantMs < 0) throw new RangeError('instant de raid invalide');
+  if (etat.raidEnCours !== null && etat.raidEnCours !== undefined) {
+    throw new Error('un raid réel est déjà en cours');
+  }
+  const tickDepart = etat.horloge.nbTicks;
+  const rapport = executerRaid(etat, base, cible, { ...options, journaliser: false });
+  etat.raidEnCours = {
+    debutMs: instantMs,
+    echeanceMs: instantMs + rapport.ticks * TICK_MS,
+    tickRapport: tickDepart + rapport.ticks,
+    rapport,
+    publie: false,
+  };
+  return rapport;
+}
+
+/** Rend le rapport à l'échéance, avec publication idempotente au journal. */
+export function acheverRaidReel(etat, instantMs) {
+  const raid = etat.raidEnCours;
+  if (raid === null || raid === undefined || instantMs < raid.echeanceMs) return null;
+  if (!raid.publie) {
+    garderLeRapport(etat, raid.rapport, raid.tickRapport);
+    raid.publie = true;
+  }
+  return raid.rapport;
+}
+
+/** Libère la cible seulement après que le joueur a eu accès au rapport. */
+export function quitterRapportReel(etat) {
+  if (etat.raidEnCours?.publie === true) etat.raidEnCours = null;
 }
 
 /**

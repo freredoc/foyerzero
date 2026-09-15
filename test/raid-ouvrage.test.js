@@ -765,8 +765,7 @@ test('RAID-B — un raid ennemi peut tomber pendant un raid du joueur, et ce n\'
   // résout en un appel synchrone à l'intérieur d'un tick ; il n'y a aucune
   // fenêtre pendant laquelle un raid ennemi pourrait tomber « au milieu ».
   const source = readFileSync(join(RACINE, 'src/sim/raid.js'), 'utf8');
-  assert.equal(/raidEnCours|enVol|raidPendant/.test(source), false,
-    'un raid du joueur porterait un état qui dure : la coexistence serait à revoir');
+  assert.match(source, /raidEnCours/, 'le raid réel conserve désormais son échéance');
   const etat = baseALaRangee(7, 200, { niveau: 10 });
   const base = basesAttaquantes(etat)[0];
   assert.doesNotThrow(() => resoudreLaMinute(etat, 5, [base]));
@@ -1215,7 +1214,7 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  assert.equal(SAVE_VERSION, 34, 'l’échéance du raid réel exige la migration v34');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

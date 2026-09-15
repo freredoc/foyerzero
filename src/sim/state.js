@@ -77,7 +77,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 33;
+export const SAVE_VERSION = 34;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -350,6 +350,7 @@ export function creerEtat(graine) {
     // la première d'une seule façon. Le champ est TOUJOURS présent — il se teste
     // donc d'une seule façon lui aussi.
     formationRetenue: null,
+    raidEnCours: null,
     // ⚠ UNE CHAÎNE DÉCIMALE, PAS UN NOMBRE. Le compteur de recherche est un
     // BigInt — le barème dépasse l'entier sûr dès le niveau 39 — et
     // `JSON.stringify` lève sur un BigInt. Voir `sim/raid.js`.
@@ -556,8 +557,18 @@ function verifierEtat(etat) {
   // rendrait nécessaire : un second point d'entrée — import, éditeur, outil de
   // debug — qui fabriquerait un état sans passer par `charger`. Sans ce
   // commentaire, quelqu'un l'aurait « nettoyée » sans savoir ce qu'elle tient.
-  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis', 'prochaineInstanceSatellite', 'satellitesDetruits', 'formationRetenue']) {
+  for (const champ of ['bases', 'baseCourante', 'attaque', 'sitesEntames', 'basesRasees', 'recherche', 'poisAcquis', 'prochaineInstanceSatellite', 'satellitesDetruits', 'formationRetenue', 'raidEnCours']) {
     exigerChamp(etat, champ);
+  }
+  if (etat.raidEnCours !== null) {
+    const raid = etat.raidEnCours;
+    if (typeof raid !== 'object' || !Number.isInteger(raid.debutMs)
+      || !Number.isInteger(raid.echeanceMs) || raid.echeanceMs < raid.debutMs
+      || !Number.isInteger(raid.tickRapport) || raid.tickRapport < 0
+      || typeof raid.publie !== 'boolean' || typeof raid.rapport !== 'object'
+      || raid.rapport === null || !Number.isInteger(raid.rapport.ticks)) {
+      throw new Error('etat : « raidEnCours » invalide');
+    }
   }
   // ⚠ LA LISTE DE BASES SE VÉRIFIE AVANT SES BASES. Sans ces deux lignes,
   // `baseCourante` lèverait sur une sauvegarde amputée avec un message qui parle
@@ -3372,6 +3383,10 @@ const MIGRATIONS = {
    */
   32: (s) => {
     s.version = 33;
+  },
+  33: (s) => {
+    s.raidEnCours = null;
+    s.version = 34;
   },
 };
 

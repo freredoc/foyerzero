@@ -264,6 +264,7 @@ export function composerBatiments(nbBatiments) {
  * placement — paquets, formes, ancres, uniques, tiers, obstacles.
  */
 export const SEL_PLACEMENT_DES_RANGEES = 8;
+export const SEL_PLACEMENT_RAID_OUVRAGE = 9;
 
 /** Borne d'une clé de tirage : un entier de [0, CLE_MAX]. */
 const CLE_MAX = 1000000;
@@ -1067,11 +1068,26 @@ export function genererVague({ niveau, budgetPoints, graine }) {
 
   const { choisis, reste } = tirerSousBudget(rng, repartition, budgetPoints, CASES_DEPLOIEMENT);
 
+  // Le flux de composition ci-dessus reste intact : placement et permutations
+  // lisent une graine hachée distincte, sans tirer dans `rng`.
+  const rngPlacement = creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_RAID_OUVRAGE));
   choisis.sort((a, b) => rangSpecialite(a) - rangSpecialite(b));
+  const ordonnes = [];
+  for (let rang = 0; rang <= RAID_OUVRAGE.ordreVagues.length; rang += 1) {
+    ordonnes.push(...melanger(rngPlacement, choisis.filter((id) => rangSpecialite(id) === rang)));
+  }
+  const formes = [
+    [5, 4, 6, 3, 7, 2, 8, 1, 9], // centre
+    [1, 2, 3, 4, 5, 6, 7, 8, 9], // flanc gauche
+    [9, 8, 7, 6, 5, 4, 3, 2, 1], // flanc droit
+    [1, 9, 2, 8, 3, 7, 4, 6, 5], // deux ailes
+  ];
+  const front = formes[entier(rngPlacement, 0, formes.length - 1)];
+  const arriere = formes[entier(rngPlacement, 0, formes.length - 1)];
   const rangeeFront = GRILLE.bandes.deploiement.derniere;
-  const unites = choisis.map((id, i) => ({
+  const unites = ordonnes.map((id, i) => ({
     id,
-    colonne: (i % GRILLE.largeur) + 1,
+    colonne: (i < GRILLE.largeur ? front : arriere)[i % GRILLE.largeur],
     rangee: rangeeFront - Math.floor(i / GRILLE.largeur),
     niveau,
   }));

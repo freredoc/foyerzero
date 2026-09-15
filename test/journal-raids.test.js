@@ -459,6 +459,20 @@ test('JRN T8 — UNE vue, UN lecteur, UN écran : le journal a quitté les panne
 // T9 — rien n'est recalculé
 // ---------------------------------------------------------------------------
 
+test('JRN T8 bis — Rejouer reste dans la tête sticky et naît masqué', () => {
+  const html = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const debut = html.indexOf('<div id="ecran-journal"');
+  const tete = html.indexOf('<div class="tete">', debut);
+  const finTete = html.indexOf('</div>', tete);
+  const bouton = html.indexOf('id="journal-rejouer"', debut);
+  assert.ok(tete >= debut && bouton > tete && bouton < finTete,
+    '#journal-rejouer n’est pas dans la tête sticky');
+  assert.match(html.slice(bouton - 80, bouton + 120), /journal-rejouer[^>]*hidden/,
+    'Rejouer ne naît plus masqué');
+  assert.match(html, /\.panneau-detail \.tete\s*\{[^}]*position:\s*sticky/,
+    'la tête du journal n’est plus sticky');
+});
+
 test('JRN T9 — rien n\'est recalculé : l\'état bouge, les nombres du journal non', () => {
   // ⚠⚠ UN MONTAGE À ÉTAT CONSTANT NE DISTINGUERAIT PAS UN CHAMP LU D'UN CHAMP
   // RECALCULÉ. On range un rapport, on change TOUT ce qui pourrait servir à le
@@ -514,7 +528,7 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33);
+  assert.equal(SAVE_VERSION, 34);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

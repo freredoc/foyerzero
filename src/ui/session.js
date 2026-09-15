@@ -900,6 +900,10 @@ export function initialiserSession(doc) {
     if (ecranOffense !== null) ecranOffense.peindre(etat);
     if (panneauTransfert !== null) panneauTransfert.peindre(etat);
     ecran.ouvrirSurLaBase();
+    if (etat.raidEnCours !== null) {
+      montrerEcran('raid');
+      ecranRaid.reprendre(etat, atlasDeLaScene(doc));
+    }
     sauvegarder();
     demarrerBoucle();
   }
@@ -1044,6 +1048,8 @@ export function initialiserSession(doc) {
    */
   function montrerEcran(nom, { depuisUnToucher = false } = {}) {
     if (depuisUnToucher) avaleur.armer();
+    const precedent = ecranCourant;
+    if (precedent === 'offense' && nom !== 'offense') ecranOffense?.masquer();
     ecranCourant = nom;
     for (const autre of ECRANS) $(`ecran-${autre}`).hidden = autre !== nom;
     // ⚠ LE CHROME COMMUN S'ÉCRIT ICI, ET NULLE PART AILLEURS — mais il dépend
@@ -1553,6 +1559,7 @@ export function initialiserSession(doc) {
   // parce qu'un raid perdu parce que le système a tué l'application est
   // exactement ce que `apresPose` évite déjà pour la pose.
   ecranRaid = initialiserEcranRaid(doc, {
+    lireInstantMs: maintenantMs,
     versEcran: (nom) => montrerEcran(nom),
     // ⚠⚠ ON REVIENT SUR LA CIBLE, PAS CHEZ SOI — Ethan, 11/09 : « quand on fait
     // un retour monde après un raid il faudrait qu'on soit sur la cible qu'on
