@@ -88,9 +88,11 @@ strictement visuelle et ne touche ni l'armée sérialisée, ni l'ordre des vague
 ni l'équilibrage.
 
 Mesure Chromium in-game à 360 × 640 : le bassin fait 324 px de haut et son
-`scrollHeight` vaut également 324 px. Chacune des quatre vagues mesure 49,28 px,
-la dernière se termine à 427,50 px avant le bord bas du bassin à 433,50 px. Les
-quatre titres, les 36 sprites et les 36 niveaux sont donc visibles ensemble.
+`scrollHeight` vaut également 324 px. Le retrait supérieur de 52 px fait
+commencer la première vague à 162 px, sous la traverse du hangar. Chacune des
+quatre vagues mesure 49,28 px et la dernière se termine à 427,50 px avant le
+bord bas du bassin à 433,50 px. Les quatre titres, les 36 sprites et les 36
+niveaux sont donc visibles ensemble.
 
 ## Tests et livrable
 
@@ -122,7 +124,7 @@ des colonnes de pointage, les bornes horizontales 58,2–301,8 px et la borne de
 de test n'est ajouté ou supprimé par cette validation.
 
 Sous Node 22, la suite complète rend **1 627 déclarés · 1 626 pass · 0 fail ·
-1 skipped** (`LIMITE T8`). Le build produit `dist/index.html`, **9 391 340
-octets**, version **0.99.67** · build **169**, soit **4 626 octets** de plus que
-`main` à `1aca789` et une marge de **208 660 octets, 2,17 %** sous la borne T10.
+1 skipped** (`LIMITE T8`). Le build produit `dist/index.html`, **9 391 349
+octets**, version **0.99.68** · build **170**, soit **4 635 octets** de plus que
+`main` à `1aca789` et une marge de **208 651 octets, 2,17 %** sous la borne T10.
 Le lot n'ajoute ni image ni son de production.

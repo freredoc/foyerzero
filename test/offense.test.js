@@ -378,6 +378,8 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   // ⚠ ET UN ÉCART MINIMUM SUBSISTE : sur un écran court, `space-between` n'a
   // plus de mou à distribuer, et deux vagues collées se liraient comme une.
   assert.match(bassin, /gap:\s*\d+px/, 'les vagues peuvent se coller sur un écran court');
+  assert.match(bassin, /padding:\s*52px 6px 6px/,
+    'la première vague remonte sur la traverse supérieure du hangar');
 
   // ⚠⚠ ET C'EST LA MOITIÉ QUI COMPTE : LES CASES RESTENT CARRÉES. L'autre façon
   // d'occuper la place — laisser les emplacements GRANDIR en hauteur — a été
