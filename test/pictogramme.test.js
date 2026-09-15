@@ -446,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 387 607 octets, la marge sur la borne T10 est de 2,21 %', () => {
+test('PIC T7 — le livrable pèse 9 388 040 octets, la marge sur la borne T10 est de 2,21 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -821,9 +821,9 @@ test('PIC T7 — le livrable pèse 9 387 607 octets, la marge sur la borne T10 e
   // Le patch du lot ne touchait pas ce fichier — le réancrage est venu de la
   // MESURE, pas du patch.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_387_607;          // remesuré après le revert de la PR 147 et le chrono par ticks
-  const MARGE = BORNE - MESURE;      // 212 393 octets
-  assert.equal(MARGE, 212_393);
+  const MESURE = 9_388_040;          // remesuré avec la compatibilité de sauvegarde v34
+  const MARGE = BORNE - MESURE;      // 211 960 octets
+  assert.equal(MARGE, 211_960);
   assert.notEqual(MARGE, 213_286,
     'la marge est revenue à l\'ancre d\'avant le chrono intégré');
   assert.notEqual(MARGE, 215_225,
