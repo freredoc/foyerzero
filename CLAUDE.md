@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **14/09/2026**, version 0.99.62 · build 164.
+Dernière révision : **15/09/2026**, version 0.99.69 · build 171.
 
 ---
 
@@ -41,6 +41,26 @@ Dernière révision : **14/09/2026**, version 0.99.62 · build 164.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 15/09/2026 (après le revert de la PR #147 et le correctif du
+raid), à confronter :**
+⚠⚠ **LA PR #147 EST ANNULÉE EN ENTIER.** Le déroulé du combat retrouve celui de
+`1aca789` : même appel à `ticksDus`, même accumulateur, mêmes instantanés et
+même interpolation. Le chrono ne fixe aucun tick et ne touche aucune position ;
+il affiche simplement `(rapport.ticks - combat.tick) × TICK_MS`, arrondi à la
+seconde supérieure. Il vit dans la barre de titre et ne réécrit le DOM que
+lorsque son texte change.
+⚠ **EN PRÉPARATION DE RAID, RÉPARER ET ACTIVER RESTENT ARMÉS** après une
+réussite, un refus ou un toucher vide. Le second clic sur le bouton actif le
+désarme ; choisir l'autre mode remplace le premier. « Tout réparer » suit le
+même état.
+`npm test` rend **1617 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
+mesuré est **1616 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
+produit **9 387 607 octets**, version **0.99.69 · build 171**, soit 212 393
+octets de marge (2,21 %) sous la borne T10. Le contrôle visuel dans Chromium à
+360 × 640 place le chrono dans le titre, entre x = 327,375 et x = 352, dans un
+parent large de 360 px ; il n'a ni position absolue ni fond propre.
 
 **Référence au 14/09/2026 (après le correctif RECHERCHE-AU-RASAGE), à
 confronter :**

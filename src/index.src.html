@@ -268,7 +268,15 @@
   #raid-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   #raid-titre {
     position: absolute; top: 0; left: 0; right: 0; z-index: 2; margin: 0;
+    display: flex; align-items: center; gap: 8px;
     padding: 3px 8px; font-size: 10px; color: #8C9A72; background: #1E2124;
+  }
+  #raid-titre-texte {
+    flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  #raid-timer {
+    flex: 0 0 auto; color: #F5F3E8; font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   /* ⚠ LE BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ.
      Il est là pour qu'on ne confonde jamais une simulation avec la vraie
@@ -3497,7 +3505,10 @@
         <!-- Le bandeau qui couvre la vue pendant tout un déroulé SIMULÉ, pour
              qu'on ne le confonde jamais avec la vraie attaque. -->
         <div id="raid-bandeau" hidden>SIMULATEUR</div>
-        <p id="raid-titre"></p>
+        <p id="raid-titre">
+          <span id="raid-titre-texte"></span>
+          <span id="raid-timer" hidden>00:00</span>
+        </p>
         <canvas id="raid-canvas"></canvas>
         <div id="raid-vitesses" hidden>
           <button type="button" id="raid-pas">Pas à pas</button>

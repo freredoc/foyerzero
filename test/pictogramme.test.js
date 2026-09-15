@@ -446,7 +446,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 386 714 octets, la marge sur la borne T10 est de 2,22 %', () => {
+test('PIC T7 — le livrable pèse 9 387 607 octets, la marge sur la borne T10 est de 2,21 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -821,9 +821,11 @@ test('PIC T7 — le livrable pèse 9 386 714 octets, la marge sur la borne T10 e
   // Le patch du lot ne touchait pas ce fichier — le réancrage est venu de la
   // MESURE, pas du patch.
   const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_386_714;          // remesuré au correctif de rasage, depuis 9 386 656
-  const MARGE = BORNE - MESURE;      // 213 286 octets
-  assert.equal(MARGE, 213_286);
+  const MESURE = 9_387_607;          // remesuré après le revert de la PR 147 et le chrono par ticks
+  const MARGE = BORNE - MESURE;      // 212 393 octets
+  assert.equal(MARGE, 212_393);
+  assert.notEqual(MARGE, 213_286,
+    'la marge est revenue à l\'ancre d\'avant le chrono intégré');
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
   assert.notEqual(MARGE, 214_592,
@@ -834,7 +836,7 @@ test('PIC T7 — le livrable pèse 9 386 714 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.22);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.21);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
