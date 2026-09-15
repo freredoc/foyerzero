@@ -730,10 +730,10 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   // le balisage à chaque image ferait perdre l'aperçu et le défilement.
   corps.textContent = '';
   // La vague reste une liste logique de neuf colonnes pour le moteur. À
-  // l'écran, la capture validée le 15/09 la plie après son premier tiers :
-  // trois pièces en haut, puis six en bas à partir de la quatrième colonne.
+  // l'écran, la capture validée le 15/09 la plie par tiers : trois pièces en
+  // haut, trois au centre, puis trois en bas.
   // Le calcul suit NB_COLONNES afin que le DOM ne porte pas une seconde largeur.
-  const derniereColonneHaute = Math.ceil(NB_COLONNES / 3);
+  const emplacementsParEtage = Math.ceil(NB_COLONNES / 3);
   for (const vague of vaguesDAssaut()) {
     const bloc = doc.createElement('section');
     bloc.className = 'vague';
@@ -758,7 +758,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       // La colonne visuelle reste la colonne de combat. Seule la ligne plie,
       // donc le pointage et le glisser-déposer gardent leur géométrie réelle.
       emplacement.style.gridColumn = String(colonne);
-      emplacement.style.gridRow = colonne <= derniereColonneHaute ? '1' : '2';
+      emplacement.style.gridRow = String(Math.ceil(colonne / emplacementsParEtage));
       cellules.set(cle(vague.numero, colonne), emplacement);
       rangee.appendChild(emplacement);
     }

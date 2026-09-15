@@ -69,15 +69,17 @@ Les scripts reproductibles sont `rapports/mesurer-formations.mjs` et
 ## Quinconce validé à 360 px
 
 La capture de référence `rapports/maquette-quinconce-360.png` a validé une vague
-pliée sur deux lignes : les colonnes 1 à 3 restent en haut à gauche, puis les
-colonnes 4 à 9 occupent la ligne basse à partir de la quatrième colonne. La
+pliée sur trois étages : les colonnes 1 à 3 restent en haut à gauche, les
+colonnes 4 à 6 occupent le centre et les colonnes 7 à 9 le bas à droite. La
 capture reproductible `rapports/maquette-quinconce-360-appliquee.png`, produite
 par `rapports/rendre-maquette-quinconce.py`, confronte cette disposition aux
 sprites les plus volumineux.
 
 `src/ui/offense.js` conserve les neuf numéros de colonne du combat et ne change
 que `grid-row`. À 360 px, les 348 px utiles moins huit écarts de 3 px donnent
-neuf cases carrées de 36 px. La pièce offensive est bornée à 96 %
+neuf cases carrées de 36 px. Les trois pistes se resserrent d'un quart de case ;
+leurs cases ne se recouvrent pas puisqu'elles occupent des colonnes disjointes.
+La pièce offensive est bornée à 96 %
 (`80 % × 1,2`) ; aucun sprite ni niveau n'est rogné. Cette modification est
 strictement visuelle et ne touche ni l'armée sérialisée, ni l'ordre des vagues,
 ni l'équilibrage.
@@ -106,12 +108,12 @@ Test ajouté : `test/formation-ouvrage.test.js`. Aucun test n'est supprimé.
 `RÉPARER T6` exige la persistance du mode.
 
 Le test de quinconce d'`offense.test.js` est remplacé par une garde DOM/CSS qui
-vérifie les quatre vagues, leurs 36 cases, le placement 3 + 6, la correspondance
+vérifie les quatre vagues, leurs 36 cases, le placement 3 + 3 + 3, la correspondance
 des colonnes de pointage, la largeur de 36 px et la borne de 96 %. Aucun fichier
 de test n'est ajouté ou supprimé par cette validation.
 
 Sous Node 22, la suite complète rend **1 627 déclarés · 1 626 pass · 0 fail ·
-1 skipped** (`LIMITE T8`). Le build produit `dist/index.html`, **9 391 154
-octets**, version **0.99.64** · build **166**, soit **4 440 octets** de plus que
-`main` à `1aca789` et une marge de **208 846 octets, 2,18 %** sous la borne T10.
+1 skipped** (`LIMITE T8`). Le build produit `dist/index.html`, **9 391 230
+octets**, version **0.99.65** · build **167**, soit **4 516 octets** de plus que
+`main` à `1aca789` et une marge de **208 770 octets, 2,17 %** sous la borne T10.
 Le lot n'ajoute ni image ni son de production.

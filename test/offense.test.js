@@ -406,12 +406,14 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   assert.match(piece, /--jeton-part:\s*\d+%/,
     'la pièce ne se mesure plus en pourcentage de sa case');
 
-  // La grille occupe maintenant deux lignes physiques par vague. Les cases
-  // restent carrées et la vague ne gagne donc que la hauteur nécessaire aux
-  // deux rangées de sprites.
+  // La grille occupe maintenant trois étages physiques par vague. Les cases
+  // restent carrées et les pistes se chevauchent seulement entre des groupes
+  // placés dans des colonnes disjointes.
   const emplacements = feuille.match(/#ecran-offense \.emplacements\s*\{([^}]*)\}/)[1];
-  assert.match(emplacements, /grid-template-rows:\s*repeat\(2,\s*auto\)/,
-    'une vague n\'a plus ses deux lignes physiques');
+  assert.match(emplacements, /grid-template-rows:\s*repeat\(3,\s*auto\)/,
+    'une vague n\'a plus ses trois étages physiques');
+  assert.match(emplacement, /margin-bottom:\s*-25%/,
+    'les trois étages ne se resserrent plus pour tenir dans la hauteur');
 
   // ⚠ ET UNE VAGUE NE SE LAISSE PAS ÉCRASER : sans ça, quatre vagues dans un
   // bassin trop court rétréciraient au lieu de faire défiler, et le carré
@@ -922,7 +924,7 @@ test('offense — l\'écran porte le bassin, et il est INLINÉ', () => {
     'un bassin qui se répète ferait une couture au milieu de l\'écran');
 });
 
-test('offense — chaque vague plie ses neuf colonnes en trois puis six à 360 px', () => {
+test('offense — chaque vague plie ses neuf colonnes en trois, trois et trois à 360 px', () => {
   const { doc, parId } = fauxDocumentOffense();
   initialiserEcranOffense(doc);
 
@@ -937,8 +939,8 @@ test('offense — chaque vague plie ses neuf colonnes en trois puis six à 360 p
       Array.from({ length: NB_COLONNES }, (_, i) => String(i + 1)),
       'une colonne visuelle ne correspond plus à sa colonne de combat');
     assert.deepEqual(rangee.children.map((e) => e.style.gridRow),
-      ['1', '1', '1', '2', '2', '2', '2', '2', '2'],
-      'la vague ne suit plus le placement trois en haut, six en bas');
+      ['1', '1', '1', '2', '2', '2', '3', '3', '3'],
+      'la vague ne suit plus le placement trois en haut, trois au centre, trois en bas');
   }
 
   const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');

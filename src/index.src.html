@@ -2130,13 +2130,19 @@
     margin: 0 0 3px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #68727E;
   }
   /* Les neuf emplacements d'une vague se plient comme sur la capture validée
-     à 360 px : les colonnes 1 à 3 occupent la ligne haute, les colonnes 4 à 9
-     la ligne basse. Elles restent sur une grille de neuf colonnes : aucune
-     translation ne sépare le dessin de la zone touchée, et la seconde ligne
-     commence exactement sous la quatrième colonne. `ui/offense.js` fournit le
-     nombre de colonnes depuis NB_COLONNES ainsi que la ligne de chaque case. */
+     à 360 px : trois en haut à gauche, trois au centre, trois en bas à droite.
+     Ils restent sur une grille de neuf colonnes : aucune translation ne sépare
+     le dessin de la zone touchée. `ui/offense.js` fournit le nombre de colonnes
+     depuis NB_COLONNES ainsi que l'étage de chaque case.
+
+     Les marges basses négatives font se chevaucher les PISTES, jamais les
+     cases : les trois groupes occupent des colonnes disjointes. Elles réduisent
+     le pas vertical d'un quart de case, et le padding rend au dernier groupe ce
+     quart afin que la vague suivante ne le recouvre pas. Le pourcentage suit
+     la largeur réelle des cases sur les écrans plus larges. */
   #ecran-offense .emplacements {
-    display: grid; grid-template-rows: repeat(2, auto); gap: 3px;
+    display: grid; grid-template-rows: repeat(3, auto);
+    column-gap: 3px; row-gap: 0; padding-bottom: 2.6%;
   }
   #ecran-offense .emplacement {
     /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — voir `.emplacement .niveau`.
@@ -2147,7 +2153,7 @@
     /* ⚠ SANS APLAT, COMME LA CASE DU RAID : même grille de composition, mêmes
        pièces — en traiter une seule aurait donné deux fonds d'un écran à
        l'autre. Voir le ⚠⚠ de `#ecran-raid .emplacement`. */
-    aspect-ratio: 1; background: transparent;
+    aspect-ratio: 1; margin-bottom: -25%; background: transparent;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; font-size: 7px; line-height: 1.1; text-align: center;
     color: #68727E; word-break: break-word;
