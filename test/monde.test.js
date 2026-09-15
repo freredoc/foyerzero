@@ -4809,9 +4809,9 @@ test('RP T1 — la carte se rouvre sur la cible du raid, une fois et une seule',
   // bouton d'abandon et celui du rapport portent le même mot, « Carte ».
   const raid = sansCommentaires(lire('src', 'ui', 'raid.js'));
   for (const bouton of ['raid-retour-carte', 'raid-fin-carte']) {
-    const branche = raid.match(new RegExp(`brancher\\('${bouton}'[\\s\\S]*?\\n  \\}\\);`));
-    assert.ok(branche !== null, `${bouton} n'est plus branché`);
-    assert.match(branche[0], /surRetourALaCarte\(cibleCourante\)/,
+    const ligne = raid.split('\n').find((l) => l.includes(`'${bouton}'`));
+    assert.ok(ligne !== undefined, `${bouton} n'est plus branché`);
+    assert.match(ligne, /surRetourALaCarte\(cibleCourante\)/,
       `${bouton} revient à la carte sans dire d'où il vient`);
   }
   // ⚠⚠ ET LA SESSION VISE AVANT DE BASCULER. C'est `peindre`, appelé par la

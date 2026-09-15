@@ -46,7 +46,7 @@ import {
 import {
   ECRAN_RAID, TYPES_SITE, EMBLEMES_CARTE, RESTE_APRES_DESTRUCTION, BATIMENTS,
 } from '../src/data/sites.js';
-import { creerEtat, rattraperJeu, serialiser, charger } from '../src/sim/state.js';
+import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
@@ -426,12 +426,27 @@ test('ASSAUT T7 — le chrome revient par TOUS les chemins de fin', () => {
   assert.match(corps[0], /bas\.hidden = false/, 'la barre du bas ne revient pas');
 });
 
-test('ASSAUT T8 — le simulateur montre le résultat avant tout rejeu', () => {
+test('ASSAUT T8 — le simulateur suit la même règle que le vrai raid', () => {
   const src = decommentee('src/ui/raid.js');
+
+  // ⚠⚠ C'EST LE MÊME DÉROULÉ À L'ÉCRAN, DONC LE MÊME MASQUAGE. Laisser les
+  // barres dans un cas et pas dans l'autre apprendrait deux grammaires pour le
+  // même dessin. **C'est une LECTURE** : Ethan a parlé du raid.
   const lancer = src.match(/function lancer\(simule\) \{[\s\S]*?\n {2}\}/);
   assert.ok(lancer, 'lancer a disparu');
-  assert.match(lancer[0], /if \(simule\) \{\s*montrerResultat\(rapportCourant, true\);\s*return;/);
-  assert.match(src, /brancher\('raid-sim-visualiser'/);
+  assert.match(lancer[0], /entrerDansLeDeroule\(\);/, 'lancer n\'entre plus dans le déroulé');
+
+  // L'appel n'est pas sous une condition de simulation.
+  const ligne = lancer[0].split('\n').find((l) => l.includes('entrerDansLeDeroule()'));
+  assert.ok(!/simule/.test(ligne), 'l\'entrée dans le déroulé dépend de la simulation');
+  const avant = lancer[0].slice(0, lancer[0].indexOf('entrerDansLeDeroule()'));
+  assert.ok(!/if \([^)]*simule[^)]*\) \{[^}]*$/.test(avant),
+    'l\'entrée dans le déroulé est enfermée dans une branche de simulation');
+
+  // ⚠ ET LES VITESSES RESTENT LE SEUL RESCAPÉ — c'est le contrôle du déroulé
+  // lui-même. Elles ne paraissent qu'en simulation : « le vrai raid se regarde
+  // en temps réel, sans contrôle de vitesse », arbitrage d'Ethan du 01/09.
+  assert.match(lancer[0], /\$\('raid-vitesses'\)\.hidden = !simule;/);
   const corps = src.match(/function quitterLeDeroule\(\) \{[\s\S]*?\n {2}\}/);
   assert.match(corps[0], /vitesses\.hidden = true/, 'les vitesses survivent à la fin du déroulé');
 });
@@ -472,7 +487,7 @@ test('ASSAUT T9 — le bouton naît inerte, et il le dit', () => {
   const ouvrir = src.match(/function ouvrirSurLaCible\([\s\S]*?\n {2}\}/);
   assert.ok(ouvrir, 'ouvrirSurLaCible a disparu');
   assert.match(ouvrir[0], /armerLAttaque\(/, 'le bouton n\'est pas ré-armé à l\'entrée');
-  const methode = src.match(/ouvrir\(etat, cible, atlasFournis = null\) \{[\s\S]*?\n {4}\}/);
+  const methode = src.match(/ouvrir\(etat, cible, atlasFournis = null\) \{[^\n]*\}/);
   assert.ok(methode, 'la méthode `ouvrir` a disparu');
   assert.match(methode[0], /ouvrirSurLaCible\(etat, cible, atlasFournis\)/,
     'la méthode `ouvrir` ne passe plus par le chemin d\'entrée commun');
@@ -875,7 +890,6 @@ function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) 
     'raid-attaquer', 'raid-simuler', 'raid-reattaquer', 'raid-tout-reparer',
     'raid-reparer', 'raid-activer', 'raid-pas', 'raid-instantane',
     'raid-sim', 'raid-sim-corps', 'raid-sim-fermer',
-    'raid-sim-visualiser', 'raid-sim-rejeu-fermer', 'raid-timer',
     'raid-fin', 'raid-fin-corps', 'raid-fin-carte', 'raid-fin-base',
     'raid-retour-carte', 'raid-retour-offense',
     // ⚠ LES QUATRE FLÈCHES — point 9, 10/09. Le faux document LÈVE sur tout
@@ -1077,7 +1091,6 @@ function ecranPret(options = {}) {
   const journal = { deroule: [] };
   const ecran = initialiserEcranRaid(doc, {
     pendantLeDeroule: (v) => journal.deroule.push(v),
-    lireInstantMs: () => rafs.horodatage,
   });
   ecran.ouvrir(etat, cible, fauxAtlas());
   return {
@@ -1086,96 +1099,61 @@ function ecranPret(options = {}) {
   };
 }
 
-function ecranRepris(etat, instantMs) {
-  const { doc, parId, rafs } = fauxDocumentRaid();
-  rafs.horodatage = instantMs;
-  const ecran = initialiserEcranRaid(doc, { lireInstantMs: () => rafs.horodatage });
-  assert.equal(ecran.reprendre(etat, fauxAtlas()), true, 'le raid sauvegardé n’est pas repris');
-  return { doc, etat, ecran, rafs, $: (id) => parId.get(id) };
-}
-
-test('RDR T1 — arrière-plan et retours répétés respectent l’échéance du raid réel', () => {
-  const { doc, etat, rafs, $ } = ecranPret();
+test('RDR T1 — un VRAI raid masqué se conclut, et le joueur atterrit sur son rapport', () => {
+  // ⚠⚠ ETHAN, 06/09 : « je lance le raid, je quitte le jeu juste après, je
+  // reviens après 5 min : le raid a figé et reprend, je dois attendre la fin. »
+  const { doc, etat, $ } = ecranPret();
   const rapportsAvant = etat.rapports.length;
 
   $('raid-attaquer').envoyer('click');
-  assert.ok(etat.raidEnCours !== null, 'le raid n’a pas conservé son échéance');
-  assert.equal(etat.rapports.length, rapportsAvant, 'le rapport a été publié avant l’échéance');
+
+  // ⚠ LE MONTAGE PROUVE D'ABORD QU'IL MESURE QUELQUE CHOSE : un déroulé de VRAI
+  // raid est en cours, et aucun rapport n'est affiché. Sans ces trois lignes, un
+  // combat déjà terminé passerait le test sans que l'écouteur existe.
+  assert.equal(etat.rapports.length, rapportsAvant + 1, 'le montage n\'a pas lancé de raid');
   assert.equal($('raid-bas').hidden, true, 'le montage n\'est pas dans un déroulé');
   assert.equal($('raid-fin').hidden, true, 'le panneau de fin est déjà ouvert');
-  assert.equal($('raid-timer').hidden, false, 'le timer n’est pas visible');
-  assert.match($('raid-timer').textContent, /^\d{2}:\d{2}$/, 'le timer n’est pas au format MM:SS');
-  assert.notEqual($('raid-timer').textContent, '00:00', 'le timer naît déjà échu');
+  assert.equal($('raid-bandeau').hidden, true, 'le montage a lancé une SIMULATION');
 
-  for (let i = 0; i < 3; i += 1) {
-    doc.hidden = true; doc.envoyer('visibilitychange');
-    doc.hidden = false; doc.envoyer('visibilitychange');
-  }
-  assert.equal($('raid-fin').hidden, true, 'un retour rapide a révélé le rapport');
-  assert.equal(etat.rapports.length, rapportsAvant, 'visibilitychange a doublé le rapport');
+  // ⚠⚠ ET C'EST ICI QUE LE DÉFAUT VIVAIT : `requestAnimationFrame` ne rappelle
+  // jamais dans ce montage, exactement comme il cesse de battre quand la WebView
+  // passe à l'arrière-plan. Le déroulé est figé où il en était.
+  doc.hidden = true;
+  doc.envoyer('visibilitychange');
 
-  rafs.horodatage = etat.raidEnCours.echeanceMs;
-  doc.hidden = false;
-  doc.envoyer('visibilitychange');
-  assert.equal($('raid-fin').hidden, false, 'le rapport n’apparaît pas après échéance');
-  assert.equal(etat.rapports.length, rapportsAvant + 1, 'le rapport n’est pas publié une fois');
-  doc.envoyer('visibilitychange');
-  assert.equal(etat.rapports.length, rapportsAvant + 1, 'le rapport est publié deux fois');
+  // ⚠⚠ LE COMBAT EST CONCLU, ET LE RAPPORT EST À L'ÉCRAN. `combat` ne sort pas du
+  // module — lui ouvrir un accesseur pour les besoins d'un test mettrait dans
+  // `src/` une porte que la production n'emploie pas —, donc on lit l'état du
+  // DÉROULÉ, qui est la conséquence exacte de sa fin : `finDuDeroule` appelle
+  // `quitterLeDeroule`, qui rend `#raid-bas`, puis `montrerResultat`.
+  assert.equal($('raid-fin').hidden, false, 'le joueur n\'atterrit pas sur son rapport');
+  assert.equal($('raid-bas').hidden, false, 'le déroulé n\'est pas fini');
+  assert.ok($('raid-fin-corps').children.length > 0, 'le rapport est vide');
+
+  // ⚠ ET AUCUN SECOND RAID N'A EU LIEU : on conclut l'animation, on ne rejoue rien.
+  assert.equal(etat.rapports.length, rapportsAvant + 1, 'le masquage a engagé un second raid');
 });
 
-test('RDR T1 bis — un rechargement restaure l’attente ou affiche le rapport échu', () => {
-  const lancement = ecranPret();
-  lancement.$('raid-attaquer').envoyer('click');
-  const json = serialiser(lancement.etat, 0);
-  const echeance = lancement.etat.raidEnCours.echeanceMs;
-
-  const avant = charger(json, echeance - 1);
-  const rapportsAvant = avant.rapports.length;
-  const attente = ecranRepris(avant, echeance - 1);
-  assert.equal(attente.$('raid-fin').hidden, true, 'le rapport paraît avant l’échéance');
-  assert.equal(attente.$('raid-timer').hidden, false, 'le temps restant n’est pas restauré');
-  assert.equal(avant.rapports.length, rapportsAvant, 'la reprise avant échéance publie le rapport');
-
-  const apres = charger(json, echeance + 1);
-  const rapportsApresAvantReprise = apres.rapports.length;
-  const termine = ecranRepris(apres, echeance + 1);
-  assert.equal(termine.$('raid-fin').hidden, false, 'le rapport échu hors ligne n’est pas affiché');
-  assert.equal(apres.raidEnCours.publie, true, 'le rapport affiché n’est pas marqué publié');
-  assert.equal(apres.rapports.length, rapportsApresAvantReprise + 1,
-    'le rapport échu n’est pas publié exactement une fois');
-});
-
-test('RDR T2 — une SIMULATION affiche immédiatement son résultat sans déroulé', () => {
+test('RDR T2 — une SIMULATION masquée ne se conclut PAS', () => {
+  // ⚠⚠ C'EST LE TEST QUI ATTRAPE UN ÉCOUTEUR ÉCRIT SANS SA GARDE. Une simulation
+  // ne commande rien à personne — le bandeau « SIMULATEUR » existe pour qu'on ne
+  // la confonde pas avec un ordre —, donc le joueur qui revient la reprend où il
+  // l'a laissée.
   const { doc, etat, $ } = ecranPret();
-  const avant = JSON.stringify(etat);
+  const rapportsAvant = etat.rapports.length;
 
   $('raid-simuler').envoyer('click');
-  assert.equal(JSON.stringify(etat), avant, 'la simulation a modifié l’état sérialisé');
-  assert.equal($('raid-sim').hidden, false, 'le résultat n’est pas immédiat');
-  assert.equal($('raid-bandeau').hidden, true, 'un rejeu a démarré automatiquement');
-  assert.equal($('raid-bas').hidden, false, 'la cible et sa formation ont disparu');
+  assert.equal(etat.rapports.length, rapportsAvant,
+    'le montage a lancé un VRAI raid : il ne mesure pas ce qu\'il annonce');
+  assert.equal($('raid-bandeau').hidden, false, 'le bandeau SIMULATEUR n\'est pas levé');
+  assert.equal($('raid-bas').hidden, true, 'le montage n\'est pas dans un déroulé');
 
   doc.hidden = true;
   doc.envoyer('visibilitychange');
-  assert.equal($('raid-sim').hidden, false, 'le résultat a disparu au masquage');
-  assert.equal($('raid-fin').hidden, true, 'le panneau du VRAI raid s\'est ouvert');
-});
 
-test('RDR T2 bis — fermer ou terminer le rejeu revient à la cible et aux résultats', () => {
-  for (const sortie of ['raid-sim-rejeu-fermer', 'raid-instantane']) {
-    const ecran = ecranPret();
-    const avant = JSON.stringify(ecran.etat);
-    ecran.$('raid-simuler').envoyer('click');
-    ecran.$('raid-sim-visualiser').envoyer('click');
-    assert.equal(ecran.$('raid-sim').hidden, true, 'le résultat couvre encore le rejeu');
-    assert.equal(ecran.$('raid-bas').hidden, true, 'le rejeu n’a pas démarré');
-    assert.equal(ecran.$('raid-bandeau').hidden, false, 'le bandeau du rejeu manque');
-    ecran.$(sortie).envoyer('click');
-    assert.equal(ecran.$('raid-sim').hidden, false, `${sortie} ne rend pas les résultats`);
-    assert.equal(ecran.$('raid-bas').hidden, false, `${sortie} ne rend pas la cible`);
-    assert.equal(ecran.$('raid-bandeau').hidden, true, `${sortie} garde le bandeau`);
-    assert.equal(JSON.stringify(ecran.etat), avant, `${sortie} a modifié l’état`);
-  }
+  assert.equal($('raid-bas').hidden, true, 'la simulation a été conclue par le masquage');
+  assert.equal($('raid-sim').hidden, true, 'un rapport de simulation s\'est ouvert tout seul');
+  assert.equal($('raid-fin').hidden, true, 'le panneau du VRAI raid s\'est ouvert');
 });
 
 test('RDR T3 — masquer sans déroulé ne fait rien, préparation comprise', () => {
@@ -1229,18 +1207,15 @@ test('RDR T4 — `#raid-vitesses` reste caché sur un vrai raid : pas de bouton 
   // Et ils reviennent bien pour le simulateur : la garde n'est pas un mur.
   const b = ecranPret();
   b.$('raid-simuler').envoyer('click');
-  assert.equal(b.$('raid-vitesses').hidden, true, 'les vitesses paraissent avant le rejeu');
-  b.$('raid-sim-visualiser').envoyer('click');
-  assert.equal(b.$('raid-vitesses').hidden, false, 'le rejeu a perdu ses vitesses');
+  assert.equal(b.$('raid-vitesses').hidden, false, 'le simulateur a perdu ses vitesses');
 });
 
 test('RDR T5 — « Réattaquer » n\'engage pas : il remet sur la cible', () => {
   // ⚠⚠ ETHAN, 06/09 : « bouton réattaquer remet sur la cible, pas d'attaque
   // instantané. » Il appelait `lancer(false)`.
-  const { doc, etat, rafs, $ } = ecranPret();
+  const { doc, etat, $ } = ecranPret();
   $('raid-attaquer').envoyer('click');
-  rafs.horodatage = etat.raidEnCours.echeanceMs;
-  doc.hidden = false;
+  doc.hidden = true;
   doc.envoyer('visibilitychange');
   assert.equal($('raid-fin').hidden, false, 'le montage n\'a pas de rapport à fermer');
 
@@ -1282,7 +1257,7 @@ test('RDR T6 — « Réattaquer » relit l\'état d\'APRÈS le raid, il ne rejou
   // à 52 % de leurs PV, et `render/scene.js` peint une barre de vie dont la
   // LARGEUR est proportionnelle aux PV. Le nombre de primitives ne bouge pas ;
   // leurs arguments, si.
-  const { doc, appels, etat, cible, ecran, rafs, $ } = ecranPret();
+  const { doc, appels, etat, cible, ecran, $ } = ecranPret();
 
   const trace = () => appels.map((a) => `${a.nom}(${a.args.join(',')})`).join('|');
   const peintureDe = (geste) => { appels.length = 0; geste(); return trace(); };
@@ -1295,8 +1270,7 @@ test('RDR T6 — « Réattaquer » relit l\'état d\'APRÈS le raid, il ne rejou
     'deux ouvertures du même état ne rendent pas la même scène : le témoin est instable');
 
   $('raid-attaquer').envoyer('click');
-  rafs.horodatage = etat.raidEnCours.echeanceMs;
-  doc.hidden = false;
+  doc.hidden = true;
   doc.envoyer('visibilitychange');
   assert.equal($('raid-fin').hidden, false, 'le montage n\'a pas de rapport à fermer');
 
@@ -1425,7 +1399,7 @@ function ecranDansLEffondrement(msParImage = 250) {
   const duCombat = imagesDuCombatSeul(msParImage);
   const ecran = ecranQuiRase();
   ecran.$('raid-attaquer').envoyer('click');
-  assert.equal(ecran.etat.raidEnCours.rapport.rase, true,
+  assert.equal(ecran.etat.rapports[ecran.etat.rapports.length - 1].rase, true,
     'le montage ne rase pas : il n\'y a pas d\'effondrement à mesurer');
   for (let k = 0; k < duCombat; k += 1) ecran.rafs.image(msParImage);
   assert.equal(ecran.$('raid-fin').hidden, true,
@@ -1462,7 +1436,7 @@ test('EFF T1 — une victoire TOTALE retarde le rapport, et de la durée de la t
       const ecran = ecranQuiRase();
       ecran.$('raid-attaquer').envoyer('click');
       // Le montage doit VRAIMENT raser, sinon rien de tout ceci ne se joue.
-      const rapport = ecran.etat.raidEnCours.rapport;
+      const rapport = ecran.etat.rapports[ecran.etat.rapports.length - 1];
       assert.equal(rapport.rase, true, 'le montage ne rase pas : EFF T1 ne mesure rien');
       assert.equal(ecran.$('raid-fin').hidden, true, 'le rapport est déjà à l\'écran');
       const { images, montre } = menerAuRapport(ecran);
@@ -1498,7 +1472,7 @@ test('EFF T2 — une victoire PARTIELLE ne déclenche rien : le rapport suit le 
       ECRAN_RAID.effondrementMs = dureeMs;
       const ecran = ecranPret(); // six Meutes de niveau 1 : `rase` est FAUX
       ecran.$('raid-attaquer').envoyer('click');
-      const rapport = ecran.etat.raidEnCours.rapport;
+      const rapport = ecran.etat.rapports[ecran.etat.rapports.length - 1];
       assert.equal(rapport.rase, false, 'le montage rase : EFF T2 ne borne plus rien');
       const { images, montre } = menerAuRapport(ecran);
       assert.equal(montre, true, `le rapport n\'est jamais venu (${images} images)`);
@@ -1521,7 +1495,7 @@ test('EFF T3 — l\'état ne bouge pas d\'un champ pendant l\'effondrement', () 
   // butin.
   const ecran = ecranQuiRase();
   ecran.$('raid-attaquer').envoyer('click');
-  const rapport = ecran.etat.raidEnCours.rapport;
+  const rapport = ecran.etat.rapports[ecran.etat.rapports.length - 1];
   assert.equal(rapport.rase, true, 'le montage ne rase pas');
 
   // On mène le combat jusqu'à sa fin, puis on relève l'état AU MILIEU de
@@ -1546,25 +1520,44 @@ test('EFF T3 — l\'état ne bouge pas d\'un champ pendant l\'effondrement', () 
   assert.equal(montre, true, 'le rapport n\'est jamais venu');
 });
 
-test('EFF T4 — masquer suspend l’image et le retour après échéance ouvre le rapport', () => {
+test('EFF T4 — l\'écran masqué COUPE l\'effondrement et va droit au rapport', () => {
+  // ⚠⚠ C'EST LE DÉFAUT DU LOT RETOUR-DE-RAID, REFAIT UN CRAN PLUS LOIN. Pendant
+  // l'effondrement le combat est TERMINÉ : la quatrième garde de l'écouteur
+  // renverrait sans rien conclure, et le joueur qui revient trouverait deux
+  // secondes d'animation figée devant son rapport.
   const ecran = ecranDansLEffondrement();
 
   ecran.doc.hidden = true;
   ecran.doc.envoyer('visibilitychange');
-  assert.equal(ecran.$('raid-fin').hidden, true, 'le fond a conclu le déroulé');
-  assert.equal(ecran.rafs.image(250), false, 'la boucle tourne encore en arrière-plan');
-  ecran.doc.hidden = false;
-  ecran.doc.envoyer('visibilitychange');
-  assert.equal(ecran.$('raid-fin').hidden, false, 'le retour après échéance n’ouvre pas le rapport');
+
+  assert.equal(ecran.$('raid-fin').hidden, false,
+    'masquer la page pendant l\'effondrement ne montre pas le rapport');
+  assert.equal(ecran.$('raid-bas').hidden, false, 'le déroulé n\'a pas été quitté');
+  // ⚠ ET IL N'EN FAUT PAS DAVANTAGE : la boucle s'arrête d'elle-même à l'image
+  // suivante, sans rejouer l'effondrement ni rouvrir un second rapport.
+  ecran.rafs.image(250);
+  assert.equal(ecran.$('raid-fin').hidden, false, 'le rapport a été refermé');
+  assert.equal(ecran.rafs.image(250), false, 'la boucle tourne encore');
 });
 
-test('EFF T5 — « Instantané » ne peut pas abréger un raid réel', () => {
+test('EFF T5 — « Instantané » n\'attend pas l\'effondrement', () => {
+  // ⚠ LE BOUTON EST CACHÉ SUR UN VRAI RAID — `#raid-vitesses` garde son
+  // `hidden = !simule`, et `RDR T4` le tient. Ce qui est mesuré ici est le
+  // CHEMIN DE CODE, celui que `conclureLeDeroule` porte : son sens est d'aller
+  // au bout tout de suite, et l'effondrement ne doit pas s'y intercaler.
   const ecran = ecranQuiRase();
   ecran.$('raid-attaquer').envoyer('click');
-  assert.equal(ecran.etat.raidEnCours.rapport.rase, true);
+  assert.equal(ecran.etat.rapports[ecran.etat.rapports.length - 1].rase, true);
+  assert.equal(ecran.$('raid-fin').hidden, true, 'le rapport est déjà à l\'écran');
+
   ecran.$('raid-instantane').envoyer('click');
-  assert.equal(ecran.$('raid-fin').hidden, true, '« Instantané » a révélé le rapport');
-  assert.equal(ecran.$('raid-bas').hidden, true, '« Instantané » a quitté le déroulé');
+
+  assert.equal(ecran.$('raid-fin').hidden, false,
+    '« Instantané » attend l\'effondrement au lieu de conclure');
+  assert.equal(ecran.$('raid-bas').hidden, false, 'le déroulé n\'a pas été quitté');
+  // ⚠ ET AUCUNE IMAGE N'A ÉTÉ JOUÉE POUR EN ARRIVER LÀ : c'est tout le sens du
+  // bouton. Sans cette ligne, un effondrement joué d'un coup passerait aussi.
+  assert.equal(ecran.rafs.horodatage, 0, 'des images ont été jouées avant le rapport');
 });
 
 test('EFF T6 — une SIMULATION ne s\'effondre pas', () => {
@@ -1579,9 +1572,16 @@ test('EFF T6 — une SIMULATION ne s\'effondre pas', () => {
       ECRAN_RAID.effondrementMs = dureeMs;
       const ecran = ecranQuiRase();
       ecran.$('raid-simuler').envoyer('click');
-      assert.equal(ecran.$('raid-bandeau').hidden, true, 'un rejeu automatique a démarré');
-      assert.equal(ecran.$('raid-sim').hidden, false, 'le résultat n’est pas immédiat');
-      return ecran.rafs.horodatage;
+      assert.equal(ecran.$('raid-bandeau').hidden, false,
+        'le montage n\'a pas lancé de SIMULATION');
+      let images = 0;
+      while (ecran.$('raid-sim').hidden && images < 4000) {
+        if (!ecran.rafs.image(250)) break;
+        images += 1;
+      }
+      assert.equal(ecran.$('raid-sim').hidden, false,
+        `le panneau de simulation n\'est jamais venu (${images} images)`);
+      return images;
     };
     // ⚠ FALSIFIABLE : la même mesure sur un VRAI raid DIFFÈRE — c'est `EFF T1`.
     // Ici la durée de la table ne change rien, quelle qu'elle soit.

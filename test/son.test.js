@@ -2294,9 +2294,12 @@ test('SON T24 — le déroulé sonne, le mode Instantané se tait par constructi
   // sans prendre d'instantané, exactement comme avant le lot. Un combat résolu
   // d'un coup n'a pas de déroulé, donc rien à sonner ; l'y brancher demanderait
   // cent cinquante coups de canon dans la même milliseconde.
-  // « Instantané » appelle `conclureLeDeroule`. Un vrai raid en cours refuse ce
-  // raccourci ; le simulateur et les rejeux restent résolus d'un bloc et ne
-  // relèvent aucun son intermédiaire.
+  // ⚠⚠ LE CORPS A ÉTÉ EXTRAIT AU LOT RETOUR-DE-RAID, ET LA GARDE SUIT SANS SE
+  // RELÂCHER. « Instantané » appelle désormais `conclureLeDeroule`, que le
+  // masquage de la page appelle aussi — un raid quitté en cours atterrit sur son
+  // rapport (Ethan, 06/09). Ce qui est gardé n'a pas changé d'un mot : ce chemin
+  // résout d'un bloc, et il ne relève RIEN. Il y a maintenant deux appelants
+  // muets au lieu d'un, ce qui rend cette assertion plus utile, pas moins.
   const appel = raid.match(/brancher\('raid-instantane'[\s\S]*?\);/);
   assert.ok(appel !== null, 'le bouton Instantané a disparu');
   assert.match(appel[0], /conclureLeDeroule\(\)/, 'l\'Instantané ne conclut plus le déroulé');
@@ -2306,12 +2309,10 @@ test('SON T24 — le déroulé sonne, le mode Instantané se tait par constructi
   assert.ok(!bloc[1].includes('relever('), 'l\'Instantané relève le journal');
   assert.ok(/while \(!combat\.termine\) tickCombat\(combat\);/.test(bloc[1]),
     'l\'Instantané ne résout plus d\'un bloc');
-  // Le pas à pas et les deux boucles de temps passent par le même chemin. La
-  // troisième occurrence est le rattrapage d'un raid réel depuis son horloge
-  // persistante ; elle doit relever les mêmes événements que le rejeu animé.
+  // Le pas à pas, lui, passe par le même chemin que la boucle : un seul endroit.
   const pas = raid.match(/brancher\('raid-pas', \(\) => \{([\s\S]*?)\n  \}\);/);
   assert.ok(pas[1].includes('avancerDUnTick();'), 'le pas à pas ne relève plus');
-  assert.equal((raid.match(/avancerDUnTick\(\);/g) ?? []).length, 3,
+  assert.equal((raid.match(/avancerDUnTick\(\);/g) ?? []).length, 2,
     'le nombre de points qui avancent d\'un tick a bougé');
 
   // ⚠⚠ ET LE CORPS DU RELEVÉ SE LIT AUSSI, PARCE QU'UNE GARDE QUI NE REGARDE QUE

@@ -330,7 +330,7 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 34);
+  assert.equal(SAVE_VERSION, 33);
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

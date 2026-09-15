@@ -62,8 +62,8 @@ import {
   reparerUnePiece, toutReparer, problemesDeLaReparationDUnePiece,
 } from '../sim/reparation.js';
 import {
-  problemesDuRaid, engagerRaidReel, acheverRaidReel, quitterRapportReel,
-  simulerRaid, composerLesVagues, montageDuRaid, pvMaxDeLUnite,
+  problemesDuRaid, executerRaid, simulerRaid, composerLesVagues, montageDuRaid,
+  pvMaxDeLUnite,
 } from '../sim/raid.js';
 import { siteDeLaCase } from '../sim/site-de-la-case.js';
 import { coutDUnRaid } from '../sim/prix-du-raid.js';
@@ -605,7 +605,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // précisément pour éviter.
   const surRetourALaCarte = crochets.surRetourALaCarte ?? (() => versEcran('monde'));
   const apresGeste = crochets.apresGeste ?? (() => {});
-  const lireInstantMs = crochets.lireInstantMs ?? (() => 0);
   // ⚠ L'ÉCRAN NOMME UN GESTE, JAMAIS UN SON — même frontière que `sonDeRefus`
   // du lot SON-MOTEUR, et la garde `SON T14` refuse de toute façon un appel de
   // `jouer(` ici. Le déroulé, lui, n'a rien à annoncer : les 174 sons de combat
@@ -683,8 +682,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let enPause = false;
   let projection = null;
   let simulation = false;
-  let retourSimulation = false;
-  let apercuSimulation = null;
   /**
    * Millisecondes écoulées depuis la fin du combat, ou `null` hors effondrement.
    *
@@ -750,8 +747,8 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   }
 
   function arreterBoucle() {
-    if (idImage !== null && typeof doc.defaultView?.cancelAnimationFrame === 'function') {
-      doc.defaultView.cancelAnimationFrame(idImage);
+    if (idImage !== null && typeof globalThis.cancelAnimationFrame === 'function') {
+      globalThis.cancelAnimationFrame(idImage);
     }
     idImage = null;
   }
@@ -915,31 +912,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     idImage = null;
     const ecoule = derniereImageMs === null ? 0 : horodatageMs - derniereImageMs;
     derniereImageMs = horodatageMs;
-    if (deroule && !simulation && etatCourant?.raidEnCours !== null
-      && etatCourant?.raidEnCours !== undefined) {
-      const raid = etatCourant.raidEnCours;
-      const instant = lireInstantMs();
-      afficherMinuterie(raid, instant);
-      const cibleTick = Math.min(raid.rapport.ticks,
-        Math.max(0, Math.floor((instant - raid.debutMs) / TICK_MS)));
-      while (combat !== null && !combat.termine && combat.tick < cibleTick) avancerDUnTick();
-      const echeanceAtteinte = instant >= raid.echeanceMs;
-      if (echeanceAtteinte && raid.rapport.rase && effondrementMs === null) {
-        effondrementMs = 0;
-      } else if (effondrementMs !== null) {
-        effondrementMs += ecoule;
-      }
-      dessiner();
-      if (echeanceAtteinte && (effondrementMs === null
-        || effondrementMs >= ECRAN_RAID.effondrementMs)) {
-        acheverRaidReel(etatCourant, instant);
-        apresGeste();
-        finDuDeroule();
-        return;
-      }
-      idImage = doc.defaultView.requestAnimationFrame(image);
-      return;
-    }
     if (combat !== null && !combat.termine && !enPause) {
       const dus = ticksDus(accumulateur, ecoule, vitesse);
       for (let k = 0; k < dus && !combat.termine; k += 1) {
@@ -979,19 +951,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   }
 
   function demarrerBoucle() {
-    if (idImage !== null || combat === null
-      || (combat.termine && etatCourant?.raidEnCours == null)) return;
+    if (idImage !== null || combat === null || combat.termine) return;
     derniereImageMs = null; // pas de rattrapage du temps passé arrêté
     idImage = doc.defaultView.requestAnimationFrame(image);
-  }
-
-  function afficherMinuterie(raid, instant) {
-    const element = $('raid-timer');
-    if (element === null) return;
-    const secondes = Math.ceil(Math.max(0, raid.echeanceMs - instant) / 1000);
-    element.textContent = `${String(Math.floor(secondes / 60)).padStart(2, '0')}`
-      + `:${String(secondes % 60).padStart(2, '0')}`;
-    element.hidden = false;
   }
 
   /**
@@ -1114,9 +1076,10 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   function finDuDeroule() {
     arreterBoucle();
     quitterLeDeroule();
-    // L'effondrement se referme ici, après une fin animée ou instantanée. Le
-    // passage en arrière-plan arrête seulement les images et ne passe plus par
-    // cette fonction.
+    // ⚠ L'EFFONDREMENT SE REFERME ICI, ET PAR UN SEUL ENDROIT. Trois portes y
+    // mènent — la boucle qui arrive au bout, « Instantané », et la page qui se
+    // masque — et chacune passe par cette fonction. Le remettre à `null` ailleurs
+    // aurait fait trois écritures d'une même remise à zéro.
     //
     // ⚠⚠ ET IL SE REFERME APRÈS `quitterLeDeroule`, PAS AVANT. Celle-ci REDESSINE
     // — elle change de cadrage, donc elle repeint — et le faire avec un
@@ -1124,35 +1087,24 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // juste avant que le rapport ne la recouvre. Le champ de ruines est ce que
     // le joueur doit voir derrière son rapport.
     effondrementMs = null;
-    if (retourSimulation) {
-      retourSimulation = false;
-      const apercu = apercuSimulation;
-      if (apercu !== null) {
-        ({ combat, precedentes, fondCourant, bandeCourante, coteVoulu,
-          decalageX, decalageY } = apercu);
-        apercuSimulation = null;
-        marquerBascule();
-        dimensionner();
-        dessiner();
-      }
-      $('raid-bandeau').hidden = true;
-      $('raid-sim-rejeu-fermer').hidden = true;
-      montrerResultat(rapportCourant, true);
-      return;
-    }
-    $('raid-timer').hidden = true;
     if (rapportCourant !== null) montrerResultat(rapportCourant, simulation);
   }
 
   /**
    * Résout ce qui reste du combat SUR-LE-CHAMP, puis montre le rapport.
    *
-   * C'est le chemin de `#raid-instantane`, réservé au simulateur et aux rejeux.
-   * La garde empêche ce raccourci de conclure un vrai raid avant l'échéance
-   * persistante.
+   * ⚠⚠ C'EST LE CHEMIN DE `#raid-instantane`, EXTRAIT ET NON RECOPIÉ. Deux
+   * appelants le demandent désormais — le bouton du simulateur et le masquage de
+   * la page (voir plus bas) —, et deux écritures voisines de « conclure un
+   * combat » divergeraient au premier ajustement, la seconde n'étant éprouvée
+   * par personne. Pas une ligne de son corps n'a changé en route.
+   *
+   * ⚠ ELLE NE DÉCIDE DE RIEN. Qui a le droit de l'appeler, et quand, se juge
+   * chez l'appelant : le bouton n'existe que pour le simulateur, l'écouteur
+   * porte ses quatre gardes. Une garde écrite ici les rendrait invisibles depuis
+   * les deux points d'appel.
    */
   function conclureLeDeroule() {
-    if (!simulation && etatCourant?.raidEnCours != null) return;
     if (combat === null) return;
     enPause = false;
     arreterBoucle();
@@ -1203,8 +1155,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // plus rien à attaquer sinon. Et il repasse par `problemesDuRaid` : un
       // second raid coûte encore des points, et l'armée qui revient est abîmée.
       const rejouable = !rapport.rase && etatCourant !== null && cibleCourante !== null
-        && problemesDuRaid({ ...etatCourant, raidEnCours: null },
-          baseCourante(etatCourant), cibleCourante).length === 0;
+        && problemesDuRaid(etatCourant, baseCourante(etatCourant), cibleCourante).length === 0;
       $('raid-reattaquer').hidden = rapport.rase;
       $('raid-reattaquer').disabled = !rejouable;
       $('raid-fin').hidden = false;
@@ -1874,28 +1825,26 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // `FG T4`.
     rapportCourant = simule
       ? simulerRaid(etatCourant, baseCourante(etatCourant), cibleCourante, { formation })
-      : engagerRaidReel(etatCourant, baseCourante(etatCourant), cibleCourante,
-        lireInstantMs(), { formation });
+      : executerRaid(etatCourant, baseCourante(etatCourant), cibleCourante, { formation });
     // ⚠ LE SON NE PART QUE SUR LA VRAIE ATTAQUE. Une simulation ne commande
     // rien à personne : la faire sonner comme un ordre ferait croire au joueur
     // qu'il vient d'engager son armée. Un bandeau couvre déjà la vue pour la
     // même raison.
     if (!simule) { sonDeGeste('attaque', {}); apresGeste(); }
     peindreVagues();
-    if (simule) {
-      montrerResultat(rapportCourant, true);
-      return;
-    }
-    $('raid-bandeau').hidden = true;
-    // Le vrai raid suit son échéance murale, sans contrôle de vitesse.
-    $('raid-vitesses').hidden = true;
+    // ⚠ UN BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ,
+    // pour qu'on ne le confonde jamais avec la vraie attaque.
+    $('raid-bandeau').hidden = !simule;
+    // ⚠ LE VRAI RAID SE REGARDE EN TEMPS RÉEL, SANS CONTRÔLE DE VITESSE — Ethan.
+    // `dureeMaxCombatSec` vaut 90 : il ne peut pas durer plus d'une minute
+    // trente, donc il n'y a pas de durée à gérer.
+    $('raid-vitesses').hidden = !simule;
     vitesse = 1;
     // ⚠ AVANT `rejouer`, ET C'EST UNE QUESTION DE MESURE : masquer `#raid-bas`
     // agrandit le canevas, et `rejouer` appelle `dimensionner`. Dans l'autre
     // ordre, la première image serait projetée sur l'ancienne taille et le
     // `ResizeObserver` la referait aussitôt.
     entrerDansLeDeroule();
-    afficherMinuterie(etatCourant.raidEnCours, lireInstantMs());
     rejouer(montage, vagues);
   }
 
@@ -1922,48 +1871,23 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // reste à affronter — et c'est dit au rapport plutôt que découvert.
   brancher('raid-reattaquer', () => {
     if (etatCourant === null || cibleCourante === null) return;
-    quitterRapportReel(etatCourant);
-    apresGeste();
     fermerPanneaux();
     ouvrirSurLaCible(etatCourant, cibleCourante);
   });
 
   brancher('raid-sim-fermer', () => { $('raid-sim').hidden = true; });
-  brancher('raid-sim-visualiser', () => {
-    if (rapportCourant?.rejeu == null || !simulation) return;
-    apercuSimulation = { combat, precedentes, fondCourant, bandeCourante,
-      coteVoulu, decalageX, decalageY };
-    retourSimulation = true;
-    $('raid-sim').hidden = true;
-    $('raid-bandeau').hidden = false;
-    $('raid-vitesses').hidden = false;
-    $('raid-sim-rejeu-fermer').hidden = false;
-    vitesse = 1;
-    entrerDansLeDeroule();
-    rejouer(rapportCourant.rejeu, rapportCourant.rejeu.vagues ?? []);
-  });
-  brancher('raid-sim-rejeu-fermer', () => {
-    if (retourSimulation) finDuDeroule();
-  });
   // ⚠ LES DEUX PORTES DU RETOUR PASSENT PAR LE MÊME CROCHET : celle d'abandon
   // (« Carte », avant le combat) et celle du rapport (« Carte », après). Ethan a
   // parlé de la seconde ; laisser la première recadrer chez soi aurait fait deux
   // comportements pour un même bouton portant le même mot.
-  brancher('raid-fin-carte', () => {
-    if (etatCourant !== null) { quitterRapportReel(etatCourant); apresGeste(); }
-    fermerPanneaux(); surRetourALaCarte(cibleCourante);
-  });
-  brancher('raid-fin-base', () => {
-    if (etatCourant !== null) { quitterRapportReel(etatCourant); apresGeste(); }
-    fermerPanneaux(); versEcran('offense');
-  });
+  brancher('raid-fin-carte', () => { fermerPanneaux(); surRetourALaCarte(cibleCourante); });
+  brancher('raid-fin-base', () => { fermerPanneaux(); versEcran('offense'); });
 
   // Les vitesses du simulateur, et le pas-à-pas.
   for (const v of VITESSES) {
     brancher(`raid-vitesse-${v}`, () => { vitesse = v; enPause = false; demarrerBoucle(); });
   }
   brancher('raid-pas', () => {
-    if (!simulation && etatCourant?.raidEnCours != null) return;
     if (combat === null || combat.termine) return;
     enPause = true;
     arreterBoucle();
@@ -1973,16 +1897,69 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   });
   brancher('raid-instantane', () => { conclureLeDeroule(); });
 
-  // Le fond suspend seulement les images ; l'échéance murale reste persistante.
+  // --- quitter le jeu pendant un vrai raid ----------------------------------
+  //
+  // ⚠⚠ UN RAID QUITTÉ EN COURS ATTERRIT SUR SON RAPPORT — Ethan, 06/09 : « je
+  // lance le raid, je quitte le jeu juste après, je reviens après 5 min : le
+  // raid a figé et reprend, je dois attendre la fin. »
+  //
+  // ⚠⚠ ET L'ÉTAT N'EST PAS EN CAUSE, C'EST LE PREMIER FAIT À DIRE. `lancer`
+  // appelle `executerRaid` AVANT la première image — arbitrage « A » du 01/09,
+  // écrit en tête de `rejouer`. Le butin est versé, la cible est entamée, les
+  // points sont dépensés : ce qui retenait le joueur était l'ANIMATION, et rien
+  // d'autre. Trois mécanismes s'y conjuguaient : `requestAnimationFrame` ne bat
+  // plus en arrière-plan, `ticksDus` plafonne le temps injecté à
+  // `PLAFOND_RATTRAPAGE_MS` puis à `TICKS_MAX_PAR_IMAGE` — cinq minutes
+  // d'absence font avancer le déroulé d'une seconde au plus —, et
+  // `demarrerBoucle` remet `derniereImageMs` à `null`. Le joueur était enfermé
+  // pour les `dureeMaxCombatSec` secondes du combat, sans aucune sortie.
+  //
+  // ⚠ LES DEUX PLAFONDS NE BOUGENT PAS, ET LE DÉFAUT N'ÉTAIT PAS LÀ. Ils
+  // protègent de la spirale de la mort et du téléphone qui chauffe ; les relever
+  // remplacerait une attente de quatre-vingt-dix secondes par un gel de
+  // plusieurs secondes à la reprise.
+  //
+  // ⚠ ET PAS DE BOUTON « PASSER » — Ethan, 06/09, mot pour mot : « bouton passer
+  // non ». On emprunte le CHEMIN DE CODE de `#raid-instantane`, on n'expose pas
+  // son bouton : `#raid-vitesses` garde son `hidden = !simule`.
+  //
+  // ⚠⚠ QUATRE GARDES, ET AUCUNE N'EST FACULTATIVE.
+  //
+  // 1. `doc.hidden` — l'évènement se déclenche dans les DEUX sens, et le retour
+  //    n'a rien à conclure.
+  // 2. `!simulation` — une simulation ne commande rien à personne, et le bandeau
+  //    « SIMULATEUR » existe justement pour qu'on ne la confonde pas avec un
+  //    ordre. Quittée puis reprise, elle se reprend où elle en était.
+  // 3. `deroule` — ET C'EST LA GARDE QUE LE BRIEF NE DEMANDAIT PAS, mesurée :
+  //    `ouvrir` monte DÉJÀ un `combat` pour montrer la cible, avec `vagues: []`,
+  //    et ce combat-là N'EST PAS TERMINÉ tant qu'aucun tick n'a tourné. S'en
+  //    tenir à `combat !== null && !combat.termine` ferait donc tourner la boucle
+  //    d'aperçu à chaque fois que le joueur quitte le jeu depuis la PRÉPARATION :
+  //    la cible se figerait sur un combat conclu « attaquants », que le joueur
+  //    n'a pas lancé. `deroule` est exactement « un déroulé est en cours ».
+  // 4. `combat !== null && !combat.termine` — masquer l'écran alors que rien ne
+  //    tourne ne doit rien déclencher, et surtout pas un second `montrerResultat`
+  //    sur un rapport déjà affiché.
+  //
+  // ⚠ ET `src/ui/session.js` N'A PAS UNE LIGNE DE CHANGÉE. Il porte déjà son
+  // `visibilitychange`, qui suspend et reprend l'horloge économique, et son
+  // `pagehide`, qui sauvegarde. Le déroulé appartient à l'écran de raid : c'est
+  // lui qui en a un, donc c'est lui qui l'écoute.
   if (typeof doc.addEventListener === 'function') {
     doc.addEventListener('visibilitychange', () => {
-      if (!deroule || simulation || etatCourant?.raidEnCours == null) return;
-      if (doc.hidden === true) { arreterBoucle(); return; }
-      if (lireInstantMs() >= etatCourant.raidEnCours.echeanceMs) {
-        acheverRaidReel(etatCourant, lireInstantMs());
-        apresGeste();
-        finDuDeroule();
-      } else demarrerBoucle();
+      if (doc.hidden !== true) return;
+      if (simulation) return;
+      if (!deroule) return;
+      // ⚠⚠ ET UNE CINQUIÈME GARDE DEPUIS LE LOT EFFONDREMENT, 07/09 — ELLE PASSE
+      // AVANT LA QUATRIÈME, ET C'EST TOUT SON INTÉRÊT. Pendant l'effondrement le
+      // combat est TERMINÉ : la garde `combat.termine` juste dessous renverrait
+      // donc sans rien conclure, et le joueur qui revient trouverait deux
+      // secondes d'animation figée devant son rapport. C'est très exactement le
+      // défaut que ce lot-là réparait, refait un cran plus loin. On coupe
+      // l'effondrement et on va droit au rapport.
+      if (effondrementMs !== null) { arreterBoucle(); finDuDeroule(); return; }
+      if (combat === null || combat.termine) return;
+      conclureLeDeroule();
     });
   }
 
@@ -2006,8 +1983,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     cibleCourante = { rangee: cible.rangee, colonne: cible.colonne };
     if (atlasFournis !== null) atlas = atlasFournis;
     rapportCourant = null;
-    $('raid-timer').hidden = true;
-    $('raid-sim-rejeu-fermer').hidden = true;
     combat = null;
     fondCourant = null;
     // ⚠ LA VUE SE REMET À NEUF À CHAQUE CIBLE. Garder le zoom et la bande de
@@ -2183,49 +2158,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     );
   }
 
-  function reprendreRaidReel(etat, atlasFournis = null) {
-    const raid = etat.raidEnCours;
-    if (raid === null) return false;
-    etatCourant = etat;
-    if (atlasFournis !== null) atlas = atlasFournis;
-    cibleCourante = { rangee: raid.rapport.cible.rangee,
-      colonne: raid.rapport.cible.colonne };
-    rapportCourant = raid.rapport;
-    simulation = false;
-    retourSimulation = false;
-    formation = null;
-    bandeCourante = null;
-    coteVoulu = null;
-    decalageX = 0;
-    decalageY = -Infinity;
-    fermerPanneaux();
-    $('raid-bandeau').hidden = true;
-    $('raid-vitesses').hidden = true;
-    $('raid-sim-rejeu-fermer').hidden = true;
-    const titre = $('raid-titre');
-    if (titre !== null) titre.textContent = `${raid.rapport.cible.type} · niveau `
-      + `${raid.rapport.cible.niveau} · rangée ${cibleCourante.rangee}, colonne ${cibleCourante.colonne}`;
-    entrerDansLeDeroule();
-    const montage = raid.rapport.rejeu;
-    rejouer(montage, montage.vagues ?? []);
-    fondCourant = fondDeLaBase(combat.proprietaireDefense,
-      montage.type, cibleCourante.rangee, cibleCourante.colonne);
-    const instant = lireInstantMs();
-    afficherMinuterie(raid, instant);
-    if (instant >= raid.echeanceMs) {
-      acheverRaidReel(etat, instant);
-      apresGeste();
-      finDuDeroule();
-    }
-    return true;
-  }
-
   return {
     /** Entre dans l'écran de raid sur une cible. */
-    ouvrir(etat, cible, atlasFournis = null) {
-      if (!reprendreRaidReel(etat, atlasFournis)) ouvrirSurLaCible(etat, cible, atlasFournis);
-    },
-    reprendre: reprendreRaidReel,
+    ouvrir(etat, cible, atlasFournis = null) { ouvrirSurLaCible(etat, cible, atlasFournis); },
     /** Rejoue un raid du journal — voir `ouvrirEnRejeu`. */
     rejouerUnRapport(etat, rapport, atlasFournis = null) {
       ouvrirEnRejeu(etat, rapport, atlasFournis);
@@ -2234,13 +2169,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ⚠ QUITTER L'ÉCRAN REND LE CHROME. Sans cette ligne, changer d'onglet
     // pendant un déroulé laisserait la page sans onglets — donc sans moyen d'en
     // revenir. Troisième porte, la même fonction idempotente.
-    masquer() {
-      arreterBoucle(); quitterLeDeroule();
-      if (etatCourant !== null && etatCourant.raidEnCours?.publie) {
-        quitterRapportReel(etatCourant);
-        apresGeste();
-      }
-    },
+    masquer() { arreterBoucle(); quitterLeDeroule(); },
     /**
      * Les unités attaquantes et leur état de mouvement — pour le son.
      *
