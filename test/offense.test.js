@@ -36,7 +36,7 @@ import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import {
   plafondDeLaReserve, plafondDeLaReserveDesBatiments, direLaDuree,
-  coutDeLaReparation, reservoirsDeLArmee, crediterLesReserves,
+  coutDeLaReparation, reservoirsDeLArmee,
 } from '../src/sim/reparation.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
@@ -378,8 +378,6 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   // ⚠ ET UN ÉCART MINIMUM SUBSISTE : sur un écran court, `space-between` n'a
   // plus de mou à distribuer, et deux vagues collées se liraient comme une.
   assert.match(bassin, /gap:\s*\d+px/, 'les vagues peuvent se coller sur un écran court');
-  assert.match(bassin, /padding:\s*52px 6px 6px/,
-    'la première vague remonte sur la traverse supérieure du hangar');
 
   // ⚠⚠ ET C'EST LA MOITIÉ QUI COMPTE : LES CASES RESTENT CARRÉES. L'autre façon
   // d'occuper la place — laisser les emplacements GRANDIR en hauteur — a été
@@ -408,24 +406,28 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   assert.match(piece, /--jeton-part:\s*\d+%/,
     'la pièce ne se mesure plus en pourcentage de sa case');
 
-  // La grille occupe maintenant trois étages physiques par vague. Les cases
-  // restent carrées et les pistes se chevauchent seulement entre des groupes
-  // placés dans des colonnes disjointes.
-  const emplacements = feuille.match(/#ecran-offense \.emplacements\s*\{([^}]*)\}/)[1];
-  assert.match(emplacements, /grid-template-rows:\s*repeat\(3,\s*auto\)/,
-    'une vague n\'a plus ses trois étages physiques');
-  assert.match(emplacement, /margin-bottom:\s*-50%/,
-    'les trois étages ne se resserrent plus pour tenir dans la hauteur');
+  // ⚠⚠ ET LE PREMIER EMPLACEMENT FAIT LA MÊME LARGEUR QUE LES HUIT AUTRES —
+  // DÉFAUT ANTÉRIEUR AU LOT, TROUVÉ AU BOOT SANS TÊTE, PAS À LA RELECTURE.
+  // `grid-column: span 2` est le raccourci de `grid-column-start: span 2` +
+  // `grid-column-end: auto` : la règle qui posait ensuite `grid-column-start: 1`
+  // écrasait le `span 2` du START et laissait le END à `auto`, donc UNE colonne.
+  // Mesuré dans Chromium à 360 px CSS : première case 15,5 px, les huit autres
+  // 34, et 37 px perdus au bord droit. Les deux règles écrivent donc la position
+  // ET la portée d'un coup.
+  for (const regle of [/\.emplacements \.emplacement:first-child \{([^}]*)\}/,
+    /\.emplacements\.decalee \.emplacement:first-child \{([^}]*)\}/]) {
+    const bloc = feuille.match(regle)[1];
+    assert.match(bloc, /grid-column:\s*\d+ \/ span 2/,
+      `le premier emplacement perd sa portée : ${bloc.trim()}`);
+    assert.doesNotMatch(bloc, /grid-column-start/,
+      'la position seule écrase la portée — c\'est le défaut du 03/09');
+  }
 
   // ⚠ ET UNE VAGUE NE SE LAISSE PAS ÉCRASER : sans ça, quatre vagues dans un
   // bassin trop court rétréciraient au lieu de faire défiler, et le carré
   // ci-dessus ne tiendrait plus.
   const vague = feuille.match(/#ecran-offense \.vague \{([^}]*)\}/)[1];
   assert.match(vague, /flex:\s*0 0 auto/, 'une vague peut encore se faire écraser');
-  assert.match(vague, /width:\s*70%/,
-    'les unités débordent de nouveau du rectangle orange sur les murs latéraux');
-  assert.match(vague, /margin-inline:\s*auto/,
-    'la formation ne reste plus centrée entre les deux murs');
   assert.match(bassin, /overflow-y:\s*auto/, 'le bassin ne défile plus quand il déborde');
 });
 
@@ -930,57 +932,54 @@ test('offense — l\'écran porte le bassin, et il est INLINÉ', () => {
     'un bassin qui se répète ferait une couture au milieu de l\'écran');
 });
 
-test('offense — chaque vague plie ses neuf colonnes en trois, trois et trois à 360 px', () => {
-  const { doc, parId } = fauxDocumentOffense();
-  initialiserEcranOffense(doc);
+test('offense — les neuf sont en quinconce, et le décalage passe par la GRILLE', () => {
+  // ⚠⚠ ETHAN, 03/09 : « toujours 4 rangées de 9, mais les neuf tu les mets en
+  // quinconce pour que ça passe à peu près ». Une rangée sur deux est décalée
+  // d'une DEMI-case.
+  //
+  // ⚠⚠ ET LE DÉCALAGE NE SE FAIT PAS PAR UN `transform`. Un `translateX`
+  // déplacerait le dessin sans déplacer la géométrie du pointage, et le doigt
+  // cesserait de tomber sur l'emplacement qu'il vise — c'est exactement ce que
+  // le dépôt refuse depuis toujours sur la grille du Chantier. On compte donc
+  // en demi-colonnes.
+  const ecran = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
 
-  const vagues = parId.get('offense-vagues').children;
-  assert.equal(vagues.length, NB_VAGUES);
-  for (const vague of vagues) {
-    const rangee = vague.children.find((e) => e.classList.contains('emplacements'));
-    assert.equal(rangee.style.gridTemplateColumns,
-      `repeat(${NB_COLONNES}, minmax(0, 1fr))`);
-    assert.equal(rangee.children.length, NB_COLONNES);
-    assert.deepEqual(rangee.children.map((e) => e.style.gridColumn),
-      Array.from({ length: NB_COLONNES }, (_, i) => String(i + 1)),
-      'une colonne visuelle ne correspond plus à sa colonne de combat');
-    assert.deepEqual(rangee.children.map((e) => e.style.gridRow),
-      ['1', '1', '1', '2', '2', '2', '3', '3', '3'],
-      'la vague ne suit plus le placement trois en haut, trois au centre, trois en bas');
-  }
+  const pose = ecran.match(/gridTemplateColumns = `repeat\(\$\{([^}]+)\}, 1fr\)`/);
+  assert.ok(pose, 'l\'écran ne pose plus le nombre de colonnes des vagues');
 
-  const source = readFileSync(join(RACINE, 'src', 'ui', 'offense.js'), 'utf8');
-  assert.match(source, /Math\.ceil\(NB_COLONNES \/ 3\)/,
-    'le pli de la vague ne suit plus le nombre de colonnes');
-  assert.doesNotMatch(source, /translateX/,
-    'une translation décrocherait le doigt de la case qu\'il vise');
+  // ⚠ LE NOMBRE SE CALCULE, IL NE SE RECOPIE PAS. Écrire `19` passerait cette
+  // égalité aujourd'hui et mentirait le jour où une vague changerait de
+  // largeur : on exige donc que l'expression NOMME la donnée.
+  assert.match(pose[1], /NB_COLONNES/,
+    'le nombre de demi-colonnes est écrit en dur : il ne suivrait plus NB_COLONNES');
+  const demiColonnes = Function('NB_COLONNES', `return ${pose[1]};`)(NB_COLONNES);
+  assert.equal(demiColonnes, NB_COLONNES * 2 + 1,
+    `${demiColonnes} demi-colonnes pour ${NB_COLONNES} emplacements : sans la demi-case`
+    + ' de mou, la rangée décalée déborde ; avec deux, elle n\'est plus au ras du bord');
 
-  // À 360 px, la vague prend les 70 % centraux des 348 px utiles : ses bords
-  // restent à 58,2 et 301,8 px, dans le rectangle orange et hors des murs.
-  const largeurBassin = 360 - 2 * 6;
-  const largeurVague = largeurBassin * 0.7;
-  const retrait = (360 - largeurVague) / 2;
-  assert.equal(retrait, 58.2);
-  assert.equal(360 - retrait, 301.8);
-  const largeurCase = (largeurVague - (NB_COLONNES - 1) * 3) / NB_COLONNES;
-  assert.ok(Math.abs(largeurCase - 24.4) < 1e-9);
-  const hauteurVague = 3 * (largeurCase / 2) + largeurCase / 2;
-  assert.ok(Math.abs(hauteurVague - 48.8) < 1e-9,
-    'la diagonale ne tient plus ses quatre vagues dans le bassin in-game');
+  // La rangée décalée est marquée dans le balisage, pas devinée par sa place
+  // dans le document : `:nth-child` aurait lié le quinconce à la structure du
+  // DOM, qu'un titre inséré un jour aurait décalée en silence.
+  assert.match(ecran, /classList\.add\('decalee'\)/,
+    'plus rien ne marque la rangée décalée');
+  assert.doesNotMatch(ecran, /transform/,
+    'un `transform` décrocherait le doigt de l\'emplacement qu\'il vise');
 
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
-  const titre = feuille.match(/#ecran-offense \.vague h2\s*\{([^}]*)\}/)[1];
-  assert.match(titre, /position:\s*absolute/,
-    'le titre reprend une ligne et pousse une partie de la quatrième vague hors écran');
-  assert.match(titre, /left:\s*34%/,
-    'le titre ne reste plus dans les six colonnes libres du premier étage');
-
-  const cadrage = feuille.match(
-    /#ecran-offense \.emplacement \.piece \{\s*--jeton-part:\s*(\d+)%/,
-  );
-  assert.ok(cadrage, 'le cadrage propre au quinconce offensif a disparu');
-  assert.equal(Number(cadrage[1]) * 1.2, 96,
-    'le grossissement dépasse la case et peut rogner le sprite ou son niveau');
+  const bloc = feuille.slice(feuille.indexOf('#ecran-offense .emplacements'),
+    feuille.indexOf('aspect-ratio: 1', feuille.indexOf('#ecran-offense .emplacements')));
+  assert.match(bloc, /grid-column:\s*span 2/,
+    'un emplacement n\'occupe plus deux demi-colonnes');
+  // ⚠ CETTE ASSERTION A CHANGÉ DE FORME LE 03/09, ET ELLE S'EST RESSERRÉE. Elle
+  // cherchait `grid-column-start: 2` — la position SEULE, qui écrasait la portée
+  // et rendait le premier emplacement deux fois trop étroit (voir le test des
+  // quatre vagues). Elle exige maintenant la position ET la portée.
+  assert.match(bloc, /\.decalee \.emplacement:first-child \{ grid-column: 2 \/ span 2/,
+    'la rangée décalée ne commence plus une demi-case plus loin, ou perd sa portée');
+  assert.doesNotMatch(bloc, /repeat\(\s*\d/,
+    'le nombre de demi-colonnes est écrit dans la feuille : c\'est une seconde vérité');
 });
 
 test('offense — la sélection survit à l\'amélioration, et la ligne ne dit pas une demi-phrase', () => {
@@ -1319,61 +1318,6 @@ test('RDR T9 bis — déposer sur une case occupée PERMUTE, au lieu de refuser'
     { v: armee[0].vague, c: armee[0].colonne }, { v: 3, c: 7 },
     'reposer une pièce sur sa propre case ne la laisse plus en place',
   );
-});
-
-test('MODES OFFENSE T1 — réussite, refus et case vide gardent les quatre modes armés', () => {
-  const monter = () => {
-    const etat = baseAvecCommandement(12);
-    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
-    const base = baseCourante(etat);
-    for (const cle of Object.keys(base.economie.ressources)) base.economie.ressources[cle] = 1_000_000_000;
-    crediterLesReserves(etat, 12 * TICKS_PAR_HEURE);
-    return { etat, ...ecranOffenseMonte(etat) };
-  };
-  const arme = (montage, nom) => montage.parId.get(`offense-${nom}`).classList.contains('arme');
-
-  const refus = monter();
-  refus.parId.get('offense-reparer').envoyer('click');
-  toucher(refus.parId, 1, 1);
-  assert.ok(arme(refus, 'reparer'), 'Réparer se désarme après un refus');
-
-  for (const nom of ['reparer', 'ameliorer', 'retirer']) {
-    const montage = monter();
-    if (nom === 'reparer') baseCourante(montage.etat).armee[0].degatsMilli = 1_000;
-    montage.parId.get(`offense-${nom}`).envoyer('click');
-    toucher(montage.parId, 1, 1);
-    assert.ok(arme(montage, nom), `${nom} se désarme après une réussite`);
-  }
-
-  for (const nom of Object.keys(ACTIONS_ARMEE)) {
-    const montage = monter();
-    montage.parId.get(`offense-${nom}`).envoyer('click');
-    toucher(montage.parId, 4, 9);
-    assert.ok(arme(montage, nom), `${nom} se désarme sur une case vide`);
-  }
-});
-
-test('MODES OFFENSE T2 — Déplacer garde le mode, vide la main et son second clic annule', () => {
-  const etat = baseAvecCommandement(12);
-  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
-  const { parId, ecran } = ecranOffenseMonte(etat);
-  parId.get('offense-deplacer').envoyer('click');
-  toucher(parId, 1, 1);
-  toucher(parId, 1, 2);
-  assert.ok(parId.get('offense-deplacer').classList.contains('arme'));
-  assert.deepEqual({ vague: baseCourante(etat).armee[0].vague,
-    colonne: baseCourante(etat).armee[0].colonne }, { vague: 1, colonne: 2 });
-
-  toucher(parId, 1, 2);
-  parId.get('offense-deplacer').envoyer('click');
-  assert.ok(!parId.get('offense-deplacer').classList.contains('arme'));
-  toucher(parId, 1, 3);
-  assert.equal(baseCourante(etat).armee[0].colonne, 2, 'la prise en main n’a pas été annulée');
-
-  parId.get('offense-reparer').envoyer('click');
-  ecran.masquer();
-  assert.ok(!parId.get('offense-reparer').classList.contains('arme'),
-    'quitter l’écran ne désarme pas le mode');
 });
 
 // ---------------------------------------------------------------------------

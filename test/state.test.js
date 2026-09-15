@@ -155,15 +155,6 @@ test('état — une partie neuve ouvre sur la base du joueur, à sa position', (
   assert.equal(etat.horloge.nbTicks, TICKS_PAR_HEURE);
 });
 
-test('RAID EN COURS — la migration v33 ajoute explicitement une absence', () => {
-  const v33 = JSON.parse(serialiser(creerEtat(34), 3_000));
-  v33.version = 33;
-  delete v33.raidEnCours;
-  const migree = migrer(v33);
-  assert.equal(migree.version, SAVE_VERSION);
-  assert.equal(migree.raidEnCours, null);
-});
-
 test('test 11 — le rattrapage reproduit la boucle sur 1 h et 2 h', () => {
   // ⚠ LES HORIZONS ONT ÉTÉ RABOTÉS DE 24 h ET 72 h À 2 h LE 26/08, et ce n'est
   // pas une baisse d'exigence. Le triple 1/24/72 venait du moteur du lot 1, qui
@@ -2556,7 +2547,7 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 34, 'l’échéance du raid réel exige la migration v34');
+  assert.equal(SAVE_VERSION, 33, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());

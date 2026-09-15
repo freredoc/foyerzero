@@ -264,8 +264,8 @@ export const DUREE_TOAST_MS = 4000;
  *
  * ⚠ LE MODÈLE EST « ARMER PUIS TOUCHER », arbitré le 27/08 — l'inverse de ce
  * qui existait. On ne sélectionne plus un bâtiment pour activer les boutons :
- * on arme un bouton, puis on touche le bâtiment. Un seul mode à la fois ; il
- * reste armé jusqu'au second clic, à un autre mode, à la palette ou à la sortie.
+ * on arme un bouton, puis on touche le bâtiment. Un seul mode à la fois, et le
+ * mode se désarme dès qu'il a servi, réussi ou non.
  *
  * `problemes` rend la liste du moteur ; `agir` exécute. Les deux viennent de
  * `sim/state.js` ou de `sim/reparation.js` et ne sont JAMAIS réécrites ici.
@@ -4228,9 +4228,16 @@ export function initialiserEcranChantier(doc, {
     posableChoisi = null;
     poseEnAttente = null;
     deplacementEnCours = null;
-    // L'action armée survit au changement de bande. Si cette bande ne propose
-    // normalement pas son bouton, `marquerBoutonsAction` garde le bouton actif
-    // visible afin que le second clic puisse toujours la désarmer.
+    // ⚠⚠ ET UNE ACTION DONT LE BOUTON VA DISPARAÎTRE SE DÉSARME — point 8,
+    // 10/09. L'action armée SURVIT au changement de bande, et c'est voulu : elle
+    // s'applique à ce qu'on touche. Mais depuis que le bouton se masque là où il
+    // n'a pas de moteur, la laisser armée laisserait un mode ACTIF que plus
+    // aucun bouton ne montre et qu'aucun geste ne peut annuler — retoucher le
+    // bouton armé est la seule façon de désarmer. C'est le piège exact que le
+    // dépôt refuse depuis le 28/08 sur cette barre.
+    if (actionArmee !== null && TERRAINS[terrainCourant()].actions[actionArmee] === null) {
+      actionArmee = null;
+    }
     marquerBoutonsAction();
     // ⚠⚠ ET LA SÉLECTION TOMBE AVEC EUX — Ethan, 07/09, point 5. Elle survivait
     // au changement de bande : `terrainSelection` restait `batiments` pendant
@@ -5108,7 +5115,7 @@ export function initialiserEcranChantier(doc, {
     for (const [nom, action] of Object.entries(ACTIONS)) {
       const bouton = $(action.bouton);
       bouton.classList.toggle('arme', actionArmee === nom);
-      bouton.hidden = terrain.actions[nom] === null && actionArmee !== nom;
+      bouton.hidden = terrain.actions[nom] === null;
     }
     // ⚠ « TOUT RÉPARER » N'APPARAÎT QUE LE MODE RÉPARER ARMÉ — Ethan, 01/09, sur
     // l'écran de raid ; c'est la même discipline, sur l'autre écran.
@@ -5281,7 +5288,11 @@ export function initialiserEcranChantier(doc, {
     // moteur ; `TERRAINS[x].actions` dit lesquelles, et le terrain des
     // bâtiments y met `ACTIONS` telle quelle, sans la recopier.
     const action = TERRAINS[terrainCible].actions[nom];
-    // Réussite et refus laissent le mode armé pour le prochain toucher.
+    // Quoi qu'il arrive, le mode se désarme : réussite comme refus. Sa ligne
+    // tombe avec lui — elle décrivait ce que le prochain toucher ferait, et il
+    // vient d'avoir lieu.
+    desarmerLAction();
+
     // ⚠⚠ IL N'Y A PLUS QU'UNE FORME SANS MOTEUR, ET C'EST `null` — lot
     // RÉPARER-ÉCRAN, 05/09. La branche `action.problemes === undefined` est
     // partie avec `messagePasDeReparation` : elle existait pour la seule action
@@ -5340,8 +5351,15 @@ export function initialiserEcranChantier(doc, {
     }
 
     if (actionArmee !== null) {
-      // Une case vide ne fait rien et conserve le mode pour le prochain toucher.
-      if (index === -1) return;
+      // ⚠ UNE CASE VIDE DÉSARME SANS RIEN DIRE. C'est le geste « à côté du
+      // menu » : le joueur a changé d'avis, il n'a pas commis d'erreur. Un
+      // toast le gronderait pour rien.
+      if (index === -1) {
+        actionArmee = null;
+        ligneDeMode('');
+        marquerBoutonsAction();
+        return;
+      }
       executerAction(index, terrainTouche);
       return;
     }
@@ -5390,9 +5408,10 @@ export function initialiserEcranChantier(doc, {
       // Ce serait plus sévère que l'armée, pour la même mécanique.
       const rien = problemesDeToutReparerLesBatiments(etatCourant)
         .find((p) => p.code === 'rien-a-reparer');
-      if (rien !== undefined) { toast(rien.message); return; }
+      if (rien !== undefined) { toast(rien.message); desarmerLAction(); return; }
 
       const bilan = toutReparerLesBatiments(etatCourant);
+      desarmerLAction();
       peindre(etatCourant);
       rafraichir(etatCourant);
       if (apresPose !== undefined) apresPose(etatCourant);
@@ -5602,9 +5621,14 @@ export function initialiserEcranChantier(doc, {
    */
   function tenterLeDeplacement(rangee, colonne, index) {
     if (deplacementEnCours === null) {
-      // Premier toucher : quel bâtiment ? Une case vide conserve le mode sans
-      // prendre de pièce en main.
-      if (index === -1) return;
+      // Premier toucher : quel bâtiment ? Une case vide désarme sans rien dire,
+      // comme partout ailleurs — c'est le geste « à côté du menu ».
+      if (index === -1) {
+        actionArmee = null;
+        ligneDeMode('');
+        marquerBoutonsAction();
+        return;
+      }
       // ⚠ ICI LE TERRAIN VIENT DE LA CASE, ET NON DE LA PALETTE. Le joueur
       // désigne une pièce PRÉCISE du doigt : c'est la bande où elle se trouve
       // qui dit dans quelle liste elle vit, et c'est cette liste-là qu'il
@@ -5637,7 +5661,7 @@ export function initialiserEcranChantier(doc, {
     terrainSelection = terrainDeplacement;
     selection = deplacementEnCours;
     deplacementEnCours = null;
-    ligneDeMode(MESSAGES_MODE.deplacer);
+    desarmerLAction();
     // Un déplacement change le voisinage, donc les débits : il s'écrit tout de
     // suite, comme une pose.
     if (apresPose !== undefined) apresPose(etatCourant);
@@ -6020,8 +6044,7 @@ export function initialiserEcranChantier(doc, {
     boutonsBande.get('defense').niveau.textContent = formaterNiveau(resume.niveaux.defense);
     boutonsBande.get('offense').niveau.textContent = formaterNiveau(resume.niveaux.assaut);
     for (const [c, { bouton }] of boutonsBande) {
-      const niveau = c === 'offense' ? resume.niveaux.assaut : resume.niveaux[c];
-      bouton.classList.toggle('sans-niveau', niveau === null || niveau === undefined);
+      bouton.classList.toggle('sans-niveau', c !== 'batiments');
     }
 
     // ⚠⚠ LA LIGNE DE DÉTAIL SUIT LE TERRAIN, ET ELLE NE LE FAISAIT PAS. Elle
@@ -6066,10 +6089,6 @@ export function initialiserEcranChantier(doc, {
      * bouton du bas à allumer et le libellé du compteur.
      */
     marquerEcran(nom) {
-      if (ecranCourant === 'chantier' && nom !== 'chantier') {
-        deplacementEnCours = null;
-        desarmerLAction();
-      }
       ecranCourant = nom;
       marquerBoutonDuBas();
     },
