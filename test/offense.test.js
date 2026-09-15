@@ -36,7 +36,7 @@ import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import {
   plafondDeLaReserve, plafondDeLaReserveDesBatiments, direLaDuree,
-  coutDeLaReparation, reservoirsDeLArmee,
+  coutDeLaReparation, reservoirsDeLArmee, crediterLesReserves,
 } from '../src/sim/reparation.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
@@ -1318,6 +1318,61 @@ test('RDR T9 bis — déposer sur une case occupée PERMUTE, au lieu de refuser'
     { v: armee[0].vague, c: armee[0].colonne }, { v: 3, c: 7 },
     'reposer une pièce sur sa propre case ne la laisse plus en place',
   );
+});
+
+test('MODES OFFENSE T1 — réussite, refus et case vide gardent les quatre modes armés', () => {
+  const monter = () => {
+    const etat = baseAvecCommandement(12);
+    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+    const base = baseCourante(etat);
+    for (const cle of Object.keys(base.economie.ressources)) base.economie.ressources[cle] = 1_000_000_000;
+    crediterLesReserves(etat, 12 * TICKS_PAR_HEURE);
+    return { etat, ...ecranOffenseMonte(etat) };
+  };
+  const arme = (montage, nom) => montage.parId.get(`offense-${nom}`).classList.contains('arme');
+
+  const refus = monter();
+  refus.parId.get('offense-reparer').envoyer('click');
+  toucher(refus.parId, 1, 1);
+  assert.ok(arme(refus, 'reparer'), 'Réparer se désarme après un refus');
+
+  for (const nom of ['reparer', 'ameliorer', 'retirer']) {
+    const montage = monter();
+    if (nom === 'reparer') baseCourante(montage.etat).armee[0].degatsMilli = 1_000;
+    montage.parId.get(`offense-${nom}`).envoyer('click');
+    toucher(montage.parId, 1, 1);
+    assert.ok(arme(montage, nom), `${nom} se désarme après une réussite`);
+  }
+
+  for (const nom of Object.keys(ACTIONS_ARMEE)) {
+    const montage = monter();
+    montage.parId.get(`offense-${nom}`).envoyer('click');
+    toucher(montage.parId, 4, 9);
+    assert.ok(arme(montage, nom), `${nom} se désarme sur une case vide`);
+  }
+});
+
+test('MODES OFFENSE T2 — Déplacer garde le mode, vide la main et son second clic annule', () => {
+  const etat = baseAvecCommandement(12);
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+  const { parId, ecran } = ecranOffenseMonte(etat);
+  parId.get('offense-deplacer').envoyer('click');
+  toucher(parId, 1, 1);
+  toucher(parId, 1, 2);
+  assert.ok(parId.get('offense-deplacer').classList.contains('arme'));
+  assert.deepEqual({ vague: baseCourante(etat).armee[0].vague,
+    colonne: baseCourante(etat).armee[0].colonne }, { vague: 1, colonne: 2 });
+
+  toucher(parId, 1, 2);
+  parId.get('offense-deplacer').envoyer('click');
+  assert.ok(!parId.get('offense-deplacer').classList.contains('arme'));
+  toucher(parId, 1, 3);
+  assert.equal(baseCourante(etat).armee[0].colonne, 2, 'la prise en main n’a pas été annulée');
+
+  parId.get('offense-reparer').envoyer('click');
+  ecran.masquer();
+  assert.ok(!parId.get('offense-reparer').classList.contains('arme'),
+    'quitter l’écran ne désarme pas le mode');
 });
 
 // ---------------------------------------------------------------------------

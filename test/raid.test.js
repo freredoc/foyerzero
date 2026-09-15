@@ -10,8 +10,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  problemesDuRaid, executerRaid, simulerRaid, composerLesVagues, pvMaxDeLUnite,
-  creerRecherche, rechercheMilli, montageDuRaid,
+  problemesDuRaid, executerRaid, engagerRaidReel, acheverRaidReel,
+  simulerRaid, composerLesVagues, pvMaxDeLUnite, creerRecherche,
+  rechercheMilli, montageDuRaid,
 } from '../src/sim/raid.js';
 import { ciblageDuSite, lignesDuSite } from '../src/ui/monde.js';
 // ⚠ ELLE A DÉMÉNAGÉ DANS `ui/rapport.js` LE 11/09, pour que le journal puisse la
@@ -82,6 +83,47 @@ function premierCamp(etat) {
   const s = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
   return s === undefined ? null : { rangee: s.rangee, colonne: s.colonne };
 }
+
+test('raid réel différé — recharge avant/après échéance et publication exactement une fois', () => {
+  const debut = 1_000_000;
+  const etat = partieArmee();
+  const cible = premierCamp(etat);
+  const rapportsAvant = etat.rapports.length;
+  const rapport = engagerRaidReel(etat, baseCourante(etat), cible, debut);
+  const apresEffets = JSON.parse(serialiser(etat, debut));
+
+  assert.equal(etat.rapports.length, rapportsAvant);
+  assert.equal(problemesDuRaid(etat, baseCourante(etat), cible)[0].code, 'raid-en-cours');
+  assert.throws(() => engagerRaidReel(etat, baseCourante(etat), cible, debut + 1),
+    /déjà en cours/);
+  assert.deepEqual(JSON.parse(serialiser(etat, debut)), apresEffets,
+    'un second engagement a répété le coût, les dégâts ou le butin');
+  assert.equal(acheverRaidReel(etat, etat.raidEnCours.echeanceMs - 1), null);
+
+  const recharge = charger(JSON.stringify(apresEffets), debut);
+  assert.deepEqual(JSON.parse(serialiser(recharge, debut)), apresEffets,
+    'le rechargement avant échéance a rejoué les effets du raid');
+  assert.deepEqual(acheverRaidReel(recharge, recharge.raidEnCours.echeanceMs), rapport);
+  assert.equal(recharge.rapports.length, rapportsAvant + 1);
+  assert.deepEqual(acheverRaidReel(recharge, recharge.raidEnCours.echeanceMs + 1), rapport);
+  assert.equal(recharge.rapports.length, rapportsAvant + 1, 'double récompense ou double rapport');
+
+  const publieRecharge = charger(serialiser(recharge, recharge.raidEnCours.echeanceMs),
+    recharge.raidEnCours.echeanceMs);
+  acheverRaidReel(publieRecharge, publieRecharge.raidEnCours.echeanceMs + 10_000);
+  assert.equal(publieRecharge.rapports.length, rapportsAvant + 1,
+    'le redémarrage après publication a dupliqué le rapport');
+});
+
+test('raid réel différé — un redémarrage après échéance expose le rapport', () => {
+  const debut = 2_000_000;
+  const etat = partieArmee(2027);
+  engagerRaidReel(etat, baseCourante(etat), premierCamp(etat), debut);
+  const recharge = charger(serialiser(etat, debut), etat.raidEnCours.echeanceMs + 1);
+  assert.ok(acheverRaidReel(recharge, recharge.raidEnCours.echeanceMs + 1));
+  assert.equal(recharge.raidEnCours.publie, true);
+  assert.equal(recharge.rapports.length, 1);
+});
 
 test('refus — les quatre raisons de ne pas partir, et chacune se dit', () => {
   const etat = partieArmee();

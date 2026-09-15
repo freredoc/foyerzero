@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=360,initial-scale=1">
+<title>Maquette quinconce 360 px</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:360px;min-height:640px;background:#11140f;color:#f5f3e8;font-family:system-ui,sans-serif}body{padding:12px 8px}.entete{margin-bottom:12px;padding:10px;background:#343a2c;border:1px solid #4e5742}.entete b{font-size:14px;letter-spacing:.12em}.entete p{margin:5px 0 0;color:#aab38e;font-size:11px}.vague{margin:0 0 8px;padding:6px 0 4px;background:#1e2124;border:1px solid #3e454c}.vague h2{margin:0 7px 5px;font-size:10px;letter-spacing:.12em;color:#aab38e}.rangee{display:grid;grid-template-columns:repeat(19,1fr);width:100%;padding:0 3px}.case{grid-column:span 2;position:relative;height:43px;overflow:visible;border:1px solid #4e5742;background:#252a22}.decalee .case:first-child{grid-column:2/span 2}.sprite{position:absolute;left:50%;top:47%;width:96%;height:96%;transform:translate(-50%,-50%);image-rendering:pixelated}.sprite img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated}.niveau{position:absolute;z-index:2;right:1px;bottom:1px;min-width:13px;padding:1px 2px;background:#161914;border:1px solid #928e80;color:#fff4bb;font:bold 9px/11px system-ui;text-align:center}.mesure{margin-top:10px;padding:8px;background:#1e2124;border-left:3px solid #f5b636;color:#cdd4ba;font-size:11px;line-height:1.35}.mesure b{color:#f5b636}
+</style>
+<body><div class="entete"><b>OFFENSE · QUINCONCE</b><p>Maquette d’essai — viewport Android 360 px · 4 vagues × 9</p></div><main id="vagues"></main><div class="mesure"><b>96 % maximum</b> — partie utile 80 % × grossissement 1,2. Les sprites et leurs niveaux restent dans la case, avec une demi-case de décalage une rangée sur deux.</div>
+<script>
+const racine='../art/sprites/';
+const lourds=[
+ ['belier','chassis/64/off_j_belier_chassis.png','tourelle-unite/64/off_j_belier_tourelle.png'],
+ ['broyeur','chassis/64/off_j_broyeur_chassis.png','tourelle-unite/64/off_j_broyeur_tourelle.png'],
+ ['fendeur','chassis/64/off_j_fendeur_chassis.png','tourelle-unite/64/off_j_fendeur_tourelle.png'],
+ ['enclume','unite/64/off_j_enclume.png',null],
+ ['busard','unite/64/off_j_busard.png',null]
+];
+const h=document.querySelector('#vagues');
+for(let v=1;v<=4;v++){
+ const bloc=document.createElement('section');bloc.className='vague';
+ bloc.innerHTML=`<h2>VAGUE D’ATTAQUE ${v}</h2><div class="rangee ${v%2===0?'decalee':''}"></div>`;
+ const r=bloc.querySelector('.rangee');
+ for(let c=1;c<=9;c++){
+  const [nom,chassis,tourelle]=lourds[(c+v)%lourds.length];
+  const e=document.createElement('div');e.className='case';e.title=nom;
+  e.innerHTML=`<div class="sprite"><img src="${racine+chassis}">${tourelle?`<img src="${racine+tourelle}">`:''}</div><i class="niveau">${40+((c+v)%11)}</i>`;
+  r.append(e);
+ }
+ h.append(bloc);
+}
+</script></body></html>

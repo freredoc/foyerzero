@@ -5201,7 +5201,7 @@ test('RÉPARER T5 — les dégâts se disent en MILLIÈMES des PV max, pas en ab
   assert.ok(!detailDuBatiment(bas, 0).detail.includes('dégâts'));
 });
 
-test('RÉPARER T6 — le mode se désarme après un refus comme après une réussite', () => {
+test('RÉPARER T6 — le mode reste armé après un refus comme après une réussite', () => {
   const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
   const laBase = baseCourante(etat);
   const pose = laBase.disposition[1];
@@ -5213,16 +5213,69 @@ test('RÉPARER T6 — le mode se désarme après un refus comme après une réus
     'le montage ne mesure rien : le bouton ne s\'arme pas');
   refus.doc.getElementById('chantier-grille')
     .dispatch('click', { target: caseDe(refus.doc, pose.rangee, pose.colonne) });
-  assert.ok(!refus.doc.getElementById('chantier-reparer').classList.contains('arme'),
-    'le mode reste armé après un refus');
+  assert.ok(refus.doc.getElementById('chantier-reparer').classList.contains('arme'),
+    'le mode s’est désarmé après un refus');
 
   // Réussite.
   abimerLeBatiment(etat, 1, 0.3);
   const reussite = ecranMonte(etat);
   armerEtToucher(reussite.doc, 'reparer', pose.rangee, pose.colonne);
   assert.equal(laBase.disposition[1].degatsMilli, 0, 'le montage n\'a rien réparé');
+  assert.ok(reussite.doc.getElementById('chantier-reparer').classList.contains('arme'),
+    'le mode s’est désarmé après une réussite');
+  reussite.doc.getElementById('chantier-reparer').click();
   assert.ok(!reussite.doc.getElementById('chantier-reparer').classList.contains('arme'),
-    'le mode reste armé après une réussite');
+    'un second clic sur le bouton actif ne désarme plus le mode');
+});
+
+test('MODES CHANTIER — Améliorer, Déplacer et Démolir restent armés', () => {
+  const armee = (doc, nom) => doc.getElementById(`chantier-${nom}`).classList.contains('arme');
+
+  const amelioration = baseBatie(20, [{ id: 'caserne', niveau: 1 }]);
+  for (const cle of RESSOURCES) baseCourante(amelioration).economie.ressources[cle] = 1_000_000_000;
+  const a = ecranMonte(amelioration);
+  armerEtToucher(a.doc, 'ameliorer', 13, 1);
+  assert.equal(baseCourante(amelioration).disposition[1].niveau, 2);
+  assert.ok(armee(a.doc, 'ameliorer'), 'Améliorer se désarme après réussite');
+
+  const demolition = baseBatie(20, [{ id: 'caserne', niveau: 1 }]);
+  const d = ecranMonte(demolition);
+  armerEtToucher(d.doc, 'demolir', 13, 1);
+  assert.equal(baseCourante(demolition).disposition.length, 1);
+  assert.ok(armee(d.doc, 'demolir'), 'Démolir se désarme après réussite');
+
+  const mouvement = baseBatie(20, [{ id: 'caserne', niveau: 1 }]);
+  const cible = casesDeplacables(mouvement, 1).find((c) => c.rangee !== 13 || c.colonne !== 1);
+  assert.ok(cible, 'le montage ne trouve aucune destination');
+  const m = ecranMonte(mouvement);
+  armerEtToucher(m.doc, 'deplacer', 13, 1);
+  m.doc.getElementById('chantier-grille').dispatch('click', {
+    target: caseDe(m.doc, cible.rangee, cible.colonne),
+  });
+  assert.ok(armee(m.doc, 'deplacer'), 'Déplacer se désarme après réussite');
+  assert.deepEqual({ rangee: baseCourante(mouvement).disposition[1].rangee,
+    colonne: baseCourante(mouvement).disposition[1].colonne }, cible);
+
+  m.doc.getElementById('chantier-grille').dispatch('click', {
+    target: caseDe(m.doc, cible.rangee, cible.colonne),
+  });
+  m.doc.getElementById('chantier-deplacer').click();
+  assert.ok(!armee(m.doc, 'deplacer'), 'le second clic ne désarme pas Déplacer');
+});
+
+test('MODES CHANTIER — une case vide conserve chaque mode et sortir les désarme', () => {
+  for (const nom of ['reparer', 'ameliorer', 'deplacer', 'demolir']) {
+    const montage = ecranMonte(baseBatie(20, [{ id: 'caserne', niveau: 1 }]));
+    montage.doc.getElementById(`chantier-${nom}`).click();
+    montage.doc.getElementById('chantier-grille').dispatch('click', {
+      target: caseDe(montage.doc, 12, 9),
+    });
+    assert.ok(montage.doc.getElementById(`chantier-${nom}`).classList.contains('arme'),
+      `${nom} se désarme sur une case vide`);
+    montage.ecran.marquerEcran('offense');
+    assert.ok(!montage.doc.getElementById(`chantier-${nom}`).classList.contains('arme'),
+      `${nom} reste armé après la sortie`);
+  }
 });
 
 test('RÉPARER T7 — la réserve affichée est celle des BÂTIMENTS, pas celle de l\'armée', () => {
@@ -6775,6 +6828,28 @@ test('CÂB T8 — les cinq tuiles du bandeau portent leur pictogramme, et le com
   for (let i = 0; i < 5; i += 1) bouton('defense').click();
   assert.equal(pictosDuBandeau().length, avant,
     'le bandeau a gagné des pictogrammes en changeant de bande');
+});
+
+test('NIVEAUX BAS — les trois bandes atténuent seulement la valeur absente', () => {
+  const etat = baseAvecComplexe();
+  poserEnGarnison(etat, 'merlon');
+  poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 6 });
+  const { doc } = ecranMonte(etat);
+  const boutons = Object.fromEntries(doc.getElementById('barre-bas').children
+    .map((bouton) => [bouton.dataset.bande, bouton]));
+  for (const nom of ['batiments', 'defense', 'offense']) {
+    assert.notEqual(boutons[nom].children[2].textContent, '—', `${nom} n’affiche pas son niveau`);
+    assert.ok(!boutons[nom].classList.contains('sans-niveau'), `${nom} est atténué malgré son niveau`);
+  }
+
+  const vide = ecranMonte(creerEtat(12)).doc.getElementById('barre-bas').children;
+  for (const bouton of vide) {
+    const absent = bouton.children[2].textContent === '—';
+    assert.equal(bouton.classList.contains('sans-niveau'), absent,
+      `${bouton.dataset.bande} ne lie pas l’atténuation à sa valeur réelle`);
+  }
+  const css = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  assert.match(css, /#barre-bas \.bande\.sans-niveau i\s*\{/);
 });
 
 // ---------------------------------------------------------------------------

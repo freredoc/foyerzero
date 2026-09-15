@@ -251,15 +251,11 @@ export function messageIndisponible(unite) {
  * améliorer etc. n'apparaissent pas dans le menu offense. » L'écran retirait
  * bien une unité — mais en DEUX touchers implicites, sans qu'aucun bouton ne le
  * dise. Le modèle « armer puis toucher » du Chantier est repris tel quel, avec
- * les mêmes quatre règles : retoucher l'action armée la désarme, armer une
- * action désarme l'autre, armer défait la palette, et toucher une case vide
- * désarme sans rien dire.
+ * les mêmes règles : retoucher l'action armée la désarme, armer une action
+ * désarme l'autre, armer défait la palette, et les touchers gardent le mode.
  *
- * ⚠ `agir: null` N'EST PAS UN OUBLI. Réparer et Améliorer n'ont pas de moteur
- * pour une unité — le COÛT d'une amélioration existe depuis le 28/08
- * (`data/couts-militaires.js`), la MÉCANIQUE non : ce que gagne une unité
- * améliorée n'est pas arbitré. Le bouton s'arme quand même et répond, parce
- * qu'« un indice n'est pas une interdiction » (CLAUDE.md §4).
+ * Les quatre actions ont aujourd'hui leur moteur. La branche `agir: null` de
+ * l'écran reste une réponse explicite pour une future action encore non câblée.
  *
  * ⚠ ET « RETIRER », PAS « DÉMOLIR ». On ne démolit pas des Fusiliers. Le
  * Chantier garde « Démolir » pour ses bâtiments ; les libellés sont ici parce
@@ -769,7 +765,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     corps.appendChild(bloc);
   }
 
-  /** Défait tous les modes — après une pose, un retrait, ou un geste à côté. */
+  /** Défait tous les modes lors d'un changement explicite ou d'une sortie. */
   function desarmer() {
     choisie = null;
     apercu = null;
@@ -789,10 +785,9 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   /**
    * Arme ou désarme une action.
    *
-   * Les quatre règles du Chantier, reprises telles quelles : retoucher l'action
+   * Les règles du Chantier sont reprises telles quelles : retoucher l'action
    * armée la désarme ; armer une action désarme l'autre ; armer défait la
-   * palette — un seul mode à la fois ; et l'action se désarme dans tous les cas
-   * après un toucher, réussite comme refus.
+   * palette. Les touchers, réussis ou refusés, gardent le mode.
    */
   function armer(nom) {
     const suivant = actionArmee === nom ? null : nom;
@@ -885,10 +880,7 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   function appliquerAction(index) {
     const nom = actionArmee;
     const action = ACTIONS_ARMEE[nom];
-    // Quoi qu'il arrive, le mode se désarme : réussite comme refus.
-    actionArmee = null;
-    ligneDeMode('');
-    marquerBoutonsAction();
+    // Le mode reste armé après une réussite ou un refus.
 
     if (action.agir === null) {
       // ⚠ « L'ARMÉE », PAS « LA DÉFENSE » — et « unité », pas « bâtiment ». Les
@@ -945,8 +937,6 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   function deposerLaPieceEnMain(vague, colonne) {
     const index = enMain;
     const action = ACTIONS_ARMEE.deplacer;
-    enMain = null;
-    ligneDeMode('');
     const occupant = baseCourante(etatCourant).armee.findIndex(
       (p) => p.vague === vague && p.colonne === colonne,
     );
@@ -960,6 +950,8 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       // ⚠ UNE PERMUTATION NE COÛTE RIEN NON PLUS : les deux mêmes pièces, aux
       // mêmes niveaux, changent de case. Le budget engagé est identique.
       action.permuter(etatCourant, index, occupant);
+      enMain = null;
+      ligneDeMode(MESSAGES_MODE_ARMEE.deplacer);
       peindre(etatCourant);
       if (apresPose) apresPose();
       return;
@@ -973,6 +965,8 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     // ⚠ DÉPLACER NE COÛTE RIEN — Ethan, 28/08 : « déplacement gratuit, comme
     // bâtiment ». Le budget ne bouge pas : la même unité change de case.
     action.agir(etatCourant, index, { vague, colonne });
+    enMain = null;
+    ligneDeMode(MESSAGES_MODE_ARMEE.deplacer);
     peindre(etatCourant);
     if (apresPose) apresPose();
   }
@@ -1009,13 +1003,12 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       return;
     }
 
-    // Toucher une case VIDE désarme, sans rien dire : c'est le geste « à côté
-    // du menu », pas une erreur. Le panneau se ferme avec la sélection : il
-    // décrivait la pièce qu'on vient de lâcher.
+    // Une case vide ferme la sélection. Si une action est armée, elle reste
+    // active pour le prochain toucher.
     if (occupant === -1) {
       selection = null;
       fermerPanneau();
-      desarmer();
+      if (actionArmee === null) desarmer();
       peindre(etatCourant);
       return;
     }
@@ -1473,5 +1466,5 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   // annoncer une sélection qui n'existe pas.
   marquerBoutonsAction();
 
-  return { peindre, rafraichir, nbEmplacements: NB_EMPLACEMENTS };
+  return { peindre, rafraichir, masquer: desarmer, nbEmplacements: NB_EMPLACEMENTS };
 }

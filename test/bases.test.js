@@ -126,6 +126,45 @@ import {
   RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
 } from './temoins-bases-0.js';
 
+/**
+ * Couche FORMATIONS-OUVRAGE : seul le placement du raid de l'Ouvrage change.
+ * Les six premières phases et le raid de proximité restent couverts par les
+ * couches antérieures ; les onze couples ci-dessous sont les effets mesurés de
+ * la nouvelle formation sur les deux raids de l'Ouvrage du scénario.
+ */
+const DEPLACES_PAR_FORMATIONS_OUVRAGE = {
+  p13_apresLeRaid: {
+    rapports: '7095a809c5d76e7f',
+    position: '9ba6269a824d3a93',
+    disposition: 'b5267c79e6a1ab1d',
+    economie: '2cecc3e59e9b7476',
+    satellites: '0a082e85a9f7b6f8',
+    reserveReparation: 'bb3452337908cb10',
+  },
+  p14_sousLeFeu: {
+    rapports: 'b363e4576daf9287',
+    position: 'ccc0b6d5feff1d87',
+    disposition: '5955e8fe3b5dc727',
+    satellites: '9c1447e9e0cd1ab2',
+    reserveReparation: 'a66372a573b3402d',
+  },
+};
+
+const EMPREINTES_PAR_GRAINE_FORMATIONS_OUVRAGE = {
+  1: '2682e1b8f86ec125', 2: '397cf1304977dae5', 3: '6940319e44d6910e',
+  4: 'c82cf0e5ea6da2d9', 5: 'd0c64bd344f5131c', 6: '7ecb469dee665053',
+  7: '99a65a6d834a3af7', 8: '483ffd3a5c876afd', 9: '54aedbeb7e1eb9c7',
+  10: '8ef2d5fcb57c2d53', 11: 'ab8b837f5434de1c', 12: '423525be2d476af8',
+  13: '10eb198a572641a0', 14: '3dc389ce50fb1daf', 15: 'b506b45503978f29',
+  16: 'f181205fedd7441a', 17: '40fc1c4bec0b7d86', 18: 'd4bc56bac38e7157',
+  19: '0bcafe11d044e455', 20: '35b84fcb9ed0bf23', 21: '37d35cd1da661209',
+  22: '578c0da4ca036336', 23: 'f3da67e9432e31c1', 24: '09fba3849bfbe4ba',
+  25: '077e96b46ce54709',
+};
+
+/** `,"raidEnCours":null` à la racine de chaque sauvegarde du scénario. */
+const OCTETS_AJOUTES_PAR_RAID_EN_COURS = 19;
+
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
 const TOUS_LES_CHAMPS = [...CHAMPS, ...CHAMPS_AJOUTES_PAR_BASES_1];
 
@@ -306,7 +345,12 @@ function empreinteAttendue(phase, champ) {
   // `POINTS_RECHERCHE.echelle`, et les deux grandeurs ne partagent plus aucun
   // facteur. C'est cette moitié-là qui prouve que le lot recale UN barème et rien
   // d'autre. ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25.
-  return DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
+  // ⚠⚠ VINGT-NEUVIÈME COUCHE — FORMATIONS-OUVRAGE, 15/09. Le flux de
+  // composition est inchangé ; un flux salé distinct varie l'affectation des
+  // unités aux cases. Onze couples bougent, uniquement après le raid de
+  // l'Ouvrage, et les vingt-cinq graines sont gardées individuellement plus bas.
+  return DEPLACES_PAR_FORMATIONS_OUVRAGE[phase]?.[champ]
+    ?? DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
     ?? DEPLACES_PAR_FREIN[phase]?.[champ]
     ?? DEPLACES_PAR_PREDILECTION[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT_2[phase]?.[champ]
@@ -759,7 +803,8 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // ⚠⚠ ÉCHELLE-RECHERCHE (14/09) DÉPLACE LES VINGT-CINQ, ET IL NE POUVAIT PAS
     // EN LAISSER : le solde de points entre dans l'empreinte de toute partie, et
     // les deux raids du scénario cassent quelque chose sur les vingt-cinq.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_FORMATIONS_OUVRAGE[g]
+      ?? EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
       ?? EMPREINTES_PAR_GRAINE_FREIN[g]
       ?? EMPREINTES_PAR_GRAINE_PREDILECTION[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT_2[g]
@@ -808,6 +853,7 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         // plus à la RACINE cette fois, `formationRetenue`, et il vaut `null` dans
         // ce scénario — 24 octets, fixes sur les vingt-cinq graines.
         + OCTETS_AJOUTES_PAR_RAID_ET_ECRAN
+        + OCTETS_AJOUTES_PAR_RAID_EN_COURS
         - OCTETS_OTES_PAR_PRODUCTION_EN_DEFENSE
         // ⚠ LE CINQUIÈME TERME EST ENTRÉ AU LOT RÈGLES-DE-CARTE, 10/09 : un
         // champ de plus par base, `dernierDeplacementDelaiTicks`, et lui aussi
@@ -2340,5 +2386,3 @@ test('BASES-1 T15 bis — les satellites de TOUTES les bases sont sur la carte',
     .filter((s) => s.type === 'camp' || s.type === 'avantPoste').length;
   assert.equal(dessines, tous.length, 'la carte ne dessine pas tous les satellites');
 });
-
-

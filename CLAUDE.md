@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **14/09/2026**, version 0.99.62 · build 164.
+Dernière révision : **15/09/2026**, version 0.99.63 · build 165.
 
 ---
 
@@ -41,6 +41,24 @@ Dernière révision : **14/09/2026**, version 0.99.62 · build 164.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 15/09/2026 (après RAID-REPRISE-ET-FORMATIONS), à confronter :**
+⚠⚠ **UN RAID RÉEL PORTE DÉSORMAIS SON ÉCHÉANCE DANS LA SAUVEGARDE.** Le coût,
+les dégâts et le butin sont commis une fois à l'engagement ; le rapport n'entre
+au journal qu'à l'échéance, de façon idempotente. L'arrière-plan arrête les
+images sans conclure le combat, et un chargement restaure le temps restant ou
+montre le rapport déjà dû. Le simulateur montre son résultat immédiatement et
+ne lance son rejeu que sur demande.
+⚠⚠ **LA COMPOSITION DES RAIDS DE L'OUVRAGE EST INCHANGÉE SUR 320 TÉMOINS.** Un
+flux salé distinct varie l'affectation aux 18 cases sans toucher aux tirages de
+composition. La maquette quinconce 360 px reste dans `rapports/`, hors de
+`src/`, en attente de validation.
+`npm test` rend **1627 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
+mesuré est **1626 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
+produit **9 391 258 octets**, version **0.99.63 · build 165**, soit **+4 544
+octets** sur `main` à `1aca789`. Détails, mesures et liste des tests dans
+`RAPPORT-lotRAID-REPRISE-FORMATIONS.md`.
 
 **Référence au 14/09/2026 (après le correctif RECHERCHE-AU-RASAGE), à
 confronter :**
@@ -13051,7 +13069,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   74 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   75 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -13061,7 +13079,7 @@ test/                   74 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   accent  icone  rendu-pose  reparation  roster  site-de-la-case  site-entame
   sprite  state  recherche  maj  territoire  bases  transfert  fond  limite
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
-  journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
+  journal-raids  batiments-quatre-etats  formation-et-garnison  formation-ouvrage  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
