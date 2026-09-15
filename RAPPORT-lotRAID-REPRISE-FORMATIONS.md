@@ -73,16 +73,22 @@ pliée sur trois étages : les colonnes 1 à 3 restent en haut à gauche, les
 colonnes 4 à 6 occupent le centre et les colonnes 7 à 9 le bas à droite. La
 capture reproductible `rapports/maquette-quinconce-360-appliquee.png`, produite
 par `rapports/rendre-maquette-quinconce.py`, confronte cette disposition aux
-sprites les plus volumineux.
+sprites les plus volumineux. `rapports/capture-quinconce-in-game-360.png` est
+une capture du vrai `dist/index.html`, avec une sauvegarde valide de 36 unités.
 
 `src/ui/offense.js` conserve les neuf numéros de colonne du combat et ne change
 que `grid-row`. À 360 px, les 348 px utiles moins huit écarts de 3 px donnent
-neuf cases carrées de 36 px. Les trois pistes se resserrent d'un quart de case ;
+neuf cases carrées de 36 px. Les trois pistes se resserrent d'une demi-case ;
 leurs cases ne se recouvrent pas puisqu'elles occupent des colonnes disjointes.
 La pièce offensive est bornée à 96 %
 (`80 % × 1,2`) ; aucun sprite ni niveau n'est rogné. Cette modification est
 strictement visuelle et ne touche ni l'armée sérialisée, ni l'ordre des vagues,
 ni l'équilibrage.
+
+Mesure Chromium in-game à 360 × 640 : le bassin fait 324 px de haut et son
+`scrollHeight` vaut également 324 px. Chacune des quatre vagues mesure 72,09 px,
+la dernière se termine à 427,50 px avant le bord bas du bassin à 433,50 px. Les
+quatre titres, les 36 sprites et les 36 niveaux sont donc visibles ensemble.
 
 ## Tests et livrable
 
@@ -113,7 +119,7 @@ des colonnes de pointage, la largeur de 36 px et la borne de 96 %. Aucun fichier
 de test n'est ajouté ou supprimé par cette validation.
 
 Sous Node 22, la suite complète rend **1 627 déclarés · 1 626 pass · 0 fail ·
-1 skipped** (`LIMITE T8`). Le build produit `dist/index.html`, **9 391 230
-octets**, version **0.99.65** · build **167**, soit **4 516 octets** de plus que
-`main` à `1aca789` et une marge de **208 770 octets, 2,17 %** sous la borne T10.
+1 skipped** (`LIMITE T8`). Le build produit `dist/index.html`, **9 391 301
+octets**, version **0.99.66** · build **168**, soit **4 587 octets** de plus que
+`main` à `1aca789` et une marge de **208 699 octets, 2,17 %** sous la borne T10.
 Le lot n'ajoute ni image ni son de production.

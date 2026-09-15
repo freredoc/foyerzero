@@ -412,7 +412,7 @@ test('offense — les quatre vagues occupent tout le bassin, sans déformer les 
   const emplacements = feuille.match(/#ecran-offense \.emplacements\s*\{([^}]*)\}/)[1];
   assert.match(emplacements, /grid-template-rows:\s*repeat\(3,\s*auto\)/,
     'une vague n\'a plus ses trois étages physiques');
-  assert.match(emplacement, /margin-bottom:\s*-25%/,
+  assert.match(emplacement, /margin-bottom:\s*-50%/,
     'les trois étages ne se resserrent plus pour tenir dans la hauteur');
 
   // ⚠ ET UNE VAGUE NE SE LAISSE PAS ÉCRASER : sans ça, quatre vagues dans un
@@ -954,8 +954,17 @@ test('offense — chaque vague plie ses neuf colonnes en trois, trois et trois �
   const largeurBassin = 360 - 2 * 6;
   const largeurCase = (largeurBassin - (NB_COLONNES - 1) * 3) / NB_COLONNES;
   assert.equal(largeurCase, 36);
+  const hauteurVague = 3 * (largeurCase / 2) + largeurCase / 2;
+  assert.equal(hauteurVague, 72,
+    'la diagonale ne tient plus ses quatre vagues dans le bassin in-game');
 
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const titre = feuille.match(/#ecran-offense \.vague h2\s*\{([^}]*)\}/)[1];
+  assert.match(titre, /position:\s*absolute/,
+    'le titre reprend une ligne et pousse une partie de la quatrième vague hors écran');
+  assert.match(titre, /left:\s*34%/,
+    'le titre ne reste plus dans les six colonnes libres du premier étage');
+
   const cadrage = feuille.match(
     /#ecran-offense \.emplacement \.piece \{\s*--jeton-part:\s*(\d+)%/,
   );
