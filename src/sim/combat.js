@@ -4023,6 +4023,24 @@ export function pointsRecherche(resultat, montage) {
   // code le jour où les attaques sur la base existeront.
   const quiDefend = montage.proprietaireDefense ?? 'ouvrage';
   const debloques = new Set(montage.modulesDebloques?.[quiDefend]?.defense ?? []);
+  // ⚠⚠ UN RASAGE PAIE TOUT, MÊME CE QUI EST RESTÉ DEBOUT — arbitré par Ethan le
+  // 14/09/2026 : « 100 %, même s'il reste des trucs debout. Comme les bâtiments
+  // intacts. » La phrase désigne `butin` juste en dessous, qui applique cette
+  // règle depuis le 29/08 sous le même nom, `rase`, et avec la même condition.
+  // Les points de recherche la copient à l'identique.
+  //
+  // ⚠ ET « TOUT » VEUT DIRE CE QUI ÉTAIT DEBOUT EN ARRIVANT, PAS LE PLEIN
+  // NOMINAL. C'est `pvInitialMilli`, pas `pvMaxMilli`. Une défense laissée à
+  // 50 % par la passe d'avant a déjà payé ses 50 % : le rasage lui paie les 50
+  // qui restent, et la somme des deux passes fait exactement 100, jamais 150.
+  // C'est le même arbitrage du 29/08 que celui écrit plus bas dans la boucle, et
+  // la règle d'avant faisait dépasser le total d'un rasage en deux temps.
+  //
+  // ⚠ SANS RASAGE, RIEN NE CHANGE : la boucle reste proportionnelle aux PV que
+  // CE raid a arrachés. `cause: 'souche'` est la seule des quatre de `CAUSES` à
+  // valoir victoire ; `attaquants`, `batiments` et `duree` laissent le site
+  // debout et se paient au prorata.
+  const rase = resultat.cause === 'souche';
   let total = 0n;
   for (const d of resultat.defenses) {
     const bareme = POINTS_RECHERCHE.parCible[d.id];
@@ -4038,8 +4056,10 @@ export function pointsRecherche(resultat, montage) {
     // ⚠ ET UNE CIBLE RÉPARÉE REMARQUE, c'est voulu et c'est la même phrase :
     // « sauf si elle est réparée ». Ses PV de départ sont revenus au plein, donc
     // la casser à nouveau est un travail à nouveau.
-    const perduIci = d.pvInitialMilli === undefined
-      ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli;
+    const perduIci = rase
+      ? (d.pvInitialMilli ?? d.pvMaxMilli)
+      : (d.pvInitialMilli === undefined
+        ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli);
     if (perduIci <= 0) continue;
     const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers

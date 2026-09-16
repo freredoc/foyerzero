@@ -39,6 +39,7 @@ import {
   COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS,
   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE,
   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_RASAGE_PAYANT,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -208,6 +209,10 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
     // ⚠⚠ ET LE LOT ÉCHELLE-RECHERCHE EN EMPILE UNE SIXIÈME, IL N'EN REMPLACE
     // AUCUNE. Même doctrine, même ordre de lecture : la plus récente l'emporte.
     const deplacesRecherche = COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE[i] ?? {};
+    // ⚠⚠ ET LE LOT RASAGE-PAYANT EN EMPILE UNE SEPTIÈME. Elle ne porte que
+    // DIX-HUIT champs, tous déjà couverts par celle d'au-dessus : elle déplace
+    // des valeurs sans élargir la surface, donc `surcharges` ne bouge pas.
+    const deplacesRasage = COMBATS_DEPLACES_PAR_RASAGE_PAYANT[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
       let reference = attendu[c];
       let couvert = false;
@@ -233,6 +238,10 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
       }
       if (Object.prototype.hasOwnProperty.call(deplacesRecherche, c)) {
         reference = deplacesRecherche[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesRasage, c)) {
+        reference = deplacesRasage[c];
         couvert = true;
       }
       if (couvert) surcharges += 1;
@@ -328,6 +337,20 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
     [...new Set(Object.values(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE)
       .flatMap((d) => Object.keys(d)))],
     ['6'], 'la couche d\'ÉCHELLE-RECHERCHE touche une colonne autre que les points');
+  //
+  // ⚠⚠ LOT RASAGE-PAYANT (14/09) : LA SURCHARGE NE BOUGE PAS — 1 240 avant,
+  // 1 240 après —, ET C'EST LE RÉSULTAT. La couche déplace DIX-HUIT champs, tous
+  // déjà couverts par celle d'ÉCHELLE-RECHERCHE : les dix-huit rasages qui
+  // laissaient une défense debout. Trente-trois combats se concluent en
+  // `souche`, quinze ne laissent rien debout et ne bougent pas.
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_RASAGE_PAYANT).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_RASAGE_PAYANT).filter((d) => Object.keys(d).length > 0).length,
+    18, 'la couche de RASAGE-PAYANT ne touche plus dix-huit combats');
+  assert.deepEqual(
+    [...new Set(Object.values(COMBATS_DEPLACES_PAR_RASAGE_PAYANT)
+      .flatMap((d) => Object.keys(d)))],
+    ['6'], 'la couche de RASAGE-PAYANT touche une colonne autre que les points');
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_2).length, 200);

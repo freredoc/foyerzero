@@ -8,6 +8,12 @@ distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
 Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
+⚠⚠ **BUILDS 164 À 173 BRÛLÉS HORS DÉPÔT, ET SAVE_VERSION JUSQU'À 35.** Des
+livrables ont été publiés sur l'appareil d'Ethan hors de ce dépôt.
+`PolitiqueVersion.miseAJourAcceptable` refuse un build inférieur **ou égal** :
+tout bump repart donc de **174**, jamais de 164, et `SAVE_VERSION` de **36** si
+elle doit bouger. Lire 163 ici et proposer 164 enverrait une mise à jour que les
+appareils ne verraient jamais.
 
 ---
 
@@ -41,6 +47,20 @@ Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 14/09/2026 (après le lot RASAGE-PAYANT), à confronter :**
+⚠⚠ **UN RASAGE PAIE LES DÉFENSES RESTÉES DEBOUT.** Arbitré par Ethan le 14/09 :
+« 100 %, même s'il reste des trucs debout. Comme les bâtiments intacts. »
+`pointsRecherche` copie la règle que `butin` applique depuis le 29/08, sous le
+même nom `rase` et avec la même condition `cause === 'souche'` — et « tout »
+veut dire ce qui était debout EN ARRIVANT, `pvInitialMilli`, pas le plein
+nominal : deux passes font 100 %, jamais 150. Hors rasage, le prorata est
+intact. `npm test` rend **1614 pass / 0 fail** au sens de la garde de
+`documentation.test.js` ; le verdict mesuré est **1612 pass · 0 fail ·
+1 skipped**, et `npm run check` sort en 0. Le lot ajoute `COMBAT T16` et la
+couche `COMBATS_DEPLACES_PAR_RASAGE_PAYANT` : **dix-huit champs sur 1 600, tous
+dans la colonne 6**, et la surcharge de `JOURNAL T1` ne bouge pas d'un champ —
+1 240 avant, 1 240 après.
 
 **Référence au 14/09/2026 (après le lot ÉCHELLE-RECHERCHE, refait), à
 confronter :**

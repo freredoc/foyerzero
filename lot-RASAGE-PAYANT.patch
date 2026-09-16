@@ -1,0 +1,422 @@
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -8,6 +8,12 @@
+ auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
+ 
+ Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
++⚠⚠ **BUILDS 164 À 173 BRÛLÉS HORS DÉPÔT, ET SAVE_VERSION JUSQU'À 35.** Des
++livrables ont été publiés sur l'appareil d'Ethan hors de ce dépôt.
++`PolitiqueVersion.miseAJourAcceptable` refuse un build inférieur **ou égal** :
++tout bump repart donc de **174**, jamais de 164, et `SAVE_VERSION` de **36** si
++elle doit bouger. Lire 163 ici et proposer 164 enverrait une mise à jour que les
++appareils ne verraient jamais.
+ 
+ ---
+ 
+@@ -42,6 +48,20 @@
+    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
+    assez gros pour qu'on ne tombe plus dessus par hasard.
+ 
++**Référence au 14/09/2026 (après le lot RASAGE-PAYANT), à confronter :**
++⚠⚠ **UN RASAGE PAIE LES DÉFENSES RESTÉES DEBOUT.** Arbitré par Ethan le 14/09 :
++« 100 %, même s'il reste des trucs debout. Comme les bâtiments intacts. »
++`pointsRecherche` copie la règle que `butin` applique depuis le 29/08, sous le
++même nom `rase` et avec la même condition `cause === 'souche'` — et « tout »
++veut dire ce qui était debout EN ARRIVANT, `pvInitialMilli`, pas le plein
++nominal : deux passes font 100 %, jamais 150. Hors rasage, le prorata est
++intact. `npm test` rend **1614 pass / 0 fail** au sens de la garde de
++`documentation.test.js` ; le verdict mesuré est **1612 pass · 0 fail ·
++1 skipped**, et `npm run check` sort en 0. Le lot ajoute `COMBAT T16` et la
++couche `COMBATS_DEPLACES_PAR_RASAGE_PAYANT` : **dix-huit champs sur 1 600, tous
++dans la colonne 6**, et la surcharge de `JOURNAL T1` ne bouge pas d'un champ —
++1 240 avant, 1 240 après.
++
+ **Référence au 14/09/2026 (après le lot ÉCHELLE-RECHERCHE, refait), à
+ confronter :**
+ ⚠⚠ **LES POINTS DE RECHERCHE QUITTENT LA COURBE DU BUTIN POUR LA LEUR, ET LE LOT
+--- a/src/sim/combat.js
++++ b/src/sim/combat.js
+@@ -4023,6 +4023,24 @@
+   // code le jour où les attaques sur la base existeront.
+   const quiDefend = montage.proprietaireDefense ?? 'ouvrage';
+   const debloques = new Set(montage.modulesDebloques?.[quiDefend]?.defense ?? []);
++  // ⚠⚠ UN RASAGE PAIE TOUT, MÊME CE QUI EST RESTÉ DEBOUT — arbitré par Ethan le
++  // 14/09/2026 : « 100 %, même s'il reste des trucs debout. Comme les bâtiments
++  // intacts. » La phrase désigne `butin` juste en dessous, qui applique cette
++  // règle depuis le 29/08 sous le même nom, `rase`, et avec la même condition.
++  // Les points de recherche la copient à l'identique.
++  //
++  // ⚠ ET « TOUT » VEUT DIRE CE QUI ÉTAIT DEBOUT EN ARRIVANT, PAS LE PLEIN
++  // NOMINAL. C'est `pvInitialMilli`, pas `pvMaxMilli`. Une défense laissée à
++  // 50 % par la passe d'avant a déjà payé ses 50 % : le rasage lui paie les 50
++  // qui restent, et la somme des deux passes fait exactement 100, jamais 150.
++  // C'est le même arbitrage du 29/08 que celui écrit plus bas dans la boucle, et
++  // la règle d'avant faisait dépasser le total d'un rasage en deux temps.
++  //
++  // ⚠ SANS RASAGE, RIEN NE CHANGE : la boucle reste proportionnelle aux PV que
++  // CE raid a arrachés. `cause: 'souche'` est la seule des quatre de `CAUSES` à
++  // valoir victoire ; `attaquants`, `batiments` et `duree` laissent le site
++  // debout et se paient au prorata.
++  const rase = resultat.cause === 'souche';
+   let total = 0n;
+   for (const d of resultat.defenses) {
+     const bareme = POINTS_RECHERCHE.parCible[d.id];
+@@ -4038,8 +4056,10 @@
+     // ⚠ ET UNE CIBLE RÉPARÉE REMARQUE, c'est voulu et c'est la même phrase :
+     // « sauf si elle est réparée ». Ses PV de départ sont revenus au plein, donc
+     // la casser à nouveau est un travail à nouveau.
+-    const perduIci = d.pvInitialMilli === undefined
+-      ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli;
++    const perduIci = rase
++      ? (d.pvInitialMilli ?? d.pvMaxMilli)
++      : (d.pvInitialMilli === undefined
++        ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli);
+     if (perduIci <= 0) continue;
+     const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
+     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
+--- a/test/combat.test.js
++++ b/test/combat.test.js
+@@ -1415,3 +1415,58 @@
+   const ecart = Math.abs(butinPlein(7, 3) - 3 * butinPlein(7, 1)) / butinPlein(7, 3);
+   assert.ok(ecart < 1e-12, 'le butin doit être proportionnel à l\'indice');
+ });
++
++// ---------------------------------------------------------------------------
++// T16 — un rasage paie ce qui est resté debout
++// ---------------------------------------------------------------------------
++
++test('T16 — la Souche tombée paie les défenses intactes, et deux passes ne dépassent pas 100 %', () => {
++  const montage = {
++    niveau: 3,
++    saveur: null,
++    obstacles: [],
++    // Un Merlon posé loin de tout : rien ne l'atteindra, et c'est le but. La
++    // Souche, elle, tombe sous le Pilon, ce qui conclut le raid en `souche` avec
++    // une défense encore entière.
++    //
++    // ⚠ LE PILON, PAS LE FRAPPEUR. Le Frappeur frappe plus fort (300 contre une
++    // structure) mais il meurt avant la fin — le raid se conclut alors en
++    // `attaquants` à la Souche à 45 %, et le test ne mesurerait plus rien.
++    // Mesuré : Pilon, `souche` au tick 335, Merlon intact.
++    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 9 }],
++    batiments: [{ id: 'souche', rangee: 18, colonne: 1 }],
++    vagues: [[{ rangee: DEPART, id: 'pilon', colonne: 1 }]],
++    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
++  };
++  const resultat = resoudre(creerCombat(montage));
++  assert.equal(resultat.cause, 'souche', 'le montage ne rase plus le site');
++  assert.equal(resultat.tick, 335, 'le raid ne dure plus le même temps');
++
++  const merlon = resultat.defenses.find(parId('merlon'));
++  assert.equal(merlon.pvPerdusMilli, 0, 'le Merlon a été touché : le montage a bougé');
++  assert.equal(merlon.detruit, false);
++
++  // ⚠⚠ ARBITRAGE D'ETHAN, 14/09/2026 : « 100 %, même s'il reste des trucs
++  // debout. Comme les bâtiments intacts. » Un Merlon de niveau 3 vaut
++  // 2 × facteurRechercheMilli(3) = 2 × 13 734 = 27 468 milli-points, et il les
++  // paie ENTIERS sans avoir reçu un seul coup, parce que la Souche est tombée.
++  // Avant ce lot il rapportait ZÉRO : la boucle était proportionnelle aux PV que
++  // le raid avait arrachés, et elle n'en avait arraché aucun.
++  assert.equal(pointsRecherche(resultat, montage), 27_468n);
++
++  // ⚠⚠ ET LA SOMME DE DEUX PASSES NE DÉPASSE PAS LE MERLON. C'est la moitié de
++  // l'arbitrage que personne ne pense à vérifier : « tout » veut dire ce qui
++  // était debout EN ARRIVANT, pas le plein nominal. Un Merlon laissé à 50 % par
++  // la passe d'avant a déjà touché ses 13 734 ; le rasage lui paie les 13 734
++  // qui restent, pas 27 468. Lire `pvMaxMilli` au lieu de `pvInitialMilli`
++  // ferait marquer 150 % pour une cible qui n'a qu'une vie, et c'est exactement
++  // la faute que l'arbitrage du 29/08 avait déjà corrigée côté prorata.
++  merlon.pvInitialMilli = merlon.pvMaxMilli / 2;
++  merlon.pvMilli = merlon.pvInitialMilli;
++  assert.equal(pointsRecherche(resultat, montage), 13_734n);
++
++  // Contre-épreuve : SANS rasage, la règle d'avant tient toujours. Un Merlon que
++  // personne n'a touché ne rapporte rien, quelle que soit sa santé.
++  const sansRasage = { ...resultat, cause: 'duree' };
++  assert.equal(pointsRecherche(sansRasage, montage), 0n);
++});
+--- a/test/journal.test.js
++++ b/test/journal.test.js
+@@ -39,6 +39,7 @@
+   COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS,
+   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE,
+   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS,
++  COMBATS_DEPLACES_PAR_RASAGE_PAYANT,
+ } from './temoins-combat.js';
+ 
+ const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+@@ -208,6 +209,10 @@
+     // ⚠⚠ ET LE LOT ÉCHELLE-RECHERCHE EN EMPILE UNE SIXIÈME, IL N'EN REMPLACE
+     // AUCUNE. Même doctrine, même ordre de lecture : la plus récente l'emporte.
+     const deplacesRecherche = COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE[i] ?? {};
++    // ⚠⚠ ET LE LOT RASAGE-PAYANT EN EMPILE UNE SEPTIÈME. Elle ne porte que
++    // DIX-HUIT champs, tous déjà couverts par celle d'au-dessus : elle déplace
++    // des valeurs sans élargir la surface, donc `surcharges` ne bouge pas.
++    const deplacesRasage = COMBATS_DEPLACES_PAR_RASAGE_PAYANT[i] ?? {};
+     for (let c = 1; c < vu.length; c += 1) {
+       let reference = attendu[c];
+       let couvert = false;
+@@ -235,6 +240,10 @@
+         reference = deplacesRecherche[c];
+         couvert = true;
+       }
++      if (Object.prototype.hasOwnProperty.call(deplacesRasage, c)) {
++        reference = deplacesRasage[c];
++        couvert = true;
++      }
+       if (couvert) surcharges += 1;
+       assert.equal(vu[c], reference,
+         `${vu[0]} : le champ ${c} a bougé depuis le témoin du lot APPROCHE`);
+@@ -328,6 +337,20 @@
+     [...new Set(Object.values(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE)
+       .flatMap((d) => Object.keys(d)))],
+     ['6'], 'la couche d\'ÉCHELLE-RECHERCHE touche une colonne autre que les points');
++  //
++  // ⚠⚠ LOT RASAGE-PAYANT (14/09) : LA SURCHARGE NE BOUGE PAS — 1 240 avant,
++  // 1 240 après —, ET C'EST LE RÉSULTAT. La couche déplace DIX-HUIT champs, tous
++  // déjà couverts par celle d'ÉCHELLE-RECHERCHE : les dix-huit rasages qui
++  // laissaient une défense debout. Trente-trois combats se concluent en
++  // `souche`, quinze ne laissent rien debout et ne bougent pas.
++  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_RASAGE_PAYANT).length, 200);
++  assert.equal(
++    Object.values(COMBATS_DEPLACES_PAR_RASAGE_PAYANT).filter((d) => Object.keys(d).length > 0).length,
++    18, 'la couche de RASAGE-PAYANT ne touche plus dix-huit combats');
++  assert.deepEqual(
++    [...new Set(Object.values(COMBATS_DEPLACES_PAR_RASAGE_PAYANT)
++      .flatMap((d) => Object.keys(d)))],
++    ['6'], 'la couche de RASAGE-PAYANT touche une colonne autre que les points');
+   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_BAREME_ET_REJEU).length, 200);
+   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT).length, 200);
+   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_CONTACT_2).length, 200);
+--- a/test/temoins-combat.js
++++ b/test/temoins-combat.js
+@@ -4381,3 +4381,229 @@
+   198: { 6: "70375275562" },   // base/-/n50/g5/toutes
+   199: { 6: "6123336762" },   // base/-/n50/g5/moitie
+ };
++
++/**
++ * ⚠⚠ LA COUCHE DU LOT RASAGE-PAYANT (14/09/2026) — LA DOUZIÈME, EMPILÉE
++ * PAR-DESSUS CELLE D'ÉCHELLE-RECHERCHE. La table n'est pas recapturée.
++ *
++ * Ce que le lot change : un raid qui fait tomber la Souche paie les défenses
++ * restées debout, au lieu de ne payer que les PV qu'il a arrachés. Arbitré par
++ * Ethan le 14/09 : « 100 %, même s'il reste des trucs debout. Comme les
++ * bâtiments intacts. » `butin` applique cette règle depuis le 29/08 ; les points
++ * de recherche la copient, sous le même nom et avec la même condition.
++ *
++ * ⚠⚠ DIX-HUIT CHAMPS SUR 1 600, ET TOUS DANS LA COLONNE 6. Trente-trois des
++ * deux cents combats se concluent en `souche` ; quinze d'entre eux ne laissent
++ * AUCUNE défense debout et ne bougent donc pas d'une unité. Les dix-huit qui
++ * restent sont exactement les rasages incomplets — c'est la mesure du lot, et
++ * le fait que les 167 autres combats ne bougent pas est ce qui prouve que la
++ * règle du prorata est intacte hors rasage.
++ *
++ * ⚠ ET LA SURCHARGE TOTALE NE MONTE PAS D'UN CHAMP : 1 240 avant, 1 240 après.
++ * Les dix-huit étaient DÉJÀ couverts par la couche d'ÉCHELLE-RECHERCHE, qui
++ * portait toute la colonne 6. Une couche peut donc déplacer des valeurs sans
++ * élargir la surface couverte, et les comptes de `JOURNAL T1` restent les mêmes.
++ * Un lot qui les ferait bouger aurait touché une autre colonne.
++ */
++export const COMBATS_DEPLACES_PAR_RASAGE_PAYANT = {
++  0: {},   // camp/richeQuartz/n5/g1/toutes
++  1: {},   // camp/richeQuartz/n5/g1/moitie
++  2: {},   // camp/richeScorie/n5/g1/toutes
++  3: {},   // camp/richeScorie/n5/g1/moitie
++  4: {},   // avantPoste/richeQuartz/n5/g1/toutes
++  5: {},   // avantPoste/richeQuartz/n5/g1/moitie
++  6: {},   // avantPoste/richeScorie/n5/g1/toutes
++  7: {},   // avantPoste/richeScorie/n5/g1/moitie
++  8: {},   // base/-/n5/g1/toutes
++  9: {},   // base/-/n5/g1/moitie
++  10: { 6: "166921425" },   // camp/richeQuartz/n20/g1/toutes
++  11: {},   // camp/richeQuartz/n20/g1/moitie
++  12: { 6: "166921425" },   // camp/richeScorie/n20/g1/toutes
++  13: {},   // camp/richeScorie/n20/g1/moitie
++  14: {},   // avantPoste/richeQuartz/n20/g1/toutes
++  15: {},   // avantPoste/richeQuartz/n20/g1/moitie
++  16: {},   // avantPoste/richeScorie/n20/g1/toutes
++  17: {},   // avantPoste/richeScorie/n20/g1/moitie
++  18: {},   // base/-/n20/g1/toutes
++  19: {},   // base/-/n20/g1/moitie
++  20: {},   // camp/richeQuartz/n35/g1/toutes
++  21: {},   // camp/richeQuartz/n35/g1/moitie
++  22: {},   // camp/richeScorie/n35/g1/toutes
++  23: {},   // camp/richeScorie/n35/g1/moitie
++  24: {},   // avantPoste/richeQuartz/n35/g1/toutes
++  25: {},   // avantPoste/richeQuartz/n35/g1/moitie
++  26: {},   // avantPoste/richeScorie/n35/g1/toutes
++  27: {},   // avantPoste/richeScorie/n35/g1/moitie
++  28: {},   // base/-/n35/g1/toutes
++  29: {},   // base/-/n35/g1/moitie
++  30: {},   // camp/richeQuartz/n50/g1/toutes
++  31: {},   // camp/richeQuartz/n50/g1/moitie
++  32: {},   // camp/richeScorie/n50/g1/toutes
++  33: {},   // camp/richeScorie/n50/g1/moitie
++  34: {},   // avantPoste/richeQuartz/n50/g1/toutes
++  35: {},   // avantPoste/richeQuartz/n50/g1/moitie
++  36: {},   // avantPoste/richeScorie/n50/g1/toutes
++  37: {},   // avantPoste/richeScorie/n50/g1/moitie
++  38: {},   // base/-/n50/g1/toutes
++  39: {},   // base/-/n50/g1/moitie
++  40: {},   // camp/richeQuartz/n5/g2/toutes
++  41: {},   // camp/richeQuartz/n5/g2/moitie
++  42: {},   // camp/richeScorie/n5/g2/toutes
++  43: {},   // camp/richeScorie/n5/g2/moitie
++  44: { 6: "1062700" },   // avantPoste/richeQuartz/n5/g2/toutes
++  45: {},   // avantPoste/richeQuartz/n5/g2/moitie
++  46: { 6: "1062700" },   // avantPoste/richeScorie/n5/g2/toutes
++  47: {},   // avantPoste/richeScorie/n5/g2/moitie
++  48: {},   // base/-/n5/g2/toutes
++  49: {},   // base/-/n5/g2/moitie
++  50: {},   // camp/richeQuartz/n20/g2/toutes
++  51: {},   // camp/richeQuartz/n20/g2/moitie
++  52: {},   // camp/richeScorie/n20/g2/toutes
++  53: {},   // camp/richeScorie/n20/g2/moitie
++  54: { 6: "225372025" },   // avantPoste/richeQuartz/n20/g2/toutes
++  55: {},   // avantPoste/richeQuartz/n20/g2/moitie
++  56: { 6: "225372025" },   // avantPoste/richeScorie/n20/g2/toutes
++  57: {},   // avantPoste/richeScorie/n20/g2/moitie
++  58: {},   // base/-/n20/g2/toutes
++  59: {},   // base/-/n20/g2/moitie
++  60: {},   // camp/richeQuartz/n35/g2/toutes
++  61: {},   // camp/richeQuartz/n35/g2/moitie
++  62: {},   // camp/richeScorie/n35/g2/toutes
++  63: {},   // camp/richeScorie/n35/g2/moitie
++  64: {},   // avantPoste/richeQuartz/n35/g2/toutes
++  65: {},   // avantPoste/richeQuartz/n35/g2/moitie
++  66: {},   // avantPoste/richeScorie/n35/g2/toutes
++  67: {},   // avantPoste/richeScorie/n35/g2/moitie
++  68: {},   // base/-/n35/g2/toutes
++  69: {},   // base/-/n35/g2/moitie
++  70: {},   // camp/richeQuartz/n50/g2/toutes
++  71: {},   // camp/richeQuartz/n50/g2/moitie
++  72: {},   // camp/richeScorie/n50/g2/toutes
++  73: {},   // camp/richeScorie/n50/g2/moitie
++  74: {},   // avantPoste/richeQuartz/n50/g2/toutes
++  75: {},   // avantPoste/richeQuartz/n50/g2/moitie
++  76: {},   // avantPoste/richeScorie/n50/g2/toutes
++  77: {},   // avantPoste/richeScorie/n50/g2/moitie
++  78: {},   // base/-/n50/g2/toutes
++  79: {},   // base/-/n50/g2/moitie
++  80: { 6: "637620" },   // camp/richeQuartz/n5/g3/toutes
++  81: { 6: "637620" },   // camp/richeQuartz/n5/g3/moitie
++  82: { 6: "637620" },   // camp/richeScorie/n5/g3/toutes
++  83: { 6: "637620" },   // camp/richeScorie/n5/g3/moitie
++  84: {},   // avantPoste/richeQuartz/n5/g3/toutes
++  85: {},   // avantPoste/richeQuartz/n5/g3/moitie
++  86: {},   // avantPoste/richeScorie/n5/g3/toutes
++  87: {},   // avantPoste/richeScorie/n5/g3/moitie
++  88: {},   // base/-/n5/g3/toutes
++  89: {},   // base/-/n5/g3/moitie
++  90: { 6: "151184725" },   // camp/richeQuartz/n20/g3/toutes
++  91: {},   // camp/richeQuartz/n20/g3/moitie
++  92: { 6: "151184725" },   // camp/richeScorie/n20/g3/toutes
++  93: {},   // camp/richeScorie/n20/g3/moitie
++  94: {},   // avantPoste/richeQuartz/n20/g3/toutes
++  95: {},   // avantPoste/richeQuartz/n20/g3/moitie
++  96: {},   // avantPoste/richeScorie/n20/g3/toutes
++  97: {},   // avantPoste/richeScorie/n20/g3/moitie
++  98: {},   // base/-/n20/g3/toutes
++  99: {},   // base/-/n20/g3/moitie
++  100: {},   // camp/richeQuartz/n35/g3/toutes
++  101: {},   // camp/richeQuartz/n35/g3/moitie
++  102: {},   // camp/richeScorie/n35/g3/toutes
++  103: {},   // camp/richeScorie/n35/g3/moitie
++  104: {},   // avantPoste/richeQuartz/n35/g3/toutes
++  105: {},   // avantPoste/richeQuartz/n35/g3/moitie
++  106: {},   // avantPoste/richeScorie/n35/g3/toutes
++  107: {},   // avantPoste/richeScorie/n35/g3/moitie
++  108: {},   // base/-/n35/g3/toutes
++  109: {},   // base/-/n35/g3/moitie
++  110: {},   // camp/richeQuartz/n50/g3/toutes
++  111: {},   // camp/richeQuartz/n50/g3/moitie
++  112: {},   // camp/richeScorie/n50/g3/toutes
++  113: {},   // camp/richeScorie/n50/g3/moitie
++  114: {},   // avantPoste/richeQuartz/n50/g3/toutes
++  115: {},   // avantPoste/richeQuartz/n50/g3/moitie
++  116: {},   // avantPoste/richeScorie/n50/g3/toutes
++  117: {},   // avantPoste/richeScorie/n50/g3/moitie
++  118: {},   // base/-/n50/g3/toutes
++  119: {},   // base/-/n50/g3/moitie
++  120: {},   // camp/richeQuartz/n5/g4/toutes
++  121: {},   // camp/richeQuartz/n5/g4/moitie
++  122: {},   // camp/richeScorie/n5/g4/toutes
++  123: {},   // camp/richeScorie/n5/g4/moitie
++  124: {},   // avantPoste/richeQuartz/n5/g4/toutes
++  125: { 6: "1062700" },   // avantPoste/richeQuartz/n5/g4/moitie
++  126: {},   // avantPoste/richeScorie/n5/g4/toutes
++  127: { 6: "1062700" },   // avantPoste/richeScorie/n5/g4/moitie
++  128: {},   // base/-/n5/g4/toutes
++  129: {},   // base/-/n5/g4/moitie
++  130: {},   // camp/richeQuartz/n20/g4/toutes
++  131: {},   // camp/richeQuartz/n20/g4/moitie
++  132: {},   // camp/richeScorie/n20/g4/toutes
++  133: {},   // camp/richeScorie/n20/g4/moitie
++  134: {},   // avantPoste/richeQuartz/n20/g4/toutes
++  135: {},   // avantPoste/richeQuartz/n20/g4/moitie
++  136: {},   // avantPoste/richeScorie/n20/g4/toutes
++  137: {},   // avantPoste/richeScorie/n20/g4/moitie
++  138: {},   // base/-/n20/g4/toutes
++  139: {},   // base/-/n20/g4/moitie
++  140: {},   // camp/richeQuartz/n35/g4/toutes
++  141: {},   // camp/richeQuartz/n35/g4/moitie
++  142: {},   // camp/richeScorie/n35/g4/toutes
++  143: {},   // camp/richeScorie/n35/g4/moitie
++  144: {},   // avantPoste/richeQuartz/n35/g4/toutes
++  145: {},   // avantPoste/richeQuartz/n35/g4/moitie
++  146: {},   // avantPoste/richeScorie/n35/g4/toutes
++  147: {},   // avantPoste/richeScorie/n35/g4/moitie
++  148: {},   // base/-/n35/g4/toutes
++  149: {},   // base/-/n35/g4/moitie
++  150: {},   // camp/richeQuartz/n50/g4/toutes
++  151: {},   // camp/richeQuartz/n50/g4/moitie
++  152: {},   // camp/richeScorie/n50/g4/toutes
++  153: {},   // camp/richeScorie/n50/g4/moitie
++  154: {},   // avantPoste/richeQuartz/n50/g4/toutes
++  155: {},   // avantPoste/richeQuartz/n50/g4/moitie
++  156: {},   // avantPoste/richeScorie/n50/g4/toutes
++  157: {},   // avantPoste/richeScorie/n50/g4/moitie
++  158: {},   // base/-/n50/g4/toutes
++  159: {},   // base/-/n50/g4/moitie
++  160: {},   // camp/richeQuartz/n5/g5/toutes
++  161: {},   // camp/richeQuartz/n5/g5/moitie
++  162: {},   // camp/richeScorie/n5/g5/toutes
++  163: {},   // camp/richeScorie/n5/g5/moitie
++  164: {},   // avantPoste/richeQuartz/n5/g5/toutes
++  165: {},   // avantPoste/richeQuartz/n5/g5/moitie
++  166: {},   // avantPoste/richeScorie/n5/g5/toutes
++  167: {},   // avantPoste/richeScorie/n5/g5/moitie
++  168: {},   // base/-/n5/g5/toutes
++  169: {},   // base/-/n5/g5/moitie
++  170: { 6: "142754350" },   // camp/richeQuartz/n20/g5/toutes
++  171: {},   // camp/richeQuartz/n20/g5/moitie
++  172: { 6: "142754350" },   // camp/richeScorie/n20/g5/toutes
++  173: {},   // camp/richeScorie/n20/g5/moitie
++  174: { 6: "222561900" },   // avantPoste/richeQuartz/n20/g5/toutes
++  175: {},   // avantPoste/richeQuartz/n20/g5/moitie
++  176: { 6: "222561900" },   // avantPoste/richeScorie/n20/g5/toutes
++  177: {},   // avantPoste/richeScorie/n20/g5/moitie
++  178: {},   // base/-/n20/g5/toutes
++  179: {},   // base/-/n20/g5/moitie
++  180: {},   // camp/richeQuartz/n35/g5/toutes
++  181: {},   // camp/richeQuartz/n35/g5/moitie
++  182: {},   // camp/richeScorie/n35/g5/toutes
++  183: {},   // camp/richeScorie/n35/g5/moitie
++  184: {},   // avantPoste/richeQuartz/n35/g5/toutes
++  185: {},   // avantPoste/richeQuartz/n35/g5/moitie
++  186: {},   // avantPoste/richeScorie/n35/g5/toutes
++  187: {},   // avantPoste/richeScorie/n35/g5/moitie
++  188: {},   // base/-/n35/g5/toutes
++  189: {},   // base/-/n35/g5/moitie
++  190: {},   // camp/richeQuartz/n50/g5/toutes
++  191: {},   // camp/richeQuartz/n50/g5/moitie
++  192: {},   // camp/richeScorie/n50/g5/toutes
++  193: {},   // camp/richeScorie/n50/g5/moitie
++  194: {},   // avantPoste/richeQuartz/n50/g5/toutes
++  195: {},   // avantPoste/richeQuartz/n50/g5/moitie
++  196: {},   // avantPoste/richeScorie/n50/g5/toutes
++  197: {},   // avantPoste/richeScorie/n50/g5/moitie
++  198: {},   // base/-/n50/g5/toutes
++  199: {},   // base/-/n50/g5/moitie
++};

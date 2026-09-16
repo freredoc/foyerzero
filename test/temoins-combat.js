@@ -4381,3 +4381,229 @@ export const COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS = {
   198: { 6: "70375275562" },   // base/-/n50/g5/toutes
   199: { 6: "6123336762" },   // base/-/n50/g5/moitie
 };
+
+/**
+ * ⚠⚠ LA COUCHE DU LOT RASAGE-PAYANT (14/09/2026) — LA DOUZIÈME, EMPILÉE
+ * PAR-DESSUS CELLE D'ÉCHELLE-RECHERCHE. La table n'est pas recapturée.
+ *
+ * Ce que le lot change : un raid qui fait tomber la Souche paie les défenses
+ * restées debout, au lieu de ne payer que les PV qu'il a arrachés. Arbitré par
+ * Ethan le 14/09 : « 100 %, même s'il reste des trucs debout. Comme les
+ * bâtiments intacts. » `butin` applique cette règle depuis le 29/08 ; les points
+ * de recherche la copient, sous le même nom et avec la même condition.
+ *
+ * ⚠⚠ DIX-HUIT CHAMPS SUR 1 600, ET TOUS DANS LA COLONNE 6. Trente-trois des
+ * deux cents combats se concluent en `souche` ; quinze d'entre eux ne laissent
+ * AUCUNE défense debout et ne bougent donc pas d'une unité. Les dix-huit qui
+ * restent sont exactement les rasages incomplets — c'est la mesure du lot, et
+ * le fait que les 167 autres combats ne bougent pas est ce qui prouve que la
+ * règle du prorata est intacte hors rasage.
+ *
+ * ⚠ ET LA SURCHARGE TOTALE NE MONTE PAS D'UN CHAMP : 1 240 avant, 1 240 après.
+ * Les dix-huit étaient DÉJÀ couverts par la couche d'ÉCHELLE-RECHERCHE, qui
+ * portait toute la colonne 6. Une couche peut donc déplacer des valeurs sans
+ * élargir la surface couverte, et les comptes de `JOURNAL T1` restent les mêmes.
+ * Un lot qui les ferait bouger aurait touché une autre colonne.
+ */
+export const COMBATS_DEPLACES_PAR_RASAGE_PAYANT = {
+  0: {},   // camp/richeQuartz/n5/g1/toutes
+  1: {},   // camp/richeQuartz/n5/g1/moitie
+  2: {},   // camp/richeScorie/n5/g1/toutes
+  3: {},   // camp/richeScorie/n5/g1/moitie
+  4: {},   // avantPoste/richeQuartz/n5/g1/toutes
+  5: {},   // avantPoste/richeQuartz/n5/g1/moitie
+  6: {},   // avantPoste/richeScorie/n5/g1/toutes
+  7: {},   // avantPoste/richeScorie/n5/g1/moitie
+  8: {},   // base/-/n5/g1/toutes
+  9: {},   // base/-/n5/g1/moitie
+  10: { 6: "166921425" },   // camp/richeQuartz/n20/g1/toutes
+  11: {},   // camp/richeQuartz/n20/g1/moitie
+  12: { 6: "166921425" },   // camp/richeScorie/n20/g1/toutes
+  13: {},   // camp/richeScorie/n20/g1/moitie
+  14: {},   // avantPoste/richeQuartz/n20/g1/toutes
+  15: {},   // avantPoste/richeQuartz/n20/g1/moitie
+  16: {},   // avantPoste/richeScorie/n20/g1/toutes
+  17: {},   // avantPoste/richeScorie/n20/g1/moitie
+  18: {},   // base/-/n20/g1/toutes
+  19: {},   // base/-/n20/g1/moitie
+  20: {},   // camp/richeQuartz/n35/g1/toutes
+  21: {},   // camp/richeQuartz/n35/g1/moitie
+  22: {},   // camp/richeScorie/n35/g1/toutes
+  23: {},   // camp/richeScorie/n35/g1/moitie
+  24: {},   // avantPoste/richeQuartz/n35/g1/toutes
+  25: {},   // avantPoste/richeQuartz/n35/g1/moitie
+  26: {},   // avantPoste/richeScorie/n35/g1/toutes
+  27: {},   // avantPoste/richeScorie/n35/g1/moitie
+  28: {},   // base/-/n35/g1/toutes
+  29: {},   // base/-/n35/g1/moitie
+  30: {},   // camp/richeQuartz/n50/g1/toutes
+  31: {},   // camp/richeQuartz/n50/g1/moitie
+  32: {},   // camp/richeScorie/n50/g1/toutes
+  33: {},   // camp/richeScorie/n50/g1/moitie
+  34: {},   // avantPoste/richeQuartz/n50/g1/toutes
+  35: {},   // avantPoste/richeQuartz/n50/g1/moitie
+  36: {},   // avantPoste/richeScorie/n50/g1/toutes
+  37: {},   // avantPoste/richeScorie/n50/g1/moitie
+  38: {},   // base/-/n50/g1/toutes
+  39: {},   // base/-/n50/g1/moitie
+  40: {},   // camp/richeQuartz/n5/g2/toutes
+  41: {},   // camp/richeQuartz/n5/g2/moitie
+  42: {},   // camp/richeScorie/n5/g2/toutes
+  43: {},   // camp/richeScorie/n5/g2/moitie
+  44: { 6: "1062700" },   // avantPoste/richeQuartz/n5/g2/toutes
+  45: {},   // avantPoste/richeQuartz/n5/g2/moitie
+  46: { 6: "1062700" },   // avantPoste/richeScorie/n5/g2/toutes
+  47: {},   // avantPoste/richeScorie/n5/g2/moitie
+  48: {},   // base/-/n5/g2/toutes
+  49: {},   // base/-/n5/g2/moitie
+  50: {},   // camp/richeQuartz/n20/g2/toutes
+  51: {},   // camp/richeQuartz/n20/g2/moitie
+  52: {},   // camp/richeScorie/n20/g2/toutes
+  53: {},   // camp/richeScorie/n20/g2/moitie
+  54: { 6: "225372025" },   // avantPoste/richeQuartz/n20/g2/toutes
+  55: {},   // avantPoste/richeQuartz/n20/g2/moitie
+  56: { 6: "225372025" },   // avantPoste/richeScorie/n20/g2/toutes
+  57: {},   // avantPoste/richeScorie/n20/g2/moitie
+  58: {},   // base/-/n20/g2/toutes
+  59: {},   // base/-/n20/g2/moitie
+  60: {},   // camp/richeQuartz/n35/g2/toutes
+  61: {},   // camp/richeQuartz/n35/g2/moitie
+  62: {},   // camp/richeScorie/n35/g2/toutes
+  63: {},   // camp/richeScorie/n35/g2/moitie
+  64: {},   // avantPoste/richeQuartz/n35/g2/toutes
+  65: {},   // avantPoste/richeQuartz/n35/g2/moitie
+  66: {},   // avantPoste/richeScorie/n35/g2/toutes
+  67: {},   // avantPoste/richeScorie/n35/g2/moitie
+  68: {},   // base/-/n35/g2/toutes
+  69: {},   // base/-/n35/g2/moitie
+  70: {},   // camp/richeQuartz/n50/g2/toutes
+  71: {},   // camp/richeQuartz/n50/g2/moitie
+  72: {},   // camp/richeScorie/n50/g2/toutes
+  73: {},   // camp/richeScorie/n50/g2/moitie
+  74: {},   // avantPoste/richeQuartz/n50/g2/toutes
+  75: {},   // avantPoste/richeQuartz/n50/g2/moitie
+  76: {},   // avantPoste/richeScorie/n50/g2/toutes
+  77: {},   // avantPoste/richeScorie/n50/g2/moitie
+  78: {},   // base/-/n50/g2/toutes
+  79: {},   // base/-/n50/g2/moitie
+  80: { 6: "637620" },   // camp/richeQuartz/n5/g3/toutes
+  81: { 6: "637620" },   // camp/richeQuartz/n5/g3/moitie
+  82: { 6: "637620" },   // camp/richeScorie/n5/g3/toutes
+  83: { 6: "637620" },   // camp/richeScorie/n5/g3/moitie
+  84: {},   // avantPoste/richeQuartz/n5/g3/toutes
+  85: {},   // avantPoste/richeQuartz/n5/g3/moitie
+  86: {},   // avantPoste/richeScorie/n5/g3/toutes
+  87: {},   // avantPoste/richeScorie/n5/g3/moitie
+  88: {},   // base/-/n5/g3/toutes
+  89: {},   // base/-/n5/g3/moitie
+  90: { 6: "151184725" },   // camp/richeQuartz/n20/g3/toutes
+  91: {},   // camp/richeQuartz/n20/g3/moitie
+  92: { 6: "151184725" },   // camp/richeScorie/n20/g3/toutes
+  93: {},   // camp/richeScorie/n20/g3/moitie
+  94: {},   // avantPoste/richeQuartz/n20/g3/toutes
+  95: {},   // avantPoste/richeQuartz/n20/g3/moitie
+  96: {},   // avantPoste/richeScorie/n20/g3/toutes
+  97: {},   // avantPoste/richeScorie/n20/g3/moitie
+  98: {},   // base/-/n20/g3/toutes
+  99: {},   // base/-/n20/g3/moitie
+  100: {},   // camp/richeQuartz/n35/g3/toutes
+  101: {},   // camp/richeQuartz/n35/g3/moitie
+  102: {},   // camp/richeScorie/n35/g3/toutes
+  103: {},   // camp/richeScorie/n35/g3/moitie
+  104: {},   // avantPoste/richeQuartz/n35/g3/toutes
+  105: {},   // avantPoste/richeQuartz/n35/g3/moitie
+  106: {},   // avantPoste/richeScorie/n35/g3/toutes
+  107: {},   // avantPoste/richeScorie/n35/g3/moitie
+  108: {},   // base/-/n35/g3/toutes
+  109: {},   // base/-/n35/g3/moitie
+  110: {},   // camp/richeQuartz/n50/g3/toutes
+  111: {},   // camp/richeQuartz/n50/g3/moitie
+  112: {},   // camp/richeScorie/n50/g3/toutes
+  113: {},   // camp/richeScorie/n50/g3/moitie
+  114: {},   // avantPoste/richeQuartz/n50/g3/toutes
+  115: {},   // avantPoste/richeQuartz/n50/g3/moitie
+  116: {},   // avantPoste/richeScorie/n50/g3/toutes
+  117: {},   // avantPoste/richeScorie/n50/g3/moitie
+  118: {},   // base/-/n50/g3/toutes
+  119: {},   // base/-/n50/g3/moitie
+  120: {},   // camp/richeQuartz/n5/g4/toutes
+  121: {},   // camp/richeQuartz/n5/g4/moitie
+  122: {},   // camp/richeScorie/n5/g4/toutes
+  123: {},   // camp/richeScorie/n5/g4/moitie
+  124: {},   // avantPoste/richeQuartz/n5/g4/toutes
+  125: { 6: "1062700" },   // avantPoste/richeQuartz/n5/g4/moitie
+  126: {},   // avantPoste/richeScorie/n5/g4/toutes
+  127: { 6: "1062700" },   // avantPoste/richeScorie/n5/g4/moitie
+  128: {},   // base/-/n5/g4/toutes
+  129: {},   // base/-/n5/g4/moitie
+  130: {},   // camp/richeQuartz/n20/g4/toutes
+  131: {},   // camp/richeQuartz/n20/g4/moitie
+  132: {},   // camp/richeScorie/n20/g4/toutes
+  133: {},   // camp/richeScorie/n20/g4/moitie
+  134: {},   // avantPoste/richeQuartz/n20/g4/toutes
+  135: {},   // avantPoste/richeQuartz/n20/g4/moitie
+  136: {},   // avantPoste/richeScorie/n20/g4/toutes
+  137: {},   // avantPoste/richeScorie/n20/g4/moitie
+  138: {},   // base/-/n20/g4/toutes
+  139: {},   // base/-/n20/g4/moitie
+  140: {},   // camp/richeQuartz/n35/g4/toutes
+  141: {},   // camp/richeQuartz/n35/g4/moitie
+  142: {},   // camp/richeScorie/n35/g4/toutes
+  143: {},   // camp/richeScorie/n35/g4/moitie
+  144: {},   // avantPoste/richeQuartz/n35/g4/toutes
+  145: {},   // avantPoste/richeQuartz/n35/g4/moitie
+  146: {},   // avantPoste/richeScorie/n35/g4/toutes
+  147: {},   // avantPoste/richeScorie/n35/g4/moitie
+  148: {},   // base/-/n35/g4/toutes
+  149: {},   // base/-/n35/g4/moitie
+  150: {},   // camp/richeQuartz/n50/g4/toutes
+  151: {},   // camp/richeQuartz/n50/g4/moitie
+  152: {},   // camp/richeScorie/n50/g4/toutes
+  153: {},   // camp/richeScorie/n50/g4/moitie
+  154: {},   // avantPoste/richeQuartz/n50/g4/toutes
+  155: {},   // avantPoste/richeQuartz/n50/g4/moitie
+  156: {},   // avantPoste/richeScorie/n50/g4/toutes
+  157: {},   // avantPoste/richeScorie/n50/g4/moitie
+  158: {},   // base/-/n50/g4/toutes
+  159: {},   // base/-/n50/g4/moitie
+  160: {},   // camp/richeQuartz/n5/g5/toutes
+  161: {},   // camp/richeQuartz/n5/g5/moitie
+  162: {},   // camp/richeScorie/n5/g5/toutes
+  163: {},   // camp/richeScorie/n5/g5/moitie
+  164: {},   // avantPoste/richeQuartz/n5/g5/toutes
+  165: {},   // avantPoste/richeQuartz/n5/g5/moitie
+  166: {},   // avantPoste/richeScorie/n5/g5/toutes
+  167: {},   // avantPoste/richeScorie/n5/g5/moitie
+  168: {},   // base/-/n5/g5/toutes
+  169: {},   // base/-/n5/g5/moitie
+  170: { 6: "142754350" },   // camp/richeQuartz/n20/g5/toutes
+  171: {},   // camp/richeQuartz/n20/g5/moitie
+  172: { 6: "142754350" },   // camp/richeScorie/n20/g5/toutes
+  173: {},   // camp/richeScorie/n20/g5/moitie
+  174: { 6: "222561900" },   // avantPoste/richeQuartz/n20/g5/toutes
+  175: {},   // avantPoste/richeQuartz/n20/g5/moitie
+  176: { 6: "222561900" },   // avantPoste/richeScorie/n20/g5/toutes
+  177: {},   // avantPoste/richeScorie/n20/g5/moitie
+  178: {},   // base/-/n20/g5/toutes
+  179: {},   // base/-/n20/g5/moitie
+  180: {},   // camp/richeQuartz/n35/g5/toutes
+  181: {},   // camp/richeQuartz/n35/g5/moitie
+  182: {},   // camp/richeScorie/n35/g5/toutes
+  183: {},   // camp/richeScorie/n35/g5/moitie
+  184: {},   // avantPoste/richeQuartz/n35/g5/toutes
+  185: {},   // avantPoste/richeQuartz/n35/g5/moitie
+  186: {},   // avantPoste/richeScorie/n35/g5/toutes
+  187: {},   // avantPoste/richeScorie/n35/g5/moitie
+  188: {},   // base/-/n35/g5/toutes
+  189: {},   // base/-/n35/g5/moitie
+  190: {},   // camp/richeQuartz/n50/g5/toutes
+  191: {},   // camp/richeQuartz/n50/g5/moitie
+  192: {},   // camp/richeScorie/n50/g5/toutes
+  193: {},   // camp/richeScorie/n50/g5/moitie
+  194: {},   // avantPoste/richeQuartz/n50/g5/toutes
+  195: {},   // avantPoste/richeQuartz/n50/g5/moitie
+  196: {},   // avantPoste/richeScorie/n50/g5/toutes
+  197: {},   // avantPoste/richeScorie/n50/g5/moitie
+  198: {},   // base/-/n50/g5/toutes
+  199: {},   // base/-/n50/g5/moitie
+};

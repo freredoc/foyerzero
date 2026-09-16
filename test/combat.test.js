@@ -1415,3 +1415,58 @@ test('§10 — le butin plein suit ses deux pentes et son indice', () => {
   const ecart = Math.abs(butinPlein(7, 3) - 3 * butinPlein(7, 1)) / butinPlein(7, 3);
   assert.ok(ecart < 1e-12, 'le butin doit être proportionnel à l\'indice');
 });
+
+// ---------------------------------------------------------------------------
+// T16 — un rasage paie ce qui est resté debout
+// ---------------------------------------------------------------------------
+
+test('T16 — la Souche tombée paie les défenses intactes, et deux passes ne dépassent pas 100 %', () => {
+  const montage = {
+    niveau: 3,
+    saveur: null,
+    obstacles: [],
+    // Un Merlon posé loin de tout : rien ne l'atteindra, et c'est le but. La
+    // Souche, elle, tombe sous le Pilon, ce qui conclut le raid en `souche` avec
+    // une défense encore entière.
+    //
+    // ⚠ LE PILON, PAS LE FRAPPEUR. Le Frappeur frappe plus fort (300 contre une
+    // structure) mais il meurt avant la fin — le raid se conclut alors en
+    // `attaquants` à la Souche à 45 %, et le test ne mesurerait plus rien.
+    // Mesuré : Pilon, `souche` au tick 335, Merlon intact.
+    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 9 }],
+    batiments: [{ id: 'souche', rangee: 18, colonne: 1 }],
+    vagues: [[{ rangee: DEPART, id: 'pilon', colonne: 1 }]],
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+  };
+  const resultat = resoudre(creerCombat(montage));
+  assert.equal(resultat.cause, 'souche', 'le montage ne rase plus le site');
+  assert.equal(resultat.tick, 335, 'le raid ne dure plus le même temps');
+
+  const merlon = resultat.defenses.find(parId('merlon'));
+  assert.equal(merlon.pvPerdusMilli, 0, 'le Merlon a été touché : le montage a bougé');
+  assert.equal(merlon.detruit, false);
+
+  // ⚠⚠ ARBITRAGE D'ETHAN, 14/09/2026 : « 100 %, même s'il reste des trucs
+  // debout. Comme les bâtiments intacts. » Un Merlon de niveau 3 vaut
+  // 2 × facteurRechercheMilli(3) = 2 × 13 734 = 27 468 milli-points, et il les
+  // paie ENTIERS sans avoir reçu un seul coup, parce que la Souche est tombée.
+  // Avant ce lot il rapportait ZÉRO : la boucle était proportionnelle aux PV que
+  // le raid avait arrachés, et elle n'en avait arraché aucun.
+  assert.equal(pointsRecherche(resultat, montage), 27_468n);
+
+  // ⚠⚠ ET LA SOMME DE DEUX PASSES NE DÉPASSE PAS LE MERLON. C'est la moitié de
+  // l'arbitrage que personne ne pense à vérifier : « tout » veut dire ce qui
+  // était debout EN ARRIVANT, pas le plein nominal. Un Merlon laissé à 50 % par
+  // la passe d'avant a déjà touché ses 13 734 ; le rasage lui paie les 13 734
+  // qui restent, pas 27 468. Lire `pvMaxMilli` au lieu de `pvInitialMilli`
+  // ferait marquer 150 % pour une cible qui n'a qu'une vie, et c'est exactement
+  // la faute que l'arbitrage du 29/08 avait déjà corrigée côté prorata.
+  merlon.pvInitialMilli = merlon.pvMaxMilli / 2;
+  merlon.pvMilli = merlon.pvInitialMilli;
+  assert.equal(pointsRecherche(resultat, montage), 13_734n);
+
+  // Contre-épreuve : SANS rasage, la règle d'avant tient toujours. Un Merlon que
+  // personne n'a touché ne rapporte rien, quelle que soit sa santé.
+  const sansRasage = { ...resultat, cause: 'duree' };
+  assert.equal(pointsRecherche(sansRasage, montage), 0n);
+});
