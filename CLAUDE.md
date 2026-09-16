@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **15/09/2026**, version 0.99.71 · build 173.
+Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
 
 ---
 
@@ -41,49 +41,6 @@ Dernière révision : **15/09/2026**, version 0.99.71 · build 173.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
-
-**Référence au 15/09/2026 (après le revert de la PR #147 et le correctif du
-raid), à confronter :**
-⚠⚠ **LA PR #147 EST ANNULÉE EN ENTIER.** Le déroulé du combat retrouve celui de
-`1aca789` : même appel à `ticksDus`, même accumulateur, mêmes instantanés et
-même interpolation. Le chrono ne fixe aucun tick et ne touche aucune position ;
-il affiche simplement `(rapport.ticks - combat.tick) × TICK_MS`, arrondi à la
-seconde supérieure. Il vit dans la barre de titre et ne réécrit le DOM que
-lorsque son texte change.
-⚠ **EN PRÉPARATION DE RAID, RÉPARER ET ACTIVER RESTENT ARMÉS** après une
-réussite, un refus ou un toucher vide. Le second clic sur le bouton actif le
-désarme ; choisir l'autre mode remplace le premier. « Tout réparer » suit le
-même état.
-⚠⚠ **`SAVE_VERSION` VAUT 35 POUR RELIRE LA V34 DÉJÀ PUBLIÉE.** Le maillon
-34 → 35 supprime uniquement `raidEnCours`, puis le chargement reprend sur le
-modèle d'avant la PR #147. Si son rapport attend encore, il entre une fois dans
-le journal ; coût, dégâts et butin, déjà appliqués, ne sont pas rejoués. Les
-tests `COMPAT-147 T1/T2` couvrent les états absent, en attente et déjà publié.
-`npm test` rend **1619 pass / 0 fail** au sens de la garde de
-`documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
-mesuré est **1618 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
-produit **9 388 040 octets**, version **0.99.71 · build 173**, soit 211 960
-octets de marge (2,21 %) sous la borne T10. Le contrôle visuel dans Chromium à
-360 × 640 place le chrono dans le titre, entre x = 327,375 et x = 352, dans un
-parent large de 360 px ; il n'a ni position absolue ni fond propre.
-
-**Référence au 14/09/2026 (après le correctif RECHERCHE-AU-RASAGE), à
-confronter :**
-⚠⚠ **LE RASAGE SOLDE LES PV PRÉSENTS AU DÉBUT DU RAID, PAS LE PLEIN NOMINAL.**
-`pointsRecherche` lit `pvInitialMilli` quand la cause est `souche` ; hors rasage,
-il garde les dégâts de la passe. T11 garde une défense intacte encore debout,
-T13 une défense déjà entamée à 50 % et la contre-épreuve hors rasage. Aucun
-barème ni aucune ligne de `POINTS_RECHERCHE.echelle` n'a changé.
-⚠⚠ **LES DEUX FICHIERS DU MOTEUR ONT ÉTÉ RESTAURÉS DEPUIS `178b69e` AVANT
-D'APPLIQUER LE CORRECTIF.** Les uploads `0e5fc03` et `5b4b7ed` avaient écrasé
-les fonctions FREIN et la nouvelle échelle de recherche. Le témoin du journal
-empile 18 champs, tous en colonne 6 et tous sur des rasages, sans recapture.
-`npm test` rend **1613 pass / 0 fail** au sens de la garde de
-`documentation.test.js` — c'est le nombre déclaré ; sous Node 22, le verdict
-mesuré est **1612 pass · 0 fail · 1 skipped** (`LIMITE T8`). `npm run build`
-produit **9 386 714 octets**, version **0.99.62 · build 164**, soit **+58 octets**
-sur le livrable du commit `178b69e`. Détails et commandes dans
-`RAPPORT-lotCORRECTIF-RECHERCHE-RASAGE.md`.
 
 **Référence au 14/09/2026 (après le lot ÉCHELLE-RECHERCHE, refait), à
 confronter :**
