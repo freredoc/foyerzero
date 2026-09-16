@@ -3981,9 +3981,9 @@ export function butin(resultat, montage) {
 /**
  * Points de recherche d'un raid, en MILLI-POINTS, sous forme de **BigInt**.
  *
- * Ils se prennent sur les cibles défensives endommagées, ou sur leurs PV de
- * départ si la Souche tombe ; les bâtiments ne rapportent rien. Casser des murs
- * rapporte 2 : ce n'est pas une erreur, c'est le point du modèle.
+ * Ils se prennent sur les cibles défensives endommagées ; les bâtiments ne
+ * rapportent rien. Casser des murs rapporte 2 : ce n'est pas une erreur, c'est
+ * le point du modèle.
  *
  * ⚠ POURQUOI UN BigInt. Le barème doublait par niveau de cible quand tout le
  * reste croissait en ×1,32 : `bareme × 1000 × 2^(niveau−1)` dépassait
@@ -4009,7 +4009,6 @@ export function butin(resultat, montage) {
  * @returns {bigint} milli-points exacts.
  */
 export function pointsRecherche(resultat, montage) {
-  const rase = resultat.cause === 'souche';
   const bonusMilli = BigInt(
     MILLE + enEntier(POINTS_RECHERCHE.bonusModuleDebloque, MILLE, 'bonusModuleDebloque'),
   );
@@ -4028,25 +4027,28 @@ export function pointsRecherche(resultat, montage) {
   for (const d of resultat.defenses) {
     const bareme = POINTS_RECHERCHE.parCible[d.id];
     if (bareme === undefined) continue;
-    // Hors rasage, seul ce raid paie ses dégâts. Si la Souche tombe, il solde
-    // tous les PV présents à l'arrivée, y compris ceux d'une défense encore
-    // debout, sans repayer les dégâts d'une passe précédente.
+    // ⚠ CE QUE CE RAID-CI A CASSÉ, PAS CE QUE LA CIBLE A PERDU DEPUIS SON PLEIN.
+    // Même arbitrage que le butin, rendu par Ethan le 29/08 : « tu tapes une
+    // défense à qui il reste cinquante pour cent, tu l'achèves, tu n'es pas
+    // censé avoir le double ; tu as cinquante plus cinquante ». Lire
+    // `pvPerdusMilli` faisait marquer 50 % à la première passe puis 100 % à la
+    // seconde, soit 150 % pour une cible qui n'a qu'une vie. Sur un site intact
+    // les deux quantités coïncident, donc les raids de référence ne bougent pas.
     //
     // ⚠ ET UNE CIBLE RÉPARÉE REMARQUE, c'est voulu et c'est la même phrase :
     // « sauf si elle est réparée ». Ses PV de départ sont revenus au plein, donc
     // la casser à nouveau est un travail à nouveau.
     const perduIci = d.pvInitialMilli === undefined
       ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli;
-    const pvRemuneres = rase ? (d.pvInitialMilli ?? d.pvMaxMilli) : perduIci;
-    if (pvRemuneres <= 0) continue;
+    if (perduIci <= 0) continue;
     const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
     // zéro : sur des grandeurs positives, c'est exactement le plancher voulu.
-    // Le facteur de recherche est en millièmes, d'où le MILLE au dénominateur ;
+    // Le facteur économique est en millièmes, d'où le MILLE au dénominateur ;
     // il est placé là, avec l'autre division, pour que TOUS les produits se
     // fassent avant la moindre troncature.
     total += (BigInt(bareme) * BigInt(facteurRechercheMilli(d.niveau)) * facteur
-      * BigInt(pvRemuneres)) / (BigInt(d.pvMaxMilli) * mille);
+      * BigInt(perduIci)) / (BigInt(d.pvMaxMilli) * mille);
   }
   return total;
 }

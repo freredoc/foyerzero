@@ -4381,30 +4381,3 @@ export const COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS = {
   198: { 6: "70375275562" },   // base/-/n50/g5/toutes
   199: { 6: "6123336762" },   // base/-/n50/g5/moitie
 };
-
-/**
- * Couche du correctif de rasage, sur le placement courant seulement.
- * Dix-huit combats sur deux cents changent, tous terminés par la Souche et
- * uniquement sur la colonne 6 (points de recherche). Les 1 582 autres champs
- * restent comparés aux témoins antérieurs ; les captures ne sont pas réécrites.
- */
-export const COMBATS_DEPLACES_PAR_RASAGE_RECHERCHE = {
-  10: { 6: "166921425" },   // camp/richeQuartz/n20/g1/toutes
-  12: { 6: "166921425" },   // camp/richeScorie/n20/g1/toutes
-  44: { 6: "1062700" },   // avantPoste/richeQuartz/n5/g2/toutes
-  46: { 6: "1062700" },   // avantPoste/richeScorie/n5/g2/toutes
-  54: { 6: "225372025" },   // avantPoste/richeQuartz/n20/g2/toutes
-  56: { 6: "225372025" },   // avantPoste/richeScorie/n20/g2/toutes
-  80: { 6: "637620" },   // camp/richeQuartz/n5/g3/toutes
-  81: { 6: "637620" },   // camp/richeQuartz/n5/g3/moitie
-  82: { 6: "637620" },   // camp/richeScorie/n5/g3/toutes
-  83: { 6: "637620" },   // camp/richeScorie/n5/g3/moitie
-  90: { 6: "151184725" },   // camp/richeQuartz/n20/g3/toutes
-  92: { 6: "151184725" },   // camp/richeScorie/n20/g3/toutes
-  125: { 6: "1062700" },   // avantPoste/richeQuartz/n5/g4/moitie
-  127: { 6: "1062700" },   // avantPoste/richeScorie/n5/g4/moitie
-  170: { 6: "142754350" },   // camp/richeQuartz/n20/g5/toutes
-  172: { 6: "142754350" },   // camp/richeScorie/n20/g5/toutes
-  174: { 6: "222561900" },   // avantPoste/richeQuartz/n20/g5/toutes
-  176: { 6: "222561900" },   // avantPoste/richeScorie/n20/g5/toutes
-};

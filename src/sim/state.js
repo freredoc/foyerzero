@@ -77,7 +77,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 35;
+export const SAVE_VERSION = 33;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -3372,38 +3372,6 @@ const MIGRATIONS = {
    */
   32: (s) => {
     s.version = 33;
-  },
-  /**
-   * v33 → v34 : réserve le numéro publié par la PR #147.
-   *
-   * Une partie restée en v33 n'a pas connu `raidEnCours`. Elle traverse ce
-   * maillon sans recevoir un champ que le jeu courant n'utilise plus.
-   */
-  33: (s) => {
-    s.version = 34;
-  },
-  /**
-   * v34 → v35 : retire l'état de raid transitoire écrit par la PR #147.
-   *
-  * ⚠ LA VERSION 34 A ÉTÉ PUBLIÉE SUR ANDROID. La refuser après le revert rend
-   * toute la partie illisible. Son seul champ neuf était `raidEnCours`. Si son
-   * rapport attend encore sa publication, on le range une fois dans le journal
-   * avant de retirer le champ ; coût, dégâts et butin avaient déjà été écrits
-   * au lancement et ne sont donc jamais rejoués ici.
-   */
-  34: (s) => {
-    const raid = s.raidEnCours;
-    if (raid !== null && typeof raid === 'object' && raid.publie === false
-      && raid.rapport !== null && typeof raid.rapport === 'object'
-      && Number.isInteger(raid.tickRapport) && Array.isArray(s.rapports)) {
-      const rapporte = { ...raid.rapport, tick: raid.tickRapport };
-      const index = s.rapports.findIndex((ancien) => ancien.tick > raid.tickRapport);
-      if (index < 0) s.rapports.push(rapporte);
-      else s.rapports.splice(index, 0, rapporte);
-      while (s.rapports.length > APRES_RAID.rapportsGardes) s.rapports.shift();
-    }
-    delete s.raidEnCours;
-    s.version = 35;
   },
 };
 

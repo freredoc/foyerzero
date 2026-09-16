@@ -783,21 +783,6 @@ test('T11 — la Souche tombée, le combat s\'arrête et le site livre tout', ()
   // Souche comprise, ne rapportent rien. Le type est un BigInt depuis le lot
   // 2B — 0n, pas 0.
   assert.equal(pointsRecherche(resultat, montage), 0n);
-
-  // Une défense intacte encore debout est soldée lorsque la Souche tombe,
-  // même si elle n'a reçu aucun tir pendant le raid.
-  const avecMerlon = {
-    ...montageSouche(),
-    defenseurs: [{ id: 'merlon', rangee: 3, colonne: 1 }],
-  };
-  const resultatAvecMerlon = resoudre(creerCombat(avecMerlon));
-  const merlon = resultatAvecMerlon.defenses.find(parId('merlon'));
-  assert.equal(resultatAvecMerlon.cause, 'souche');
-  assert.equal(merlon.pvInitialMilli, merlon.pvMaxMilli);
-  assert.equal(merlon.pvMilli, merlon.pvInitialMilli);
-  assert.equal(merlon.pvPerdusIciMilli, 0);
-  // Barème 2 × facteurRechercheMilli(1) = 2 × 8 875.
-  assert.equal(pointsRecherche(resultatAvecMerlon, avecMerlon), 17750n);
 });
 
 // ---------------------------------------------------------------------------
@@ -876,10 +861,9 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-point
     // Merlon se monte désormais PLEIN, et c'est la ligne de résultat qu'on
     // abaisse à 50 % après coup. Le monter à moitié comme avant décrivait un
     // Merlon DÉJÀ à moitié cassé EN ARRIVANT, et depuis l'arbitrage d'Ethan ce
-    // n'est plus la même chose : hors rasage, un raid ne marque que ce qu'il
-    // casse lui-même. Un Merlon monté à 50 % et laissé tranquille rapporte
-    // zéro : ses PV perdus ont déjà été payés à la passe précédente. Ce que le
-    // test veut dire, « détruit à 50 % »,
+    // n'est plus la même chose : un raid ne marque que ce qu'il casse LUI, donc
+    // un Merlon monté à 50 % et laissé tranquille rapporte zéro — il a été payé
+    // à la passe précédente. Ce que le test veut dire, « détruit à 50 % »,
     // s'écrit donc maintenant en abaissant le RÉSULTAT.
     defenseurs: [{ id: 'merlon', rangee: 3, colonne: 5 }],
     batiments: [{ id: 'gangue', rangee: 18, colonne: 9 }],
@@ -961,33 +945,6 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-point
   // Un bâtiment détruit rapporte 0 : la Gangue n'entre pas dans le compte.
   assert.equal(resultat.batiments.length, 1);
   assert.equal(resultat.defenses.length, 1);
-
-  // Après une première passe, le rasage solde les 50 % de PV présents au
-  // départ ; hors rasage, seuls les dégâts de cette passe sont rémunérés.
-  {
-    const montageEntame = {
-      ...montageSouche(),
-      defenseurs: [{ id: 'merlon', rangee: 3, colonne: 1 }],
-    };
-    const pvMaxMilli = creerCombat(montageEntame).entites.find(parId('merlon')).pvMaxMilli;
-    montageEntame.defenseurs[0].pvMilli = pvMaxMilli / 2;
-    const rasage = resoudre(creerCombat(montageEntame));
-    const merlonEntame = rasage.defenses.find(parId('merlon'));
-    assert.equal(rasage.cause, 'souche');
-    assert.equal(merlonEntame.pvInitialMilli, pvMaxMilli / 2);
-    assert.equal(merlonEntame.pvMilli, merlonEntame.pvInitialMilli);
-    assert.equal(merlonEntame.pvPerdusIciMilli, 0);
-    // 2 × 8 875 × 50 % = 8 875 milli-points.
-    assert.equal(pointsRecherche(rasage, montageEntame), 8875n);
-
-    const passe = resoudre(creerCombat(montageEntame), { maxTicks: 1 });
-    const merlonDeLaPasse = passe.defenses.find(parId('merlon'));
-    assert.equal(passe.cause, 'duree');
-    abimerLigne(merlonDeLaPasse, pvMaxMilli / 4);
-    assert.equal(merlonDeLaPasse.pvPerdusIciMilli, pvMaxMilli / 4);
-    // 2 × 8 875 × 25 % = 4 437,5, tronqué par la division BigInt.
-    assert.equal(pointsRecherche(passe, montageEntame), 4437n);
-  }
 });
 
 // ---------------------------------------------------------------------------

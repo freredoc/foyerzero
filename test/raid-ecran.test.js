@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  libelleDAttaque, vueDuRaid, plafondDuZoom, chronoDuRaid,
+  libelleDAttaque, vueDuRaid, plafondDuZoom,
   initialiserEcranRaid, BANDE_A_L_OUVERTURE,
   ordreDeLEffondrement, effondrees, ficheDeLEntite,
 } from '../src/ui/raid.js';
@@ -885,8 +885,7 @@ test('RAID-E T9 — un doigt promène, deux doigts zooment, et la pièce se glis
  */
 function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) {
   const IDS = [
-    'raid-canvas', 'raid-titre', 'raid-titre-texte', 'raid-timer',
-    'raid-avis', 'raid-bas', 'raid-vagues',
+    'raid-canvas', 'raid-titre', 'raid-avis', 'raid-bas', 'raid-vagues',
     'raid-bandeau', 'raid-vitesses', 'raid-bascule-bande', 'raid-boutons',
     'raid-attaquer', 'raid-simuler', 'raid-reattaquer', 'raid-tout-reparer',
     'raid-reparer', 'raid-activer', 'raid-pas', 'raid-instantane',
@@ -953,12 +952,7 @@ function fauxDocumentRaid({ largeurCss = 360, hauteurCss = 466, dpr = 3 } = {}) 
       // s'empiler quatre vagues à chaque repeint, et le test compterait des
       // cases qui n'existent plus. Trouvé en le mesurant, pas en le relisant.
       _texte: '',
-      ecrituresTexte: 0,
-      set textContent(v) {
-        el.children.length = 0;
-        el._texte = String(v);
-        el.ecrituresTexte += 1;
-      },
+      set textContent(v) { el.children.length = 0; el._texte = String(v); },
       get textContent() { return el._texte; },
       appendChild(n) { el.children.push(n); n.parent = el; return n; },
       append(...n) { for (const x of n) el.appendChild(x); },
@@ -1105,20 +1099,6 @@ function ecranPret(options = {}) {
   };
 }
 
-/** Toutes les cases de la formation actuellement peinte. */
-function cellulesDeFormation(ecran) {
-  return ecran.$('raid-vagues').children
-    .flatMap((vague) => vague.children)
-    .flatMap((rangee) => rangee.children);
-}
-
-/** Touche une case par la délégation d'évènement réelle de `#raid-vagues`. */
-function toucherUneCellule(ecran, cellule) {
-  ecran.$('raid-vagues').envoyer('pointerdown', {
-    target: { closest: (selecteur) => (selecteur === '.emplacement' ? cellule : null) },
-  });
-}
-
 test('RDR T1 — un VRAI raid masqué se conclut, et le joueur atterrit sur son rapport', () => {
   // ⚠⚠ ETHAN, 06/09 : « je lance le raid, je quitte le jeu juste après, je
   // reviens après 5 min : le raid a figé et reprend, je dois attendre la fin. »
@@ -1152,86 +1132,6 @@ test('RDR T1 — un VRAI raid masqué se conclut, et le joueur atterrit sur son 
 
   // ⚠ ET AUCUN SECOND RAID N'A EU LIEU : on conclut l'animation, on ne rejoue rien.
   assert.equal(etat.rapports.length, rapportsAvant + 1, 'le masquage a engagé un second raid');
-});
-
-test('RAID-ERG T1 — le chrono lit les ticks restants sans piloter le combat', () => {
-  assert.equal(chronoDuRaid(900, 0), '01:30');
-  assert.equal(chronoDuRaid(900, 1), '01:30');
-  assert.equal(chronoDuRaid(900, 10), '01:29');
-  assert.equal(chronoDuRaid(900, 900), '00:00');
-  assert.equal(chronoDuRaid(900, 901), '00:00');
-});
-
-test('RAID-ERG T2 — le chrono est dans le titre, descend avec le combat et ne repeint pas à 60 Hz', () => {
-  const banc = ecranPret();
-  const html = balisage();
-  const titre = html.match(/<p id="raid-titre">([\s\S]*?)<\/p>/);
-  assert.ok(titre, 'le titre du raid a disparu');
-  assert.match(titre[1], /id="raid-titre-texte"/);
-  assert.match(titre[1], /id="raid-timer"/, 'le chrono est posé hors du titre');
-
-  banc.$('raid-attaquer').envoyer('click');
-  const timer = banc.$('raid-timer');
-  assert.equal(timer.hidden, false, 'le chrono ne paraît pas au lancement');
-  assert.match(timer.textContent, /^\d{2}:\d{2}$/);
-  const depart = timer.textContent;
-  const ecritures = timer.ecrituresTexte;
-
-  // La première image initialise l'horodatage ; les cinq suivantes restent
-  // dans la même seconde de combat et ne doivent pas réécrire le même texte.
-  for (let image = 0; image < 6; image += 1) banc.rafs.image(16);
-  assert.equal(timer.ecrituresTexte, ecritures,
-    'le chrono réécrit le DOM à chaque requestAnimationFrame');
-
-  // Dix ticks font exactement une seconde, sans modifier leur cadence ni leur
-  // interpolation. L'horloge affichée suit seulement `combat.tick`.
-  for (let image = 0; image < 11; image += 1) banc.rafs.image(100);
-  assert.notEqual(timer.textContent, depart, 'le chrono ne descend pas avec le combat');
-});
-
-test('RAID-ERG T3 — une simulation ne porte pas le chrono du raid réel', () => {
-  const banc = ecranPret();
-  banc.$('raid-simuler').envoyer('click');
-  assert.equal(banc.$('raid-timer').hidden, true, 'le chrono réel paraît sur une simulation');
-});
-
-test('RAID-ERG T4 — les modes de préparation persistent après réussite, refus et vide', () => {
-  const banc = ecranPret();
-  const activer = banc.$('raid-activer');
-  const reparer = banc.$('raid-reparer');
-
-  activer.envoyer('click');
-  assert.equal(activer.classList.contains('arme'), true, 'Activer ne s’arme pas');
-  let occupee = cellulesDeFormation(banc).find((cellule) => cellule.dataset.index === '0');
-  toucherUneCellule(banc, occupee);
-  assert.equal(activer.classList.contains('arme'), true, 'une réussite désarme Activer');
-  occupee = cellulesDeFormation(banc).find((cellule) => cellule.dataset.index === '0');
-  assert.equal(occupee.classList.contains('inactive'), true, 'le geste armé n’a pas été appliqué');
-
-  const vide = cellulesDeFormation(banc).find((cellule) => cellule.dataset.index === undefined);
-  assert.ok(vide, 'la formation de test ne porte aucune case vide');
-  toucherUneCellule(banc, vide);
-  assert.equal(activer.classList.contains('arme'), true, 'un toucher vide désarme Activer');
-
-  activer.envoyer('click');
-  assert.equal(activer.classList.contains('arme'), false, 'le second clic ne désarme pas Activer');
-  activer.envoyer('click');
-  assert.equal(activer.classList.contains('arme'), true, 'Activer ne se réarme pas');
-
-  reparer.envoyer('click');
-  assert.equal(activer.classList.contains('arme'), false, 'changer de mode conserve l’ancien');
-  assert.equal(reparer.classList.contains('arme'), true, 'Réparer ne remplace pas Activer');
-  assert.equal(banc.$('raid-tout-reparer').classList.contains('repliee'), false,
-    'Tout réparer ne suit pas le mode Réparer');
-  occupee = cellulesDeFormation(banc).find((cellule) => cellule.dataset.index === '0');
-  toucherUneCellule(banc, occupee);
-  assert.equal(reparer.classList.contains('arme'), true, 'un refus désarme Réparer');
-  assert.equal(banc.$('raid-avis').hidden, false, 'le motif du refus a disparu');
-
-  reparer.envoyer('click');
-  assert.equal(reparer.classList.contains('arme'), false, 'le second clic ne désarme pas Réparer');
-  assert.equal(banc.$('raid-tout-reparer').classList.contains('repliee'), true,
-    'Tout réparer reste visible après désarmement');
 });
 
 test('RDR T2 — une SIMULATION masquée ne se conclut PAS', () => {

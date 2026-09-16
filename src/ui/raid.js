@@ -456,14 +456,6 @@ export function plafondDuZoom(dpr) {
   return COTE_SPRITE * multiple;
 }
 
-/** Formate la durée de combat restante sans lire ni piloter le rendu. */
-export function chronoDuRaid(ticksTotaux, tickCourant) {
-  const ticksRestants = Math.max(0, ticksTotaux - tickCourant);
-  const secondes = Math.ceil((ticksRestants * TICK_MS) / 1000);
-  return `${String(Math.floor(secondes / 60)).padStart(2, '0')}`
-    + `:${String(secondes % 60).padStart(2, '0')}`;
-}
-
 // ---------------------------------------------------------------------------
 // Étage DOM
 // ---------------------------------------------------------------------------
@@ -688,8 +680,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let derniereImageMs = null;
   let idImage = null;
   let enPause = false;
-  let chronoActif = false;
-  let chronoAffiche = null;
   let projection = null;
   let simulation = false;
   /**
@@ -929,7 +919,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
         // compare à la position d'après. Le journal se relève après.
         avancerDUnTick();
       }
-      if (dus > 0) afficherChrono();
     }
     // ⚠⚠ L'EFFONDREMENT S'INTERCALE ICI, ENTRE LA FIN DU COMBAT ET LE RAPPORT —
     // lot EFFONDREMENT, 07/09. Il prend son temps sur la boucle d'images, celle
@@ -965,25 +954,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     if (idImage !== null || combat === null || combat.termine) return;
     derniereImageMs = null; // pas de rattrapage du temps passé arrêté
     idImage = doc.defaultView.requestAnimationFrame(image);
-  }
-
-  function afficherChrono() {
-    if (!chronoActif || combat === null || rapportCourant === null) return;
-    const element = $('raid-timer');
-    if (element === null) return;
-    const texte = chronoDuRaid(rapportCourant.ticks, combat.tick);
-    if (texte !== chronoAffiche) {
-      chronoAffiche = texte;
-      element.textContent = texte;
-    }
-    if (element.hidden) element.hidden = false;
-  }
-
-  function masquerChrono() {
-    chronoActif = false;
-    chronoAffiche = null;
-    const element = $('raid-timer');
-    if (element !== null) element.hidden = true;
   }
 
   /**
@@ -1105,7 +1075,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
 
   function finDuDeroule() {
     arreterBoucle();
-    masquerChrono();
     quitterLeDeroule();
     // ⚠ L'EFFONDREMENT SE REFERME ICI, ET PAR UN SEUL ENDROIT. Trois portes y
     // mènent — la boucle qui arrive au bout, « Instantané », et la page qui se
@@ -1343,6 +1312,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // en français lisible dans `sim/`, et les reformuler ici en ferait une
       // seconde formulation qui finirait par dire autre chose que la règle.
       avis(problemes.map((p) => p.message).join(' ; '));
+      desarmer();
       peindreVagues();
       return;
     }
@@ -1354,9 +1324,9 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // test ne l'aurait dit — les deux chemins sont muets.
     if (m.ecritSurLArmee) resynchroniserLaFormation(etatCourant, formation);
     retenir();
+    desarmer();
     peindreVagues();
     apresGeste();
-    avis(m.invite);
   }
 
   // --- le glisser-déposer ----------------------------------------------------
@@ -1430,6 +1400,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ce lot ne l'aggrave pas.
     if (mode !== null) {
       if (index !== undefined) agirSur(Number(index));
+      else desarmer();
       return;
     }
     if (index === undefined) return;
@@ -1770,6 +1741,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // Même raison qu'au mode « Réparer » : la formation porte une copie des
     // dégâts, et c'est elle que le raid emporte.
     resynchroniserLaFormation(etatCourant, formation);
+    desarmer();
     peindreVagues();
     apresGeste();
     // ⚠ `toutReparer` NE S'ARRÊTE PAS À LA PREMIÈRE IMPAYABLE : elle répare tout
@@ -1874,8 +1846,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // `ResizeObserver` la referait aussitôt.
     entrerDansLeDeroule();
     rejouer(montage, vagues);
-    chronoActif = !simule;
-    afficherChrono();
   }
 
   brancher('raid-attaquer', () => lancer(false));
@@ -2013,7 +1983,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     cibleCourante = { rangee: cible.rangee, colonne: cible.colonne };
     if (atlasFournis !== null) atlas = atlasFournis;
     rapportCourant = null;
-    masquerChrono();
     combat = null;
     fondCourant = null;
     // ⚠ LA VUE SE REMET À NEUF À CHAQUE CIBLE. Garder le zoom et la bande de
@@ -2068,7 +2037,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // une activation ne changent. Il se peint donc à l'ouverture, comme le
     // titre, et pas à chaque image.
     armerLAttaque(vueDuRaid(etat, cibleCourante, formation).cout);
-    const titre = $('raid-titre-texte');
+    const titre = $('raid-titre');
     if (titre !== null && site !== null) {
       titre.textContent = `${site.type} · niveau ${site.niveau}`
         + ` · rangée ${site.rangee}, colonne ${site.colonne}`;
@@ -2136,7 +2105,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // fin du rejeu exactement les lignes que le dépliant montrait — même source,
     // deux formes, et `lignesDuPanneauDeFin` fait la traduction.
     rapportCourant = rapport;
-    masquerChrono();
     simulation = false;
     formation = null;
     combat = null;
@@ -2150,7 +2118,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     desarmer();
     peindreVagues();
     const qui = rapport.sens === 'defense' ? rapport.attaquant : rapport.cible;
-    const titre = $('raid-titre-texte');
+    const titre = $('raid-titre');
     if (titre !== null) {
       const quoi = rapport.sens === 'defense' ? 'Raid subi' : 'Raid mené';
       titre.textContent = `${quoi} · ${qui?.type ?? '—'} · niveau `
@@ -2201,7 +2169,7 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ⚠ QUITTER L'ÉCRAN REND LE CHROME. Sans cette ligne, changer d'onglet
     // pendant un déroulé laisserait la page sans onglets — donc sans moyen d'en
     // revenir. Troisième porte, la même fonction idempotente.
-    masquer() { arreterBoucle(); masquerChrono(); quitterLeDeroule(); },
+    masquer() { arreterBoucle(); quitterLeDeroule(); },
     /**
      * Les unités attaquantes et leur état de mouvement — pour le son.
      *
