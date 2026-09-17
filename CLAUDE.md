@@ -7,13 +7,22 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **14/09/2026**, version 0.99.61 · build 163.
-⚠⚠ **BUILDS 164 À 173 BRÛLÉS HORS DÉPÔT, ET SAVE_VERSION JUSQU'À 35.** Des
-livrables ont été publiés sur l'appareil d'Ethan hors de ce dépôt.
-`PolitiqueVersion.miseAJourAcceptable` refuse un build inférieur **ou égal** :
-tout bump repart donc de **174**, jamais de 164, et `SAVE_VERSION` de **36** si
-elle doit bouger. Lire 163 ici et proposer 164 enverrait une mise à jour que les
-appareils ne verraient jamais.
+Dernière révision : **17/09/2026**, version 0.99.62 · build 174.
+⚠⚠ **LES BUILDS 164 À 173 SONT BRÛLÉS HORS DÉPÔT, ET LE BUMP FANTÔME DU 17/09
+LES A FRANCHIS.** Des livrables ont été publiés sur l'appareil d'Ethan hors de ce
+dépôt, jusqu'au build 173 ; `PolitiqueVersion.miseAJourAcceptable` refusant un
+build inférieur **ou égal** à l'installé, les builds 163 et avant ne pouvaient
+atteindre aucun de ces appareils. Le 174 est le premier qui le peut. Le
+franchissement est **fait** : le prochain bump repart normalement de 175, et il
+n'y a plus de trou à sauter.
+⚠⚠ **`SAVE_VERSION` RESTE À 33, ET CE TROU-LÀ N'EST PAS COMBLÉ.** Les builds hors
+dépôt écrivaient en **35** ; `migrer` LÈVE sur « sauvegarde de version 35 plus
+récente que le jeu (33) ». Une partie sauvegardée sous ces builds n'est donc pas
+reprise par le 174, et elle ne peut pas l'être : les changements de schéma qui
+ont mené 33 à 35 ne sont nulle part dans ce dépôt. Ne PAS écrire 36 pour faire
+passer la sauvegarde — le numéro ne migre rien, il ne fait que décrire un schéma,
+et l'avancer sans migration correspondante rendrait la levée silencieuse au lieu
+de la rendre juste.
 
 ---
 
@@ -148,6 +157,34 @@ DÉCLARÉ, ET IL EST DANS L'AUTRE SENS QUE D'HABITUDE.** La session est épingl�
 `claude/revert-echelle-recherche-plbgnu`, déjà fusionnée ; Ethan a nommé
 `claude/echelle-recherche` en toutes lettres, et c'est cette autorisation
 explicite qui a tranché.
+
+**Référence au 17/09/2026 (après le BUMP FANTÔME), à confronter :**
+⚠⚠ **UN BUMP SANS LOT, ET C'EST TOUT CE QU'IL EST.** Ethan, le 17/09 : « je ne
+peux pas mettre mon jeu à jour, main est vert ». Le dépôt était sain et le
+livrable inatteignable — pas pour une faute de code, mais parce que son numéro de
+build était derrière celui que l'appareil portait déjà. Le lot ne change donc
+**aucun comportement** : `package.json` seul, deux valeurs, `0.99.61 → 0.99.62`
+et `163 → 174`.
+⚠⚠ **DEUX VALEURS SUFFISENT PARCE QUE TOUTE LA CHAÎNE LES LIT, et il ne faut en
+saisir aucune ailleurs.** `tools/build.js` interpole `%VERSION%` et `%BUILD%`
+dans le HTML ; `android/app/build.gradle.kts` lit le même `package.json` pour
+`versionCode` et `versionName` ; le job `pages` de `ci.yml` en fabrique
+`manifest.json`. Écrire le numéro une seconde fois quelque part créerait deux
+vérités dont une seule suivrait.
+⚠⚠ **LE LIVRABLE PÈSE EXACTEMENT LE MÊME POIDS : 9 387 515 octets, ZÉRO octet
+d'écart**, mesuré avant et après. `0.99.61` et `0.99.62` ont la même longueur,
+`163` et `174` aussi, et les deux marqueurs sont les seuls endroits où ces
+chaînes entrent dans la page. **`PIC T7` n'est donc PAS réancré**, et c'est un
+choix mesuré, pas un oubli : sa `MESURE` reste celle d'ÉCHELLE-RECHERCHE, et
+l'écart réel de 859 octets accumulé depuis tient dans sa tolérance de 50 000.
+⚠ **AUCUN FICHIER DE `src/` NI DE `test/` AU DIFF** — `package.json` et
+`CLAUDE.md`, rien d'autre. `npm test` rend **1616 pass / 0 fail** au sens de la
+garde de `documentation.test.js` ; le verdict mesuré est **1615 pass · 0 fail ·
+1 skipped**, identique au commit d'avant, ce qui est la seule chose qu'on
+attende d'un bump.
+⚠ **ET LE RENDU N'A PAS ÉTÉ VU, CE QUI EST SANS OBJET ICI** : ce que le lot
+déplace est la ligne `v0.99.62 b174` de l'écran Options et l'en-tête du banc,
+c'est-à-dire l'affichage du numéro lui-même.
 
 **Auparavant, après le REVERT du lot ÉCHELLE-RECHERCHE :**
 ⚠⚠ **LE LOT ÉCHELLE-RECHERCHE A ÉCRASÉ LE LOT FREIN, ET `main` ÉTAIT ROUGE
