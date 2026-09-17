@@ -535,6 +535,16 @@ export const POINTS_RECHERCHE = {
   // Vaut donc 8 875 au niveau 1 — et non 1 000 : l'ancrage EST le facteur du
   // niveau 1, il n'y a pas de second nombre caché ailleurs.
   echelle: { ancrage: 8.875, pente: 1.244 },
+  // ⚠⚠ UN RAID SUBI PAIE MOITIÉ MOINS, ARBITRÉ PAR ETHAN LE 14/09/2026. Le
+  // facteur s'applique au total d'un assaut repoussé, pas au barème : le barème
+  // reste la valeur d'une pièce, et c'est le CAMP qui décide de son tarif.
+  //
+  // ⚠ POURQUOI IL FALLAIT UN FACTEUR. Mesuré avant de trancher, sur 30 tirages
+  // par niveau : un assaut repoussé vaut 0,81 camp rasé au niveau 12, puis 0,91
+  // au 20, 0,97 au 26 et 0,98 au 40. Sans facteur, défendre rapportait donc
+  // autant que raider, et doublait le revenu de recherche de quiconque se fait
+  // attaquer aussi souvent qu'il attaque.
+  multiplicateurDefense: 0.5,
   parCible: {
     merlon: 2, herse: 2, ronce: 2,
     meute: 10, perceurs: 10,
@@ -543,6 +553,28 @@ export const POINTS_RECHERCHE = {
     creneau: 30, fendeur: 30, guetteur: 30,
     faucheuse: 40, mortier: 40, harpon: 40,
     broyeur: 60,
+    // ⚠⚠ LES SIX QUI NE PEUVENT QUE L'ATTAQUER — lot RECHERCHE-DEFENSE,
+    // 14/09/2026. `defense.present` vaut `false` pour elles dans `UNITES` :
+    // elles ne garnissent JAMAIS un site, et c'est pour ça qu'elles n'avaient
+    // pas de barème. Depuis que les raids SUBIS paient, elles sont des cibles.
+    //
+    // ⚠⚠ LES SIX VALEURS SONT POSÉES À LA MAIN PAR ETHAN, ET AUCUNE FORMULE NE
+    // LES DEVINE. Huit formules ont été essayées contre les dix-sept valeurs
+    // connues — `points × 2`, `pv / 35`, `réparation / 25`, `10 + apparition`,
+    // et quatre combinaisons — et la meilleure se trompe de 19 % en moyenne et
+    // de 48 % sur le Bélier. Ce barème-ci n'est pas calculé, il est arbitré ;
+    // le dériver produirait un faux air de rigueur.
+    //
+    // ⚠ ET ELLES PÈSENT LA MOITIÉ DU LOT, MESURÉ : la part des attaquantes sans
+    // barème monte de 4 % au niveau 12 à 27 % au 20 et 43 % au 40. Les laisser
+    // à zéro aurait fait payer une défense de haut niveau un peu plus que la
+    // moitié de son dû, et personne ne l'aurait vu.
+    //
+    // ⚠ LE MAXIMUM DU BARÈME NE BOUGE PAS. Il reste 60, au Broyeur, et c'est ce
+    // que borne `verifierArithmetique` : ces six entrées n'élargissent pas le
+    // plafond de l'entier sûr.
+    crecelle: 20, busard: 25, frappeur: 30,
+    fouisseurs: 25, pilon: 40, enclume: 50,
   },
 };
 

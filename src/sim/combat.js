@@ -4073,6 +4073,59 @@ export function pointsRecherche(resultat, montage) {
   return total;
 }
 
+/**
+ * Points de recherche que la DÉFENSE gagne, en milli-points, sur les
+ * attaquantes qu'elle a détruites. Le pendant exact de `pointsRecherche`.
+ *
+ * ⚠⚠ ARBITRÉ PAR ETHAN LE 14/09/2026 : « il faut qu'on gagne des points de
+ * recherche suite aux raids subis », puis « moitié moins ». Les trois facteurs
+ * sont ceux de l'offense — barème de la pièce, échelle de son niveau, prorata
+ * des PV arrachés — et le total est ensuite divisé par deux, via
+ * `POINTS_RECHERCHE.multiplicateurDefense`.
+ *
+ * ⚠⚠ ET IL N'Y A PAS DE BRANCHE `rase` ICI, CE N'EST PAS UN OUBLI. Un assaut
+ * REPOUSSÉ ne laisse aucune attaquante vivante : le prorata paie donc déjà
+ * 100 %, et une prime d'achèvement n'aurait rien à ajouter. Si la base tombe ou
+ * si la durée s'épuise, les survivantes se replient intactes et ne paient rien
+ * — exactement la même doctrine que pour un rasage manqué côté offense.
+ *
+ * ⚠⚠ LA MAJORATION LIT LA BRANCHE `offense` DE L'ATTAQUANT, PAS SA DÉFENSE.
+ * `pointsRecherche` lit `defense` du propriétaire de la GARNISON, parce que
+ * c'est ce qui équipe la pièce détruite ; ici la pièce détruite est une
+ * attaquante, donc c'est `offense` du propriétaire de l'ASSAUT qui l'équipe.
+ * Lire la même branche des deux côtés ferait payer au joueur les modules qu'il
+ * a débloqués pour lui-même, ce qui est le camp d'en face et une autre grandeur.
+ *
+ * ⚠ LE PRORATA SE LIT SUR `pvPerdusMilli`, ET IL N'Y A RIEN À CORRIGER. Une
+ * attaquante arrive toujours au plein de ses PV — elle vient d'être composée par
+ * `genererVague` —, donc `pvInitialMilli` et `pvMaxMilli` coïncident. Le
+ * déduplicatage du 29/08 n'a pas d'objet de ce côté : aucune attaquante ne
+ * survit d'un assaut au suivant.
+ *
+ * @param {object} resultat sortie de `resoudre`
+ * @param {object} montage le même montage que `creerCombat` a reçu
+ * @returns {bigint} milli-points
+ */
+export function pointsRechercheDefense(resultat, montage) {
+  const mille = BigInt(MILLE);
+  const bonusMilli = BigInt(MILLE + Math.round(MILLE * POINTS_RECHERCHE.bonusModuleDebloque));
+  const neutre = mille;
+  const quiAttaque = montage.proprietaireAttaque ?? 'ouvrage';
+  const debloques = new Set(montage.modulesDebloques?.[quiAttaque]?.offense ?? []);
+  const tarifMilli = BigInt(Math.round(MILLE * POINTS_RECHERCHE.multiplicateurDefense));
+  let total = 0n;
+  for (const a of resultat.attaquants) {
+    const bareme = POINTS_RECHERCHE.parCible[a.id];
+    if (bareme === undefined) continue;
+    const perduIci = a.pvPerdusMilli;
+    if (perduIci <= 0) continue;
+    const facteur = a.module !== null && debloques.has(a.module) ? bonusMilli : neutre;
+    total += (BigInt(bareme) * BigInt(facteurRechercheMilli(a.niveau)) * facteur
+      * BigInt(perduIci) * tarifMilli) / (BigInt(a.pvMaxMilli) * mille * mille);
+  }
+  return total;
+}
+
 // ---------------------------------------------------------------------------
 // Sérialisation stable
 // ---------------------------------------------------------------------------

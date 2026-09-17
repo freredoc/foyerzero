@@ -27,7 +27,7 @@ import {
   basesAttaquantes, montageDeLaBaseDuJoueur, subirUnRaid, resoudreLaMinute,
   prochaineMinuteDeRaid,
 } from '../src/sim/raid-ouvrage.js';
-import { creerCombat, resoudre } from '../src/sim/combat.js';
+import { creerCombat, resoudre, pointsRechercheDefense } from '../src/sim/combat.js';
 import { garderLeRapport } from '../src/sim/raid.js';
 import { genererSite, budgetRaid } from '../src/sim/generateur.js';
 import { RAID_OUVRAGE, TYPES_SITE, APRES_RAID, GEOGRAPHIE } from '../src/data/sites.js';
@@ -1224,4 +1224,42 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   basesAttaquantes(etat);
   assert.equal(serialiser(etat, 1_700_000_000_000), json,
     '`basesAttaquantes` a écrit dans l\'état');
+});
+
+test('RCU T13 — un assaut repoussé crédite la recherche, moitié tarif, et le rapport le dit', () => {
+  // Une base de niveau 20 garnie : la garnison tue une partie de l'assaut.
+  const etat = baseALaRangee(7, 200, { niveau: 20, garnison: true });
+  const avant = BigInt(etat.recherche.pointsMilli);
+  const rapport = subirUnRaid(etat, ATTAQUANTE, 5);
+  const apres = BigInt(etat.recherche.pointsMilli);
+
+  // ⚠⚠ ARBITRÉ PAR ETHAN LE 14/09/2026 : « il faut qu'on gagne des points de
+  // recherche suite aux raids subis », puis « moitié moins ». Avant ce lot,
+  // `raid-ouvrage.js` ne créditait RIEN — ni butin, ni recherche : la défense
+  // était le seul combat du jeu qui ne payait pas.
+  assert.ok(apres > avant, 'un assaut ne crédite plus rien à la défense');
+
+  // ⚠ LE RAPPORT PORTE LE MÊME NOM DE CHAMP QUE CELUI DE L'OFFENSE, et la même
+  // unité — une chaîne de milli-points, parce qu'un BigInt ne survit ni à
+  // `structuredClone` ni à la sauvegarde. Un écran qui sait afficher les points
+  // d'un raid mené sait afficher ceux d'un raid subi.
+  assert.equal(typeof rapport.rechercheMilli, 'string');
+  assert.equal(BigInt(rapport.rechercheMilli), apres - avant,
+    'le rapport annonce autre chose que ce qui a été crédité');
+
+  // ⚠⚠ ET LE CRÉDIT EST EXACTEMENT CELUI QUE `pointsRechercheDefense` CALCULE,
+  // pas une seconde formule écrite dans le raid. Le rejeu du rapport rend le
+  // même combat, donc le même total : c'est la garde qui tomberait si le raid
+  // se mettait un jour à arrondir pour son compte.
+  const rejoue = resoudre(creerCombat(rapport.rejeu));
+  assert.equal(pointsRechercheDefense(rejoue, rapport.rejeu), apres - avant);
+
+  // ⚠ UNE BASE SANS GARNISON NE TUE RIEN, DONC NE TOUCHE RIEN. Le prorata est
+  // sur les PV arrachés : zéro attaquante abîmée, zéro point, et pas de plancher
+  // consolant.
+  const nue = baseALaRangee(7, 200, { niveau: 20, garnison: false });
+  const avantNue = BigInt(nue.recherche.pointsMilli);
+  const rapportNu = subirUnRaid(nue, ATTAQUANTE, 5);
+  assert.equal(BigInt(nue.recherche.pointsMilli), avantNue);
+  assert.equal(rapportNu.rechercheMilli, '0');
 });

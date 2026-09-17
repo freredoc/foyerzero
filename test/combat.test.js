@@ -16,6 +16,7 @@ import {
   resoudre,
   butin,
   butinPlein,
+  pointsRechercheDefense,
   pointsRecherche,
   construireResultat,
   serialiserEtat,
@@ -1469,4 +1470,81 @@ test('T16 — la Souche tombée paie les défenses intactes, et deux passes ne d
   // personne n'a touché ne rapporte rien, quelle que soit sa santé.
   const sansRasage = { ...resultat, cause: 'duree' };
   assert.equal(pointsRecherche(sansRasage, montage), 0n);
+});
+
+// ---------------------------------------------------------------------------
+// T17 — la défense paie, moitié moins
+// ---------------------------------------------------------------------------
+
+test('T17 — les attaquantes détruites paient la défense, à moitié tarif', () => {
+  // Une Carapace de niveau 3 attaque une Casemate qui la tue. Barème de la
+  // Carapace : 20. Échelle : facteurRechercheMilli(3) = 13 734. Plein tarif
+  // vaudrait 20 × 13 734 = 274 680 milli-points ; la défense en touche la
+  // moitié, 137 340.
+  //
+  // ⚠ LA CARAPACE, PAS LE PERCEURS : il faut une attaquante qui MEURE et qui
+  // PORTE un module, pour mesurer les deux moitiés du test avec un seul montage.
+  // Mesuré sur les quatorze unités au niveau 3 : la Carapace est la seule à
+  // faire les deux — le Perceurs meurt sans module, les Fouisseurs portent
+  // `camouflage` mais survivent.
+  const montage = {
+    niveau: 3,
+    saveur: null,
+    obstacles: [],
+    defenseurs: [{ id: 'casemate', rangee: 3, colonne: 1 }],
+    batiments: [{ id: 'souche', rangee: 18, colonne: 9 }],
+    vagues: [[{ rangee: DEPART, id: 'carapace', colonne: 1, niveau: 3 }]],
+    modulesDebloques: { ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] } },
+    proprietaireDefense: 'joueur',
+    proprietaireAttaque: 'ouvrage',
+  };
+  const resultat = resoudre(creerCombat(montage));
+  const carapace = resultat.attaquants[0];
+  assert.equal(carapace.detruit, true, 'la Carapace survit : le montage a bougé');
+
+  // ⚠⚠ ARBITRAGE D'ETHAN, 14/09/2026 : « moitié moins ». Le facteur est dans les
+  // données, `POINTS_RECHERCHE.multiplicateurDefense`, et il s'applique au TOTAL
+  // de l'assaut, pas au barème — le barème reste la valeur d'une pièce, et c'est
+  // le camp qui décide de son tarif.
+  assert.equal(pointsRechercheDefense(resultat, montage), 137_340n);
+
+  // ⚠ ET L'OFFENSE, ELLE, EST INCHANGÉE PAR CE LOT. La même passe vue de
+  // l'autre côté paie plein tarif sur ce que l'attaquant a cassé.
+  assert.equal(pointsRecherche(resultat, montage) > 0n, true);
+
+  // ⚠⚠ LA MAJORATION LIT LA BRANCHE `offense` DE L'ATTAQUANT, PAS SA DÉFENSE.
+  // La Carapace porte le module `camouflage` : le débloquer côté offense de
+  // l'Ouvrage majore de 20 %, soit 137 340 × 1,2 = 164 808. Mettre le même nom
+  // dans la branche `defense` de l'Ouvrage, ou dans l'une des deux du joueur, ne
+  // doit RIEN changer — sinon le joueur se paierait ses propres modules.
+  const arme = {
+    ...montage,
+    modulesDebloques: {
+      ouvrage: { offense: [carapace.module], defense: [] },
+      joueur: { offense: [], defense: [] },
+    },
+  };
+  assert.equal(carapace.module !== null, true, 'la Carapace n’a plus de module : le test ne mesure plus rien');
+  assert.equal(pointsRechercheDefense(resultat, arme), 164_808n);
+  for (const fuite of [
+    { ouvrage: { offense: [], defense: [carapace.module] }, joueur: { offense: [], defense: [] } },
+    { ouvrage: { offense: [], defense: [] }, joueur: { offense: [carapace.module], defense: [carapace.module] } },
+  ]) {
+    assert.equal(
+      pointsRechercheDefense(resultat, { ...montage, modulesDebloques: fuite }), 137_340n,
+      'une autre branche que l’offense de l’attaquant majore les points : la fuite est ouverte',
+    );
+  }
+
+  // ⚠⚠ ET IL N'Y A PAS DE BRANCHE `rase` DE CE CÔTÉ, CE N'EST PAS UN OUBLI. Une
+  // attaquante qui se replie intacte ne paie rien, quelle que soit la cause de
+  // fin — un assaut repoussé ne laisse de toute façon personne debout, donc le
+  // prorata paie déjà 100 %. Contre-épreuve : la même cause `souche` qui, côté
+  // offense, fait tout payer, ne fait rien payer ici sur une attaquante intacte.
+  const intacte = {
+    ...resultat,
+    cause: 'souche',
+    attaquants: [{ ...carapace, detruit: false, pvMilli: carapace.pvMaxMilli, pvPerdusMilli: 0 }],
+  };
+  assert.equal(pointsRechercheDefense(intacte, montage), 0n);
 });

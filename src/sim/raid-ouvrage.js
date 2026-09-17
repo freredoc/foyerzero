@@ -36,7 +36,7 @@ import { TICKS_PAR_HEURE } from './clock.js';
 import { RAID_OUVRAGE, TYPES_SITE, APRES_RAID, GEOGRAPHIE } from '../data/sites.js';
 import { BASE_BATIMENTS } from '../data/base.js';
 import {
-  creerCombat, resoudre, facteurMilli, TICKS_MAX_COMBAT,
+  creerCombat, resoudre, facteurMilli, TICKS_MAX_COMBAT, pointsRechercheDefense,
 } from './combat.js';
 import { genererVague, budgetRaid } from './generateur.js';
 import { ciblesAPortee } from './site-de-la-case.js';
@@ -46,7 +46,9 @@ import { modulesDebloquesDuJoueur, nomDuModule } from './recherche.js';
 import { UNITES } from '../data/combat.js';
 import { majorationsDeCombat } from './poi.js';
 import { poserLaBaseSur } from './deplacement.js';
-import { reparerLaGarnison, garderLeRapport, pourLeRejeu } from './raid.js';
+import {
+  reparerLaGarnison, garderLeRapport, pourLeRejeu, rechercheMilli,
+} from './raid.js';
 import { baseCourante } from './base-courante.js';
 import { pvMaxDeLaPieceDeGarnisonMilli, ramenerLaGarnison } from './reparation.js';
 
@@ -838,6 +840,27 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   }
   ramenerLaGarnison(etat);
 
+  // --- 4 bis. les points de recherche de la défense se rangent --------------
+  //
+  // ⚠⚠ DÉFENDRE PAIE DEPUIS LE 14/09/2026, ET MOITIÉ MOINS QU'ATTAQUER. Ethan :
+  // « il faut qu'on gagne des points de recherche suite aux raids subis », puis
+  // « moitié moins ». Le tarif vit dans les données,
+  // `POINTS_RECHERCHE.multiplicateurDefense`, et le calcul dans
+  // `pointsRechercheDefense`, jumeau exact de celui de l'offense.
+  //
+  // ⚠⚠ ET LE CRÉDIT EST ICI, PAS DANS `resoudreLaMinute`. Celle-ci résout
+  // PLUSIEURS assauts pour une même minute, un par base attaquante ; créditer
+  // chez elle obligerait à additionner des totaux qu'elle ne calcule pas, et le
+  // jour où un appelant sauterait la boucle pour appeler `subirUnRaid`
+  // directement — ce que fait le journal en rejeu — la défense ne paierait plus.
+  // Le raid sait ce qu'il vient de détruire ; il le range lui-même.
+  //
+  // ⚠ LA MÊME ÉCRITURE QUE `executerRaid`, au même champ, dans la même unité :
+  // `etat.recherche.pointsMilli` est une chaîne de milli-points, parce qu'un
+  // BigInt ne survit pas à `structuredClone` ni à la sauvegarde.
+  const gagnesMilli = pointsRechercheDefense(resultat, montage);
+  etat.recherche.pointsMilli = (rechercheMilli(etat) + gagnesMilli).toString();
+
   // --- 5. le rapport rejoint les dix ---------------------------------------
   const rapport = {
     // ⚠ LE SENS EST ÉCRIT, ET LES DEUX CÔTÉS LE PORTENT. Une liste où seuls les
@@ -845,6 +868,11 @@ export function subirUnRaid(etat, base, minute, options = {}) {
     // l'absence comme un cas ; `executerRaid` pose donc `sens: 'offense'` de son
     // côté, et personne n'a plus à deviner.
     sens: 'defense',
+    // ⚠ LE MÊME NOM DE CHAMP QUE LE RAPPORT D'OFFENSE, ET LA MÊME UNITÉ. Un
+    // écran qui sait afficher les points d'un raid mené sait afficher ceux d'un
+    // raid subi ; lui donner ici `rechercheDefenseMilli` aurait obligé tout
+    // lecteur à connaître DEUX noms pour une seule grandeur.
+    rechercheMilli: gagnesMilli.toString(),
     attaquant: {
       type: base.type, niveau: base.niveau, rangee: base.rangee, colonne: base.colonne,
     },
