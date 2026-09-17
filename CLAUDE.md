@@ -48,6 +48,30 @@ appareils ne verraient jamais.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
+**Référence au 14/09/2026 (après le lot RECHERCHE-DEFENSE), à confronter :**
+⚠⚠ **DÉFENDRE PAIE DES POINTS DE RECHERCHE, MOITIÉ MOINS QU'ATTAQUER.** Arbitré
+par Ethan le 14/09 : « il faut qu'on gagne des points de recherche suite aux
+raids subis », puis « moitié moins ». `pointsRechercheDefense` est le jumeau de
+`pointsRecherche` — mêmes trois facteurs, barème × échelle × prorata des PV —,
+divisé par `POINTS_RECHERCHE.multiplicateurDefense`. Le crédit vit dans
+`subirUnRaid`, PAS dans `resoudreLaMinute`, qui résout plusieurs assauts par
+minute. ⚠ **ET LA MAJORATION LIT LA BRANCHE `offense` DE L'ATTAQUANT**, jamais
+sa défense ni celle du joueur — `COMBAT T17` garde les trois fuites.
+⚠⚠ **LE BARÈME PASSE DE 17 À 23 ENTRÉES**, et l'invariant de `donnees.test.js`
+avec : « le pool défensif PLUS les six qui ne font qu'attaquer », les six étant
+DÉRIVÉES de `UNITES[x].defense.present !== true`, jamais listées à la main.
+Valeurs posées par Ethan — Crécelle 20, Busard 25, Frappeur 30, Fouisseurs 25,
+Pilon 40, Enclume 50 — parce qu'aucune formule ne les devine : huit essayées, la
+meilleure se trompe de 19 % en moyenne. Le maximum reste 60, donc le garde-fou
+de l'entier sûr ne bouge pas. ⚠ Mesuré avant de trancher : un assaut repoussé
+valait 0,81 camp rasé au niveau 12, 0,98 au 40 — d'où le facteur. Et la part des
+attaquantes sans barème monte de 4 % au niveau 12 à 43 % au 40 : les six valeurs
+portent la moitié du lot. `npm test` rend **1616 pass / 0 fail** au sens de la
+garde de `documentation.test.js` ; le verdict mesuré est **1614 pass · 0 fail ·
+1 skipped**. La couche `DEPLACES_PAR_RECHERCHE_DEFENSE` porte **quatre couples
+sur 350**, sur p13 et p14 seulement — les deux seules phases où le joueur subit
+un assaut —, et les deux rapports d'offense du relevé ne bougent pas.
+
 **Référence au 14/09/2026 (après le lot RASAGE-PAYANT), à confronter :**
 ⚠⚠ **UN RASAGE PAIE LES DÉFENSES RESTÉES DEBOUT.** Arbitré par Ethan le 14/09 :
 « 100 %, même s'il reste des trucs debout. Comme les bâtiments intacts. »

@@ -179,18 +179,40 @@ test('données — la garnison ne tire que des entités présentes en défense, 
   }
 });
 
-test('données — le barème de recherche est EXACTEMENT le pool défensif', () => {
+test('données — le barème de recherche est le pool défensif PLUS les six qui ne font qu’attaquer', () => {
   const pool = new Set();
   for (const ligne of Object.values(GARNISON.parNiveau)) {
     for (const id of Object.keys(ligne)) pool.add(id);
   }
+  // ⚠⚠ L'INVARIANT S'EST ÉLARGI AU LOT RECHERCHE-DEFENSE (14/09/2026), ET IL
+  // RESTE FERMÉ. Il disait « EXACTEMENT le pool défensif », ce qui était juste
+  // tant que seuls les raids MENÉS payaient : le barème ne voyait que des
+  // garnisons. Depuis que les raids SUBIS paient, les attaquantes de l'Ouvrage
+  // sont des cibles elles aussi, et six d'entre elles ne peuvent JAMAIS garnir
+  // un site.
+  //
+  // ⚠⚠ ET LES SIX SE DÉRIVENT DES DONNÉES, ELLES NE SONT PAS ÉCRITES ICI.
+  // `UNITES[x].defense.present === false` est le critère, le même que celui qui
+  // les exclut du pool de garnison. Les lister à la main aurait fait deux
+  // sources pour une seule vérité, et la seconde aurait vieilli en silence : le
+  // jour où une unité gagne une version défensive, ce test suit tout seul.
+  const attaqueSeulement = new Set(
+    Object.entries(UNITES).filter(([, u]) => u.defense?.present !== true).map(([id]) => id),
+  );
+  const attendu = new Set([...pool, ...attaqueSeulement]);
   const bareme = new Set(Object.keys(POINTS_RECHERCHE.parCible));
-  const manquants = [...pool].filter((id) => !bareme.has(id));
-  const enTrop = [...bareme].filter((id) => !pool.has(id));
-  assert.deepEqual(manquants, [], 'des cibles du pool défensif ne rapportent aucun point');
-  assert.deepEqual(enTrop, [], 'le barème paie des cibles qui n’apparaissent jamais en garnison');
-  // MESURÉ : 17 entités dans le pool défensif, donc 17 au barème.
+  const manquants = [...attendu].filter((id) => !bareme.has(id));
+  const enTrop = [...bareme].filter((id) => !attendu.has(id));
+  assert.deepEqual(manquants, [], 'des cibles payables ne rapportent aucun point');
+  assert.deepEqual(enTrop, [], 'le barème paie des cibles qui n’apparaissent ni en garnison ni en assaut');
+  // MESURÉ : 17 entités dans le pool défensif, 6 qui ne font qu'attaquer, donc
+  // 23 au barème — les huit unités qui savent faire les deux sont comptées une
+  // fois, et c'est le `Set` qui s'en charge.
   assert.equal(pool.size, 17, `pool défensif de ${pool.size} entités, 17 attendues`);
+  assert.equal(attaqueSeulement.size, 6, `${attaqueSeulement.size} unités sans version défensive, 6 attendues`);
+  assert.equal(bareme.size, 23, `barème de ${bareme.size} entrées, 23 attendues`);
+  // ⚠ LE MAXIMUM NE BOUGE PAS, et c'est lui que `verifierArithmetique` borne.
+  assert.equal(Math.max(...Object.values(POINTS_RECHERCHE.parCible)), 60);
 });
 
 test('données — la densité tient dans les 72 cases, et un camp n’est jamais plus dense qu’un avant-poste', () => {

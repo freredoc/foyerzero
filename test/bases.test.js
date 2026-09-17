@@ -121,6 +121,7 @@ import {
   RAPPORTS_OUVRAGE_PREDILECTION,
   DEPLACES_PAR_FREIN, EMPREINTES_PAR_GRAINE_FREIN,
   RAPPORTS_PROCHE_FREIN, RAPPORTS_OUVRAGE_FREIN,
+  DEPLACES_PAR_RECHERCHE_DEFENSE, EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE,
   DEPLACES_PAR_ECHELLE_RECHERCHE, EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE,
   RAPPORTS_PROCHE_ECHELLE_RECHERCHE, RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE,
   RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
@@ -306,7 +307,13 @@ function empreinteAttendue(phase, champ) {
   // `POINTS_RECHERCHE.echelle`, et les deux grandeurs ne partagent plus aucun
   // facteur. C'est cette moitié-là qui prouve que le lot recale UN barème et rien
   // d'autre. ⚠⚠ AUCUN SCALAIRE NE BOUGE — les dix-sept, sur 25 graines sur 25.
-  return DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
+  // ⚠⚠ VINGT-NEUVIÈME COUCHE — lot RECHERCHE-DEFENSE, 14/09. **QUATRE couples
+  // sur 350**, `recherche` et `rapports`, sur p13 et p14 UNIQUEMENT : les deux
+  // seules phases où le joueur SUBIT un assaut. Les douze autres, qui
+  // contiennent des raids menés et deux rapports d'offense complets, ne bougent
+  // pas d'un bit — c'est ce qui prouve que le lot ne paie que la défense.
+  return DEPLACES_PAR_RECHERCHE_DEFENSE[phase]?.[champ]
+    ?? DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
     ?? DEPLACES_PAR_FREIN[phase]?.[champ]
     ?? DEPLACES_PAR_PREDILECTION[phase]?.[champ]
     ?? DEPLACES_PAR_CONTACT_2[phase]?.[champ]
@@ -759,7 +766,10 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // ⚠⚠ ÉCHELLE-RECHERCHE (14/09) DÉPLACE LES VINGT-CINQ, ET IL NE POUVAIT PAS
     // EN LAISSER : le solde de points entre dans l'empreinte de toute partie, et
     // les deux raids du scénario cassent quelque chose sur les vingt-cinq.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
+    // ⚠⚠ RECHERCHE-DEFENSE (14/09) déplace les vingt-cinq : les vingt-cinq
+    // parties subissent un assaut dans la fenêtre de p13.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE[g]
+      ?? EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
       ?? EMPREINTES_PAR_GRAINE_FREIN[g]
       ?? EMPREINTES_PAR_GRAINE_PREDILECTION[g]
       ?? EMPREINTES_PAR_GRAINE_CONTACT_2[g]

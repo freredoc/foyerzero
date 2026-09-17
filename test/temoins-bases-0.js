@@ -5292,3 +5292,68 @@ export const RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE = {
   24: "7104e011028ad192",
   25: "297c839eb32648f9",
 };
+
+/**
+ * ⚠⚠ VINGT-NEUVIÈME COUCHE — lot RECHERCHE-DEFENSE, 14/09/2026. **QUATRE
+ * COUPLES SUR 350**, deux champs — `recherche` et `rapports` — sur deux phases
+ * seulement, p13 et p14.
+ *
+ * Ce que le lot change : un raid SUBI paie des points de recherche, moitié moins
+ * qu'un raid mené (`POINTS_RECHERCHE.multiplicateurDefense`). Arbitré par Ethan
+ * le 14/09 : « il faut qu'on gagne des points de recherche suite aux raids
+ * subis », puis « moitié moins ».
+ *
+ * ⚠⚠ ET DEUX PHASES SEULEMENT, C'EST LA MESURE DU LOT. p13 est la fenêtre de
+ * cinq minutes qui couvre un assaut, p14 les vingt-quatre heures sous le feu :
+ * ce sont les SEULES phases où le joueur subit quelque chose. Les douze autres
+ * ne bougent pas d'un bit, alors qu'elles contiennent des raids MENÉS et deux
+ * rapports d'offense complets. Un lot qui prétendrait ne payer que la défense et
+ * ferait bouger p07 aurait touché l'offense.
+ *
+ * ⚠⚠ ET LES DEUX RAPPORTS D'OFFENSE DU RELEVÉ NE BOUGENT PAS — `raidProche` et
+ * `raidOuvrage`, vingt-cinq graines sur vingt-cinq, aucune table de rapports
+ * dans cette couche. Ces deux-là sont des raids que le joueur MÈNE, contre le
+ * camp le plus proche et contre la base de l'Ouvrage ; leur jeu de clés est
+ * gardé nom par nom par `CLES_DU_RAPPORT_AVANT_TRANSFERT`, et il est intact. La
+ * clé `rechercheMilli` que ce lot ajoute est celle du rapport de DÉFENSE, qui
+ * portait déjà le même nom côté offense.
+ */
+export const DEPLACES_PAR_RECHERCHE_DEFENSE = {
+  p13_apresLeRaid: { rapports: "2ab832c02d77c45f", recherche: "0ab1d83da1a40044" },
+  p14_sousLeFeu: { rapports: "bc100ca6b3806904", recherche: "0ab1d83da1a40044" },
+};
+
+/**
+ * Les empreintes par graine, lot RECHERCHE-DEFENSE — les 25 sur 25.
+ *
+ * ⚠ ET IL NE POUVAIT PAS EN RESTER : le solde de points entre dans l'empreinte
+ * de toute partie, et les vingt-cinq parties subissent un assaut dans la fenêtre
+ * de p13. Une graine gardée voudrait dire une partie où personne n'a attaqué.
+ */
+export const EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE = {
+  1: "47d2a347779d3e13",
+  2: "9b1740e69c9f3477",
+  3: "1c7c702b7644ea6a",
+  4: "01253a96141b52b0",
+  5: "6d802c8d074854b0",
+  6: "dc03f99935b02b10",
+  7: "c29b07a66daad7ca",
+  8: "8401caa544806faa",
+  9: "4d6d9b533bb19263",
+  10: "1da314daf7725565",
+  11: "99809a259f03017d",
+  12: "be08cca0ca39b25e",
+  13: "96757327b23df738",
+  14: "8f6e5b57ecf95595",
+  15: "53ecc676d0c70f79",
+  16: "c70b59a4c0d21b6a",
+  17: "1e4dbf41ec8cb83e",
+  18: "d63a7fb2c3d17bf7",
+  19: "d2fccd7f8fc52620",
+  20: "25f499728210a5dc",
+  21: "6feef7b201c8aa77",
+  22: "79b6f73e5551ddb0",
+  23: "f7016a8fc891664c",
+  24: "2926af39b26c2ff5",
+  25: "906ea0e11f46ca34",
+};
