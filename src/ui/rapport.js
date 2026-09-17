@@ -446,6 +446,37 @@ export function lignesDeLaDefense(rapport) {
       avant: formaterDuree((rapport.ticks * TICK_MS) / 1000),
       apres: null,
     },
+    // ⚠⚠ LA RECHERCHE SE DIT DE CE CÔTÉ AUSSI DEPUIS LE 14/09/2026, ET LA LIGNE
+    // D'EN FACE EN DISAIT LE CONTRAIRE. `ÉCRANS T1` assertait qu'un raid SUBI ne
+    // rend aucune ligne de recherche, en donnant pour raison « un raid subi ne
+    // rapporte pas un point » : c'était vrai quand elle a été écrite, et le lot
+    // RECHERCHE-DEFENSE l'a rendue fausse sans faire tomber le test, puisque
+    // cette fonction-ci n'avait pas été touchée. Un test vert pour une raison
+    // périmée est le pire des deux mondes ; il est retourné avec ce lot.
+    //
+    // ⚠ MÊME PLACE QUE DANS `lignesDuResultat`, ET POUR LA MÊME RAISON : le
+    // GAIN d'abord, ce qui RESTE debout ensuite. Glisser un gain au milieu des
+    // pourcentages obligerait le joueur à relire la colonne pour savoir de quel
+    // côté chaque chiffre tombe.
+    //
+    // ⚠⚠ ET LE CHAMP ABSENT NE DONNE AUCUNE LIGNE — c'est le même idiome et la
+    // même fenêtre de sauvegardes qu'en face, décalée d'une semaine : les
+    // rapports de défense existent depuis le lot RAID-B, `rechercheMilli` n'y
+    // entre que le 14/09, et aucune migration ne vide `etat.rapports`. Une
+    // sauvegarde d'avant ce lot porte donc des rapports SANS le champ, et
+    // `BigInt(undefined)` LÈVE : le dépliant du journal viderait l'écran.
+    //
+    // ⚠ « ABSENT » VAUT « PAS DE LIGNE », JAMAIS « ZÉRO POINT ». Une défense qui
+    // n'a vraiment rien détruit garde sa ligne et dit « 0 » — c'est le cas d'une
+    // base sans garnison, mesuré par `RCU T13`.
+    ...(rapport.rechercheMilli !== undefined && rapport.rechercheMilli !== null
+      ? [{
+        libelle: 'Recherche',
+        picto: PICTOGRAMMES.recherche,
+        avant: `${formaterPoints(BigInt(rapport.rechercheMilli))} points`,
+        apres: null,
+      }]
+      : []),
     { libelle: 'Défense restante', avant: pct(rapport.restantDefense), apres: null },
     { libelle: 'Bâtiments restants', avant: pct(rapport.restantBatiments), apres: null },
     // ⚠ « AU PLANCHER » N'EST PAS « DÉTRUIT », et le mot doit le dire : une pièce
