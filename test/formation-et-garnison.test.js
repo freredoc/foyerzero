@@ -1000,7 +1000,7 @@ test('FR T3 — la chaîne de migration se rejoue en entier, et le maillon 31 �
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33, 'SAVE_VERSION a bougé sans que ce test suive');
+  assert.equal(SAVE_VERSION, 36, 'SAVE_VERSION a bougé sans que ce test suive');
   // ⚠⚠ LE MAILLON 31 → 32 A JOUÉ, ET IL N'A RIEN INVENTÉ. Une v0 ne sait ni
   // quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
   // formation vivait dans la fermeture de l'écran et ne se sérialisait pas.
