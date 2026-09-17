@@ -514,7 +514,7 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33);
+  assert.equal(SAVE_VERSION, 36);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

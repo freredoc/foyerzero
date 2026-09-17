@@ -2547,7 +2547,7 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 33, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  assert.equal(SAVE_VERSION, 36, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());

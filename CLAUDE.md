@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **17/09/2026**, version 0.99.62 · build 174.
+Dernière révision : **17/09/2026**, version 0.99.63 · build 175.
 ⚠⚠ **LES BUILDS 164 À 173 SONT BRÛLÉS HORS DÉPÔT, ET LE BUMP FANTÔME DU 17/09
 LES A FRANCHIS.** Des livrables ont été publiés sur l'appareil d'Ethan hors de ce
 dépôt, jusqu'au build 173 ; `PolitiqueVersion.miseAJourAcceptable` refusant un

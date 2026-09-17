@@ -77,7 +77,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 33;
+export const SAVE_VERSION = 36;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -3372,6 +3372,24 @@ const MIGRATIONS = {
    */
   32: (s) => {
     s.version = 33;
+  },
+
+  /**
+   * v33 → v36 : TROIS MAILLONS VIDES, PR TEST DU 17/09/2026. Ils ne
+   * convertissent rien : les schémas 34 et 35 sont ceux des builds publiés hors
+   * dépôt, et leurs migrations ne sont nulle part ici. Ces maillons font passer
+   * une sauvegarde v35 sans la comprendre — c'est ce que `CLAUDE.md` §0 dit de
+   * ne pas faire, et c'est ce qu'Ethan a demandé de mesurer sur une PR test.
+   * @param {object} s
+   */
+  33: (s) => {
+    s.version = 34;
+  },
+  34: (s) => {
+    s.version = 35;
+  },
+  35: (s) => {
+    s.version = 36;
   },
 };
 
