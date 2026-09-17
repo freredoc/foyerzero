@@ -1370,14 +1370,36 @@ test('ÉCRANS T1 — le rapport publie la recherche, à la valeur du moteur', ()
   assert.ok(lignesDetailleesDuRapport(rapport).some((l) => l.libelle === 'Recherche'),
     'le dépliant du journal ne dit pas la recherche');
 
-  // ⚠⚠ ET UN RAID SUBI N'EN REND AUCUNE — un raid subi ne rapporte pas un point,
-  // son rapport n'a pas le champ, et `lignesDeLaDefense` n'a pas été touchée. Y
-  // poser une ligne à zéro mentirait sur la mécanique.
+  // ⚠⚠ ET UN RAID SUBI EN REND UNE, DEPUIS LE 14/09/2026. CETTE MOITIÉ-CI A ÉTÉ
+  // RETOURNÉE, PAS SUPPRIMÉE, et c'est la leçon du lot : elle assertait
+  // l'inverse — « un raid SUBI n'en rend aucune » — en donnant pour raison « un
+  // raid subi ne rapporte pas un point ». Le lot RECHERCHE-DEFENSE a rendu cette
+  // raison FAUSSE sans faire tomber le test, parce que `lignesDeLaDefense`
+  // n'avait pas été touchée : le test restait vert en gardant une mécanique qui
+  // n'existait plus. Un test vert pour une raison périmée ne garde rien.
+  //
+  // ⚠ ET IL TOMBERA TOUT AUTANT si quelqu'un retire la ligne du panneau de
+  // défense, ce que l'ancienne rédaction ne pouvait pas faire.
   const subi = { ...rapport, sens: 'defense' };
-  assert.ok(!lignesDetailleesDuRapport(subi).some((l) => l.libelle === 'Recherche'),
-    'un raid SUBI annonce des points de recherche');
-  assert.ok(!lignesDuPanneauDeFin(subi).some((l) => l.quoi === 'Recherche'),
-    'le panneau de fin d\'un raid SUBI annonce des points de recherche');
+  assert.ok(lignesDetailleesDuRapport(subi).some((l) => l.libelle === 'Recherche'),
+    'un raid SUBI n\'annonce pas ses points de recherche');
+  assert.ok(lignesDuPanneauDeFin(subi).some((l) => l.quoi === 'Recherche'),
+    'le panneau de fin d\'un raid SUBI n\'annonce pas ses points de recherche');
+
+  // ⚠⚠ ET LES DEUX SURFACES DE LA DÉFENSE PASSENT PAR UNE SEULE ÉCRITURE, comme
+  // les trois de l'offense : `lignesDuPanneauDeFin` réexpédie `lignesDeLaDefense`
+  // quand le sens est `defense`. Un lot qui les séparerait fait tomber cette
+  // moitié-ci.
+  const detail = lignesDetailleesDuRapport(subi).find((l) => l.libelle === 'Recherche');
+  const fin = lignesDuPanneauDeFin(subi).find((l) => l.quoi === 'Recherche');
+  assert.equal(detail.avant, fin.valeur, 'les deux surfaces de la défense divergent');
+
+  // ⚠ LE CHAMP ABSENT NE DONNE TOUJOURS AUCUNE LIGNE DE CE CÔTÉ NON PLUS — même
+  // idiome, même fenêtre de sauvegardes qu'en face : les rapports de défense
+  // existent depuis RAID-B et `rechercheMilli` n'y entre que le 14/09.
+  const subiSansChamp = { ...subi, rechercheMilli: undefined };
+  assert.ok(!lignesDetailleesDuRapport(subiSansChamp).some((l) => l.libelle === 'Recherche'),
+    'un rapport de défense SANS le champ annonce quand même une ligne');
 });
 
 test('ÉCRANS T1 bis — un rapport sans le champ ne rend pas de ligne, et ne LÈVE pas', () => {
