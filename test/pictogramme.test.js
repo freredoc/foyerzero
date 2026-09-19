@@ -458,7 +458,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 est de 2,23 %', () => {
+test('PIC T7 — le livrable pèse 9 485 395 octets, la marge sur la borne T10 est de 2,21 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -832,10 +832,30 @@ test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 e
   // assertion ne bronche, en faisant mentir la §0 de `CLAUDE.md` de 51 octets.
   // Le patch du lot ne touchait pas ce fichier — le réancrage est venu de la
   // MESURE, pas du patch.
-  const BORNE = 9_600_000;           // T10 de `banc.test.js`, relevée au lot ART-90
-  const MESURE = 9_386_656;          // remesuré au lot ÉCHELLE-RECHERCHE, base `6de495d`
-  const MARGE = BORNE - MESURE;      // 213 344 octets — 213 293 écrits par FREIN
-  assert.equal(MARGE, 213_344);
+  // ⚠⚠ RÉANCRÉ AU LOT RUINES-DÉFENSE, 19/09, ET LA BORNE BOUGE AVEC — PREMIÈRE
+  // FOIS DEPUIS ART-90. Huit ruines de pièce de défense entrent dans l'atlas
+  // `defense`, qui passe de 18 à 26 sprites. Mesuré poste par poste contre le
+  // livrable rebâti dans un `git worktree` sur l'arbre pristine de `main` =
+  // `105d4fc`, qui est le merge d'ANCRES-ZÉNITH (**9 409 289**) : **images
+  // +75 208 · JavaScript +898 · feuille +0 · balisage +0 · audio +0**, la
+  // partition tombant EXACTEMENT sur le total des DEUX côtés — écart **0 · 0**
+  // —, et **306 URI / 307 lignes `data:` de part et d'autre**.
+  //
+  // ⚠⚠ ET C'EST LE PLANCHER DE 150 000 QUI A FORCÉ LE RELÈVEMENT, PAS LA BORNE.
+  // À 9 600 000 la marge tombait à **114 605 octets, 1,19 %** : le livrable
+  // passait sous la borne, et l'assertion du bas de ce test ne passait pas. Une
+  // ressource entre légitimement — huit dessins neufs, pas de l'entropie —, donc
+  // la borne monte à **9 700 000** et `banc.test.js` T10 écrit pourquoi.
+  //
+  // ⚠ LES 898 OCTETS DE JAVASCRIPT SONT LE CÂBLAGE : `FAMILLE_DE_LA_RUINE`,
+  // `SEL_VARIANTE_RUINE`, la famille passée en paramètre de `nombreDeVariantes`
+  // et les cinq arguments de `couchesDeLaRuine`. Pas une image ne les porte.
+  const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
+  const MESURE = 9_485_395;          // remesuré au lot RUINES-DÉFENSE, base `105d4fc`
+  const MARGE = BORNE - MESURE;      // 214 605 octets — 213 344 écrits par ÉCHELLE-RECHERCHE
+  assert.equal(MARGE, 214_605);
+  assert.notEqual(MARGE, 213_344,
+    'la marge est celle d\'avant RUINES-DÉFENSE : le réancrage a été défait');
   assert.notEqual(MARGE, 215_225,
     'la marge est revenue à l\'ancre du lot REJEU : le réancrage a été défait');
   assert.notEqual(MARGE, 214_592,
@@ -846,7 +866,7 @@ test('PIC T7 — le livrable pèse 9 385 638 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.22);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.21);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

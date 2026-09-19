@@ -1,5 +1,506 @@
 # RAPPORT — lot RUINES-DÉFENSE
 
+Une pièce de défense abattue laisse sa ruine. Huit sources d'Ethan — quatre par
+camp —, conditionnées aux deux grilles, cousues dans l'atlas `defense`, et
+tirées sous un sel à elles.
+
+**`npm run check` : 1 646 déclarés · 1 645 pass · 0 fail · 1 skipped**, sortie 0.
+`npm run build` → `dist/index.html`, **9 485 395 octets**, 0 référence externe.
+Version et build passent à **0.99.68 · build 180**, les deux restant des CHAÎNES.
+
+⚠ **CE RAPPORT A DEUX MOITIÉS, ET LA SECONDE EST DE L'HISTOIRE.** Le lot s'était
+arrêté sur son pré-check n° 5 — les huit sources n'étaient pas au dépôt — et
+avait rendu ses mesures sous cette forme-là. Le corps de ce rapport d'arrêt est
+conservé tel quel à partir du §10, sans qu'un mot en bouge, **y compris son
+§7.3, dont le §9 ci-dessous est la rétractation.**
+
+---
+
+## 1. Où vont les huit sprites, et ce que ça pèse
+
+**Dans la famille `defense`, avec les pièces qu'elles remplacent.** La famille
+passe de **18 à 26 sprites**, sa grille de **5 × 4 à 6 × 5**.
+
+⚠⚠ **LE POIDS N'A PAS DÉCIDÉ, ET C'EST MESURÉ SUR LES QUATRE CANDIDATS.** Chacun
+a été cousu pour de bon à la grille 128 et pesé en base64 :
+
+| candidat | sprites | grille | octets | base64 | écart |
+|---|---|---|---|---|---|
+| `batiment` (83 → 91) | 91 | 10 × 10 | 582 950 | 777 268 | **+69 652** |
+| **`defense` (18 → 26)** | **26** | **6 × 5** | **121 456** | **161 944** | **+75 208** |
+| `terrain` (18 → 26) | 26 | 6 × 5 | 133 724 | 178 300 | **+73 228** |
+| famille NEUVE `ruine` | 8 | 3 × 3 | 55 594 | 74 128 | **+74 128** |
+
+**5 556 octets séparent le meilleur du pire, soit 0,06 % du livrable.** La
+balance ne tranche pas ; c'est le CÂBLAGE qui a décidé, sur trois faits :
+
+1. `defense` est **déjà** dans `ATLAS_DE_LA_PAGE`, dans `atlasDeLaScene` et dans
+   la table du banc — **zéro site de câblage neuf**. Une famille neuve en demande
+   six, et `executer` **LÈVE** sur une famille absente : l'oubli d'un seul vide
+   l'écran de raid au premier montage qui pose une ruine.
+2. `batiment` est là où vivent `ruine_j` et `ruine_o` — les ruines de BÂTIMENT.
+   C'est la confusion maximale, et c'est très exactement celle que le §1.1 du
+   brief existe pour éviter.
+3. `terrain` n'a aucun rapport : une ruine de pièce n'est pas du sol.
+
+⚠ **ET LE PALIER DE QUALITÉ N'A PAS ÉTÉ BAISSÉ**, comme au lot ART-90 et pour la
+même raison : `QUALITE = 85` de `tools/atlas.py` vaut pour les DIX-NEUF atlas, et
+la baisser pour celui-ci dégraderait les dix-huit autres.
+
+### 1.1 Le livrable, poste par poste
+
+Mesuré contre le livrable rebâti dans un `git worktree` sur l'arbre pristine de
+`main` = **`105d4fc`**, qui est le merge d'ANCRES-ZÉNITH :
+
+| poste | `main` `105d4fc` | arbre du lot | écart |
+|---|---|---|---|
+| **total** | 9 409 289 | 9 485 395 | **+76 106** |
+| JavaScript | 436 118 | 437 016 | **+898** |
+| feuille | 48 043 | 48 043 | +0 |
+| balisage | 38 439 | 38 439 | +0 |
+| images | 7 683 603 | 7 758 811 | **+75 208** |
+| audio | 1 203 086 | 1 203 086 | +0 |
+
+**La partition tombe EXACTEMENT sur le total des DEUX côtés — écart 0 · 0** — et
+**306 URI / 307 lignes `data:` de part et d'autre**. Aucune ressource ne prend un
+marqueur de plus : c'est le même atlas qui pèse plus.
+
+⚠ **Les +75 208 d'images sont, à l'octet, le delta que la table du §1 annonçait
+pour `defense`.** Deux chemins de mesure indépendants — la couture seule, et le
+livrable bâti — se rejoignent.
+
+⚠ **Les 898 octets de JavaScript sont le câblage** : `FAMILLE_DE_LA_RUINE`,
+`SEL_VARIANTE_RUINE`, la famille passée en paramètre de `nombreDeVariantes` et
+les cinq arguments de `couchesDeLaRuine`. Pas une image ne les porte.
+
+### 1.2 La borne T10 passe de 9 600 000 à 9 700 000
+
+⚠⚠ **ET C'EST LE PLANCHER QUI L'A FORCÉ, PAS LA BORNE.** À 9 600 000 le livrable
+passait encore — 9 485 395 — mais la marge tombait à **114 605 octets, 1,19 %**,
+c'est-à-dire **sous le plancher de 150 000 qu'asserte `PIC T7`**. Le plancher a
+fait son travail : il a refusé un lot que la borne aurait laissé passer.
+
+`CLAUDE.md` §5 dit la suite : **on ne rogne jamais pour passer dessous**, la
+borne monte et le lot écrit pourquoi. Une ressource entre ici **légitimement** —
+huit dessins neufs, pas de l'entropie comme à ART-90, où c'était le même atlas
+avec des sprites dessinés plus grands. Marge après relèvement : **214 605
+octets, 2,21 %**.
+
+---
+
+## 2. Le sel — la mesure qui a tranché, et ce qu'elle coûte aux parties en cours
+
+### 2.1 La collision est totale, et elle est mesurée
+
+`variante` mélange une bande : `SEL_VARIANTE * 32 + nombre`. Le sol a **quatre**
+variantes ; les ruines de défense en ont **quatre** aussi. Sous un sel unique la
+bande vaut donc **132 des deux côtés**, et la ruine posée sur une case porte
+**toujours** la lettre du sol de cette case.
+
+```
+cases                       162
+accord ruine/sol, sel du sol   162  = 100,00 %
+```
+
+Ce n'est pas une corrélation, c'est une identité. Quatre paires sur seize,
+répétées sur toute la base, sur toutes les graines.
+
+### 2.2 Les deux issues, et le coût de chacune
+
+| issue | accord ruine/sol | cases du SOL repeintes sur une partie en cours |
+|---|---|---|
+| la FAMILLE entre dans le mélange | décorrélé | **76,0 %** |
+| **un second SEL** | **26,54 %** | **0 % — identique au bit** |
+
+⚠⚠ **C'EST CE SECOND CHIFFRE QUI A DÉCIDÉ.** Faire entrer la famille règle le cas
+génériquement — et change le hachage du SOL, donc **repeint les trois quarts des
+cases de la base d'un joueur qui n'a rien demandé**. Le brief le demandait
+nommément : *« si le sol change d'aspect sur une sauvegarde existante, c'est un
+coût à porter au rapport et à soumettre à Ethan »*. Il y est porté, et il n'est
+pas payé : un second sel laisse le sol **identique au bit**.
+
+**26,54 %** est ce qu'on attend de deux tirages indépendants sur quatre valeurs —
+l'espérance vaut 25 %, et 43 sur 162 en est à un écart-type près.
+
+### 2.3 Le numéro est 9, et c'est le PREMIER LIBRE
+
+Le brief laissait croire que c'était 8. **Mesuré au grep `export const SEL_` :
+`sim/generateur.js` a pris 8 au lot PAQUETS en écrivant qu'il était « le premier
+libre partout ». Il ne l'est plus.** Les sels 0 et 1 sont au peuplement, qui ne
+les exporte pas ; 2 et 3 aux POI ; 4 à la variante ; 5 au fond ; 6 au bloc ; 7 à
+la famille ; 8 au placement des rangées. `SEL_VARIANTE_RUINE = 9`.
+
+### 2.4 Il se passe en ARGUMENT, avec le défaut du terrain
+
+Une seconde fonction de tirage aurait été le second compteur que le brief
+interdit ; une table `préfixe → sel` la seconde vérité que §4 interdit. **Tout
+appelant d'avant le lot rend le même nombre, au bit** — seule la famille qui
+collisionne NOMME son sel.
+
+### 2.5 `nombreDeVariantes` prend la famille, et le mémo la porte aussi
+
+Elle lisait `ATLAS.terrain` en dur. Un SECOND compteur écrit à côté aurait été la
+première chose à ne pas suivre le jour où une cinquième variante entrerait d'un
+côté seulement.
+
+⚠ **Et la clé du mémo porte la famille** : elle ne portait que le préfixe. Deux
+familles qui partageraient un préfixe se seraient rendu le compte l'une de
+l'autre, et le premier appel aurait décidé pour le second. **Aucune ne le partage
+aujourd'hui — c'est précisément pour ça que la faute aurait été muette.**
+
+---
+
+## 3. L'emprise — §3.4, mesuré sur l'art réel
+
+⚠⚠ **LA PRÉMISSE DU BRIEF EST FAUSSE, ET C'EST CE QUI REND LA RÈGLE A7 GRATUITE.**
+Il pose que *« les quatre ruines livrées sont carrées »*. Mesuré sur les huit
+sources, boîte d'encre :
+
+| source | taille | encre L × H | L/H |
+|---|---|---|---|
+| `ruine_def_j_variante_01` | 1254² | 946 × 809 | 1,169 |
+| `ruine_def_j_variante_02` | 1254² | 834 × 817 | 1,021 |
+| `ruine_def_j_variante_03` | 1254² | 1050 × 827 | 1,270 |
+| `ruine_def_j_variante_04` | 1254² | 974 × 790 | 1,233 |
+| `ruine_def_o_variante_01` | 1024² | 863 × 817 | 1,056 |
+| `ruine_def_o_variante_02` | 1024² | 890 × 813 | 1,095 |
+| `ruine_def_o_variante_03` | 1024² | 900 × 661 | 1,362 |
+| `ruine_def_o_variante_04` | 1024² | 898 × 822 | 1,092 |
+
+Aucune n'est carrée. **`recadrer` porte la plus GRANDE dimension à l'emprise**,
+donc le côté long y tombe et l'autre reste dessous : la règle A7 —
+non-dépassement absolu — **tient par construction**, sans rien rogner.
+
+Boîtes conditionnées, mesurées sur la grille de 32 :
+
+| sprite | boîte | | sprite | boîte |
+|---|---|---|---|---|
+| `ruine_def_j_a` | 29,0 × 24,0 | | `ruine_def_o_a` | 27,5 × 26,5 |
+| `ruine_def_j_b` | 29,0 × 28,0 | | `ruine_def_o_b` | 28,5 × 25,5 |
+| `ruine_def_j_c` | 29,0 × 22,0 | | `ruine_def_o_c` | 29,0 × 20,0 |
+| `ruine_def_j_d` | 28,5 × 23,0 | | `ruine_def_o_d` | 29,0 × 26,0 |
+
+**Toutes sous 29,0 × 28,0.** Et le point que le brief demandait de vérifier
+nommément — le mur et les deux barrières : `merlon`, `ronce` et `herse` mesurent
+**exactement 29,0** de côté sur `defense/128`, donc une ruine ne dépasse jamais
+la pièce qu'elle remplace.
+
+### 3.1 Palier 29, pas 31
+
+Une ruine de défense remplace **UNE PIÈCE** — socle, tourelle, mur —, pas une
+base rasée. `EMPRISE_QUATRE_VINGT_DIX` est le palier des pièces qu'elle recouvre ;
+les ruines de bâtiment gardent `EMPRISE_QUATRE_VINGT_DIX_HUIT`, celui du Chantier.
+
+### 3.2 Un garde-fou aurait arrêté la production sur des sources saines
+
+`tools/ruines.py` porte un seuil de violet à **30 %** sur le bloc des ruines de
+base. Les quatre ruines de l'Ouvrage mesurent **17,5 · 23,4 · 27,7 · 27,8 %** :
+le garde-fou n'aurait pas levé de justesse, il aurait levé sur les quatre.
+`SEUIL_VIOLET_DEF = 5` entre à côté, avec la mesure écrite en face — **on n'a pas
+desserré le seuil existant**, qui garde ce qu'il gardait.
+
+---
+
+## 4. Les deux tests du §4
+
+### 4.1 `RUINES-DÉF T1` — la ruine et le sol tirent séparément
+
+**Montage :** graine témoin 2026, les 162 cases de la grille (18 rangées × 9
+colonnes). Pour chaque case on demande la lettre de la ruine **par le chemin de
+production** — `couchesDeLaRuine('joueur', 'defense', 2026, r, c)` — et la lettre
+du sol par `nomDeVariante('tile_sol_j', …)`. Le test asserte d'abord la référence
+à 100,00 % sous le sel du sol, sans quoi la fraction mesurée ne voudrait rien
+dire.
+
+**Sortie brute :**
+```
+cases                          162
+accord ruine/sol, sel 9         43  = 26,54 %
+accord sous le sel du sol      162  = 100,00 %
+```
+
+**Verdict : VERT.** 0,15 ≤ 0,2654 ≤ 0,35. ⚠ Le brief interdisait un test de
+valeur absolue, et il a raison : la fraction est une propriété statistique, pas
+une constante. La borne encadre, elle n'épingle pas.
+
+⚠⚠ **ET LE MONTAGE A DÛ ÊTRE RÉPARÉ — LA FALSIFICATION F5 N'A PAS MORDU AU
+PREMIER RELEVÉ.** Retirer `SEL_VARIANTE_RUINE` **au site d'appel** de
+`render/scene.js` laissait la suite du lot **entièrement verte, 3 pass / 0
+fail** : `T1` appelait `nomDeVariante` directement et n'exerçait jamais le chemin
+de production. Il passe par `couchesDeLaRuine` désormais, et F5 mord. **C'est le
+MONTAGE qu'on répare, jamais l'assertion** — et *une falsification qui ne mord
+pas se vérifie avant d'être crue*.
+
+### 4.2 `RUINES-DÉF T2` — la défense laisse sa ruine, le bâtiment sa planche
+
+**Montage : DEUX, et le premier jet n'en avait qu'un.** Il tombait sur « la Meute
+n'a pas abattu le Merlon en 20 000 ticks ». Mesuré au débogueur plutôt que
+supposé : la Meute attaquante vise la Meute **défensive** — sa classe de
+prédilection — six colonnes plus loin, ne l'atteint pas, tourne à vide et **se
+replie au tick 415**, `sorti: true`, cause `attaquants`. Les deux chemins de
+destruction sont donc montés séparément :
+
+- **l'effondrement** (trois genres côte à côte) — une pièce tombée à la fin d'un
+  raid gagné ;
+- **la mort au moteur** (un mur seul, la géométrie de `VIT T2 bis`) — une pièce
+  abattue pendant le combat.
+
+**Assertions :** une pièce de défense détruite rend exactement **une** couche
+`defense/ruine_def_[jo]_[a-d]` ; un bâtiment détruit rend `batiment/ruine_[jo]`
+et **aucune** `ruine_def_` ; deux appels de `listeAffichage` sur le même état
+rendent la **même** liste.
+
+**Verdict : VERT** sur les deux montages.
+
+### 4.3 `RUINES-DÉF T2 bis` — la ruine ne consomme pas le flux
+
+`JSON.stringify(partie.rng)` relevé avant et après une peinture complète :
+**identique**. C'est la règle §4 du dépôt, et elle se mesure, elle ne se relit
+pas dans un commentaire.
+
+### 4.4 Les cinq falsifications
+
+| # | falsification | ce qui tombe |
+|---|---|---|
+| F1 | sel remis à `SEL_VARIANTE` (4) | `T1` |
+| F2 | famille ramenée à `batiment` | `T2`, `T2 bis` |
+| F3 | `RESTE_APRES_DESTRUCTION.defense` remis à `'rien'` | **sept** tests |
+| F4 | `variantes: false` dans `FAMILLE_DE_LA_RUINE` | `T2`, `T2 bis`, les couches de `sprite.test.js` |
+| F5 | sel retiré du site d'appel de `scene.js` | `T1` — **après réparation du montage** |
+
+---
+
+## 5. ⚠⚠ Ce qui a été trouvé et qui n'est pas de ce lot : `main` est ROUGE au vérificateur
+
+`python3 tools/verifier.py` a été lancé **des deux côtés**, chaîne entière —
+c'est ce que le lot doit, puisqu'il touche `art/` et `tools/`.
+
+| | identiques à l'octet | différents | nouveaux | MANQUANTS |
+|---|---|---|---|---|
+| `main` pristine `105d4fc` | **934** | **176** | 0 | 0 |
+| arbre du lot | **950** | **176** | 0 | 0 |
+
+⚠⚠ **LES DEUX LISTES DE 176 SONT IDENTIQUES, LIGNE POUR LIGNE** — `diff` vide.
+**Pas un seul des différents n'est de ce lot.** Et l'écart des identiques vaut
+**+16**, c'est-à-dire exactement les huit ruines aux deux grilles : elles se
+reproduisent toutes à l'octet, ce qui est la seule chose qui dise que l'art
+commité vient de l'outil commité.
+
+Répartition des 176, des deux côtés :
+
+```
+132  bâtiment/
+ 24  defense/
+ 18  socle/
+  2  chassis/
+```
+
+⚠ **ET C'EST PLUS LARGE QUE LES 44 QUE J'AVAIS D'ABORD MESURÉS.** Ce premier
+chiffre ne portait que sur `joueur_v2` et `ouvrage_v2`, les deux outils que le
+diff d'ANCRES-ZÉNITH désignait ; la chaîne ENTIÈRE en rend quatre fois plus. Les
+**42** de `defense/` et `socle/` sont ceux des 22 sources zénithales — le lot
+ANCRES-ZÉNITH a remplacé les **SOURCES** et réparé les **DÉTECTEURS**, sans
+régénérer les **SPRITES**. Les **134** de `bâtiment/` et `chassis/`, eux, ne
+correspondent à aucune source de ce lot-là : ils sont **plus anciens encore**, et
+ce rapport ne les attribue à personne — il les compte.
+
+⚠⚠ **C'EST LE DÉFAUT QUE L'EN-TÊTE DE `tools/verifier.py` DÉCRIT MOT POUR MOT** —
+*« un outil et ses fichiers, justes séparément, faux ensemble »*. Le fichier
+existe pour ça, il l'a vu, et personne ne l'a lancé.
+
+### 5.1 Ce lot ne le répare pas, et voici pourquoi
+
+Régénérer les 176 ferait **la moitié manquante d'un AUTRE lot** — et, pour 134
+d'entre eux, d'un lot que personne n'a encore nommé. Ça changerait ce que le jeu
+**dessine** sans brief, et ferait entrer un redessin zénithal dans une PR qui
+parle de ruines. Le brief §5 nomme ANCRES-ZÉNITH comme un lot séparé.
+
+**Ce qui est vérifié à la place, et qui suffit à ce que ce lot-ci soit propre :**
+
+- `python3 tools/ruines.py` reproduit ses **20 fichiers à l'octet — zéro diff** ;
+- `python3 tools/atlas.py --ecrire --forcer defense` rend `src/data/atlas.js`
+  **identique**, `atlas-empreintes.json` **identique**, et un atlas **identique**
+  à celui que le lot avait cousu avant la fusion — la couture ne dépend pas des
+  sprites qu'ANCRES-ZÉNITH n'a pas régénérés, elle dépend de ceux du dépôt ;
+- **l'atlas et les PNG du dépôt s'accordent**, ce que `sprite.test.js` garde à
+  chaque `npm run check`. C'est l'accord **SOURCE → PNG** qui manque, et il
+  manquait déjà.
+
+⚠ Les trois ÉCART de `atlas.py` — `carte-64`, `carte-128`, `interface-128` —
+sont les trois préexistants, laissés exactement où ils ont été trouvés.
+
+**Ethan tranche** : soit un lot de suite régénère les 176 et recoud, soit
+ANCRES-ZÉNITH est repris pour les 42 qui sont les siens — et les **134** de
+`bâtiment/` et `chassis/` restent à attribuer. Ce rapport ne fait que nommer le
+trou et le mesurer.
+
+### 5.2 Et la question du §5 de l'amendement a sa réponse
+
+L'amendement demandait : *« il faudra que tu dises lequel passe en premier si les
+deux sont en vol »*. **La réponse n'est plus à donner, elle est mesurée** : Ethan
+a fusionné ANCRES-ZÉNITH le 19/09 à 20 h 01 (PR #160, merge `105d4fc`). Ce lot a
+donc **fusionné `main` puis rejoué sa chaîne par-dessus** — `ruines.py` et
+`atlas.py --forcer defense` —, ce qui est l'ordre qui ne clobbère rien.
+
+---
+
+## 6. Un choix qui n'est gardé par aucun test, et qui se déclare
+
+⚠⚠ **`caseDepuisMilli`, JAMAIS `positionDe(e)`.** Une entité de combat n'a ni
+`e.rangee` ni `e.colonne` — le moteur range `rangeeMilli` / `colonneMilli`. Entre
+les deux lectures disponibles :
+
+- `caseDepuisMilli(e.rangeeMilli)` rend la case **du modèle** ;
+- `positionDe(e)` rend la position **INTERPOLÉE** entre deux ticks.
+
+Sous la seconde, la ruine changerait de lettre pendant qu'on la regarde.
+
+⚠ **Mesuré : la falsification ne mord sur aucun montage d'aujourd'hui.** À
+`alpha 0` et `precedentes null` — l'état de tous les montages du dépôt — les deux
+lectures coïncident. Elle mordrait dans le DÉROULÉ, que rien n'automatise ici.
+**Un test qui ne peut tomber sur aucun état d'aujourd'hui se déclare, il ne se
+compte pas.**
+
+---
+
+## 7. Les réancrages — sept, aucun assoupli
+
+| test | avant | après |
+|---|---|---|
+| `ER T6` | `defense: 'rien'` | `defense: 'ruine'` + `notEqual` |
+| `PIC T6` | `atlas-defense-128` 65 050 · `-64` 27 124 | **121 456** · **46 924** |
+| `PIC T7` | 9 386 656 o, marge 213 344 (2,22 %) | **9 485 395**, marge **214 605** (2,21 %) |
+| `EFF T11` | ruine générique comptée | `ruine_o`/`ruine_j` **nommées**, `ruine_def_` comptée à part |
+| `EFF T12` | va-et-vient `rien` → `ruine` | va-et-vient **inversé**, `unite: 'ruine'` lève |
+| `T5` (`rendu.test.js`) | le Merlon mort ne laisse rien | il laisse **une** `ruine_def_` + `notEqual` |
+| `VIT T2 bis` | la bascule OUVRE | la bascule **FERME** vers `'rien'` |
+| `sprite.test.js` | `noms.size` 50 | **58** + balayage des 8 ruines + `notEqual` |
+
+Chacun écrit le nombre d'avant à côté de celui d'après et porte une
+contre-assertion `notEqual` qui refuse le retour de l'ancien.
+
+Et `banc.test.js` **T10** relève la borne, en écrivant le motif — voir §1.2.
+
+---
+
+## 8. Ce qui reste ouvert
+
+1. ⚠⚠ **Les 176 sprites que la chaîne ne reproduit plus** (§5) — 132 `bâtiment/`,
+   24 `defense/`, 18 `socle/`, 2 `chassis/`. Antérieurs au lot, mesurés des deux
+   côtés, listes identiques, **non réparés**. C'est le point le plus important de
+   ce rapport, et il en cache un second : 134 d'entre eux sont plus vieux
+   qu'ANCRES-ZÉNITH et personne ne les avait comptés.
+2. **Le rendu n'a pas été vu**, ni sur appareil ni dans un navigateur. À regarder
+   au premier essai : que les quatre variantes ne se lisent pas comme quatre fois
+   le même tas, et que la ruine d'un mur ne se confonde pas avec le mur intact au
+   cran le plus large.
+3. **`ruine_j` et `ruine_o` redeviennent dormantes côté défense**, et restent
+   employées par les bâtiments. Rien n'est retiré.
+4. **Le lot n'est pas sur la branche que le brief nomme.** Il demande
+   `claude/ruines-defense-<suffixe>` ; l'environnement épingle la session à
+   `claude/new-session-fx3z9w` et interdit de pousser ailleurs sans autorisation
+   explicite. **Écart déclaré.**
+
+---
+
+## 9. ⚠⚠ RÉTRACTATION — la mesure du §7.3 est fausse, et le §7.3 reste écrit
+
+Le rapport d'arrêt, §7.3 ci-dessous, refusait les copies reçues en s'appuyant sur
+**trois** indices. Ethan a répondu le 19/09 : *« son troisième indice ne tient
+pas »*. Il a raison, et la mesure le dit.
+
+### 9.1 Ce qui est retiré
+
+Le §7.3 écrit deux nombres, en table :
+
+> clé `#FF00FF` pure : **22,1 % au minimum sur 152 planches**
+> quasi-clé : **36,5 % au maximum**
+
+**Les deux sont faux.** Remesuré sur `art/sources/`, filtre honnête — une planche
+compte dès que `cle_de_fond` rend le magenta ET que `est_fond` en classe au moins
+10 % :
+
+```
+planches à clé magenta      264
+à 0,00 % de clé pure         89   (34 %)
+médiane de pureté          54,7 %
+minimum / maximum      0,00 % / 98,56 %
+quasi-clé maximale        98,93 %   (roquettes_2x2_1254x1254.png)
+```
+
+**Minimum réel 0,00 %, annoncé 22,1 %. Quasi-clé maximale réelle 98,93 %,
+annoncée 36,5 %.** Ce ne sont pas des approximations, ce sont d'autres nombres.
+
+### 9.2 La cause, qui est un filtre circulaire
+
+Mon balayage écartait toute planche sous **1 % de clé pure** — « ce n'est pas une
+planche à clé » — puis rapportait le **minimum de pureté sur ce qui restait**.
+C'est une tautologie : le filtre EST la conclusion. Toute planche dont la clé est
+**bruitée** — c'est-à-dire exactement le cas que je prétendais mesurer — était
+silencieusement exclue avant le comptage. Les 89 planches à 0,00 % n'ont jamais
+été regardées.
+
+⚠ Ethan l'avait déduit sans voir le code : *« il a dû échantillonner les anciennes
+planches, pas les récentes »*. La cause est un cran plus haut — ce n'est pas
+l'échantillon qui est vieux, c'est le filtre qui se mord la queue — mais le
+diagnostic pointait le bon endroit.
+
+### 9.3 Et le critère invoqué n'était pas celui du dépôt
+
+Ethan : *« Le critère du dépôt n'est pas la pureté de la clé, c'est
+`cond.est_fond` et son seuil de 140. Un fond à (252, 3, 250) est à 5,9 du
+magenta. »* **Vérifié** : les huit sources livrées se découpent, et
+`M3_socles_o_tourelles_3_v2.png`, déjà commitée depuis le lot OUVRAGE-CÂBLAGE,
+est elle aussi à 0,00 % de clé pure. Une règle que l'art du dépôt viole déjà
+n'est pas une règle du dépôt.
+
+### 9.4 Ce qui survit
+
+**L'indice du transport**, que le §7.3 tire de l'en-tête `VP8 ` et du profil ICC,
+et qu'Ethan accorde : *« ce qu'il a reçu était bien un collage ré-encodé en
+WebP »*. Et l'argument de **STATUT** — une image collée dans une conversation
+n'est pas un fichier livré. Ce sont eux qui ont motivé la demande de pièce
+jointe, et la demande était fondée.
+
+### 9.5 Ce qu'Ethan a fait avec, et qui est mesurable ici
+
+*« il a rendu service : j'ai aplati la clé à `#FF00FF` exact sur tous les pixels
+déjà classés fond. Opération neutre par construction, et vérifiée — masque
+`est_fond` identique sur les 45 fichiers, zéro dérive. »*
+
+**Confirmé sur les huit sources de ce lot** : `fond` et `clé pure` y coïncident
+au centième, donc **quasi-clé exactement 0,000 %** sur les huit. Il n'y a plus un
+pixel de clé bruitée à découper.
+
+| source | fond | clé pure | quasi-clé |
+|---|---|---|---|
+| `ruine_def_j_variante_01` | 69,10 % | 69,10 % | **0,000** |
+| `ruine_def_j_variante_02` | 66,67 % | 66,67 % | **0,000** |
+| `ruine_def_j_variante_03` | 65,85 % | 65,85 % | **0,000** |
+| `ruine_def_j_variante_04` | 69,01 % | 69,01 % | **0,000** |
+| `ruine_def_o_variante_01` | 60,31 % | 60,31 % | **0,000** |
+| `ruine_def_o_variante_02` | 67,13 % | 67,13 % | **0,000** |
+| `ruine_def_o_variante_03` | 59,13 % | 59,13 % | **0,000** |
+| `ruine_def_o_variante_04` | 56,10 % | 56,10 % | **0,000** |
+
+### 9.6 Pourquoi le §7.3 n'est pas corrigé sur place
+
+**Rien ne se retire en silence** (`CLAUDE.md` §4), et une mesure fausse qu'on
+réécrit ne s'est jamais produite. Le §7.3 reste tel qu'il a été rendu ; cette
+section-ci le contredit, nommément, avec les nombres. La prochaine personne qui
+lira la table du §7.3 lira aussi qu'elle est retirée.
+
+---
+
+## 10. — CE QUI SUIT EST LE RAPPORT D'ARRÊT, RENDU AVANT QUE LES SOURCES N'ARRIVENT
+
+⚠ **Il est conservé sans qu'un mot en bouge**, §7.3 compris, dont le §9 ci-dessus
+est la rétractation. Ses §1 à §6 décrivent l'état du lot au moment où il s'est
+arrêté sur son pré-check n° 5 ; ses mesures de sel, d'emprise et de câblage sont
+celles que les sections ci-dessus reprennent et complètent.
+
+---
+
 **Verdict : le lot est ARRÊTÉ sur son propre pré-check n° 5. Aucune ligne de
 `src/` n'est touchée, aucun test n'entre, `dist/index.html` ne bouge pas d'un
 octet, version et build ne sont pas bumpés.**
