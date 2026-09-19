@@ -405,6 +405,21 @@ annonce 653 : un de moins que le disque, sa dérive habituelle, aucune garde ne
 comptant ce dossier.) Une source `.webp` serait une première, et elle le serait
 pour une raison qui n'en est pas une.
 
+⚠⚠ **ET LE RÉ-ENCODAGE A ÉTÉ REPRODUIT : LES HUIT SONT ARRIVÉES UNE SECONDE
+FOIS, ET LA SECONDE COPIE EST AUSSI ABÎMÉE QUE LA PREMIÈRE.** Ethan les a
+repostées quelques heures plus tard, déposées sur le disque cette fois ; mesuré
+sur les seize fichiers, **seize empreintes MD5 distinctes** — ce ne sont donc
+pas les mêmes octets, c'est un SECOND transcodage indépendant des mêmes huit
+dessins. Et il rend exactement le même verdict : `VP8 ` avec perte, profil ICC
+de 456 octets, **clé pure 0,00 % à 0,01 %** (0 à 67 pixels), **quasi-clé 55,50 %
+à 68,79 %**, aux mêmes canevas — 1 254² pour les quatre du joueur, 1 024² pour
+les quatre de l'Ouvrage. Les deux copies d'un même dessin s'accordent d'ailleurs
+au pixel près sur le compte de quasi-clé (625 186 contre 625 178 ; 581 921 contre
+581 911), ce qui dit que la dégradation est **déterministe et propre au
+transport**, pas un accident d'un envoi. ⚠ **Reposter ne débloquera donc rien**,
+quel que soit le nombre d'essais : c'est le collage en IMAGE qui ré-encode, et la
+sortie se prend en FICHIER joint ou en commit direct.
+
 ### 7.4 Ce qu'il faut, et ce que ça débloque
 
 **Les huit PNG d'origine**, tels qu'Ethan les a exportés — clé `#FF00FF` pure,
