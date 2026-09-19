@@ -55,13 +55,13 @@
       "y_pct": 1.2
     },
     "off_j_pilon_chassis": {
-      "cote_case_pct": 48.01,
-      "diametre_pct": 22.5,
+      "cote_case_pct": 50.81,
+      "diametre_pct": 23.2,
       "dx_case_pct": -0.09,
-      "dy_case_pct": -12.01,
+      "dy_case_pct": -9.49,
       "mesure": true,
       "x_pct": -0.1,
-      "y_pct": -12.4
+      "y_pct": -9.8
     },
     "off_j_ratisseur_chassis": {
       "cote_case_pct": 42.44,

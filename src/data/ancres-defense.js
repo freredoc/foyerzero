@@ -46,29 +46,46 @@
 // table des tourelles ci-dessous sont là pour dire D'OÙ il vient, pas pour être
 // relus au dessin.
 //
-// ⚠⚠ LE CARRÉ DÉBORDE DE LA CASE SUR LES DOUZE SOCLES, ET C'EST MESURÉ, PAS
-// SUBI. Le carré de tourelle atteint **58,23 à 65,34 % de demi-case chez le
-// joueur** et **69,56 à 83,94 % à l'Ouvrage**, là où 50 est le bord : la
-// tourelle mord donc sur la case voisine quand son canon pointe dans cette
-// direction-là. Les deux camps débordent ; l'Ouvrage déborde davantage, et le
-// motif est dans son DESSIN, pas dans le rendu.
+// ⚠⚠ LA TABLE EST MIXTE DEPUIS LE LOT ANCRES-ZÉNITH (19/09), ET C'EST VOULU :
+// NEUF SOCLES MESURÉS SUR DES DESSINS ZÉNITHAUX, TROIS SUR DES DESSINS À 75°.
+// Les six socles de l'Ouvrage et les trois socles de tourelle du joueur
+// (`casemate`, `creneau`, `batterie`) ont été redessinés vus de dessus, et leur
+// logement est AU CENTRE de la pièce — `y_pct` de −0,2 à −1,2 là où il valait
+// −17,6 à −35,3. Les trois socles d'artillerie du joueur (`faucheuse`,
+// `mortier`, `harpon`) n'ont PAS été redessinés — arbitrage d'Ethan du 19/09,
+// « si j'ai pas modifié, c'est qu'il n'y a pas besoin » —, et l'ancre décrit le
+// socle : le socle n'a pas bougé, l'ancre non plus (−11,1 · −10,9 · −11,8).
+// **Ne pas « harmoniser » ces trois-là** : les relancer dans le détecteur
+// réparé rendrait d'ailleurs exactement les mêmes nombres (T1 du lot, au bit
+// sur les 30 pièces 75° du dépôt) ; seul un socle redessiné les changera, et
+// `test/ancres-zenith.test.js` le dira. ⚠ Leur `cote_case_pct`, lui, a bougé
+// avec leur TOURELLE, qui est redessinée : 111,95 → 146,89, 104,96 → 159,17,
+// 96,53 → 180,01.
 //
-// ⚠⚠ ET LE MOTIF DE L'ÉCART SE LIT DANS `y_pct`. Les six socles du joueur
-// portent leur logement à 10,9 à 17,6 % au-dessus du centre de la pièce ; ceux
-// de l'Ouvrage à **25,1 à 35,3 %** — le socle carré a une haute face avant sous
-// son plateau, et l'artillerie est un marcheur qui a ses pattes. C'est ce que
-// `tools/ancres-ouvrage.py` documente en passant `decal_max = 0,40` à
-// `chassis.ancre` là où le défaut de 0,22 rejetait les six. Le canon est donc
-// haut parce que la plate-forme est haute : le poser plus bas le mettrait dans
-// les pattes. **Le corriger demanderait de redessiner les socles, pas de
-// changer un nombre du rendu — et c'est un arbitrage qui revient à Ethan.**
+// ⚠⚠ ET DEUX DÉTECTEURS ONT ÉTÉ RÉPARÉS POUR CES DESSINS-LÀ, SANS DÉPLACER LE
+// 75°. `chassis.ancre` rendait 82,7 % et +7,3 sur le créneau de l'Ouvrage — une
+// tache plus haute que large, le logement plus le module inférieur du socle —
+// et rejetait les trois marcheurs ; `ancres-defense.pivot` prenait la rangée de
+// missiles du Harpon pour son embase (D 858 pour 390). Le détail, mesure par
+// mesure, est dans `tools/chassis.py`, `tools/ancres-defense.py` et
+// `rapports/RAPPORT-lotANCRES-ZENITH.md`.
 //
-// ⚠ ET LA v1 FAISAIT PIRE, ce qui met les deux chiffres en perspective : elle
+// ⚠⚠ LE CARRÉ DÉBORDE DE LA CASE SUR DIX SOCLES SUR DOUZE, ET LE MOTIF A CHANGÉ.
+// Au 08/09 il débordait sur les douze — 58 à 65 % de demi-case chez le joueur,
+// 70 à 84 à l'Ouvrage — parce que le logement était haut sur la pièce. Le
+// logement est centré maintenant ; ce qui déborde, c'est le carré lui-même :
+// les tourelles zénithales portent des canons et des rampes deux à trois fois
+// plus longs que leur embase (`cote_pct_embase` 246 à 336 chez le joueur,
+// contre 143 à 209 avant), donc à `echelle` inchangée le carré fait **96 à
+// 180 % de la case** — le Créneau, seul, tient dans la sienne (48,98 et 48,18),
+// le Harpon joueur atteint 99,97 % de demi-case. **`echelle` a été choisie à
+// l'œil sur les dessins à 75° ; la rejuger sur les zénithaux est un arbitrage
+// d'Ethan, au lot de conditionnement.** Un test borne les deux camps
+// séparément et nomme le pire de chaque côté au centième.
+//
+// ⚠ ET LA v1 FAISAIT PIRE, ce qui met ces chiffres en perspective : elle
 // dessinait la tourelle sur la case ENTIÈRE, `sprite(famille, nom, x, y, t, t)`,
-// son canon atteignant le bord par construction. **Un test borne les deux camps
-// SÉPARÉMENT, chacun sur sa propre fourchette mesurée**, et nomme le pire de
-// chaque côté au centième : une borne unique et lâche laisserait passer une
-// dérive du camp le plus serré.
+// son canon atteignant le bord par construction.
 
 /**
  * @typedef {{ cote_case_pct: number, diametre_pct: number, dx_case_pct: number,
@@ -76,18 +93,18 @@
  * @type {Record<string, Ancre>}
  */
 export const ANCRES_DEFENSE = {
-  socle_def_j_batterie: { cote_case_pct: 93.82, diametre_pct: 44.9, dx_case_pct: -0.09, dy_case_pct: -15.74, mesure: true, x_pct: -0.1, y_pct: -17.6 },
-  socle_def_j_casemate: { cote_case_pct: 93.36, diametre_pct: 44.9, dx_case_pct: -0.09, dy_case_pct: -15.74, mesure: true, x_pct: -0.1, y_pct: -17.6 },
-  socle_def_j_creneau: { cote_case_pct: 93.62, diametre_pct: 44.9, dx_case_pct: -0.09, dy_case_pct: -15.74, mesure: true, x_pct: -0.1, y_pct: -17.6 },
-  socle_def_j_faucheuse: { cote_case_pct: 111.95, diametre_pct: 35.4, dx_case_pct: -0.0, dy_case_pct: -9.37, mesure: true, x_pct: -0.0, y_pct: -11.1 },
-  socle_def_j_harpon: { cote_case_pct: 96.53, diametre_pct: 35.3, dx_case_pct: -0.07, dy_case_pct: -9.96, mesure: true, x_pct: -0.1, y_pct: -11.8 },
-  socle_def_j_mortier: { cote_case_pct: 104.96, diametre_pct: 31.2, dx_case_pct: -0.0, dy_case_pct: -9.2, mesure: true, x_pct: -0.0, y_pct: -10.9 },
-  socle_def_o_batterie: { cote_case_pct: 93.83, diametre_pct: 32.9, dx_case_pct: 0.09, dy_case_pct: -23.56, mesure: true, x_pct: 0.1, y_pct: -26.0 },
-  socle_def_o_casemate: { cote_case_pct: 93.35, diametre_pct: 31.4, dx_case_pct: 0.08, dy_case_pct: -23.56, mesure: true, x_pct: 0.1, y_pct: -26.0 },
-  socle_def_o_creneau: { cote_case_pct: 93.61, diametre_pct: 32.8, dx_case_pct: 0.09, dy_case_pct: -22.75, mesure: true, x_pct: 0.1, y_pct: -25.1 },
-  socle_def_o_faucheuse: { cote_case_pct: 111.95, diametre_pct: 20.5, dx_case_pct: 0.17, dy_case_pct: -27.97, mesure: true, x_pct: 0.2, y_pct: -35.3 },
-  socle_def_o_harpon: { cote_case_pct: 96.52, diametre_pct: 20.4, dx_case_pct: 0.17, dy_case_pct: -27.89, mesure: true, x_pct: 0.2, y_pct: -35.2 },
-  socle_def_o_mortier: { cote_case_pct: 104.94, diametre_pct: 20.5, dx_case_pct: 0.17, dy_case_pct: -27.52, mesure: true, x_pct: 0.2, y_pct: -34.7 },
+  socle_def_j_batterie: { cote_case_pct: 130.2, diametre_pct: 26.9, dx_case_pct: -0.0, dy_case_pct: -1.06, mesure: true, x_pct: -0.0, y_pct: -1.2 },
+  socle_def_j_casemate: { cote_case_pct: 107.19, diametre_pct: 26.9, dx_case_pct: -0.0, dy_case_pct: -1.06, mesure: true, x_pct: -0.0, y_pct: -1.2 },
+  socle_def_j_creneau: { cote_case_pct: 95.84, diametre_pct: 26.9, dx_case_pct: -0.0, dy_case_pct: -1.06, mesure: true, x_pct: -0.0, y_pct: -1.2 },
+  socle_def_j_faucheuse: { cote_case_pct: 146.89, diametre_pct: 35.4, dx_case_pct: -0.0, dy_case_pct: -9.37, mesure: true, x_pct: -0.0, y_pct: -11.1 },
+  socle_def_j_harpon: { cote_case_pct: 180.01, diametre_pct: 35.3, dx_case_pct: -0.07, dy_case_pct: -9.96, mesure: true, x_pct: -0.1, y_pct: -11.8 },
+  socle_def_j_mortier: { cote_case_pct: 159.17, diametre_pct: 31.2, dx_case_pct: -0.0, dy_case_pct: -9.2, mesure: true, x_pct: -0.0, y_pct: -10.9 },
+  socle_def_o_batterie: { cote_case_pct: 130.18, diametre_pct: 55.1, dx_case_pct: 0.0, dy_case_pct: -0.18, mesure: true, x_pct: 0.0, y_pct: -0.2 },
+  socle_def_o_casemate: { cote_case_pct: 107.19, diametre_pct: 55.0, dx_case_pct: -0.0, dy_case_pct: -0.36, mesure: true, x_pct: -0.0, y_pct: -0.4 },
+  socle_def_o_creneau: { cote_case_pct: 95.82, diametre_pct: 55.0, dx_case_pct: -0.0, dy_case_pct: -0.27, mesure: true, x_pct: -0.0, y_pct: -0.3 },
+  socle_def_o_faucheuse: { cote_case_pct: 146.88, diametre_pct: 24.2, dx_case_pct: -0.0, dy_case_pct: -0.47, mesure: true, x_pct: -0.0, y_pct: -0.6 },
+  socle_def_o_harpon: { cote_case_pct: 179.99, diametre_pct: 22.1, dx_case_pct: -0.0, dy_case_pct: -0.56, mesure: true, x_pct: -0.0, y_pct: -0.7 },
+  socle_def_o_mortier: { cote_case_pct: 159.18, diametre_pct: 20.4, dx_case_pct: -0.0, dy_case_pct: -0.62, mesure: true, x_pct: -0.0, y_pct: -0.8 },
 };
 
 /**
@@ -96,30 +113,42 @@ export const ANCRES_DEFENSE = {
  * nombre du dessus ne soit pas un nombre tombé du ciel.
  *
  * ⚠ `cote_pct_embase` est le rapport du carré du sprite à son embase — il va de
- * ×1,43 à ×2,21 selon la tourelle, parce qu'un tube long demande plus de marge
- * pour tourner sans se rogner. Chez le JOUEUR, `echelle` vaut 1,6 pour les trois
- * tourelles de contact et 2,4 pour les trois artilleries, CHOISI À L'ŒIL à
- * 40 px : à ×1,0 le canon disparaît et il ne reste qu'un anneau de couleur.
+ * ×1,48 à ×3,34 selon la tourelle depuis le lot ANCRES-ZÉNITH (×1,43 à ×2,21 sur
+ * les dessins à 75°), parce qu'un tube long demande plus de marge pour tourner
+ * sans se rogner, et que les dessins zénithaux ont des tubes plus longs. Chez le
+ * JOUEUR, `echelle` vaut 1,6 pour les trois tourelles de contact et 2,4 pour les
+ * trois artilleries, CHOISI À L'ŒIL à 40 px sur les dessins à 75° : à ×1,0 le
+ * canon disparaît et il ne reste qu'un anneau de couleur.
+ *
+ * ⚠ EN ZÉNITHAL, L'EMBASE EST LE PLUS GRAND DISQUE INSCRIT DANS LA SILHOUETTE
+ * — `tools/ancres-defense.py:pivot`. Sur une plaque plus large que haute
+ * (`def_j_batterie`, 742 × 370 px) c'est la hauteur qui compte, d'où un ratio
+ * de 3,34 ; prendre la largeur de la plaque aurait donné 1,85 et un carré de
+ * 72 % au lieu de 130. C'est la définition retenue — le plus grand disque qui
+ * tienne sous le corps dessiné — et elle est écrite là où elle se mesure.
  *
  * ⚠⚠ LES SIX ÉCHELLES DE L'OUVRAGE SONT CALCULÉES, PAS CHOISIES — DÉCISION
  * D'ETHAN DU 07/09. Chacune aligne le carré de la tourelle de l'Ouvrage sur
  * celui de son homologue du joueur, en pourcentage de case, si bien que les deux
  * camps se lisent à la même taille. Elle se RECALCULE quand un dessin change, au
  * lieu d'être une constante à re-arbitrer — voir `src/data/ancres-blindes.js`,
- * qui porte la formule. Vérifiable dans la table ci-dessus : Faucheuse 111,95 %
- * des deux côtés, Batterie 93,82 contre 93,83, Casemate 93,36 contre 93,35.
+ * qui porte la formule. Vérifiable dans la table ci-dessus : Faucheuse 146,89
+ * contre 146,88, Batterie 130,20 contre 130,18, Casemate 107,19 des deux côtés
+ * (au 08/09 : 111,95 · 93,82 / 93,83 · 93,36 / 93,35). ⚠ Le Créneau de
+ * l'Ouvrage passe SOUS 1 (0,992) : son embase est plus petite que son carré ne
+ * le demande, et c'est le calage qui le dit, pas un choix.
  */
 export const TOURELLES_DEFENSE = {
-  def_j_batterie: { cote_pct_embase: 144.1, echelle: 1.6 },
-  def_j_casemate: { cote_pct_embase: 143.4, echelle: 1.6 },
-  def_j_creneau: { cote_pct_embase: 143.8, echelle: 1.6 },
-  def_j_faucheuse: { cote_pct_embase: 209.2, echelle: 2.4 },
-  def_j_harpon: { cote_pct_embase: 163.5, echelle: 2.4 },
-  def_j_mortier: { cote_pct_embase: 200.0, echelle: 2.4 },
-  def_o_batterie: { cote_pct_embase: 171.6, echelle: 1.874 },
-  def_o_casemate: { cote_pct_embase: 153.9, echelle: 2.37 },
-  def_o_creneau: { cote_pct_embase: 200.4, echelle: 1.604 },
-  def_o_faucheuse: { cote_pct_embase: 220.6, echelle: 2.934 },
-  def_o_harpon: { cote_pct_embase: 199.2, echelle: 2.815 },
-  def_o_mortier: { cote_pct_embase: 200.7, echelle: 3.023 },
+  def_j_batterie: { cote_pct_embase: 333.8, echelle: 1.6 },
+  def_j_casemate: { cote_pct_embase: 274.8, echelle: 1.6 },
+  def_j_creneau: { cote_pct_embase: 245.7, echelle: 1.6 },
+  def_j_faucheuse: { cote_pct_embase: 274.5, echelle: 2.4 },
+  def_j_harpon: { cote_pct_embase: 304.9, echelle: 2.4 },
+  def_j_mortier: { cote_pct_embase: 303.3, echelle: 2.4 },
+  def_o_batterie: { cote_pct_embase: 205.6, echelle: 1.268 },
+  def_o_casemate: { cote_pct_embase: 147.5, echelle: 1.458 },
+  def_o_creneau: { cote_pct_embase: 193.6, echelle: 0.993 },
+  def_o_faucheuse: { cote_pct_embase: 325.5, echelle: 2.21 },
+  def_o_harpon: { cote_pct_embase: 270.3, echelle: 3.571 },
+  def_o_mortier: { cote_pct_embase: 282.9, echelle: 3.269 },
 };

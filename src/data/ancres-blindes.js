@@ -75,7 +75,7 @@ export const ANCRES_BLINDES = {
   off_j_broyeur_chassis_def: { cote_case_pct: 64.05, diametre_pct: 18.9, dx_case_pct: 1.84, dy_case_pct: -4.84, mesure: true, x_pct: 1.9, y_pct: -7.5 },
   off_j_fendeur_chassis: { cote_case_pct: 84.92, diametre_pct: 35.4, dx_case_pct: -0.08, dy_case_pct: 0.81, mesure: true, x_pct: -0.2, y_pct: 1.3 },
   off_j_fendeur_chassis_def: { cote_case_pct: 83.35, diametre_pct: 22.9, dx_case_pct: -2.31, dy_case_pct: 0.47, mesure: true, x_pct: -3.7, y_pct: 1.2 },
-  off_j_pilon_chassis: { cote_case_pct: 48.01, diametre_pct: 22.5, dx_case_pct: -0.09, dy_case_pct: -12.01, mesure: true, x_pct: -0.1, y_pct: -12.4 },
+  off_j_pilon_chassis: { cote_case_pct: 50.81, diametre_pct: 23.2, dx_case_pct: -0.09, dy_case_pct: -9.49, mesure: true, x_pct: -0.1, y_pct: -9.8 },
   off_j_ratisseur_chassis: { cote_case_pct: 42.44, diametre_pct: 31.4, dx_case_pct: -0.05, dy_case_pct: -6.81, mesure: true, x_pct: -0.1, y_pct: -10.9 },
   off_j_ratisseur_chassis_def: { cote_case_pct: 36.49, diametre_pct: 21.3, dx_case_pct: 0.31, dy_case_pct: -0.87, mesure: true, x_pct: 0.5, y_pct: -2.1 },
   off_o_belier_chassis: { cote_case_pct: 40.18, diametre_pct: 29.6, dx_case_pct: -0.06, dy_case_pct: -3.09, mesure: true, x_pct: -0.1, y_pct: -5.0 },
@@ -84,7 +84,7 @@ export const ANCRES_BLINDES = {
   off_o_broyeur_chassis_def: { cote_case_pct: 74.83, diametre_pct: 26.4, dx_case_pct: -0.87, dy_case_pct: -4.27, mesure: true, x_pct: -0.9, y_pct: -5.2 },
   off_o_fendeur_chassis: { cote_case_pct: 84.9, diametre_pct: 28.6, dx_case_pct: -0.0, dy_case_pct: -3.06, mesure: true, x_pct: -0.0, y_pct: -4.9 },
   off_o_fendeur_chassis_def: { cote_case_pct: 92.21, diametre_pct: 30.5, dx_case_pct: -0.62, dy_case_pct: -4.35, mesure: true, x_pct: -1.0, y_pct: -8.8 },
-  off_o_pilon_chassis: { cote_case_pct: 48.0, diametre_pct: 22.5, dx_case_pct: -0.0, dy_case_pct: -9.21, mesure: true, x_pct: -0.0, y_pct: -9.7 },
+  off_o_pilon_chassis: { cote_case_pct: 50.83, diametre_pct: 22.5, dx_case_pct: -0.0, dy_case_pct: -9.21, mesure: true, x_pct: -0.0, y_pct: -9.7 },
   off_o_ratisseur_chassis: { cote_case_pct: 42.44, diametre_pct: 12.8, dx_case_pct: -0.06, dy_case_pct: -11.06, mesure: true, x_pct: -0.1, y_pct: -18.2 },
   off_o_ratisseur_chassis_def: { cote_case_pct: 71.29, diametre_pct: 21.5, dx_case_pct: 4.25, dy_case_pct: -4.31, mesure: true, x_pct: 6.8, y_pct: -7.3 },
 };
@@ -120,6 +120,6 @@ export const TOURELLES_BLINDES = {
   off_o_belier_tourelle: { cote_pct_embase: 144.3, echelle: 1.505 },
   off_o_broyeur_tourelle: { cote_pct_embase: 201.1, echelle: 1.455 },
   off_o_fendeur_tourelle: { cote_pct_embase: 247.3, echelle: 1.956 },
-  off_o_pilon_tourelle: { cote_pct_embase: 156.5, echelle: 1.407 },
+  off_o_pilon_tourelle: { cote_pct_embase: 156.5, echelle: 1.49 },
   off_o_ratisseur_tourelle: { cote_pct_embase: 166.2, echelle: 3.192 },
 };

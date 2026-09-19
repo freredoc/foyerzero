@@ -55,7 +55,7 @@
       "y_pct": -8.8
     },
     "off_o_pilon_chassis": {
-      "cote_case_pct": 48.0,
+      "cote_case_pct": 50.83,
       "diametre_pct": 22.5,
       "dx_case_pct": -0.0,
       "dy_case_pct": -9.21,
@@ -97,7 +97,7 @@
     },
     "off_o_pilon_tourelle": {
       "cote_pct_embase": 156.5,
-      "echelle": 1.407
+      "echelle": 1.49
     },
     "off_o_ratisseur_tourelle": {
       "cote_pct_embase": 166.2,
