@@ -41,6 +41,7 @@
 // grille ». Ce lot ne parle que du TERRITOIRE.
 
 import { coutDuRaid, distanceTchebychev } from './points-attaque.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import { campDeLaCase, JOUEUR } from './territoire.js';
 
 /**
@@ -70,6 +71,20 @@ import { campDeLaCase, JOUEUR } from './territoire.js';
  * @returns {number} coût en points
  */
 export function coutDUnRaid(etat, baseAttaquante, cible) {
+  // ⚠⚠ LA FRANCHISE DU MODE DÉVELOPPEUR EST ICI, ET NULLE PART AILLEURS — lot
+  // MODE-DEV, 19/09/2026. Cette fonction est la SEULE autorité du prix d'un
+  // raid : `ui/monde.js` la lit pour le panneau de la carte, `ui/raid.js` pour
+  // l'écran de raid — un appel chacun, et deux tests le gardent —, et
+  // `executerRaid` pour la facture. Poser la franchise dans `executerRaid`
+  // seule laissait la carte annoncer « ce raid coûte 11 points » au-dessus d'un
+  // raid qui n'en coûte aucun : le premier jet de ce lot l'a fait, et la
+  // relecture adverse l'a trouvé.
+  //
+  // ⚠ ZÉRO, PAS `null`. `null` veut dire « ce raid n'a pas de prix » — c'est ce
+  // que les deux écrans posent hors de portée — et le panneau se CACHE dessus.
+  // Zéro se lit « gratuit », ce qui est exactement le fait à dire, et c'est la
+  // convention que le commentaire de `ciblageDuSite` énonce déjà.
+  if (enModeDeveloppeur(etat)) return 0;
   const distance = distanceTchebychev(baseAttaquante.position, cible);
   return coutDuRaid(distance, campDeLaCase(etat, cible.rangee, cible.colonne) === JOUEUR);
 }

@@ -28,6 +28,7 @@ import {
   ARBRE_RECHERCHE, gratuitesDe, BRANCHES, SPECIAL, NOEUD_BASE_SUPPLEMENTAIRE,
 } from '../data/recherche.js';
 import { UNITES, DEFENSES } from '../data/combat.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import { MODULES, moduleEstCable } from '../data/modules.js';
 // ⚠ `sim/` IMPORTE DE `render/`, ET CE N'EST PAS UNE PREMIÈRE : `sim/poi.js` y
 // prend `empriseDeLaGrosseBase`. Ce qui est interdit est d'importer d'`ui/`, qui
@@ -381,6 +382,13 @@ export function problemesDeLAchat(etat, branche, id, quoi) {
     }
   }
 
+  // ⚠⚠ LE MODE DÉVELOPPEUR LÈVE LE PRIX, PAS LES PRÉREQUIS — lot MODE-DEV,
+  // 19/09/2026. `dejaAcquise`, `sansModule`, `uniteNonAcquise` et
+  // `effetNonCable` restent : acheter deux fois la même pièce, ou son module
+  // avant elle, produirait une liste `acquises` que `verifierEtat` n'attend
+  // nulle part. La gratuité est un PRIX à zéro, pas une permission de casser
+  // l'arbre.
+  if (enModeDeveloppeur(etat)) return problemes;
   const du = coutMilli(branche, id, quoi);
   const ai = BigInt(etat.recherche.pointsMilli);
   if (du > ai) {
@@ -421,8 +429,13 @@ export function acheter(etat, branche, id, quoi) {
       `recherche : achat impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  const reste = BigInt(etat.recherche.pointsMilli) - coutMilli(branche, id, quoi);
-  etat.recherche.pointsMilli = reste.toString();
+  // ⚠ LE DÉBIT SAUTE, LE RANGEMENT NON — lot MODE-DEV. Les deux sont
+  // indissociables quand on paie ; ici il n'y a rien à payer, et surtout rien à
+  // créditer : `pointsMilli` n'est pas touché du tout.
+  if (!enModeDeveloppeur(etat)) {
+    const reste = BigInt(etat.recherche.pointsMilli) - coutMilli(branche, id, quoi);
+    etat.recherche.pointsMilli = reste.toString();
+  }
   const liste = quoi === 'unite' ? etat.recherche.acquises[branche] : etat.recherche.modules[branche];
   liste.push(id);
   // Triées et sans doublon : `problemesDeLAchat` a déjà refusé le doublon, le
@@ -495,6 +508,12 @@ export function coutDeLaBaseSuivanteMilli(etat) {
  */
 export function problemesDeLAchatDUneBase(etat) {
   exigerEtat(etat);
+  // ⚠⚠ ET `problemesDeLaFondation` EN HÉRITE SANS UNE LIGNE — lot MODE-DEV. Il
+  // recopie ce que cette fonction rend sous le code `points-insuffisants` ; la
+  // vider ici suffit donc à rendre le DROIT gratuit sur les deux écrans. Le
+  // refus `recherche-manquante`, lui, reste — il dit qu'il faut ACHETER, et
+  // acheter est précisément ce qui devient gratuit.
+  if (enModeDeveloppeur(etat)) return [];
   const du = coutDeLaBaseSuivanteMilli(etat);
   const ai = BigInt(etat.recherche.pointsMilli);
   if (du <= ai) return [];
@@ -526,8 +545,11 @@ export function acheterUneBaseDePlus(etat) {
       `recherche : achat impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
     );
   }
-  const reste = BigInt(etat.recherche.pointsMilli) - coutDeLaBaseSuivanteMilli(etat);
-  etat.recherche.pointsMilli = reste.toString();
+  // ⚠ Même geste qu'`acheter` : le débit saute, l'ouverture du rang non.
+  if (!enModeDeveloppeur(etat)) {
+    const reste = BigInt(etat.recherche.pointsMilli) - coutDeLaBaseSuivanteMilli(etat);
+    etat.recherche.pointsMilli = reste.toString();
+  }
   etat.recherche.basesAutorisees += 1;
   return etat;
 }

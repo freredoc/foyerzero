@@ -25,6 +25,7 @@
 // donc elle reste à la maison sans qu'on la retire.
 
 import { APRES_RAID, TYPES_SITE } from '../data/sites.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import { UNITES, GRILLE } from '../data/combat.js';
 import { reservoirsDeLArmee } from './reparation.js';
 import { RESSOURCES, capacitesMilli } from './economie-base.js';
@@ -274,13 +275,25 @@ export function problemesDuRaid(etat, baseAttaquante, cible, formation = null) {
     return problemes;
   }
 
-  const cout = coutDUnRaid(etat, baseAttaquante, cible);
-  const manque = manquePourPayer(etat.attaque, cout);
-  if (manque !== null) {
-    problemes.push({
-      code: 'points-insuffisants',
-      message: `Ce raid coûte ${cout} points d'attaque : il t'en manque ${manque}.`,
-    });
+  // ⚠⚠ LE PÉAGE DES POINTS D'ATTAQUE SAUTE EN MODE DÉVELOPPEUR — lot MODE-DEV,
+  // 19/09/2026. `hors-portee`, `sans-cible`, `sans-batiment-de-production` et
+  // `sans-armee` restent au-dessus et en dessous : le mode paie, il ne téléporte
+  // pas et il ne compose pas d'armée.
+  //
+  // ⚠ LE GARDE EST ICI EN PLUS DE LA FRANCHISE DE `coutDUnRaid`, ET IL N'EST PAS
+  // REDONDANT : en mode développeur le barème rend ZÉRO, et `manquePourPayer`
+  // exige un entier ≥ 1 — elle LÈVERAIT. Ce bloc n'est donc pas « la même
+  // franchise écrite deux fois », c'est ce qui empêche la première de faire
+  // tomber un geste de jeu sur une RangeError.
+  if (!enModeDeveloppeur(etat)) {
+    const cout = coutDUnRaid(etat, baseAttaquante, cible);
+    const manque = manquePourPayer(etat.attaque, cout);
+    if (manque !== null) {
+      problemes.push({
+        code: 'points-insuffisants',
+        message: `Ce raid coûte ${cout} points d'attaque : il t'en manque ${manque}.`,
+      });
+    }
   }
 
   const { vagues, indices } = composerLesVagues(etat, formation);
@@ -632,11 +645,19 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   }
 
   const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
+  // ⚠⚠ LE COÛT VIENT DE `coutDUnRaid`, QUI PORTE DÉJÀ LA FRANCHISE DU MODE
+  // DÉVELOPPEUR — lot MODE-DEV, 19/09/2026. Rien de particulier ici : c'est la
+  // même fonction que les deux écrans lisent, donc le nombre ANNONCÉ sur la
+  // carte, le nombre FACTURÉ ici et le nombre écrit au JOURNAL sont le même
+  // fait. Une franchise posée ici, et pas là-bas, les aurait fait diverger.
+  //
+  // ⚠ ET `payer` NE S'APPELLE PAS AVEC ZÉRO : `manquePourPayer` exige un entier
+  // ≥ 1 et LÈVE en dessous. Le `> 0` n'est pas une coquetterie.
   const cout = coutDUnRaid(etat, baseAttaquante, cible);
   // ⚠ ON PAIE AVANT DE PARTIR, et jamais après. Un raid raté coûte ses points :
   // c'est ce qui fait du choix de cible une décision. Payer au retour ferait de
   // l'échec une répétition gratuite.
-  payer(etat.attaque, cout);
+  if (cout > 0) payer(etat.attaque, cout);
   // ⚠ LE RAID NE TOUCHE PLUS À LA RÉPARATION, ET C'EST UN ARBITRAGE, PAS UN
   // OUBLI. Ethan, le 29/08 : « les points de réparation bonus disparaissent si
   // on refait un raid avec la même armée » — cette phrase portait sur un modèle

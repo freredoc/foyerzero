@@ -3960,6 +3960,16 @@ export const EMPREINTES_PAR_GRAINE_REGLES_DE_CARTE = {
 export const OCTETS_AJOUTES_PAR_REGLES_DE_CARTE = 36;
 
 /**
+ * Ce que le lot MODE-DEV ajoute à la sauvegarde — 19/09/2026.
+ *
+ * ⚠ UN CHAMP À LA RACINE, `modeDeveloppeur`, ET IL VAUT `false` SUR TOUTES LES
+ * GRAINES : `,"modeDeveloppeur":false` fait 24 octets, les mêmes 24 partout.
+ * Si l'écart dépendait de la partie, c'est que le drapeau aurait pris une
+ * valeur quelque part — et ce lot ne l'allume jamais tout seul.
+ */
+export const OCTETS_AJOUTES_PAR_MODE_DEV = 24;
+
+/**
  * Ce que le lot RAID-ET-ÉCRAN ajoute à la sauvegarde — 10/09/2026.
  *
  * ⚠ UN SEUL CHAMP, À LA RACINE ET NON PAR BASE, ET IL VAUT `null` DANS CE

@@ -1223,7 +1223,7 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  assert.equal(SAVE_VERSION, 37, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  assert.equal(SAVE_VERSION, 38, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

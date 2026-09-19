@@ -1008,7 +1008,7 @@ test('FR T3 — la chaîne de migration se rejoue en entier, et le maillon 31 �
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  assert.equal(SAVE_VERSION, 37, 'SAVE_VERSION a bougé sans que ce test suive');
+  assert.equal(SAVE_VERSION, 38, 'SAVE_VERSION a bougé sans que ce test suive');
   // ⚠⚠ LE MAILLON 31 → 32 A JOUÉ, ET IL N'A RIEN INVENTÉ. Une v0 ne sait ni
   // quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
   // formation vivait dans la fermeture de l'écran et ne se sérialisait pas.

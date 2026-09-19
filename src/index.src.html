@@ -2607,6 +2607,31 @@
     margin: 0; padding: 8px; font-size: 11px; line-height: 1.4;
     color: #E43E32; background: #161914; border: 1px solid #8A1E17;
   }
+  /* ⚠ AUCUNE TEINTE NEUVE DANS CE LOT. `banc.test.js` ferme la palette et
+     refuse tout hex qui n'y est pas ; les six couleurs ci-dessous sont celles
+     de l'écran, reprises telles quelles. */
+  #options-sauvegarde, #options-bloc-dev {
+    margin-top: 16px; padding-top: 12px; border-top: 1px solid #343A2C;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #options-sauvegarde .boutons { display: flex; gap: 8px; }
+  #options-sauvegarde .boutons button { flex: 1; }
+  /* ⚠ `monospace` ET `break-all` : le texte portable est une seule chaîne de
+     plusieurs milliers de caractères sans espace. Une police proportionnelle et
+     une coupure aux mots la laisseraient déborder de la fenêtre. */
+  #options-sauvegarde-texte {
+    width: 100%; box-sizing: border-box; height: 96px; resize: vertical;
+    font-family: monospace; font-size: 10px; line-height: 1.3; word-break: break-all;
+    color: #F5F3E8; background: #161914; border: 1px solid #343A2C; padding: 6px;
+  }
+  #options-sauvegarde-etat { margin: 0; font-size: 11px; line-height: 1.4; color: #68727E; }
+  #options-sauvegarde-etat.refus { color: #E43E32; }
+  #options-importer-confirmer { background: #8A1E17; color: #F5F3E8; }
+  /* ⚠ L'INTERRUPTEUR DU MODE DEV REPREND LA FORME DE CELUI DU SON : il dit
+     l'ÉTAT, pas le geste, et il se colore quand il est ALLUMÉ — l'inverse du
+     son, qui se colore quand il est coupé. C'est le même code visuel : la
+     couleur marque ce qui n'est pas l'ordinaire. */
+  #options-mode-dev[aria-pressed="true"] { background: #8A1E17; color: #F5F3E8; }
   /* ⚠⚠ UN SEUL BLOC POUR LES DEUX BOUTONS DE GESTE — lot BASES-2, 11/09. « Fonder
      une base » s'ajoute à « Déplacer la base » sur le panneau de sa propre base,
      et deux règles identiques auraient divergé au premier ajustement de taille
@@ -3767,6 +3792,60 @@
            3. IL REPART D'UNE PARTIE NEUVE PAR LE CHEMIN NORMAL, `partieNeuve`,
               celui du bouton de l'écran d'alerte. Il ne « répare » rien et ne
               bricole aucun état : nouvelle graine, nouvelle fondation. -->
+      <!-- ⚠⚠ LA SAUVEGARDE QU'ON EMPORTE — Ethan, 19/09/2026 : « j'ai foiré ma
+           sauvegarde, elle est morte ». Le magasin de l'appareil est le SEUL
+           exemplaire d'une partie ; ce bloc en donne un second, en texte.
+           ⚠⚠ IL N'EST PAS DANS LE BLOC AMOVIBLE DU MODE DÉVELOPPEUR, ET C'EST
+           VOULU. L'import est ce qui répare une partie perdue : le mettre
+           derrière un interrupteur qu'on retire un jour ferait disparaître le
+           remède avec l'outil de debug.
+           ⚠ L'IMPORT DEMANDE CONFIRMATION EN DEUX TEMPS, comme « Effacer et
+           recommencer » : il ÉCRASE la partie en cours, et la phrase de
+           confirmation dit ce qui sera perdu.
+           ⚠ UN `textarea` ET AUCUN SÉLECTEUR DE FICHIERS : le texte passe par
+           le presse-papier, qui marche dans la WebView comme au navigateur, et
+           la page ne touche ni au disque ni au réseau. -->
+      <div id="options-sauvegarde">
+        <h2>Sauvegarde</h2>
+        <p class="mot">Exporte ta partie en un texte à copier-coller, ou remplace
+          la partie en cours par un texte déjà exporté.</p>
+        <div class="boutons">
+          <button type="button" id="options-exporter">Exporter</button>
+          <button type="button" id="options-importer">Importer</button>
+        </div>
+        <textarea id="options-sauvegarde-texte" hidden spellcheck="false"
+                  autocapitalize="off" autocorrect="off"
+                  aria-label="Texte de la sauvegarde"></textarea>
+        <div class="boutons" id="options-sauvegarde-gestes" hidden>
+          <button type="button" id="options-copier" hidden>Copier</button>
+          <button type="button" id="options-importer-confirmer" hidden>Remplacer ma partie</button>
+          <button type="button" id="options-sauvegarde-fermer">Fermer</button>
+        </div>
+        <p id="options-sauvegarde-etat"></p>
+      </div>
+
+      <!-- ⚠⚠⚠ BLOC AMOVIBLE — Ethan, 19/09/2026 : « un switch qu'on pourrait
+           enlever à la demande, un bouton, mais le code lui reste ». RETIRER CE
+           SEUL BLOC `<div id="options-bloc-dev">…</div>` SUFFIT : le moteur
+           garde ses franchises, `src/sim/mode-developpeur.js` reste au dépôt, et
+           `src/ui/session.js` ne lève pas — son câblage teste `!== null` avant
+           de poser le moindre écouteur, et c'est la seule raison d'être de ce
+           test-là. NE PAS LE « NETTOYER ».
+           ⚠ CE QUI RESTE ALLUMÉ LE RESTE. Retirer le bouton ne rend pas le
+           drapeau à `false` : une partie sauvegardée en mode développeur garde
+           `modeDeveloppeur: true`, et il n'y aurait plus d'interrupteur pour
+           l'éteindre. L'éteindre AVANT de retirer le bloc. -->
+      <div id="options-bloc-dev">
+        <h2>Mode développeur</h2>
+        <p class="mot">Tout devient gratuit : améliorations, recherche, raids,
+          réparations, transferts, et la base se déplace sans attendre. Rien
+          n'est ajouté à ta partie — éteindre le mode remet tous les prix.</p>
+        <div class="ligne">
+          <span class="nom">Gratuité</span>
+          <button type="button" id="options-mode-dev" aria-pressed="false">Éteint</button>
+        </div>
+      </div>
+
       <div id="options-zone-danger">
         <h2>Recommencer</h2>
         <p class="mot">Efface la partie enregistrée sur cet appareil et en

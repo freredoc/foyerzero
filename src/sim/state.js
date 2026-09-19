@@ -6,6 +6,7 @@
 // avant la première sauvegarde réelle, pas après coup.
 
 import { baseCourante } from './base-courante.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import { creerRng, restaurerRng } from './rng.js';
 import { creerHorloge, tick as tickHorloge, avancerTicks, accumuler } from './clock.js';
 import { champsDeLaBase, obstaclesDeLaBase, ressourceDeLaCase } from './champs.js';
@@ -80,7 +81,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 37;
+export const SAVE_VERSION = 38;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -331,6 +332,13 @@ export function creerEtat(graine) {
     // DÉCISION du joueur, et aucune base ne l'exprime — c'est de l'histoire, au
     // même titre que `satellites`, donc ça se garde.
     tutoriel: { ferme: false },
+    // ⚠⚠ LE MODE DÉVELOPPEUR EST UN FAIT DE PARTIE, DONC IL EST ICI — arbitrage
+    // d'Ethan du 19/09/2026. Il ne va PAS dans `CLE_REGLAGES` avec le son : le
+    // moteur ne lit jamais le magasin de réglages, et un mode qui change ce
+    // qu'une partie a eu le droit de faire doit voyager avec elle — jusque dans
+    // la sauvegarde exportée. Le lire se fait par `enModeDeveloppeur`, jamais en
+    // touchant ce champ à la main.
+    modeDeveloppeur: false,
     // ⚠ LE PLEIN, PAS ZÉRO, et c'est un arbitrage d'Ethan du 29/08 : « au tout
     // début du jeu, on lui donne immédiatement le plein — c'est frustrant de
     // démarrer le jeu puis d'attendre que ça se remplisse ». Une base neuve n'a
@@ -1154,6 +1162,12 @@ export function problemesDeLAmelioration(etat, index) {
     problemes.push({ code: 'abimee', message: 'abîmé : réparez-le d\'abord' });
   }
 
+  // ⚠⚠ LE MODE DÉVELOPPEUR LÈVE LE PÉAGE ET RIEN D'AUTRE — lot MODE-DEV,
+  // 19/09/2026. Les refus `plafond` et `abimee` restent au-dessus, arbitrés
+  // « non » par Ethan : ce mode rend les choses GRATUITES, il ne rend pas les
+  // gestes LÉGAUX. Le garde est ici, après les deux autres, pour que l'ordre de
+  // lecture des refus ne bouge pas quand le mode est éteint.
+  if (enModeDeveloppeur(etat)) return problemes;
   const cout = coutDeMontee(batiment.id, vise);
   for (const r of RESSOURCES) {
     const duMilli = cout[r] * MILLI;
@@ -1203,8 +1217,14 @@ export function ameliorer(etat, index) {
   }
   const base = baseCourante(etat);
   const batiment = base.disposition[index];
-  const cout = coutDeMontee(batiment.id, batiment.niveau + 1);
-  for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
+  // ⚠⚠ LE DÉBIT SAUTE, LA MONTÉE NON. Les deux sont indissociables quand on
+  // paie ; en mode développeur il n'y a rien à payer, donc rien à débiter — et
+  // SURTOUT rien à créditer. L'état n'est pas touché, ce qui est exactement ce
+  // qui rend l'extinction du mode propre.
+  if (!enModeDeveloppeur(etat)) {
+    const cout = coutDeMontee(batiment.id, batiment.niveau + 1);
+    for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
+  }
   batiment.niveau += 1;
   return etat;
 }
@@ -2117,6 +2137,10 @@ export function problemesDeLAmeliorationDEffectif(etat, force, index) {
   // lire les deux raisons d'un refus, pas seulement la première. « Un indice
   // n'est pas une interdiction » (CLAUDE.md §4) vaut aussi pour les messages,
   // et `problemesDeLAmelioration` fait déjà exactement ça pour les bâtiments.
+  // ⚠⚠ MÊME GARDE QUE POUR LES BÂTIMENTS, ET AU MÊME ENDROIT DE LA FONCTION —
+  // lot MODE-DEV. `plafond`, `sans-batiment`, `plafond-commandement` et
+  // `abimee` restent : Ethan a arbitré « non » sur les verrous non monétaires.
+  if (enModeDeveloppeur(etat)) return problemes;
   const cout = f.coutDeMontee(piece.id, vise);
   for (const r of RESSOURCES) {
     const duMilli = cout[r] * MILLI;
@@ -2171,8 +2195,11 @@ export function ameliorerEffectif(etat, force, index) {
   }
   const base = baseCourante(etat);
   const piece = base[f.champ][index];
-  const cout = f.coutDeMontee(piece.id, piece.niveau + 1);
-  for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
+  // ⚠ Même geste qu'`ameliorer` : le débit saute, la montée non. Voir là-bas.
+  if (!enModeDeveloppeur(etat)) {
+    const cout = f.coutDeMontee(piece.id, piece.niveau + 1);
+    for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
+  }
   piece.niveau += 1;
   return etat;
 }
@@ -3475,6 +3502,23 @@ const MIGRATIONS = {
   36: (s) => {
     s.version = 37;
     traduireLesModulesDesRejeux(s);
+  },
+
+  /**
+   * v37 → v38 : le mode développeur entre dans l'état — lot MODE-DEV.
+   *
+   * ⚠ IL SE POSE À `false`, ET C'EST LA SEULE VALEUR POSSIBLE. Une partie
+   * d'avant le lot n'a jamais rien eu de gratuit ; la migrer en mode allumé
+   * changerait rétroactivement ce qu'elle a eu le droit de faire.
+   *
+   * ⚠ ET LE MAILLON N'EST PAS VIDE, contrairement à 33 → 34 et 34 → 35 : le
+   * champ doit EXISTER après migration, parce que l'écran d'options le lit pour
+   * peindre l'interrupteur. `enModeDeveloppeur` tolère son absence, l'écran non.
+   * @param {object} s
+   */
+  37: (s) => {
+    s.version = 38;
+    if (typeof s.modeDeveloppeur !== 'boolean') s.modeDeveloppeur = false;
   },
 };
 

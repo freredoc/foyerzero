@@ -26,6 +26,7 @@
 // à portée.
 
 import { DEPLACEMENT, GEOGRAPHIE } from '../data/sites.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import { TICKS_PAR_HEURE } from './clock.js';
 import { estSurLaCarte } from './carte.js';
 import { releverLesPoisAcquis } from './poi.js';
@@ -213,6 +214,23 @@ export function delaiPourLaBase(laBase, distance) {
  * @returns {number} ticks restants, 0 si aucun
  */
 export function ticksAvantProchainDeplacement(etat) {
+  // ⚠⚠ LE DÉLAI TOMBE À ZÉRO EN MODE DÉVELOPPEUR, ET C'EST ICI QU'IL TOMBE —
+  // lot MODE-DEV, 19/09/2026, arbitrage « délai » d'Ethan. Cette fonction a
+  // DEUX lecteurs et deux seulement : le refus `delai` de
+  // `problemesDuDeplacement`, et `src/ui/monde.js` qui PEINT l'attente. Poser
+  // la franchise dans le refus aurait laissé la carte annoncer « il reste
+  // 3 h 20 » au-dessus d'un bouton qui marche — l'écran et la règle s'accordent
+  // par CONSTRUCTION, pas par recopie.
+  //
+  // ⚠ LA PORTÉE NE BOUGE PAS. `trop-loin`, le voisinage et le territoire tenu
+  // restent : le mode enlève l'ATTENTE, pas la géographie. Arbitré « délai »,
+  // pas « déplacement libre ».
+  //
+  // ⚠ ET `dernierDeplacementTick` N'EST PAS EFFACÉ. Éteindre le mode doit rendre
+  // la partie telle quelle : si le champ était remis à `null`, un joueur qui
+  // s'est déplacé en mode dev repartirait sans délai après extinction, et
+  // l'extinction cesserait d'être propre.
+  if (enModeDeveloppeur(etat)) return 0;
   const laBase = baseCourante(etat);
   const dernier = laBase.dernierDeplacementTick;
   if (dernier === null || dernier === undefined) return 0;

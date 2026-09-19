@@ -338,7 +338,7 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  assert.equal(SAVE_VERSION, 37);
+  assert.equal(SAVE_VERSION, 38);
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

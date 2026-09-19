@@ -109,6 +109,7 @@ import {
   DEPLACES_PAR_APPROCHE, EMPREINTES_PAR_GRAINE_APPROCHE,
   RAPPORTS_PROCHE_APPROCHE, RAPPORTS_OUVRAGE_APPROCHE,
   OCTETS_AJOUTES_PAR_REGLES_DE_CARTE, RAPPORTS_OUVRAGE_REGLES_DE_CARTE,
+  OCTETS_AJOUTES_PAR_MODE_DEV,
   RAPPORTS_PROCHE_PAQUETS, RAPPORTS_OUVRAGE_PAQUETS,
   DEPLACES_PAR_BAREME_ET_REJEU, EMPREINTES_PAR_GRAINE_BAREME_ET_REJEU,
   RAPPORTS_PROCHE_BAREME_ET_REJEU, RAPPORTS_OUVRAGE_BAREME_ET_REJEU,
@@ -877,7 +878,10 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         // champ de plus par base, `dernierDeplacementDelaiTicks`, et lui aussi
         // d'un nombre FIXE — 36 octets sur les vingt-cinq graines, exactement
         // comme `reserveReparationBatiments`.
-        + OCTETS_AJOUTES_PAR_REGLES_DE_CARTE,
+        + OCTETS_AJOUTES_PAR_REGLES_DE_CARTE
+        // ⚠ LE HUITIÈME TERME EST ENTRÉ AU LOT MODE-DEV, 19/09 : `modeDeveloppeur`
+        // à la RACINE, `false`, 24 octets fixes sur les vingt-cinq graines.
+        + OCTETS_AJOUTES_PAR_MODE_DEV,
       `graine ${g} : taille de la sauvegarde`,
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);

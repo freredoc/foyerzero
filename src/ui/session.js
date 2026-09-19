@@ -52,6 +52,7 @@ import { initialiserEcranMonde } from './monde.js';
 import { initialiserEcranRaid } from './raid.js';
 import { initialiserEcranRecherche } from './recherche.js';
 import { initialiserBanc } from './banc.js';
+import { versLeTextePortable, depuisLeTextePortable } from './sauvegarde-portable.js';
 import { initialiserLeSon } from './son.js';
 import { bouclesDesirees, evenementDuGeste } from '../son/cablage.js';
 import { REGLAGES_PAR_DEFAUT } from '../data/sons.js';
@@ -1080,6 +1081,9 @@ export function initialiserSession(doc) {
     // cet écran : sans ce rappel, il y trouverait un tiret alors que le verdict
     // est tombé depuis longtemps, et il croirait la ligne morte.
     if (nom === 'options') suivreLaMaj();
+    // ⚠ L'interrupteur se repeint à l'ouverture : un import a pu changer le
+    // drapeau pendant que l'écran était caché.
+    if (nom === 'options') rendreLeModeDev();
     // ⚠ ET LA CARTE SE MET EN SCÈNE ET SE RETIRE, LES DEUX. Elle est le seul
     // écran qui porte une boucle à lui : les dalles du fond se calculent deux
     // par image tant qu'il en manque. La laisser tourner derrière un autre
@@ -1355,6 +1359,147 @@ export function initialiserSession(doc) {
   // ⚠ DÉSARMÉE AU CÂBLAGE, comme le panneau de l'écran Monde : le `hidden` du
   // balisage serait la SEULE chose à tenir la confirmation fermée au démarrage.
   armerLaRemiseAZero(false);
+
+  // --- la sauvegarde qu'on emporte -------------------------------------------
+  //
+  // ⚠⚠ L'IMPORT PASSE PAR `charger`, ET PAR RIEN D'AUTRE. C'est le seul chemin
+  // qui MIGRE la sauvegarde, REDÉDUIT le terrain depuis la fondation, la
+  // VÉRIFIE et RATTRAPE le temps écoulé. `sim/state.js` nommait déjà ce
+  // danger — « un second point d'entrée, import, éditeur, outil de debug, qui
+  // fabriquerait un état sans passer par `charger` » : ce lot est ce second
+  // point d'entrée, et il ne le fabrique pas.
+  //
+  // ⚠⚠ ET IL PASSE AUSSI PAR `installer`, LE MÊME QUE `demarrer` ET
+  // `partieNeuve`. Poser `etat` à la main ici laisserait les trois écrans
+  // peints sur l'ANCIENNE partie, la boucle sur l'ancienne, et la première
+  // sauvegarde écrirait un mélange des deux.
+  //
+  // ⚠ RIEN N'EST ÉCRIT TANT QUE LA LECTURE N'A PAS RÉUSSI. On décode, on
+  // charge, et seulement ensuite on installe : un texte abîmé laisse la partie
+  // en cours intacte, ce qui est le minimum pour un bouton qui l'écrase.
+  const sauvegardeTexte = $('options-sauvegarde-texte');
+  const sauvegardeGestes = $('options-sauvegarde-gestes');
+  const sauvegardeEtat = $('options-sauvegarde-etat');
+  const boutonCopier = $('options-copier');
+  const boutonImporterConfirmer = $('options-importer-confirmer');
+
+  /** Dit ce qui vient de se passer, et de quelle couleur. */
+  function direLaSauvegarde(texte, refus = false) {
+    sauvegardeEtat.textContent = texte;
+    sauvegardeEtat.classList.toggle('refus', refus);
+  }
+
+  function fermerLePanneauDeSauvegarde() {
+    sauvegardeTexte.hidden = true;
+    sauvegardeTexte.value = '';
+    sauvegardeGestes.hidden = true;
+    boutonCopier.hidden = true;
+    boutonImporterConfirmer.hidden = true;
+    direLaSauvegarde('');
+  }
+
+  $('options-exporter').addEventListener('click', async () => {
+    if (etat === null) { direLaSauvegarde('Aucune partie à exporter.', true); return; }
+    try {
+      // ⚠ ON SÉRIALISE MAINTENANT, on ne relit pas le magasin : la dernière
+      // écriture peut dater de plusieurs secondes, et le joueur exporterait
+      // une partie plus vieille que celle qu'il regarde.
+      const texte = await versLeTextePortable(serialiser(etat, maintenantMs()));
+      sauvegardeTexte.hidden = false;
+      sauvegardeTexte.readOnly = true;
+      sauvegardeTexte.value = texte;
+      sauvegardeGestes.hidden = false;
+      boutonCopier.hidden = false;
+      boutonImporterConfirmer.hidden = true;
+      direLaSauvegarde(`${texte.length} caractères. Copie-les et garde-les au chaud.`);
+    } catch (erreur) {
+      direLaSauvegarde(`Export impossible : ${erreur.message}`, true);
+    }
+  });
+
+  boutonCopier.addEventListener('click', async () => {
+    // ⚠ LE PRESSE-PAPIER PEUT NE PAS EXISTER, ET IL PEUT REFUSER. Hors d'un
+    // contexte sûr il n'y a pas de `navigator.clipboard` du tout ; on le dit et
+    // on laisse le texte sélectionnable, ce qui est la porte de sortie.
+    try {
+      await fenetre.navigator.clipboard.writeText(sauvegardeTexte.value);
+      direLaSauvegarde('Copié.');
+    } catch {
+      sauvegardeTexte.select();
+      direLaSauvegarde('Copie automatique refusée : le texte est sélectionné, copie-le à la main.', true);
+    }
+  });
+
+  $('options-importer').addEventListener('click', () => {
+    sauvegardeTexte.hidden = false;
+    sauvegardeTexte.readOnly = false;
+    sauvegardeTexte.value = '';
+    sauvegardeGestes.hidden = false;
+    boutonCopier.hidden = true;
+    boutonImporterConfirmer.hidden = false;
+    sauvegardeTexte.focus();
+    direLaSauvegarde('Colle ici le texte exporté, puis « Remplacer ma partie ». '
+      + 'Ta partie en cours sera écrasée, définitivement.');
+  });
+
+  boutonImporterConfirmer.addEventListener('click', async () => {
+    let importe = null;
+    try {
+      const json = await depuisLeTextePortable(sauvegardeTexte.value);
+      importe = charger(json, maintenantMs());
+    } catch (erreur) {
+      direLaSauvegarde(`Import refusé : ${erreur.message}`, true);
+      return;
+    }
+    installer(importe);
+    fermerLePanneauDeSauvegarde();
+    rendreLeModeDev();
+    montrerEcran('chantier');
+  });
+
+  $('options-sauvegarde-fermer').addEventListener('click', fermerLePanneauDeSauvegarde);
+  fermerLePanneauDeSauvegarde();
+
+  // --- le mode développeur, derrière un bouton qu'on peut retirer ------------
+  //
+  // ⚠⚠ TOUT CE BLOC TESTE `!== null`, ET C'EST LA DEMANDE D'ETHAN, PAS UNE
+  // PRÉCAUTION DE STYLE : « un switch qu'on pourrait enlever à la demande, mais
+  // le code lui reste ». Retirer `#options-bloc-dev` du balisage doit suffire ;
+  // sans ce test, `$('options-mode-dev').addEventListener` lèverait sur `null`
+  // au câblage, c'est-à-dire que le JEU ENTIER ne démarrerait plus.
+  //
+  // ⚠ ET LE DRAPEAU VIT DANS L'ÉTAT, PAS DANS `reglages`. Le son et le volume
+  // vont au magasin de réglages parce qu'ils ne sont pas des faits de partie ;
+  // celui-ci en est un, il voyage avec la sauvegarde et il s'écrit par
+  // `sauvegarder()`. Voir `src/sim/mode-developpeur.js`.
+  const boutonModeDev = $('options-mode-dev');
+
+  function rendreLeModeDev() {
+    if (boutonModeDev === null || etat === null) return;
+    const allume = etat.modeDeveloppeur === true;
+    boutonModeDev.textContent = allume ? 'Allumé' : 'Éteint';
+    boutonModeDev.setAttribute('aria-pressed', String(allume));
+  }
+
+  if (boutonModeDev !== null) {
+    boutonModeDev.addEventListener('click', () => {
+      if (etat === null) return;
+      etat.modeDeveloppeur = etat.modeDeveloppeur !== true;
+      rendreLeModeDev();
+      // ⚠ ON SAUVEGARDE TOUT DE SUITE. Le drapeau est un fait de partie ; le
+      // laisser attendre le prochain cycle ferait perdre l'extinction si
+      // l'application est tuée entre-temps — et c'est l'EXTINCTION qu'on ne
+      // veut jamais perdre.
+      sauvegarder();
+      // ⚠⚠ ET LES ÉCRANS SE REPEIGNENT. Les prix affichés, les boutons grisés
+      // et le délai de la carte se calculent tous à la peinture : sans ce
+      // rafraîchissement, le mode serait actif dans le moteur et invisible à
+      // l'écran jusqu'au premier geste — on croirait qu'il ne marche pas.
+      rafraichirLaBase();
+      if (ecranOffense !== null) ecranOffense.peindre(etat);
+      if (panneauTransfert !== null) panneauTransfert.peindre(etat);
+    });
+  }
 
   const version = $('options-version');
   let minuterieDebug = null;

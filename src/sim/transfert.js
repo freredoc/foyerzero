@@ -20,6 +20,7 @@
 // par dire autre chose que la règle.
 
 import { TRANSFERT } from '../data/sites.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import { RESSOURCES, capacitesMilli } from './economie-base.js';
 import { distanceCarreeCases } from './points-attaque.js';
 
@@ -111,6 +112,29 @@ export function recuMilli(envoyeMilli, cases) {
   const restePct = 100 - cases * TRANSFERT.taxeParCasePct;
   if (restePct <= 0) return 0;
   return Math.floor((envoyeMilli * restePct) / 100);
+}
+
+/**
+ * Le reçu POUR CETTE PARTIE — le barème, ou la franchise du mode développeur.
+ *
+ * ⚠⚠ ELLE EXISTE POUR QU'IL N'Y AIT QU'UNE AUTORITÉ — lot MODE-DEV, 19/09/2026.
+ * `recuMilli` est appelée à DEUX endroits : le contrôle de débordement de
+ * `problemesDuTransfert` et l'aperçu que l'écran affiche. Poser la franchise
+ * sur un seul des deux ferait refuser pour débordement un transfert dont
+ * l'écran annonce qu'il passe, ou l'inverse — et le défaut ne se verrait qu'aux
+ * grandes distances.
+ *
+ * ⚠ `recuMilli` RESTE PURE ET EXPORTÉE. C'est le BARÈME, et `test/transfert.js`
+ * l'éprouve sur des nombres seuls ; lui passer un état en ferait une fonction
+ * de partie, ce qui est exactement ce que `CLAUDE.md` §4 sépare.
+ *
+ * @param {object} etat
+ * @param {number} envoyeMilli
+ * @param {number} cases
+ * @returns {number} milli reçus
+ */
+function recuMilliPourLaPartie(etat, envoyeMilli, cases) {
+  return enModeDeveloppeur(etat) ? envoyeMilli : recuMilli(envoyeMilli, cases);
 }
 
 /** La place qu'il reste dans une base, pour cette ressource, en milli. */
@@ -214,7 +238,7 @@ export function problemesDuTransfert(etat, source, destination, ressource, quant
   // refuserait des transferts parfaitement valables — à 50 cases, un envoi de
   // 200 n'en fait arriver que 100, et une place de 100 suffit.
   if (source !== destination && cases <= TRANSFERT.porteeMaxCases) {
-    const recu = recuMilli(quantiteMilli, cases);
+    const recu = recuMilliPourLaPartie(etat, quantiteMilli, cases);
     const place = placeLibreMilli(etat.bases[destination], ressource);
     if (recu > place) {
       const manqueMilli = recu - place;
@@ -244,10 +268,13 @@ export function problemesDuTransfert(etat, source, destination, ressource, quant
  */
 export function apercuDuTransfert(etat, source, destination, quantiteMilli) {
   const cases = casesEntreDeuxBases(etat.bases[source].position, etat.bases[destination].position);
-  const recu = recuMilli(quantiteMilli, cases);
+  const recu = recuMilliPourLaPartie(etat, quantiteMilli, cases);
   return {
     cases,
-    taxePct: cases * TRANSFERT.taxeParCasePct,
+    // ⚠ LA TAXE ANNONCÉE SUIT LE REÇU — lot MODE-DEV. L'écran écrit ce champ
+    // tel quel : afficher « -40 % » au-dessus d'un transfert qui arrive entier
+    // serait le mensonge que `perduMilli` existe pour éviter.
+    taxePct: recu >= quantiteMilli ? 0 : cases * TRANSFERT.taxeParCasePct,
     envoyeMilli: quantiteMilli,
     recuMilli: recu,
     // ⚠ CE QUI EST PERDU EST PERDU : la taxe ne va nulle part. Ce champ existe

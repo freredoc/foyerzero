@@ -68,6 +68,7 @@
 // il est CADUC, et non contredit.
 
 import { DEFENSES, UNITES } from '../data/combat.js';
+import { enModeDeveloppeur } from './mode-developpeur.js';
 import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, REPARATION_BASE_JOUEUR, RETOUR_DEFENSES, coutDeMontee,
   etatDuBatiment,
@@ -603,6 +604,12 @@ export function problemesDeLaReparationDUnePiece(etat, index) {
     }];
   }
   const problemes = [];
+  // ⚠⚠ LES DEUX PÉAGES DE LA RÉPARATION SAUTENT EN MODE DÉVELOPPEUR — lot
+  // MODE-DEV, 19/09/2026, arbitrage (d) « tout péage du dépôt ». `rien-a-reparer`
+  // et `sans-batiment` restent au-dessus et sortent AVANT ce garde : réparer une
+  // pièce intacte n'a pas de sens, et réparer sans l'atelier reste refusé —
+  // c'est un verrou de règle, pas un prix.
+  if (enModeDeveloppeur(etat)) return problemes;
   const reserve = laBase.reserveReparation[cout.chassis];
   if (reserve < cout.ticks) {
     problemes.push({
@@ -646,11 +653,17 @@ export function reparerUnePiece(etat, index) {
     throw new Error(`réparation impossible — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
   const cout = coutDeLaReparation(etat, index);
-  const scorie = Math.ceil(cout.scorie);
-  laBase.reserveReparation[cout.chassis] -= cout.ticks;
+  // ⚠⚠ EN MODE DÉVELOPPEUR ON NE DÉBITE NI LE TEMPS NI LA SCORIE, ET C'EST ZÉRO
+  // QUI EST RENDU — lot MODE-DEV. L'appelant `toutReparer` ADDITIONNE ce retour
+  // pour annoncer au joueur ce qu'il vient de dépenser : rendre le barème sous
+  // un geste gratuit ferait afficher une facture que personne n'a payée.
+  const gratuit = enModeDeveloppeur(etat);
+  const scorie = gratuit ? 0 : Math.ceil(cout.scorie);
+  const ticks = gratuit ? 0 : cout.ticks;
+  laBase.reserveReparation[cout.chassis] -= ticks;
   laBase.economie.ressources.scorie -= scorie * MILLE;
   laBase.armee[index].degatsMilli = 0;
-  return { chassis: cout.chassis, ticks: cout.ticks, scorie };
+  return { chassis: cout.chassis, ticks, scorie };
 }
 
 /**
@@ -671,6 +684,10 @@ export function problemesDeToutReparer(etat) {
     }];
   }
   const problemes = [];
+  // ⚠ Même garde que la réparation pièce par pièce — lot MODE-DEV. Sans elle,
+  // le bouton « tout réparer » resterait refusé pendant que chaque pièce se
+  // répare gratuitement une par une : deux réponses pour une même question.
+  if (enModeDeveloppeur(etat)) return problemes;
   for (const chassis of CHASSIS_REPARABLES) {
     const demande = devis.reservoirs[chassis].ticks;
     const reserve = laBase.reserveReparation[chassis];
@@ -974,6 +991,9 @@ export function problemesDeLaReparationDUnBatiment(etat, index) {
     return [{ code: 'rien-a-reparer', message: 'Ce bâtiment est intact.' }];
   }
   const problemes = [];
+  // ⚠ Même garde que `problemesDeLaReparationDUnePiece`, au même endroit — voir
+  // là-bas. C'est le miroir bâtiments, et la symétrie tient ici.
+  if (enModeDeveloppeur(etat)) return problemes;
   const reserve = laBase.reserveReparationBatiments;
   if (reserve < cout.ticks) {
     problemes.push({
@@ -1014,11 +1034,15 @@ export function reparerUnBatiment(etat, index) {
     throw new Error(`réparation impossible — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
   const cout = coutDeLaReparationDUnBatiment(etat, index);
-  const quartz = cout.quartz;
-  laBase.reserveReparationBatiments -= cout.ticks;
+  // ⚠ Même geste que `reparerUnePiece` : rien n'est débité, et c'est ZÉRO qui
+  // est rendu — `toutReparerLesBatiments` additionne ce retour pour l'annoncer.
+  const gratuit = enModeDeveloppeur(etat);
+  const quartz = gratuit ? 0 : cout.quartz;
+  const ticks = gratuit ? 0 : cout.ticks;
+  laBase.reserveReparationBatiments -= ticks;
   laBase.economie.ressources.quartz -= quartz * MILLE;
   laBase.disposition[index].degatsMilli = 0;
-  return { batiment: cout.batiment, ticks: cout.ticks, quartz };
+  return { batiment: cout.batiment, ticks, quartz };
 }
 
 /**
@@ -1034,6 +1058,8 @@ export function problemesDeToutReparerLesBatiments(etat) {
     return [{ code: 'rien-a-reparer', message: 'Ta base est intacte.' }];
   }
   const problemes = [];
+  // ⚠ Miroir bâtiments de la garde ci-dessus — lot MODE-DEV.
+  if (enModeDeveloppeur(etat)) return problemes;
   const reserve = laBase.reserveReparationBatiments;
   if (devis.ticks > reserve) {
     problemes.push({

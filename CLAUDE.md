@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **19/09/2026**, version 0.99.65 · build 177.
+Dernière révision : **19/09/2026**, version 0.99.66 · build 178.
 ⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
 164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
 **175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
@@ -68,7 +68,99 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 19/09/2026 (après le lot MUNITIONS), à confronter :**
+**Référence au 19/09/2026 (après le lot MODE-DEV), à confronter :**
+⚠⚠ **LE MODE DÉVELOPPEUR LÈVE LES PÉAGES, IL NE CRÉDITE RIEN, ET C'EST TOUTE LA
+DIFFÉRENCE.** Ethan, 19/09 : « j'ai foiré ma sauvegarde, elle est morte » — le
+mode existe pour remonter une partie, et son extinction doit « remettre tout
+proprement ». Un mode qui remplirait les stocks serait IRRÉVERSIBLE ; celui-ci
+saute le refus et le débit, au même endroit et dans le même appel, si bien qu'il
+n'écrit RIEN dans l'état. Éteindre le drapeau refacture tout au geste suivant, et
+`MODE-DEV T1` le mesure sur les huit péages.
+⚠⚠ **HUIT PÉAGES, ET C'EST UN INVENTAIRE, PAS UNE LISTE DE GOÛT** — arbitrage (d)
+d'Ethan, « tout péage du dépôt ». Amélioration d'un bâtiment et d'une pièce
+(`sim/state.js`), achat de recherche et droit de fonder (`sim/recherche.js`),
+points d'attaque d'un raid (`sim/raid.js`), réparation d'une pièce et d'un
+bâtiment (`sim/reparation.js`, quatre portes avec les deux « tout réparer »),
+taxe de transfert (`sim/transfert.js`), délai entre deux déplacements
+(`sim/deplacement.js`).
+⚠⚠ **ET LA CONSTRUCTION N'EN FAIT PAS PARTIE, PARCE QU'ELLE EST DÉJÀ GRATUITE.**
+`poserEffectif` le dit depuis le 28/08 — « POSER NE COÛTE RIEN,
+`ECONOMIE_NIVEAU.premierNiveauPayant` vaut 2 » — et `poser` ne touche aucune
+ressource. Ce qui bloque une construction, ce sont les emplacements, le
+voisinage, le bâtiment de production et le budget de points d'armée : des
+VERROUS, pas des prix. Ne pas chercher un coût de pose à supprimer, il n'y en a
+jamais eu.
+⚠⚠ **LES VERROUS NON MONÉTAIRES NE SE LÈVENT PAS — arbitré « non » le 19/09.**
+`plafond`, `plafond-commandement`, `sans-batiment`, `abimee`, `dejaAcquise`,
+`uniteNonAcquise`, `effetNonCable`, `sans-batiment-de-production`, la portée du
+déplacement, le voisinage et le territoire tenu tiennent tous. **Conséquence à
+connaître avant de la découvrir en jouant :** en mode développeur, monter une
+pièce exige TOUJOURS un Centre de commandement de niveau suffisant, et une pièce
+abîmée doit d'abord être réparée — gratuitement, mais dans cet ordre. Le premier
+jet de `MODE-DEV T1` est tombé là-dessus, et le refus a eu raison.
+⚠ **LE DRAPEAU EST DANS `etat`, DONC `SAVE_VERSION` PASSE À 38.** Le magasin de
+réglages (son, volume) ne convient pas : aucun module de `src/sim/` ne le lit. Le
+maillon 37 → 38 n'est PAS vide — il pose `modeDeveloppeur: false`, parce que
+l'écran d'options lit le champ pour peindre l'interrupteur, là où
+`enModeDeveloppeur` en tolère l'absence. Coût mesuré sur la sauvegarde :
+**+24 octets fixes**, `,"modeDeveloppeur":false`, les mêmes sur les 25 graines de
+`BASES-0 T1`.
+⚠⚠ **`src/sim/mode-developpeur.js` EXISTE POUR UNE CONTRAINTE D'IMPORTS**, comme
+`base-courante.js`, `saveur.js` et `batiment-de-production.js` avant lui. Six
+modules de `sim/` posent la même question et trois s'importent déjà entre eux :
+loger le prédicat dans `state.js` aurait fait remonter `deplacement.js` et
+`transfert.js` vers le moteur d'état. **Il n'importe rien**, et cette ligne-là
+n'est pas négociable.
+⚠⚠ **DEUX FRANCHISES SONT POSÉES EN AMONT ET PAS AU REFUS, ET C'EST CE QUI TIENT
+L'ÉCRAN D'ACCORD AVEC LA RÈGLE.** `ticksAvantProchainDeplacement` rend zéro —
+elle a DEUX lecteurs, le refus `delai` et `ui/monde.js` qui peint l'attente ;
+poser la franchise dans le refus aurait laissé la carte annoncer « il reste
+3 h 20 » au-dessus d'un bouton qui marche. Même motif pour
+`recuMilliPourLaPartie` de `transfert.js`, lue par le contrôle de débordement ET
+par l'aperçu. Et la franchise du raid est dans **`coutDUnRaid`**, pas dans
+`executerRaid` : ce barème est la SEULE autorité du prix — les deux écrans
+l'appellent une fois chacun, deux tests gardent ce compte —, et le poser dans
+l'acte laissait la carte annoncer « 11 points » au-dessus d'un raid gratuit. Le
+premier jet l'a fait ; la relecture adverse l'a trouvé. ⚠ **Zéro et pas `null`** :
+`null` fait se CACHER le panneau de prix, zéro se lit « gratuit ». ⚠ Et le garde
+de `problemesDuRaid` reste en plus — `manquePourPayer` LÈVE sous 1.
+⚠ **LE BLOC `#options-bloc-dev` SE RETIRE SEUL, ET C'EST MESURÉ.** Ethan : « un
+switch qu'on pourrait enlever à la demande, mais le code lui reste. » Le câblage
+de `session.js` teste `!== null` avant de poser le moindre écouteur ; retiré, le
+jeu démarre, l'export survit, `#options-zero` est toujours là — vérifié au
+navigateur. ⚠ **Éteindre le mode AVANT de retirer le bloc** : une partie
+sauvegardée allumée le reste, et il n'y aurait plus d'interrupteur.
+⚠⚠ **L'HEXADÉCIMAL SEUL AURAIT FAIT L'INVERSE DE CE QU'ON LUI DEMANDE.**
+`hex(JSON)` pèse DEUX FOIS le JSON. Mesuré sur une partie à trois rapports :
+12 932 caractères de JSON → **25 864** en hexadécimal brut, → **4 134** en
+gzip-puis-hexadécimal, soit **32 %** du JSON. L'ordre est gzip PUIS hex, et
+`MODE-DEV T2` refuse un texte plus long que `2 × JSON` — un codec qui sauterait
+la compression passerait l'aller-retour sans que rien ne le dise.
+⚠ **ET LE BASE64 A ÉTÉ ÉCARTÉ EN LE SACHANT** : 2 744 caractères contre 4 134,
+soit 33 % de moins, mais il porte `+`, `/`, `=` et la casse. Le texte est fait
+pour être collé à la main depuis un téléphone ; l'hexadécimal ne s'abîme pas en
+chemin. ⚠ Sur une sauvegarde NEUVE (1 237 caractères) le gain est nul — 1 212
+caractères : gzip n'a rien à mordre. C'est normal et sans conséquence.
+⚠⚠ **L'IMPORT PASSE PAR `charger`, ET C'EST LE SECOND POINT D'ENTRÉE QUE
+`sim/state.js` NOMMAIT DÉJÀ** ligne 560 : « un import, un éditeur, un outil de
+debug qui fabriquerait un état sans passer par `charger` ». Il ne le fabrique
+pas. Il passe aussi par `installer`, le même que `demarrer` et `partieNeuve` :
+poser `etat` à la main laisserait les trois écrans peints sur l'ancienne partie.
+⚠ **RIEN N'EST ÉCRIT TANT QUE LA LECTURE N'A PAS RÉUSSI** — vérifié au
+navigateur, un texte invalide laisse la partie en cours intacte.
+⚠ **RÉANCRAGES :** sept, tous des constantes déplacées, aucun assouplissement.
+`SAVE_VERSION` 37 → 38 dans SIX épingles (`B4 T7`, `FR T3`, `JRN T10`,
+`RCU T12`, `PD T10`, `MODULES-PIÈCE T1`), et `BASES-0 T1` gagne un huitième
+terme, `OCTETS_AJOUTES_PAR_MODE_DEV = 24`.
+⚠ **`npm test` rend **1641 pass / 0 fail** au sens de la garde de
+`documentation.test.js`** — 1 640 pass · 0 fail · 1 skipped au relevé de
+`npm run check`. Falsification jouée dans trois directions : prédicat forcé à
+`false` → `MODE-DEV T1` rouge sur le péage 1 ; forcé à `true` → `T1` rouge sur
+les contre-assertions ; compression retirée → `MODE-DEV T2` rouge sur
+« 7 498 caractères pour un JSON de 3 747 » ; franchise retirée de `coutDUnRaid`
+→ `T1` rouge sur « payer : 11 points demandés, 0 disponibles ».
+
+**Auparavant, après le lot MUNITIONS (19/09) :**
 ⚠⚠ **UN SEUL NOMBRE DE DONNÉES CHANGE : LA RÉSERVE DU FOUDRE, 450 → 25.** Ses
 dégâts ne bougent pas. `src/sim/combat.js` ne gagne qu'un EXPORT
 (`porteUnModuleAcquis`) lu par le rendu ; aucune règle de combat ne bouge.
@@ -12840,7 +12932,7 @@ src/data/               toutes les valeurs de calibrage — 13 fichiers ; RIEN d
     contenu réel de `art/sprites/`, si bien qu'un sprite ajouté sans que l'outil
     soit relancé fait ROUGIR la suite au lieu de faire dessiner de travers.
 
-src/sim/                simulation déterministe, sans DOM — 35 fichiers
+src/sim/                simulation déterministe, sans DOM — 36 fichiers
   rng.js  clock.js  state.js  grille.js  combat.js  generateur.js
   base-courante.js      l'accesseur de base courante — SANS AUCUN IMPORT
   saveur.js             la saveur d'une case : deux tirables, une géographie
@@ -12871,6 +12963,7 @@ src/sim/                simulation déterministe, sans DOM — 35 fichiers
   prix-du-raid.js       ce qu'un raid coûte : la distance, et ce que la CARTE peint
   territoire-tenu.js    le refus partagé : une case tenue par l'Ouvrage ne se prend pas
   batiment-de-production.js  quel bâtiment manque à une pièce, ou `null`
+  mode-developpeur.js     le prédicat du mode développeur — SANS AUCUN IMPORT
   ⤷ ⚠⚠ `batiment-de-production.js` EXISTE POUR UNE CONTRAINTE D'IMPORTS, ET
     LES PRÉCÉDENTS SONT `base-courante.js` ET `saveur.js` — lot RAID-ET-ÉCRAN,
     10/09. `batimentDeProductionManquant` vivait dans `sim/state.js` ; le
@@ -13096,7 +13189,7 @@ src/render/             rendu, sans DOM non plus : rend des primitives — 15 fi
     sous un sel à lui — il n'en écrit pas un second. Un test le prouve en
     relevant l'état du flux avant et après une peinture complète.
 
-src/ui/                 les huit écrans, leurs éditeurs et les pictogrammes — 14 fichiers
+src/ui/                 les huit écrans, leurs éditeurs et les pictogrammes — 15 fichiers
   session.js            LE SEUL fichier du dépôt qui lise l'horloge murale, une fois
   chantier.js           l'écran de la base : formatage PUR, puis rendu au DOM
   offense.js            l'écran des quatre vagues : il compose l'armée et l'écrit
@@ -13111,6 +13204,7 @@ src/ui/                 les huit écrans, leurs éditeurs et les pictogrammes �
   defense.js            éditeur de garnison — module PUR
   son.js                l'adaptateur audio : il joue, il ne décide de rien
   pictogramme.js        les 46 pictogrammes : une table par famille, un poseur
+  sauvegarde-portable.js  le codec de la sauvegarde qu'on emporte : gzip puis hexadécimal
   ⤷ ⚠⚠ IL EXISTE PARCE QU'UN CYCLE D'IMPORTS L'A EXIGÉ, le 11/09. Ethan voulait
     ouvrir un rapport du journal pour voir ce qui s'est passé ; les quinze lignes
     d'un rapport d'attaque étaient déjà écrites par `lignesDuResultat`, dans
@@ -13304,7 +13398,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   75 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   76 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -13316,7 +13410,7 @@ test/                   75 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
-  bareme-et-rejeu  contact  predilection  frein  silhouettes
+  bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
