@@ -333,44 +333,44 @@
   "engine_ouvrage_heavy_idle_loop": {
    "debit_kbps": 20,
    "duree_ms": 4000,
-   "octets": 9157,
+   "octets": 10926,
    "serie": 591556690,
-   "sha256": "de60efb6d2500b6a868c3bf9efbab1ac744581b9af84316bbf28c0c423509480"
+   "sha256": "cf0e82f745c16065c46d3b7043fc55d31cc8d53a767afbf801622745114a31b0"
   },
   "engine_ouvrage_light_idle_loop": {
    "debit_kbps": 20,
    "duree_ms": 3200,
-   "octets": 7833,
+   "octets": 8977,
    "serie": 227747876,
-   "sha256": "ae4c55454468f95784e22b4948b53ba4e72c1d8b625cf27eb202485a599989bb"
+   "sha256": "fcd7bc343be083147519114ddd70e4b69af35d032fec6972da62c2ff121c58bb"
   },
   "engine_ouvrage_medium_idle_loop": {
    "debit_kbps": 20,
    "duree_ms": 3600,
-   "octets": 8251,
+   "octets": 9812,
    "serie": 1368432498,
-   "sha256": "91031eb68ffb49112b910e9375bf787921529b44c56deec0c5132ec6043f1b3b"
+   "sha256": "12943a0fdf87b17713505f01c0c497334e39518b8d20a726b8d21ed8ef4c801d"
   },
   "engine_player_heavy_idle_loop": {
    "debit_kbps": 20,
    "duree_ms": 4000,
-   "octets": 15300,
+   "octets": 10825,
    "serie": 2332318912,
-   "sha256": "e5a65d48b67fb3f3324dd63197fd6e2cf08d052ba185b64c1f0a29a293f267fd"
+   "sha256": "e9d884072b660fbc0116a6ecec5a9c2a709392c1d4676670b82f399fbc1edebd"
   },
   "engine_player_light_idle_loop": {
    "debit_kbps": 20,
    "duree_ms": 3200,
-   "octets": 15532,
+   "octets": 8924,
    "serie": 2782201014,
-   "sha256": "4d404f4ed50580e8895474ca593def7288b561a621ff7f8cfe6ac3e696cec3e6"
+   "sha256": "278eacf9314ba408ecad874bc74c377e5c1802b73be34853cd8650e755de4215"
   },
   "engine_player_medium_idle_loop": {
    "debit_kbps": 20,
    "duree_ms": 3600,
-   "octets": 16696,
+   "octets": 9936,
    "serie": 1329146678,
-   "sha256": "5438ee6d2f2fec03addfd97c66da6e59dd2f621927778b973f7b6b4f2a2727b6"
+   "sha256": "72d3f45dae1b185651babc6fd64ae5ff4c2d9539eb6862271fe803ac479eb731"
   },
   "explosion_ouvrage_large_01": {
    "debit_kbps": 20,
@@ -850,31 +850,31 @@
   },
   "movement_dard_heavy_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3400,
-   "octets": 7803,
+   "duree_ms": 2900,
+   "octets": 6748,
    "serie": 3067023090,
-   "sha256": "5408da0ed0a161b3860f3059f992176caa2f80921c9c3c55471e273711007039"
+   "sha256": "3bc4694af891fbfe37c8f5dad233376cf8463d478e9292d3e8500dba1c364c7e"
   },
   "movement_dard_light_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3400,
-   "octets": 7872,
+   "duree_ms": 2500,
+   "octets": 5850,
    "serie": 335585366,
-   "sha256": "ea23faac1c2308ab88fcca6e1946e3292b2ada36c983f81e29523e7f56199da4"
+   "sha256": "f1d55b8240e3a8b6fe600187edf7f1ae6dfdba72e9d3360467bc4fdf37dfedb3"
   },
   "movement_essaim_ouvrage_loop": {
    "debit_kbps": 20,
-   "duree_ms": 2400,
-   "octets": 7473,
+   "duree_ms": 2600,
+   "octets": 6021,
    "serie": 133843266,
-   "sha256": "22cd4a53a2b6b5bde6295e6d04e759b784d3f6c3e07ac56f5e3b2e8329381953"
+   "sha256": "5920ccfad67411ce0ccbf9439372bda90e0fa3371430249accf8136c0def6563"
   },
   "movement_infantry_player_loop": {
    "debit_kbps": 20,
-   "duree_ms": 2400,
-   "octets": 4287,
+   "duree_ms": 2900,
+   "octets": 6570,
    "serie": 1324937442,
-   "sha256": "5090064ff83c172279763dfb777262289ca97431a5c41cf1e1a904f5497b6e97"
+   "sha256": "5fa20b8b7e4012df1e665812f5b4b6a9df88b3eed50960e3e6feb3d14cb82892"
   },
   "movement_ouvrage_deploy_01": {
    "debit_kbps": 20,
@@ -892,24 +892,24 @@
   },
   "movement_ouvrage_flyby_01": {
    "debit_kbps": 20,
-   "duree_ms": 2000,
-   "octets": 5333,
+   "duree_ms": 3580,
+   "octets": 8482,
    "serie": 1203365446,
-   "sha256": "0a10f1e4fdeca1156a5188a975f04e299ed07eaedbd6334a4701cc7d5c35df5c"
+   "sha256": "3567723f61758afa754c15003aaa28230884526eb7b0e06959b039d7b7ee0f07"
   },
   "movement_ouvrage_flyby_02": {
    "debit_kbps": 20,
-   "duree_ms": 2000,
-   "octets": 5270,
+   "duree_ms": 3600,
+   "octets": 8793,
    "serie": 3736123388,
-   "sha256": "ab5e2e18e049b09e9dc69ae84bcc35cdd0064e19e108b2a36c29f83553325ff1"
+   "sha256": "cc9855996973bdfc0c57ef617dad0965ac18ca406047cd475331a53355ea286c"
   },
   "movement_ouvrage_flyby_03": {
    "debit_kbps": 20,
-   "duree_ms": 2000,
-   "octets": 5320,
+   "duree_ms": 3300,
+   "octets": 7700,
    "serie": 2847377258,
-   "sha256": "ee9bd77fdd549cc5d052f20c4fab7a277c2b82f2493967ead007a28f48979053"
+   "sha256": "c96b8d41f29fe9288709c27fb32b0c26e665a1b97fcfc304856e9a6c6d549ee8"
   },
   "movement_player_deploy_01": {
    "debit_kbps": 20,
@@ -927,66 +927,66 @@
   },
   "movement_player_flyby_01": {
    "debit_kbps": 20,
-   "duree_ms": 2000,
-   "octets": 5602,
+   "duree_ms": 3400,
+   "octets": 7545,
    "serie": 4203294328,
-   "sha256": "4319a844af64a910d52fd307bb0d070aba1eb92ebf0ab273c6e48a20449f02ba"
+   "sha256": "8ce164547b6d4bcb783e760d5e6cc6717523a4d95b52dccd7d8a73d24f562e20"
   },
   "movement_player_flyby_02": {
    "debit_kbps": 20,
-   "duree_ms": 2000,
-   "octets": 5642,
+   "duree_ms": 3600,
+   "octets": 8789,
    "serie": 1669365698,
-   "sha256": "ad57b649bae5a5ae9a296b4ac51e2e7f4437266dfacf9df9cdbca66f5342b9fd"
+   "sha256": "3b507705f7d0ec73dd12407891e91cef3fedb3cf5cd4f90f4490ebd4f01777b3"
   },
   "movement_player_flyby_03": {
    "debit_kbps": 20,
-   "duree_ms": 2000,
-   "octets": 5583,
+   "duree_ms": 3400,
+   "octets": 7792,
    "serie": 344411988,
-   "sha256": "9d6653f2c1464ad315c9eadde5dbc8df1a37769d423aa469559307d118819e95"
+   "sha256": "be15a7960f6de94dcc04cf5a76c15829b235eb8aca1a4e8e433cf8523b3639b6"
   },
   "movement_tracks_heavy_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3200,
-   "octets": 8224,
+   "duree_ms": 3000,
+   "octets": 6751,
    "serie": 3250519754,
-   "sha256": "90e9f561d842b66d17a9a8d46064b894e69d47b558d82e86dfdf3289e392daf7"
+   "sha256": "e7c5d3f666bd16274addb40a40b879c4b316055846fd1ece589854746d15242b"
   },
   "movement_tracks_light_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3200,
-   "octets": 9394,
+   "duree_ms": 3100,
+   "octets": 7163,
    "serie": 1668370542,
-   "sha256": "c4b91ddc115b0263e8f5ecc0e3faad2d761ced5c43225059592f35badeb27fef"
+   "sha256": "56780c328b0493d9ac090f8dd8b64fda4e5f32da3626a4331cd7b7bb54e27579"
   },
   "movement_tracks_medium_loop": {
    "debit_kbps": 20,
    "duree_ms": 3200,
-   "octets": 8807,
+   "octets": 7497,
    "serie": 3494932127,
-   "sha256": "51d1f891d2b0c79166d2c4f4f84c3e491569cfa03899dcb9c7cc35fd2e3c23ac"
+   "sha256": "6ba3adf7e439319947fa893c685eb4ec38bf7b398fa0f78dae5745c42502edc3"
   },
   "movement_walker_heavy_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3600,
-   "octets": 9907,
+   "duree_ms": 3000,
+   "octets": 6914,
    "serie": 4091478983,
-   "sha256": "c09801bf33853d3dc5a712d0227ff8dd95bbb1edaadff5d408ad7a5faba992ce"
+   "sha256": "73675ec56820b09b0e723f14cb85bf7638cc51de3068dceeabbf07f9f289398c"
   },
   "movement_walker_light_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3600,
-   "octets": 10052,
+   "duree_ms": 3100,
+   "octets": 7169,
    "serie": 1360047459,
-   "sha256": "38053dae71a11b30ccd3e3c10dc87b37986a90768807d3f716fc5fd35430e27e"
+   "sha256": "dd711776f8c766b50ebcc27816b5fecc2c602e32498c47a87f844eadf0f27932"
   },
   "movement_walker_medium_loop": {
    "debit_kbps": 20,
-   "duree_ms": 3600,
-   "octets": 7977,
+   "duree_ms": 3100,
+   "octets": 7224,
    "serie": 2933093343,
-   "sha256": "c3b9ea3a596f5e36afe14985c55339eb5c3d5a18947b074864e4608bb4c07758"
+   "sha256": "fb1fd283bf15333b2cb2862737c50bdd830b84e770e33b77932d2023a8f765e0"
   },
   "order_ouvrage_attack_01": {
    "debit_kbps": 20,
@@ -1501,59 +1501,59 @@
   },
   "weapon_ouvrage_missile_launch_01": {
    "debit_kbps": 20,
-   "duree_ms": 875,
-   "octets": 2462,
+   "duree_ms": 577,
+   "octets": 1680,
    "serie": 1538999273,
-   "sha256": "e62d6c21b17c4fc55c5e9925d7da520d448ced011975eb79aeee009bdc98b705"
+   "sha256": "5a50df4676a371efff86816165d35a3df0d5346037ad84cfac1ce36a2eb56ebb"
   },
   "weapon_ouvrage_missile_launch_02": {
    "debit_kbps": 20,
-   "duree_ms": 900,
-   "octets": 2537,
+   "duree_ms": 547,
+   "octets": 1618,
    "serie": 3266450003,
-   "sha256": "fa1f80a7959fa545880f0177066be3a71ebe9e5d33dce096170943e78ea70062"
+   "sha256": "de021315f4635da7bfbcf1aa84115576a9c8a5e9b83aa4d418ca1e8d39846a21"
   },
   "weapon_ouvrage_missile_launch_03": {
    "debit_kbps": 20,
-   "duree_ms": 925,
-   "octets": 2585,
+   "duree_ms": 677,
+   "octets": 1934,
    "serie": 3048547013,
-   "sha256": "37875491aaa025da090fd60947815d7da421b2de647a8fa14bf6e39f28291d00"
+   "sha256": "04c8fccb5a1917b2c68c2f9ed96dbcf083faff97c72a07866869c20e08847a4d"
   },
   "weapon_ouvrage_missile_launch_04": {
    "debit_kbps": 20,
-   "duree_ms": 950,
-   "octets": 2693,
+   "duree_ms": 637,
+   "octets": 1834,
    "serie": 735164262,
-   "sha256": "5f9c28a404219f3831a61fd28ac3af88900c521caee1804fb7f2e67fc0d5ac93"
+   "sha256": "4079badb4931e4fa63b09f0479bb17404151e8ebd649465a0cba1c80a54494f8"
   },
   "weapon_ouvrage_rifle_01": {
    "debit_kbps": 20,
-   "duree_ms": 311,
-   "octets": 898,
+   "duree_ms": 1450,
+   "octets": 3827,
    "serie": 4021365886,
-   "sha256": "63bc3bbbccd7a642d0b13bc43d73577f3b6451298f4085da249925aa455f52d4"
+   "sha256": "23292ce96f9f95d05efcac0200c01d64525c4d28656967a0a51accf236bb90cb"
   },
   "weapon_ouvrage_rifle_02": {
    "debit_kbps": 20,
-   "duree_ms": 311,
-   "octets": 892,
+   "duree_ms": 1500,
+   "octets": 3927,
    "serie": 1991802308,
-   "sha256": "18a06c529bde8aaf3d2d0b9b0df94b028eee8df1077be5ed7c65931777912658"
+   "sha256": "13e1122e8645e6d4deb6437b914fa47732b9ff0b778f0ba43a31bfcec007265b"
   },
   "weapon_ouvrage_rifle_03": {
    "debit_kbps": 20,
-   "duree_ms": 311,
-   "octets": 915,
+   "duree_ms": 1450,
+   "octets": 3756,
    "serie": 29314386,
-   "sha256": "7871b96fdb0b10693a37058ed88f44b3f840ccde923a506c40375c770b19a5f6"
+   "sha256": "6e68aad26fe051352ccad5e8e0cbe4fa3b9ec32c31ed99fdb16deeabf287e49c"
   },
   "weapon_ouvrage_rifle_04": {
    "debit_kbps": 20,
-   "duree_ms": 311,
-   "octets": 886,
+   "duree_ms": 1500,
+   "octets": 4832,
    "serie": 2681985265,
-   "sha256": "ba3a4a65a7a2ba38c97a8670d73b583f1c1965b9e4e89345990fda39729a2368"
+   "sha256": "8dd51f9928a57b52f4af12b7f908d3ad87d318e28d30040ece857f110946089c"
   },
   "weapon_player_aa_01": {
    "debit_kbps": 20,
@@ -1788,59 +1788,59 @@
   },
   "weapon_player_missile_launch_01": {
    "debit_kbps": 20,
-   "duree_ms": 875,
-   "octets": 2403,
+   "duree_ms": 617,
+   "octets": 1794,
    "serie": 433915430,
-   "sha256": "e2220d4a7fa2f5e0a20fe6b61363ba725c3fdd89d81a230bc863b355a5320f55"
+   "sha256": "0803bfa0c73ac27d1ee1932d9287a43703c7ebefa9fe6d1fce78de8fa61e4cd2"
   },
   "weapon_player_missile_launch_02": {
    "debit_kbps": 20,
-   "duree_ms": 900,
-   "octets": 2463,
+   "duree_ms": 697,
+   "octets": 1981,
    "serie": 2161399708,
-   "sha256": "64cba32831a9ce1ea18d44b4b8dd8de69162411d88dc98f0d017cb100fcba2d1"
+   "sha256": "800a2d7f85d00505a265b9208c5554d2e3ce69c46767c243efd5baef1d50b48f"
   },
   "weapon_player_missile_launch_03": {
    "debit_kbps": 20,
-   "duree_ms": 925,
-   "octets": 2464,
+   "duree_ms": 647,
+   "octets": 1863,
    "serie": 4157826826,
-   "sha256": "1b755fb5ec9dda6978b670907fbb8229de4571b341e9bcecc74a0db2654a6be0"
+   "sha256": "e52187eb98465fdacb560fcff480463e168f5a1134cf6e1247e40c2bd0433bb9"
   },
   "weapon_player_missile_launch_04": {
    "debit_kbps": 20,
-   "duree_ms": 950,
-   "octets": 2630,
+   "duree_ms": 717,
+   "octets": 2017,
    "serie": 1773662889,
-   "sha256": "1e87dea58840a1fc904511d2e3cde7d81fa2395e9d39bf9eb53e80794f4ae862"
+   "sha256": "af9600c33f7666939bf64d39a5ed9d1ceb8824b172cd895a1877df80d0e7393d"
   },
   "weapon_player_rifle_01": {
    "debit_kbps": 20,
-   "duree_ms": 240,
-   "octets": 756,
+   "duree_ms": 1300,
+   "octets": 3446,
    "serie": 3156586929,
-   "sha256": "afc546aa1cd09669416b9d22ada7dd46f09eac2c2fc493323aafc1a1b3ebc616"
+   "sha256": "cdca6ea7ac4e62312fd0348e2a8f079cbc54f3d63a1bfe319a9ab8ae3dc74b15"
   },
   "weapon_player_rifle_02": {
    "debit_kbps": 20,
-   "duree_ms": 240,
-   "octets": 770,
+   "duree_ms": 1250,
+   "octets": 3300,
    "serie": 623697931,
-   "sha256": "fe5c037cd0ee74c8f704483fff0a1745b3b553839bf00c87c95913dfe4dff8fe"
+   "sha256": "38f3bfa7e593be9b0c33a58059c565a5e4a38be926ce14c9c22f454cc825939b"
   },
   "weapon_player_rifle_03": {
    "debit_kbps": 20,
-   "duree_ms": 240,
-   "octets": 762,
+   "duree_ms": 1250,
+   "octets": 3237,
    "serie": 1378603165,
-   "sha256": "6a9367346da89131dec53a67df7272fcc426bd6a99eca4caefbedb98572b31cb"
+   "sha256": "a30efd18829290e939c45f6e0f63ef3bd2b28726389bcd4d0dadd2304bb13996"
   },
   "weapon_player_rifle_04": {
    "debit_kbps": 20,
-   "duree_ms": 240,
-   "octets": 773,
+   "duree_ms": 1450,
+   "octets": 4060,
    "serie": 3427747134,
-   "sha256": "041120ce37443b5f83a4aa8cf8c084a5bfb6ed53959a067b072fad2156e3540b"
+   "sha256": "fd10766a8849f92988efd7d9f606424f733694ac34826eb8e048564532f0eb83"
   }
  }
 }
