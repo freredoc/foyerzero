@@ -217,6 +217,33 @@ tolère en silence : **un test borne les deux camps séparément** et nomme le p
 de chaque côté. Une borne unique assez large pour les deux cesserait de garder le
 camp le plus serré.
 
+⚠⚠ **LE PLAFOND DE FAIT EST ÉCRIT, RELEVÉ LE 19/09 AU LOT CONDITIONNEMENT-ZÉNITH
+— IL EXISTAIT DEPUIS OUVRAGE-CÂBLAGE SANS ÊTRE ÉCRIT NULLE PART.** Les douze
+tourelles de défense sont zénithales, recentrées sur leur pivot dans un carré
+porté par le canon (ratio carré/embase 1,48 à 3,34, médiane 2,72, contre 1,43 à
+2,09 sur les dessins à 75°). Mesuré sur les sprites 128 cousus et la table
+`ANCRES_DEFENSE` :
+
+- **portée du carré : jusqu'à 99,97 % du côté de la case** depuis le centre de
+  la case (le bord est à 50 %) — `def_j_harpon`, carré de **180,0 % de la
+  case** ; à l'Ouvrage 90,56 % (`def_o_harpon`). Le Créneau seul tient dans sa
+  case (48,98 · 48,18) ;
+- **portée du dessin lui-même : jusqu'à 97,99 %** — le pixel opaque le plus
+  loin du pivot est à 0,978 à 0,992 fois la demi-cellule ;
+- **remplissage du carré : 10,4 à 41,4 % de pixels opaques** — la marge de
+  rotation est presque entièrement transparente, et c'est ce que le dépassement
+  coûte réellement à l'œil : une tourelle du joueur occupe 12 à 24 % de sa
+  cellule.
+
+**Arbitrage du 19/09 : on achète le dépassement, et `ECHELLE` ne bouge pas.** Le
+baisser a été rejeté à l'œil par Ethan le 05/09 — « le canon disparaît, il ne
+reste qu'un anneau de couleur autour d'un trou noir » — et raccourcir les canons
+demanderait −74 % sur le mortier joueur, c'est-à-dire un autre dessin. Le
+plafond est GARDÉ : `test/sprite.test.js` borne la portée du carré à 101 % chez
+le joueur et 92 % à l'Ouvrage, nomme le pire de chaque camp au centième, et
+exige que le Créneau tienne. Un lot qui le ferait bouger doit réécrire ces
+nombres et cette ligne.
+
 Les tuiles de terrain font 32 × 32 bord à bord, comme avant.
 
 ⚠⚠ **LE NOMBRE 28 SURVIT AILLEURS DANS CE DOCUMENT, ET IL Y EST FAUX.** Relevé

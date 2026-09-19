@@ -381,11 +381,22 @@ test('sprite — les sprites de l\'Ouvrage ne sont plus percés de trous', () =>
   // et les **SOCLES 972 px sur six fichiers seulement**. Un socle de tourelle
   // est un ANNEAU : ce qu'il enferme est un trou par construction, pas un aléa
   // de dessin, et aucune refonte d'art ne le remplira sans le dénaturer.
-  const socles = join(SPRITES, 'socle', '128');
-  const ajours = readdirSync(socles)
-    .filter((f) => f.endsWith('.png') && f.includes('_j_'))
-    .reduce((t, f) => t + trousEnfermes(join(socles, f)), 0);
-  assert.ok(ajours > 500, `${ajours} px enfermés côté joueur : le compteur ne compte rien`);
+  //
+  // ⚠⚠ ET LA REFONTE L'A REMPLI — TROISIÈME CHANGEMENT D'APPÂT, LOT
+  // CONDITIONNEMENT-ZÉNITH, 19/09. Vu de dessus, le logement d'un socle n'est
+  // plus un trou traversant : c'est un DISQUE PEINT sombre, dans lequel la
+  // tourelle se pose. Les trois socles de tourelle du joueur passent de 972 à
+  // **0 px** enfermés ; il ne reste que les trois socles d'artillerie, encore à
+  // 75°, à 68 · 74 · 77 = **219 px**, sous les 500. Remesuré sur les onze
+  // familles, grille 128 : `interface` **15 777 px sur 46 fichiers** — un
+  // pictogramme est un TRAIT sur du vide, ce qu'il enferme l'est par
+  // construction, et c'est la seule famille que ni un camp ni une refonte d'art
+  // de pièce ne touche. Le seuil, lui, ne bouge pas.
+  const pictogrammes = join(SPRITES, 'interface', '128');
+  const ajours = readdirSync(pictogrammes)
+    .filter((f) => f.endsWith('.png'))
+    .reduce((t, f) => t + trousEnfermes(join(pictogrammes, f)), 0);
+  assert.ok(ajours > 500, `${ajours} px enfermés dans les pictogrammes : le compteur ne compte rien`);
 
   // Et le balayage a bien trouvé les sprites : sans ça, zéro fichier donnerait
   // zéro trou, et la garde serait verte sur un dossier vide.
@@ -1056,12 +1067,17 @@ test('sprite — une tourelle ne sort pas de son carré en tournant', () => {
   }
 
   // ⚠ ET LA MARGE EST MINCE, CE QU'IL FAUT SAVOIR AVANT DE RETOUCHER UN DESSIN :
-  // MESURÉ, le pire des onze est à 31,69 sur 32, soit TROIS DIXIÈMES de pixel de
+  // MESURÉ, le pire des onze est à 31,60 sur 32, soit QUATRE DIXIÈMES de pixel de
   // la bordure. Ces sprites sont calibrés au plus juste ; un canon allongé d'un
   // pixel ferait tomber ce test, et il aurait raison.
+  // ⚠ RÉANCRÉ AU LOT CONDITIONNEMENT-ZÉNITH (19/09) : 31,69 avant, sur les six
+  // tourelles de défense à 75°. Les six zénithales sont recentrées sur leur pivot
+  // dans une toile au carré de rotation plus quatre pixels de marge, donc leur
+  // canon s'arrête à 31,50–31,60 (`def_j_casemate`), et ce sont les deux blindés
+  // — `belier`, `broyeur`, inchangés — qui partagent désormais le pire.
   assert.equal(pireNom !== null, true);
   assert.ok(pire > 30, `${pireNom} à ${pire.toFixed(2)} : la marge est plus large qu'annoncé — remesurer`);
-  assert.equal(pire.toFixed(2), '31.69');
+  assert.equal(pire.toFixed(2), '31.60');
 });
 
 test('sprite — les deux tables d\'ancres transcrites sont identiques aux JSON du disque', () => {
