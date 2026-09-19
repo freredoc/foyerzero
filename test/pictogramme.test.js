@@ -347,14 +347,14 @@ const TAILLES_D_AVANT = {
   'atlas-batiment-64.webp': 190064, // 179002 avant TERRITOIRE-ET-ÉCHELLE, 185210 avant EMPRISES-ET-DÉLAI
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
-  'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
-  'atlas-chassis-64.webp': 27802, // 10690 avant OUVRAGE-CÂBLAGE
-  'atlas-defense-128.webp': 65050, // 53520 avant OUVRAGE-CÂBLAGE
-  'atlas-defense-64.webp': 27124, // 21976 avant OUVRAGE-CÂBLAGE
+  'atlas-chassis-128.webp': 73090, // 72842 avant CONDITIONNEMENT-ZÉNITH, 28850 avant OUVRAGE-CÂBLAGE
+  'atlas-chassis-64.webp': 27824, // 27802 avant CONDITIONNEMENT-ZÉNITH, 10690 avant OUVRAGE-CÂBLAGE
+  'atlas-defense-128.webp': 59120, // 65050 avant CONDITIONNEMENT-ZÉNITH, 53520 avant OUVRAGE-CÂBLAGE
+  'atlas-defense-64.webp': 24648, // 27124 avant CONDITIONNEMENT-ZÉNITH, 21976 avant OUVRAGE-CÂBLAGE
   'atlas-limite-128.webp': 13092,
   'atlas-limite-64.webp': 10016,
-  'atlas-socle-128.webp': 53918, // 54642 avant OUVRAGE-CÂBLAGE
-  'atlas-socle-64.webp': 21750, // 21092 avant OUVRAGE-CÂBLAGE
+  'atlas-socle-128.webp': 66600, // 53918 avant CONDITIONNEMENT-ZÉNITH, 54642 avant OUVRAGE-CÂBLAGE
+  'atlas-socle-64.webp': 26344, // 21750 avant CONDITIONNEMENT-ZÉNITH, 21092 avant OUVRAGE-CÂBLAGE
   'atlas-terrain-128.webp': 78802,
   'atlas-terrain-64.webp': 33256,
   'atlas-tourelle_unite-128.webp': 36454, // 19454 avant OUVRAGE-CÂBLAGE
@@ -418,6 +418,22 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // **Aucun sprite n'entre ni ne sort** : 83 des deux côtés, pour la troisième
   // fois. ⚠ Et **132 des 162 PNG changent de dessin** — les trente autres sont
   // les états neufs dont l'ancrage ne déplace rien, plus la vignette mixte.
+  //
+  // ⚠⚠ SIX LIGNES SONT RÉANCRÉES AU LOT CONDITIONNEMENT-ZÉNITH, 19/09, ET LE
+  // NOMBRE D'AVANT EST ÉCRIT À CÔTÉ DE CELUI D'APRÈS. Les 22 sources passées au
+  // zénithal au lot ANCRES-ZÉNITH sont enfin conditionnées : 44 sprites changent
+  // de dessin — les douze tourelles de défense, les neuf socles redessinés et la
+  // coque de l'Obusier, aux deux grilles —, les 124 autres sont identiques au
+  // pixel, et `--forcer defense --forcer socle --forcer chassis` nomme les
+  // trois familles recousues. `defense` MAIGRIT (65 050 → 59 120 en 128) : les
+  // tourelles zénithales, recentrées sur leur pivot dans un carré porté par le
+  // canon, ne remplissent leur cellule qu'à 11 à 43 % ; `socle` GROSSIT
+  // (53 918 → 66 600) : le logement peint remplace un trou transparent.
+  // **Aucun sprite n'entre ni ne sort** : 18 · 12 · 18 des deux côtés. Les
+  // douze autres lignes n'ont pas bougé d'un octet, et `atlas.py --verifier`
+  // rend après le lot ce qu'il rendait avant sur l'arbre pristine : 17
+  // identiques · 3 différents — `carte-64`, `carte-128`, `interface-128`, l'encodeur
+  // de la machine, laissés là où ils étaient.
   //
   // ⚠⚠ ET LES SEIZE AUTRES LIGNES N'ONT PAS BOUGÉ D'UN OCTET, CE QUI EST LA
   // MOITIÉ QUI PROUVE. Le lot ne touche que la famille `batiment` :

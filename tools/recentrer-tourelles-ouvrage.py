@@ -26,6 +26,28 @@ cylindre plus bas.
 ⚠ LA TRANSLATION EST ENTIÈRE. Le pivot mesuré peut tomber sur un demi-pixel
 (`(xs.min() + xs.max() + 1) / 2`). On arrondit, et l'erreur résiduelle — au plus
 un demi-pixel sur 1024, soit 0,02 px à la taille du jeu — est imprimée.
+
+⚠⚠ GÉNÉRALISÉ AU LOT CONDITIONNEMENT-ZÉNITH (19/09), ET RÉPARÉ EN PASSANT. Il
+exécutait le SOURCE de `pivot` avec `np` pour seul nom global ; depuis
+ANCRES-ZÉNITH `ancres-defense.pivot` est le plus grand disque inscrit et demande
+`scipy.ndimage` — le script tombait en `NameError`. Il importe maintenant les
+deux modules d'ancres comme des modules, et prend la règle d'embase DE LA
+FAMILLE : `def_*` → `ancres-defense.pivot` (disque inscrit, tourelles de défense
+zénithales), `off_*_tourelle` → `ancres-blindes.pivot` (tambour, tourelles de
+blindé encore à 75°) — c'est-à-dire, pour les cinq blindés de l'Ouvrage, la même
+règle que celle qui les a recentrés le 07/09.
+
+Le masque est celui des outils, `cond.est_fond_sujet`, et non plus « à plus de
+90 de la clé en somme » : les sources du joueur ont un fond BRUITÉ (5 000
+couleurs, coins à (239, 14, 239)), et les deux masques divergeaient sur la
+frange. La toile est remplie de la clé pure, le fond bruité n'est pas recopié —
+il était déjà du fond pour toute la chaîne.
+
+Les noms à traiter se passent en arguments après le dossier de sortie ; sans eux,
+la liste historique des onze de l'Ouvrage. Les douze tourelles de défense
+zénithales — six par camp — ont été recentrées ainsi le 19/09, EN PLACE dans
+`art/sources/` (brief §1) : pivot de 21 à 225 px sous le centre du fichier,
+carré plus grand que la planche sur dix d'entre elles.
 """
 import numpy as np, sys, os
 from PIL import Image
@@ -35,25 +57,37 @@ MARGE = 2
 
 
 def _charger_depot(racine):
-    src = open(os.path.join(racine, 'tools', 'ancres-defense.py'), encoding='utf-8').read()
-    debut = src.index('def pivot(m):')
-    fin = src.index('def ', src.index('def cote_du_carre'))
-    fin = src.index('\n\n\n', src.index('def cote_du_carre'))
-    ns = {}
-    exec(compile(src[debut:fin], 'ancres-defense', 'exec'), {'np': np}, ns)
-    return ns['pivot'], ns['cote_du_carre']
+    """Les deux modules d'ancres, importés — plus jamais exécutés par morceaux."""
+    import importlib.util as u
+    sys.path.insert(0, os.path.join(racine, 'tools'))
+    mods = {}
+    for nom in ('ancres-defense', 'ancres-blindes'):
+        spec = u.spec_from_file_location(nom.replace('-', '_'),
+                                         os.path.join(racine, 'tools', nom + '.py'))
+        mods[nom] = u.module_from_spec(spec)
+        spec.loader.exec_module(mods[nom])
+    return mods['ancres-defense'], mods['ancres-blindes']
+
+
+def regle(nom, DEF, BL):
+    """La règle d'embase de la famille : disque inscrit pour une défense, tambour pour un blindé."""
+    if nom.startswith('def_'):
+        return DEF.pivot, DEF.cote_du_carre
+    if nom.endswith('_tourelle'):
+        return BL.pivot, BL.cote_du_carre
+    raise AssertionError(f'{nom} : ni tourelle de défense ni tourelle de blindé')
 
 
 def cle_de_fond(a):
-    """Les quatre coins votent, comme `cond.cle_de_fond`."""
-    h, w, _ = a.shape
-    coins = np.array([a[0, 0], a[0, w - 1], a[h - 1, 0], a[h - 1, w - 1]], int)
-    vert, magenta = np.array([0, 255, 0]), np.array([255, 0, 255])
-    return vert if ((coins - vert) ** 2).sum() < ((coins - magenta) ** 2).sum() else magenta
+    """La clé LUE sur les quatre coins — `cond.cle_de_fond`, pas une seconde écriture."""
+    from cond import cle_de_fond as lire
+    return np.array(lire(a.astype(np.uint8)), int)
 
 
 def masque(a, fond):
-    return (np.abs(a - fond).sum(2) > 90)
+    """Le sujet tel que la chaîne le voit — `cond.est_fond_sujet`, pas un seuil à part."""
+    from cond import est_fond_sujet
+    return ~est_fond_sujet(a.astype(np.uint8))
 
 
 def recentrer(entree, sortie, pivot, cote_du_carre):
@@ -100,10 +134,13 @@ TOURELLES = [f'def_o_{c}' for c in ['casemate', 'creneau', 'batterie',
 
 if __name__ == '__main__':
     racine, entree, sortie = sys.argv[1], sys.argv[2], sys.argv[3]
-    pivot, cote = _charger_depot(racine)
+    noms = sys.argv[4:] or TOURELLES
+    DEF, BL = _charger_depot(racine)
     os.makedirs(sortie, exist_ok=True)
     tout = True
-    for n in TOURELLES:
+    for n in noms:
+        pivot, cote = regle(n, DEF, BL)
         tout &= recentrer(os.path.join(entree, n + '.png'),
                           os.path.join(sortie, n + '.png'), pivot, cote)
     print('TOUT VERT' if tout else '⚠ AU MOINS UN CONTRÔLE ROUGE')
+    sys.exit(0 if tout else 1)

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **19/09/2026**, version 0.99.67 · build 179.
+Dernière révision : **19/09/2026**, version 0.99.68 · build 180.
 ⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
 164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
 **175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
@@ -68,7 +68,72 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 19/09/2026 (après le lot ANCRES-ZÉNITH), à confronter :**
+**Référence au 19/09/2026 (après le lot CONDITIONNEMENT-ZÉNITH), à confronter :**
+⚠⚠ **L'ÉTAT TRANSITOIRE D'ANCRES-ZÉNITH EST FERMÉ : LES 44 SPRITES SONT
+CONDITIONNÉS, LES TROIS ATLAS RECOUSUS, LA TABLE ET L'ART S'ACCORDENT.** Les
+22 sources zénithales — douze tourelles de défense, neuf socles, la coque de
+l'Obusier — passent par `joueur_v2` et `ouvrage_v2` ; **exactement 44 sprites
+changent de dessin, les 124 autres sont identiques au pixel** (rejoués sous
+`FZ_SPRITES`, comparés au pixel, seuls les 44 copiés — aucun fichier commité
+rafraîchi pour l'encodeur). `atlas.py --ecrire --forcer defense --forcer socle
+--forcer chassis` : six atlas réécrits, `atlas.js` identique, `atlas.py
+--verifier` rend après le lot ce qu'il rendait avant sur l'arbre pristine — 17
+identiques · 3 différents (`carte-64`, `carte-128`, `interface-128`, l'encodeur de
+la machine, laissés là où ils étaient).
+⚠⚠ **LES DOUZE TOURELLES ONT ÉTÉ RECENTRÉES SUR LEUR PIVOT, EN PLACE, AVANT
+D'ÊTRE CONDITIONNÉES.** Livrées, leur embase était de 21 à 225 px SOUS le centre
+du fichier et leur carré de rotation dépassait la planche sur dix d'entre elles
+(1 430 à 1 638 pour 1 254 chez le joueur) : le mode `carre` — « la planche EST le
+sprite » — les aurait fait tourner en cercle autour de leur embase, canon rogné
+à 45°. `tools/recentrer-tourelles-ouvrage.py` les a translatées dans une toile
+carrée remplie de la clé, côté = carré + 4 px, pair : sujet conservé au pixel et
+à la somme, pivot à ≤ 0,5 px du centre, planches de 898 à 1 642. ⚠ **LE SCRIPT
+ÉTAIT CASSÉ DEPUIS ANCRES-ZÉNITH ET NE LE DISAIT PAS** : il exécutait le SOURCE
+de `pivot` avec `np` pour seul nom, et le disque inscrit demande `nd` —
+`NameError`. Il importe maintenant les deux modules d'ancres et prend la règle
+d'embase DE LA FAMILLE : disque inscrit pour `def_*`, tambour (`ancres-blindes`)
+pour `off_*_tourelle` ; masque `est_fond_sujet` comme toute la chaîne — les
+sources du joueur ont un fond BRUITÉ à 5 000 couleurs, coins à (239, 14, 239),
+et l'ancien « > 90 de la clé » divergeait sur la frange. ⚠ Les quatre JSON
+d'ancres se reproduisent au caractère près sur les sources recentrées : pivot et
+carré sont invariants par translation, mesuré et pas supposé.
+⚠⚠ **`ECHELLE` NE BOUGE PAS, ET LE PLAFOND DE FAIT EST ÉCRIT DANS
+`INVENTAIRE-SPRITES.md` A7** — il existait depuis OUVRAGE-CÂBLAGE (83,94 %) sans
+être écrit nulle part. Mesuré sur les sprites 128 cousus : portée du carré
+jusqu'à **99,97 % du côté de la case** (`def_j_harpon`, carré de 180 %), portée
+du dessin lui-même jusqu'à **97,99 %**, remplissage du carré **10,4 à 41,4 %** de
+pixels opaques — la marge de rotation est presque vide, une tourelle du joueur
+occupe 12 à 24 % de sa cellule. Arbitrage : on achète le dépassement ; baisser
+`ECHELLE` a été rejeté à l'œil le 05/09, raccourcir les canons demanderait −74 %
+sur le mortier joueur. `sprite.test.js` le borne (101 / 92) et nomme le pire.
+⚠ **T1 — `CZ T1`, ROUGE AVANT, VERT APRÈS** : le pivot des douze sources refait
+par une transformée de distance exacte en JavaScript (quart de résolution,
+plateau du maximum) est à moins de 1 % du centre du fichier, et aucun pixel de
+sujet n'est plus loin du centre que la demi-planche. Avant : 2,07 % à 19,36 %
+d'écart, dix planches trop petites. **T2 — `CZ T2`, ROUGE AVANT, VERT APRÈS** :
+sur les neuf socles redessinés, le trou du SPRITE 128 cousu (la recette d'`AZ
+T1`, relue sur le RVBA) tombe où la table pose la tourelle, à 2 % de la case
+près ; avant, 13,7 à 16,5 px d'écart sur 64 (l'Ouvrage), 9,6 (le joueur). Les
+deux vivent dans `test/ancres-zenith.test.js`, dont la recette du trou est
+PARTAGÉE entre le dessin et le sprite — une seconde écriture aurait vieilli.
+⚠ **TROIS RÉANCRAGES, AUCUN ASSOUPLISSEMENT.** `sprite.test.js` « ne sort pas de
+son carré » : pire rayon 31,69 → **31,60** (les zénithales s'arrêtent à
+31,50–31,60, les deux blindés inchangés partagent le pire). `sprite.test.js`
+« percés de trous » : l'appât CHANGE pour la troisième fois — les socles de
+tourelle du joueur passent de 972 à **0 px** enfermés (le logement zénithal est
+un disque PEINT, plus un trou traversant), il ne reste que 219 px sur les trois
+socles d'artillerie à 75° ; l'appât devient `interface/128`, **15 777 px sur 46
+pictogrammes**, un trait sur du vide enferme par construction, et le seuil de
+500 ne bouge pas. `PIC T6` : six tailles d'atlas réancrées, l'ancien nombre à
+côté — `defense` maigrit (65 050 → 59 120 en 128, les carrés sont vides), `socle`
+grossit (53 918 → 66 600, le disque peint remplace le trou), `chassis` bouge de
+248 octets.
+⚠ **`npm test` rend **1645 pass / 0 fail** au sens de la garde de
+`documentation.test.js`** — 1 644 pass · 0 fail · 1 skipped au relevé de
+`npm run check`. `SAVE_VERSION` ne bouge pas, vérifié : rien n'entre dans l'état.
+Version 0.99.68 · build 180 — le livrable change, trois atlas inlinés.
+
+**Auparavant, après le lot ANCRES-ZÉNITH (19/09) :**
 ⚠⚠ **LES DEUX DÉTECTEURS GÉOMÉTRIQUES RENDAIENT DES VALEURS FAUSSES SANS LEVER,
 ET C'EST MESURÉ AVANT D'ÊTRE RÉPARÉ.** Les socles et les tourelles de défense
 sont passés du top-down 75° au zénithal (22 sources d'Ethan entrées ici, les

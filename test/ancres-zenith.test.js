@@ -146,6 +146,27 @@ function etiqueter(m, l, h) {
  */
 function trouDuLogement(chemin) {
   const { l, h, somme, fond } = demiResolution(decoderRgba(chemin));
+  const trou = trouDansLeMasque(l, h, somme, fond);
+  if (!trou) return null;
+  return {
+    x_pct: (trou.cx - (trou.x0 + trou.W / 2)) / trou.W * 100,
+    y_pct: (trou.cy - (trou.y0 + trou.H / 2)) / trou.H * 100,
+    part: trou.part,
+  };
+}
+
+/**
+ * La recette elle-même, sur un masque déjà posé : `somme` est la somme RVB de
+ * chaque pixel, `fond` vaut 1 hors du sujet. Rend le centroïde de la plus
+ * grande tache sombre enfermée, en pixels, avec la boîte du sujet — c'est à
+ * l'appelant de choisir son référentiel (la pièce, ou la case).
+ *
+ * ⚠ PARTAGÉE ENTRE LA SOURCE ET LE SPRITE DEPUIS LE LOT CONDITIONNEMENT-ZÉNITH :
+ * `AZ T1` la joue sur le dessin RVB à demi-résolution, `CZ T2` sur le sprite
+ * RVBA de 128 tel que l'atlas le coud. Une seconde recette écrite pour le sprite
+ * aurait été la copie qui vieillit.
+ */
+function trouDansLeMasque(l, h, somme, fond) {
   let x0 = l; let x1 = -1; let y0 = h; let y1 = -1;
   const sombre = new Uint8Array(l * h);
   for (let y = 0; y < h; y++) {
@@ -180,11 +201,112 @@ function trouDuLogement(chemin) {
   let meilleur = 0;
   for (let c = 1; c <= n; c++) if (!touche[c] && taille[c] > taille[meilleur]) meilleur = c;
   if (!meilleur) return null;
+  return { cx: sx[meilleur] / taille[meilleur], cy: sy[meilleur] / taille[meilleur],
+    x0, y0, W, H, part: taille[meilleur] / (W * H) };
+}
+
+/**
+ * Le trou du logement sur un SPRITE cousu — RVBA, pleine résolution, le fond
+ * est l'alpha. Rend le centre de la tache en pourcentage du côté de la CASE,
+ * depuis le centre de la case : le référentiel de `dx_case_pct` / `dy_case_pct`.
+ * `recadrer` centre la boîte de la pièce dans la cellule, donc le centre de la
+ * pièce EST le centre de la case, et la comparaison est directe.
+ */
+function trouDuSprite(chemin) {
+  const { largeur, hauteur, pixels } = decoderRgba(chemin);
+  const somme = new Uint16Array(largeur * hauteur);
+  const fond = new Uint8Array(largeur * hauteur);
+  for (let i = 0; i < largeur * hauteur; i++) {
+    somme[i] = pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2];
+    fond[i] = pixels[i * 4 + 3] < 128 ? 1 : 0;
+  }
+  const trou = trouDansLeMasque(largeur, hauteur, somme, fond);
+  if (!trou) return null;
   return {
-    x_pct: ((sx[meilleur] / taille[meilleur]) - (x0 + W / 2)) / W * 100,
-    y_pct: ((sy[meilleur] / taille[meilleur]) - (y0 + H / 2)) / H * 100,
-    part: taille[meilleur] / (W * H),
+    dx_case_pct: (trou.cx + 0.5 - largeur / 2) / largeur * 100,
+    dy_case_pct: (trou.cy + 0.5 - hauteur / 2) / hauteur * 100,
+    part: trou.part,
   };
+}
+
+/**
+ * Transformée de distance euclidienne au carré (Felzenszwalb & Huttenlocher),
+ * une dimension : d(p) = min_q (p − q)² + f(q). `f` vaut 0 sur le fond, LOIN
+ * ailleurs — LOIN fini, un infini ferait des NaN dans les intersections.
+ */
+const LOIN = 1e12;
+function edt1d(f, n, d) {
+  const v = new Int32Array(n);
+  const z = new Float64Array(n + 1);
+  let k = 0;
+  v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+  for (let q = 1; q < n; q++) {
+    let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) {
+      k -= 1;
+      s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    }
+    k += 1;
+    v[k] = q; z[k] = s; z[k + 1] = Infinity;
+  }
+  k = 0;
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1] < q) k += 1;
+    d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+  }
+}
+
+/**
+ * Le pivot d'une tourelle zénithale, par la règle du lot ANCRES-ZÉNITH — le
+ * plus grand disque inscrit dans la silhouette —, refaite ici en JavaScript sur
+ * le masque au QUART de la résolution : la transformée de distance exacte, puis
+ * le centre du plateau du maximum (à un centième du rayon). Rend le centre en
+ * pixels pleine résolution, le rayon, et la distance du pixel de sujet le plus
+ * loin du centre du FICHIER, mesurée à pleine résolution.
+ */
+function pivotDeLaTourelle(chemin) {
+  const { largeur, hauteur, pixels } = decoderRgba(chemin);
+  const l = largeur >> 2;
+  const h = hauteur >> 2;
+  const f = new Float64Array(l * h);
+  // ⚠ LE FOND EST LA CLÉ MAGENTA, À 140 COMME `cond.est_fond` ; un bloc de 4 × 4
+  // est du sujet à la majorité de ses seize pixels.
+  let loin = 0;
+  for (let y = 0; y < hauteur; y++) {
+    for (let x = 0; x < largeur; x++) {
+      const i = (y * largeur + x) * 4;
+      const r = pixels[i]; const g = pixels[i + 1]; const b = pixels[i + 2];
+      const sujet = (r - 255) ** 2 + g ** 2 + (b - 255) ** 2 >= 140 * 140;
+      if (!sujet) continue;
+      const d = Math.hypot(x + 0.5 - largeur / 2, y + 0.5 - hauteur / 2);
+      if (d > loin) loin = d;
+      if ((x >> 2) < l && (y >> 2) < h) f[(y >> 2) * l + (x >> 2)] += 1;
+    }
+  }
+  for (let i = 0; i < l * h; i++) f[i] = f[i] >= 8 ? LOIN : 0;
+  // colonnes puis lignes : la distance au fond le plus proche, au carré
+  const colonne = new Float64Array(h); const dc = new Float64Array(h);
+  for (let x = 0; x < l; x++) {
+    for (let y = 0; y < h; y++) colonne[y] = f[y * l + x];
+    edt1d(colonne, h, dc);
+    for (let y = 0; y < h; y++) f[y * l + x] = dc[y];
+  }
+  const ligne = new Float64Array(l); const dl = new Float64Array(l);
+  let max = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < l; x++) ligne[x] = f[y * l + x];
+    edt1d(ligne, l, dl);
+    for (let x = 0; x < l; x++) { f[y * l + x] = dl[x]; if (dl[x] > max) max = dl[x]; }
+  }
+  const rayon = Math.sqrt(max);
+  const seuil = (rayon - Math.max(1, 0.01 * rayon)) ** 2;
+  let n = 0; let sx = 0; let sy = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < l; x++) {
+      if (f[y * l + x] >= seuil) { n += 1; sx += x + 0.5; sy += y + 0.5; }
+    }
+  }
+  return { largeur, hauteur, px: 4 * sx / n, py: 4 * sy / n, rayon: 4 * rayon, loin };
 }
 
 test('AZ T1 — sur les neuf socles zénithaux, le logement de la table est le trou du dessin, à 2 % près', () => {
@@ -241,4 +363,76 @@ test('AZ T2 — la table est MIXTE : neuf logements zénithaux centrés, trois l
   // Et les deux listes couvrent exactement la moitié joueur + la moitié Ouvrage.
   const tous = [...SOCLES_ZENITHAUX, ...SOCLES_75_SURVIVANTS].sort();
   assert.deepEqual(tous, Object.keys(ANCRES_DEFENSE).sort(), 'les douze clés de la table ne sont pas toutes classées');
+});
+
+// ---------------------------------------------------------------------------
+// Lot CONDITIONNEMENT-ZÉNITH — 19/09/2026. Il ferme l'état transitoire laissé par
+// ANCRES-ZÉNITH : ancres zénithales sur des sprites encore à 75°.
+// ---------------------------------------------------------------------------
+
+/** Les douze tourelles de défense zénithales, six par camp. */
+const TOURELLES_ZENITHALES = ['j', 'o'].flatMap((c) =>
+  ['casemate', 'creneau', 'batterie', 'faucheuse', 'mortier', 'harpon'].map((k) => `def_${c}_${k}`));
+
+test('CZ T1 — les douze tourelles zénithales sont centrées sur leur pivot, et leur carré tient dans la planche', () => {
+  // ⚠⚠ C'EST LA CONDITION DU MODE `carre` DE `joueur_v2.py` — « aucun recadrage,
+  // la planche EST le sprite » —, et les douze sources livrées le 19/09 la
+  // violaient : l'embase de 21 à 225 px SOUS le centre du fichier, le carré de
+  // rotation plus grand que la planche sur dix d'entre elles (1 430 à 1 638 pour
+  // 1 254 chez le joueur). Conditionnées telles quelles, elles auraient tourné
+  // en décrivant un cercle autour de leur embase, canon rogné à 45°.
+  // `tools/recentrer-tourelles-ouvrage.py` les a recentrées EN PLACE ; ce test
+  // le remesure par sa propre voie — transformée de distance exacte au quart de
+  // la résolution, plateau du maximum — et non en relisant ce que l'outil a écrit.
+  //
+  // ⚠ ROUGE AVANT LE LOT, ET C'EST MESURÉ : sur les sources telles que livrées,
+  // les douze tombent — écart vertical de 2,1 % (`def_o_casemate`, 21 px sur
+  // 1 024) à 18,0 % (`def_j_mortier`, 225 px sur 1 254), et dix planches trop
+  // petites pour leur carré.
+  for (const nom of TOURELLES_ZENITHALES) {
+    const { largeur, hauteur, px, py, rayon, loin } = pivotDeLaTourelle(join(SOURCES, `${nom}.png`));
+    assert.equal(largeur, hauteur, `${nom} : planche ${largeur} × ${hauteur}, pas carrée`);
+    // Montage : la mesure a trouvé une embase qui compte — un rayon de trois
+    // pixels serait un rivet, et l'écart au centre ne voudrait rien dire.
+    assert.ok(rayon > 0.1 * largeur, `${nom} : embase de rayon ${rayon.toFixed(0)} px sur ${largeur} — la mesure n'a pas trouvé l'embase`);
+    const ecart = Math.hypot(px - largeur / 2, py - hauteur / 2);
+    assert.ok(ecart < 0.01 * largeur,
+      `${nom} : pivot en (${px.toFixed(1)}, ${py.toFixed(1)}) pour un centre à ${largeur / 2} — écart `
+      + `${ecart.toFixed(1)} px, ${(100 * ecart / largeur).toFixed(2)} % du côté`);
+    assert.ok(loin <= largeur / 2,
+      `${nom} : un pixel de sujet à ${loin.toFixed(1)} du centre pour une demi-planche de ${largeur / 2} — `
+      + 'le canon sera rogné à 45°');
+  }
+});
+
+test('CZ T2 — sur les neuf socles redessinés, le sprite 128 cousu porte son trou là où la table pose la tourelle', () => {
+  // ⚠⚠ LA TABLE ET L'ART S'ACCORDENT ENFIN. Depuis ANCRES-ZÉNITH la table
+  // décrivait des dessins zénithaux (logement au centre) pendant que l'atlas
+  // portait encore les sprites à 75° (logement à −15,74 % de la case chez le
+  // joueur, −22,75 à −27,97 à l'Ouvrage) : la tourelle était posée au centre
+  // d'un socle dont le trou était en haut, 15 px d'écart sur une case de 64.
+  // Ce test relit le SPRITE — celui que `tools/atlas.py` coud et que l'écran
+  // dessine —, y refait le trou par la recette d'`AZ T1`, et le confronte au
+  // `dy_case_pct` de la table. Rouge avant ce lot sur les neuf ; vert après.
+  //
+  // ⚠ LES TROIS SOCLES D'ARTILLERIE DU JOUEUR N'Y SONT PAS : non redessinés,
+  // toujours à 75°, la recette ne trouve pas un trou vu de biais (voir `AZ T1`).
+  for (const cle of SOCLES_ZENITHAUX) {
+    const ancre = ANCRES_DEFENSE[cle];
+    const trou = trouDuSprite(join(RACINE, 'art', 'sprites', 'socle', '128', `${cle}.png`));
+    assert.ok(trou, `${cle} : aucune tache sombre enfermée dans le sprite`);
+    assert.ok(trou.part > 0.01, `${cle} : la tache ne fait que ${(100 * trou.part).toFixed(2)} % de la boîte`);
+    const dx = Math.abs(trou.dx_case_pct - ancre.dx_case_pct);
+    const dy = Math.abs(trou.dy_case_pct - ancre.dy_case_pct);
+    assert.ok(dx < TOLERANCE_PCT && dy < TOLERANCE_PCT,
+      `${cle} : la table pose la tourelle en (${ancre.dx_case_pct}, ${ancre.dy_case_pct}) % de la case, le sprite `
+      + `porte son trou en (${trou.dx_case_pct.toFixed(2)}, ${trou.dy_case_pct.toFixed(2)}) — écart `
+      + `${Math.max(dx, dy).toFixed(2)} % de la case, ${(Math.max(dx, dy) * 0.64).toFixed(1)} px sur 64`);
+  }
+  // ⚠ ET LA MESURE SAIT DISTINGUER : le trou du socle 75° du joueur était à
+  // −15,74 % ; un sprite qui le porterait encore là doit tomber ici.
+  for (const cle of SOCLES_ZENITHAUX.filter((c) => c.startsWith('socle_def_j_'))) {
+    const trou = trouDuSprite(join(RACINE, 'art', 'sprites', 'socle', '128', `${cle}.png`));
+    assert.ok(Math.abs(trou.dy_case_pct - (-15.74)) > TOLERANCE_PCT, `${cle} : l'appât 75° passerait — le montage ne mesure rien`);
+  }
 });
