@@ -1053,6 +1053,14 @@ test('COL T18 bis — DETTE : un site raidé en boucle peut encore lever', () =>
   // que ce test épingle un scénario que le lot n'a PAS déplacé — donc le plus
   // solide des huit réancrages, et celui qui dit le mieux que la cause est
   // ailleurs que dans le ciblage.
+  //
+  // ⚠ LOT MUNITIONS (19/09) : L'ÉPINGLÉ NE BOUGE PAS, ET IL A FALLU LE MESURER
+  // DEUX FOIS. Une version antérieure du lot rabotait la réserve du Pilon — que
+  // `MOTIF` porte un cycle sur quatre — et `camp/30/30` cessait alors de lever ;
+  // le balayage de 600 passait de trois levées à deux, et ce test avait été
+  // réancré sur `29/91` et `30/83`. Le rabot a été annulé par Ethan, et
+  // `camp/30/30` lève de nouveau, avec le même message. Le seul nombre que le
+  // lot garde est la réserve du Foudre, et `MOTIF` n'en porte pas.
   for (const [type, niveau, graine] of [
     ['camp', 30, 30],
   ]) {

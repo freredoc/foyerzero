@@ -32,7 +32,7 @@ import {
   voilesDeLaBande,
   casesDeLaBande, bornesDuDecalage, bornesDuDecalageX,
 } from '../src/render/bandes.js';
-import { rosterDefensif } from '../src/data/couts-militaires.js';
+import { rosterDefensif, remboursementDEffectif } from '../src/data/couts-militaires.js';
 import { ZOOM_CARTE } from '../src/data/sites.js';
 import { COTE_SPRITE } from '../src/data/atlas.js';
 import {
@@ -4861,6 +4861,83 @@ test('ERGO T7 ter — un seul rendu de panneau, et les deux écrans l\'appellent
 });
 
 // ---------------------------------------------------------------------------
+// FIX T6 — ce qu'un RETRAIT rend se dit avant le geste
+// ---------------------------------------------------------------------------
+
+test('FIX T6 — le panneau d\'une pièce annonce ce que son retrait rend, par FORCE', () => {
+  // ⚠⚠ LE MOTEUR DES 90 % ÉTAIT GARDÉ DES DEUX CÔTÉS, L'AFFICHAGE D'UN SEUL.
+  // Ethan, 17/09, point 14 : « vendre un bâtiment/unités doit rembourser 90 %
+  // des ressources ». `remboursementDEffectif` est tenue par `state.test.js` et
+  // `base.test.js`, et le panneau d'un BÂTIMENT par « panneau — ce qu'une
+  // démolition rend se dit AVANT le geste » ; la section que `lignesDeLaPiece`
+  // pousse pour une PIÈCE n'était lue par aucun test. Elle l'est ici.
+  const etat = creerEtat(11);
+  const base = baseCourante(etat);
+  base.garnison.push({ id: 'guetteur', rangee: 5, colonne: 4, niveau: 1, degatsMilli: 0 });
+  base.armee.push({ id: 'guetteur', vague: 1, colonne: 2, niveau: 1, degatsMilli: 0, actif: true });
+
+  const sectionDuRetrait = (force) => {
+    const vue = lignesDeLaPiece(apercuDeLaPiece(etat, force, 0));
+    const section = vue.sections.find((s) => s.titre === 'Retrait');
+    assert.ok(section !== undefined,
+      `le panneau d'une pièce de ${force} ne dit pas ce que son retrait rend`);
+    assert.equal(section.lignes.length, 1, 'la section « Retrait » a cessé d\'être une ligne');
+    // ⚠ EN QUEUE DE PANNEAU, comme la « Démolition » d'un bâtiment : c'est le
+    // dernier mot avant le geste, pas une ligne perdue au milieu de la fiche.
+    assert.equal(vue.sections[vue.sections.length - 1].titre, 'Retrait',
+      'la section « Retrait » a quitté la queue du panneau');
+    return section.lignes[0];
+  };
+
+  // ⚠ UNE PIÈCE DE NIVEAU 1 N'A RIEN COÛTÉ, DONC ELLE NE REND RIEN — ET ELLE LE
+  // DIT. « rien », jamais « 0 » : c'est le mot de `formaterCout`, celui que le
+  // panneau d'un bâtiment emploie déjà pour la même absence.
+  for (const force of ['garnison', 'armee']) {
+    assert.equal(sectionDuRetrait(force).avant, 'rien',
+      `une pièce de ${force} au niveau 1 annonce un remboursement qu'elle n'a pas`);
+    assert.equal(sectionDuRetrait(force).apres, null,
+      'le retrait annonce un « si j\'améliorais » : il n\'en a pas');
+  }
+
+  // ⚠⚠ ET LE MONTAGE DISCRIMINE LA FORCE, SANS QUOI SON TROISIÈME ARGUMENT
+  // SERAIT LIBRE. Le Guetteur ne coûte pas le même prix en garnison et à
+  // l'assaut — `CLAUDE.md` §6, « la même unité ne coûte pas le même prix en
+  // défense et en offense », mesuré sur cinq unités sur huit — donc une vue qui
+  // lirait TOUJOURS `'garnison'`, ou toujours `'armee'`, tombe ici. Trois des
+  // huit coïncident : en prendre une aurait passé sur le code fautif.
+  base.garnison[0].niveau = 5;
+  base.armee[0].niveau = 5;
+  const attenduGarnison = formaterCout(remboursementDEffectif('garnison', 'guetteur', 5));
+  const attenduArmee = formaterCout(remboursementDEffectif('armee', 'guetteur', 5));
+  assert.notEqual(attenduGarnison, attenduArmee,
+    'le montage cesse de discriminer : les deux forces rendraient le même texte');
+  assert.equal(sectionDuRetrait('garnison').avant, attenduGarnison,
+    'le panneau d\'une pièce de garnison ne rend pas ce que le moteur rembourse');
+  assert.equal(sectionDuRetrait('armee').avant, attenduArmee,
+    'le panneau d\'une pièce d\'armée ne rend pas ce que le moteur rembourse');
+  assert.notEqual(sectionDuRetrait('garnison').avant, 'rien',
+    'le montage ne monte plus ses pièces : « rien » passerait des deux côtés');
+
+  // ⚠⚠ LE LIBELLÉ SE CONFRONTE À CELUI D'UN BÂTIMENT, IL NE SE RETAPE PAS. Les
+  // deux gestes sont le même arbitrage du 17/09 : « Rend » d'un côté contre
+  // « Rembourse » de l'autre apprendrait au joueur deux mots pour une règle.
+  // C'est ce que le commentaire de `lignesDeLaPiece` promet — « même titre de
+  // ligne, même formatage, même place en queue de panneau » — et rien ne le
+  // mesurait.
+  moteurEtat.ameliorer(etat, 0);
+  const champ = baseCourante(etat).champs.cases[0];
+  poser(etat, collecteurDe(champ), champ.rangee, champ.colonne);
+  moteurEtat.ameliorer(etat, 1);
+  const demolition = lignesDuPanneau(apercuDuBatiment(etat, 1)).sections
+    .find((s) => s.titre === 'Démolition');
+  assert.ok(demolition !== undefined, 'le montage a perdu la section « Démolition » du bâtiment');
+  assert.equal(demolition.lignes[0].libelle, 'Rend',
+    'le panneau d\'un bâtiment a changé le mot de son remboursement');
+  assert.equal(sectionDuRetrait('garnison').libelle, demolition.lignes[0].libelle,
+    'le retrait d\'une pièce et la démolition d\'un bâtiment ne disent plus le même mot');
+});
+
+// ---------------------------------------------------------------------------
 // Le lot RÉPARER-ÉCRAN — un bouton branché, et un faux document pour le prouver
 // ---------------------------------------------------------------------------
 //
@@ -5020,6 +5097,21 @@ function caseDe(doc, rangee, colonne) {
   return trouvee;
 }
 
+/**
+ * Une case de la BANDE BÂTIMENTS qu'aucun bâtiment n'occupe, ou `null`.
+ *
+ * ⚠ LA GRILLE PEINTE FAIT FOI, PAS LA DISPOSITION : on cherche une case sans
+ * `.jeton`. Déduire le vide de `disposition` obligerait à rejouer ici la
+ * correspondance rangée/bande, qui est précisément ce que l'écran calcule.
+ */
+function caseLibre(doc, laBase) {
+  const prises = new Set(laBase.disposition.map((b) => `${b.rangee};${b.colonne}`));
+  return doc.getElementById('chantier-grille').children.find(
+    (c) => c.dataset.rangee !== undefined
+      && !prises.has(`${c.dataset.rangee};${c.dataset.colonne}`),
+  ) ?? null;
+}
+
 /** Arme une action du bandeau, puis touche la case d'un bâtiment. */
 function armerEtToucher(doc, action, rangee, colonne) {
   doc.getElementById(`chantier-${action}`).click();
@@ -5165,9 +5257,27 @@ test('RÉPARER T4 — le devis affiché EST le prix facturé', () => {
   // NE MORDAIT PAS — 1 pass / 0 fail, vérifié. C'est la leçon du dépôt prise une
   // troisième fois : un montage qui tombe du bon côté de la demie ne mesure pas
   // un arrondi. À 0,5 le brut vaut 26 594,239, et les deux lectures divergent.
-  const brut = coutDeLaReparationDUnBatiment(etat, 1).quartz;
+  //
+  // ⚠⚠ ET LE BRUT N'EST PLUS LISIBLE DEPUIS LE 17/09 — AUDIT, DÉFAUT N° 4.
+  // `coutDeLaReparationDUnBatiment` rendait un quartz FRACTIONNAIRE que ses
+  // quatre appelants arrondissaient chacun pour son compte, celui-ci compris.
+  // Il rend maintenant un entier, arrondi UNE fois, à la source. La garde
+  // ci-dessus ne pouvait donc plus mordre : `ceil` et `round` d'un entier sont
+  // le même entier, et elle serait passée pour toujours.
+  //
+  // ⚠⚠ ELLE EST REMPLACÉE PAR CE QU'ELLE VOULAIT DIRE, ET C'EST PLUS FORT : le
+  // brut se refait ICI à partir de la donnée, on vérifie qu'il tombe bien entre
+  // deux entiers — sans quoi le montage ne discriminerait rien —, et on exige
+  // que l'écran rende le `Math.round` du moteur et PAS un `Math.ceil` refait.
+  const cout = coutDeLaReparationDUnBatiment(etat, 1);
+  const brut = (coutDeMontee('caserne', 28).quartz / 230) * cout.part;
   assert.notEqual(Math.ceil(brut), Math.round(brut),
     `le montage ne discrimine pas les arrondis : brut ${brut}`);
+  assert.equal(annonce.devis.quartz, Math.round(brut),
+    'le devis affiché n\'est pas l\'arrondi du moteur');
+  assert.notEqual(annonce.devis.quartz, Math.ceil(brut),
+    'le devis est recalculé avec un ceil : la gratuité du bas d\'échelle tombera avec');
+  assert.ok(Number.isInteger(cout.quartz), 'le module rend encore un quartz fractionnaire');
   assert.match(annonce.detail, new RegExp(`${formaterEntier(annonce.devis.quartz)} q`),
     'la ligne du bandeau ne porte pas le devis qu\'elle rend');
 
@@ -5201,28 +5311,45 @@ test('RÉPARER T5 — les dégâts se disent en MILLIÈMES des PV max, pas en ab
   assert.ok(!detailDuBatiment(bas, 0).detail.includes('dégâts'));
 });
 
-test('RÉPARER T6 — le mode se désarme après un refus comme après une réussite', () => {
+test('RÉPARER T6 — le mode COLLE : ni le refus, ni la réussite, ni la case vide ne le défont', () => {
+  // ⚠⚠ CE TEST DISAIT L'INVERSE JUSQU'AU 17/09, et c'est l'arbitrage d'Ethan
+  // (point 1) qui l'a retourné : « il faut rester que le bouton en mode hold,
+  // donc on reclique pas, ça part pas ». Le mode ne se quitte plus que par son
+  // bouton — c'est le LOCK du lot, et les quatre chemins qui le défaisaient
+  // tout seuls sont testés un par un ci-dessous.
   const etat = baseBatie(20, [{ id: 'caserne', niveau: 20 }]);
   const laBase = baseCourante(etat);
   const pose = laBase.disposition[1];
+  const arme = (doc) => doc.getElementById('chantier-reparer').classList.contains('arme');
 
-  // Refus — le bâtiment est intact.
+  // 1. Refus — le bâtiment est intact, le moteur dit non.
   const refus = ecranMonte(etat);
   refus.doc.getElementById('chantier-reparer').click();
-  assert.ok(refus.doc.getElementById('chantier-reparer').classList.contains('arme'),
-    'le montage ne mesure rien : le bouton ne s\'arme pas');
+  assert.ok(arme(refus.doc), 'le montage ne mesure rien : le bouton ne s\'arme pas');
   refus.doc.getElementById('chantier-grille')
     .dispatch('click', { target: caseDe(refus.doc, pose.rangee, pose.colonne) });
-  assert.ok(!refus.doc.getElementById('chantier-reparer').classList.contains('arme'),
-    'le mode reste armé après un refus');
+  assert.ok(arme(refus.doc), 'le mode doit survivre à un refus');
 
-  // Réussite.
+  // 2. Case VIDE — le geste « à côté du menu » ne dit rien et ne défait rien.
+  // ⚠ FALSIFICATION : c'est ici que le montage doit VRAIMENT viser du vide,
+  // sinon l'assertion suivante serait vraie pour la mauvaise raison.
+  const vide = caseLibre(refus.doc, laBase);
+  assert.notEqual(vide, null, 'le montage ne discrimine pas : aucune case vide sur la grille');
+  refus.doc.getElementById('chantier-grille').dispatch('click', { target: vide });
+  assert.ok(arme(refus.doc), 'le mode doit survivre à un toucher sur une case vide');
+
+  // 3. Réussite — l'action passe, le mode reste pour la suivante.
   abimerLeBatiment(etat, 1, 0.3);
   const reussite = ecranMonte(etat);
   armerEtToucher(reussite.doc, 'reparer', pose.rangee, pose.colonne);
   assert.equal(laBase.disposition[1].degatsMilli, 0, 'le montage n\'a rien réparé');
-  assert.ok(!reussite.doc.getElementById('chantier-reparer').classList.contains('arme'),
-    'le mode reste armé après une réussite');
+  assert.ok(arme(reussite.doc), 'le mode doit survivre à une réussite');
+
+  // 4. LE SEUL DÉSARMEMENT QUI RESTE : retoucher le bouton.
+  // ⚠ Sans cette assertion, un mode qu'on ne pourrait plus JAMAIS quitter
+  // passerait les trois premières — c'est le piège exact que ce lot crée.
+  reussite.doc.getElementById('chantier-reparer').click();
+  assert.ok(!arme(reussite.doc), 'retoucher le bouton armé doit désarmer');
 });
 
 test('RÉPARER T7 — la réserve affichée est celle des BÂTIMENTS, pas celle de l\'armée', () => {

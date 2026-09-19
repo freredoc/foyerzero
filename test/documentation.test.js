@@ -345,10 +345,21 @@ test('documentation — aucun fichier de test ne traîne hors de test/', () => {
   //                             sur le moteur COURANT et prouve que seul le
   //                             placement a changé. Elle ne se met pas à jour :
   //                             c'est un AVANT, comme `temoins-combat.js`.
+  //   `portants.js`          — la traduction d'un NOM de module vers les PIÈCES
+  //                             qui le portent, entrée au lot « modules par
+  //                             pièce » (18/09, audit défaut n° 2). Les listes
+  //                             `modulesDebloques` portaient des noms ; elles
+  //                             portent des identifiants de pièces depuis que
+  //                             le déblocage lit un seuil PAR PIÈCE. Ce fichier
+  //                             traduit les anciens montages sans changer ce
+  //                             qu'ils mesurent, et il lit `data/combat.js`,
+  //                             jamais `sim/` — un montage qui mesure la
+  //                             barrière elle-même écrit ses identifiants en
+  //                             clair et ne passe pas par lui.
   const connus = new Set([
     'prereglages-lot3a.js', 'png-rgba.js', 'temoins-bases-0.js', 'aplatir-sauvegarde.js',
     'temoins-combat.js', 'temoins-couts.js', 'batiments-de-production.js',
-    'generateur-ancien.js',
+    'generateur-ancien.js', 'portants.js',
   ]);
   const egares = fichiersJs('test')
     .filter((n) => !n.endsWith('.test.js') && !connus.has(n));

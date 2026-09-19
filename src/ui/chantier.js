@@ -112,7 +112,7 @@ import {
 import { acquisesDe } from '../sim/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
 import { facteurMilli } from '../sim/combat.js';
-import { rosterDefensif } from '../data/couts-militaires.js';
+import { rosterDefensif, remboursementDEffectif } from '../data/couts-militaires.js';
 import { baseCourante } from '../sim/base-courante.js';
 import { regenerationParHeureMilli, secondesAvantLePlein } from '../sim/points-attaque.js';
 
@@ -795,7 +795,13 @@ export function detailDuBatiment(etat, index) {
   // `reparerUnBatiment`. Un `Math.ceil` d'écran annoncerait une unité de trop et
   // ferait chercher un quartz qui ne sert à rien.
   const devis = cout === null ? null
-    : { quartz: Math.round(cout.quartz), ticks: cout.ticks };
+    // ⚠ PLUS D'ARRONDI ICI DEPUIS LE 17/09 : `coutDeLaReparationDUnBatiment`
+    // rend un entier, arrondi AU PLUS PROCHE, une seule fois. Le refaire ici
+    // était la seconde écriture d'une grandeur. ⚠⚠ ET « AU PLUS PROCHE » EST LA
+    // RÈGLE, PAS UNE NÉGLIGENCE : c'est elle qui produit la gratuité du bas
+    // d'échelle arbitrée dans `MODELE-REPARATION-1.md` §3, et le pavé de
+    // `sim/reparation.js` l'argumente sur douze lignes. Un `Math.ceil` la tuerait.
+    : { quartz: cout.quartz, ticks: cout.ticks };
   // « Niv. 5 · +176 q +352 s /h » — et rien du tout quand le bâtiment ne
   // produit pas, plutôt qu'un « /h » orphelin.
   const lignes = [`Niv. ${b.niveau}`];
@@ -2038,6 +2044,20 @@ export function lignesDeLaPiece(apercu) {
   });
   sections.push({ titre: 'La pièce', lignes: fiche });
 
+  // ⚠ LE PENDANT EXACT DE LA SECTION « DÉMOLITION » D'UN BÂTIMENT — même titre
+  // de ligne (« Rend »), même formatage, même place en queue de panneau. Les
+  // deux gestes sont le même arbitrage du 17/09 : « vendre un bâtiment/unités
+  // doit rembourser 90 % des ressources ». Deux formulations pour un seul taux
+  // auraient fini par se contredire à l'écran.
+  sections.push({
+    titre: 'Retrait',
+    lignes: [{
+      libelle: 'Rend',
+      avant: formaterCout(apercu.remboursement),
+      apres: null,
+    }],
+  });
+
   return {
     titre: `${apercu.nom} · niv. ${formaterEntier(apercu.niveau)}`,
     // ⚠⚠ ET ELLE PERD SON `picto` DE TITRE EN MÊME TEMPS QUE LA FICHE D'UN
@@ -2493,6 +2513,13 @@ export function apercuDeLaPiece(etat, force, index) {
     degatsSubisMilliemes: piece.degatsMilli === 0 ? 0
       : Math.round((1000 * piece.degatsMilli) / (ligne.pv * facteurMilli(piece.niveau))),
     cout: bloque ? null : f.coutDeMontee(piece.id, vise),
+    // ⚠ CE QUE REND LE RETRAIT SE DIT AVANT LE GESTE — Ethan, 17/09, point 14,
+    // et c'est le même raisonnement que `data/base.js` tenait déjà pour la
+    // démolition : « retirer une pièce de niveau 1 ne rend rien […] l'écran
+    // devra le dire avant le geste, sinon il se lira comme un bug ». Le bouton
+    // « Retirer » n'a aucun refus possible (`problemes: () => []`) : sans cette
+    // ligne, le joueur ne saurait qu'après coup ce qu'il vient d'encaisser.
+    remboursement: remboursementDEffectif(force, piece.id, piece.niveau),
     problemes,
   };
 }
@@ -5222,20 +5249,16 @@ export function initialiserEcranChantier(doc, {
   }
 
   /**
-   * Désarme l'action courante et efface son mot.
-   *
-   * ⚠ LES TROIS LIGNES ÉTAIENT ÉCRITES QUATRE FOIS À L'IDENTIQUE, ET LE LOT
-   * RÉPARER-ÉCRAN EN AURAIT ÉCRIT UNE CINQUIÈME. Trois gestes qui doivent
-   * toujours aller ensemble — l'état, le mot, les boutons — recopiés à cinq
-   * endroits, c'est exactement la forme que prend une divergence quand elle
-   * commence : le jour où le désarmement devra faire une quatrième chose, un
-   * des cinq sites l'oubliera.
+   * ⚠⚠ `desarmerLAction` EST PARTIE LE 17/09 AVEC SES QUATRE APPELANTS — point
+   * 1 d'Ethan : le mode est COLLANT, il ne se quitte plus que par son bouton.
+   * Les quatre chemins qui désarmaient tout seuls (exécution d'une action,
+   * case vide, déplacement réussi, « Tout réparer ») ne le font plus ; il ne
+   * reste qu'un seul désarmement automatique, celui du changement de bande
+   * vers un terrain où le bouton n'existe pas — sans lui le mode deviendrait
+   * inannulable, faute de bouton à retoucher. Il est écrit sur place, plus bas,
+   * parce qu'il est désormais SEUL : une fonction partagée par un appelant
+   * unique cache où le geste a lieu.
    */
-  function desarmerLAction() {
-    actionArmee = null;
-    ligneDeMode('');
-    marquerBoutonsAction();
-  }
 
   /**
    * Arme — ou désarme — une action.
@@ -5288,10 +5311,18 @@ export function initialiserEcranChantier(doc, {
     // moteur ; `TERRAINS[x].actions` dit lesquelles, et le terrain des
     // bâtiments y met `ACTIONS` telle quelle, sans la recopier.
     const action = TERRAINS[terrainCible].actions[nom];
-    // Quoi qu'il arrive, le mode se désarme : réussite comme refus. Sa ligne
-    // tombe avec lui — elle décrivait ce que le prochain toucher ferait, et il
-    // vient d'avoir lieu.
-    desarmerLAction();
+    // ⚠⚠ LE MODE NE SE DÉSARME PLUS APRÈS UN TOUCHER — Ethan, 17/09, point 1 :
+    // « il faut rester que le bouton en mode hold, donc on reclique pas, ça
+    // part pas ». Le mode est COLLANT : il vit jusqu'à ce que le joueur
+    // retouche son bouton, en arme un autre, ou choisisse une vignette de
+    // palette. Réparer trois bâtiments demandait six touchers — bouton, case,
+    // bouton, case, bouton, case ; il en demande quatre, et les suivants sont
+    // gratuits.
+    //
+    // ⚠ CE QUI TOMBE AVEC : la ligne de mode ne s'efface plus non plus, parce
+    // qu'elle décrit ce que le PROCHAIN toucher fera — et il y en aura un. Un
+    // refus la garde pour la même raison ; le toast passe par-dessus le temps
+    // de son échéance, `ligneAAfficher` s'en charge.
 
     // ⚠⚠ IL N'Y A PLUS QU'UNE FORME SANS MOTEUR, ET C'EST `null` — lot
     // RÉPARER-ÉCRAN, 05/09. La branche `action.problemes === undefined` est
@@ -5324,6 +5355,11 @@ export function initialiserEcranChantier(doc, {
     selection = ACTIONS[nom].retireLaPiece === true ? null : index;
     peindre(etatCourant);
     rafraichir(etatCourant);
+    // ⚠ LE MODE RESTE ARMÉ, DONC SA BARRE DOIT SE RELIRE. `peindre` remarque
+    // les cases légales, mais pas les boutons : sans cet appel, la réserve
+    // écrite sous « Réparer » garderait le chiffre d'avant la réparation qu'on
+    // vient de payer, et le joueur enchaînerait sur un montant faux.
+    marquerBoutonsAction();
     if (apresPose !== undefined) apresPose(etatCourant);
   }
 
@@ -5351,15 +5387,12 @@ export function initialiserEcranChantier(doc, {
     }
 
     if (actionArmee !== null) {
-      // ⚠ UNE CASE VIDE DÉSARME SANS RIEN DIRE. C'est le geste « à côté du
-      // menu » : le joueur a changé d'avis, il n'a pas commis d'erreur. Un
-      // toast le gronderait pour rien.
-      if (index === -1) {
-        actionArmee = null;
-        ligneDeMode('');
-        marquerBoutonsAction();
-        return;
-      }
+      // ⚠⚠ UNE CASE VIDE NE DÉSARME PLUS — Ethan, 17/09, point 1. Elle ne dit
+      // toujours rien, pour la raison d'avant (le joueur a visé à côté, ce
+      // n'est pas une erreur à gronder), mais elle ne défait plus le mode
+      // non plus : le mode ne se quitte que par son bouton. Toucher entre deux
+      // bâtiments coûtait le mode et faisait rater le geste suivant.
+      if (index === -1) return;
       executerAction(index, terrainTouche);
       return;
     }
@@ -5408,10 +5441,13 @@ export function initialiserEcranChantier(doc, {
       // Ce serait plus sévère que l'armée, pour la même mécanique.
       const rien = problemesDeToutReparerLesBatiments(etatCourant)
         .find((p) => p.code === 'rien-a-reparer');
-      if (rien !== undefined) { toast(rien.message); desarmerLAction(); return; }
+      // ⚠ LE MODE RESTE ARMÉ ICI AUSSI — Ethan, 17/09, point 1. Le désarmer
+      // repliait la barre qui porte ce bouton-là, sous le doigt qui venait de
+      // le presser.
+      if (rien !== undefined) { toast(rien.message); return; }
 
       const bilan = toutReparerLesBatiments(etatCourant);
-      desarmerLAction();
+      marquerBoutonsAction();
       peindre(etatCourant);
       rafraichir(etatCourant);
       if (apresPose !== undefined) apresPose(etatCourant);
@@ -5621,14 +5657,10 @@ export function initialiserEcranChantier(doc, {
    */
   function tenterLeDeplacement(rangee, colonne, index) {
     if (deplacementEnCours === null) {
-      // Premier toucher : quel bâtiment ? Une case vide désarme sans rien dire,
-      // comme partout ailleurs — c'est le geste « à côté du menu ».
-      if (index === -1) {
-        actionArmee = null;
-        ligneDeMode('');
-        marquerBoutonsAction();
-        return;
-      }
+      // Premier toucher : quel bâtiment ? Une case vide ne dit rien et ne
+      // défait plus le mode — Ethan, 17/09, point 1 : le mode est collant, il
+      // ne se quitte que par son bouton.
+      if (index === -1) return;
       // ⚠ ICI LE TERRAIN VIENT DE LA CASE, ET NON DE LA PALETTE. Le joueur
       // désigne une pièce PRÉCISE du doigt : c'est la bande où elle se trouve
       // qui dit dans quelle liste elle vit, et c'est cette liste-là qu'il
@@ -5661,7 +5693,14 @@ export function initialiserEcranChantier(doc, {
     terrainSelection = terrainDeplacement;
     selection = deplacementEnCours;
     deplacementEnCours = null;
-    desarmerLAction();
+    // ⚠⚠ LE MODE RESTE ARMÉ, ET SA LIGNE REVIENT AU PREMIER TEMPS — Ethan,
+    // 17/09, point 1. Le déplacement a deux touchers ; en réarmer un troisième
+    // entre chaque bâtiment déplacé était le geste de trop. La ligne, elle,
+    // DOIT être réécrite : elle disait « touchez la case d'arrivée », et
+    // l'arrivée vient d'avoir lieu — la laisser mentirait sur le toucher
+    // suivant, qui redésigne une pièce.
+    ligneDeMode(MESSAGES_MODE[actionArmee]);
+    marquerBoutonsAction();
     // Un déplacement change le voisinage, donc les débits : il s'écrit tout de
     // suite, comme une pose.
     if (apresPose !== undefined) apresPose(etatCourant);

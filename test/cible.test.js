@@ -360,7 +360,18 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // rencontre, et le raid se conclut d'autant. Ce que ce test tient est
   // inchangé depuis le lot 3C, à travers les neuf réancrages : **le raid ne se
   // termine pas faute de mieux**, et la cause reste `attaquants`.
-  assert.equal(r.nbTicks, 308);
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09) : 308 → **319**, ET LE SENS EST L'INVERSE DU LOT
+  // CONTACT-2 — ONZE TICKS REPRIS SUR LES VINGT-SIX QU'IL AVAIT RENDUS. C'est le
+  // point 11 d'Ethan, « un pionnier roule trop facilement », et il se lit ici
+  // exactement comme il se lisait là-bas, dans l'autre sens : un écrasement qui
+  // dure le rapport des masses retient l'écraseuse plus longtemps sous le frein,
+  // donc l'assaut lourd met plus de temps à traverser la bande de défense. Ce
+  // que ce test tient est inchangé depuis le lot 3C, à travers les dix
+  // réancrages : **le raid ne se termine pas faute de mieux**, et la cause reste
+  // `attaquants`.
+  assert.equal(r.nbTicks, 319);
+  assert.notEqual(r.nbTicks, 308, 'l\'ancre d\'avant le lot ÉCRASEMENT est revenue');
   // Lot COURBE : 2 655 au lieu de 2 656. UNE unité de quartz, et rien d'autre —
   // ni la cause, ni le tick 383, ni les deux survivants. Le butin est
   // proportionnel aux dégâts en milli-PV, qui s'arrondissent une fois de plus.
@@ -436,14 +447,44 @@ test('T4 — le raid qui expirait au tick 900 se conclut maintenant', () => {
   // petit réancrage que ce test ait porté, et il faut le dire dans ce sens-là :
   // un lot qui change ce que QUATORZE unités visent peut ne rien déplacer ici.
   // **Aucun barème n'a été touché.**
-  assert.deepEqual(r.butin, { quartz: 20_885, scorie: 6_961 });
+  // ⚠ LOT ÉCRASEMENT (17/09-18/09) : **20 999 ET 6 999**, SOIT +0,55 % POUR
+  // +3,57 % DE TICKS — et c'est le dernier endroit où on aurait parié sur une
+  // hausse. Le lot ALOURDIT l'écrasement ; il devrait donc coûter du butin, comme
+  // le lot ARRÊT en coûtait. Il en rapporte, et la mesure dit pourquoi : le heurt
+  // fait payer à la garnison ce qu'elle encaissait gratuitement en barrant la
+  // route à un véhicule, donc l'assaut lourd perd MOINS d'unités en chemin —
+  // cinq survivants au lieu de quatre — et ces unités-là griffent les bâtiments
+  // pendant onze ticks de plus. Le multiplicateur de 3,25 de l'avant-poste
+  // amplifie la hausse comme il amplifiait les baisses.
+  //
+  // ⚠⚠ ET C'EST UN ASSAUT **LOURD** : c'est pour ça que ce raid-ci bouge alors
+  // que le raid C de `repli.test.js`, qui est un assaut d'INFANTERIE, ne bouge
+  // plus d'un tick depuis qu'Ethan a borné le heurt aux véhicules (18/09,
+  // `MASSE_MINI_HEURT`). Les deux tests se lisent ensemble : l'un mesure que le
+  // seuil laisse passer les véhicules, l'autre qu'il arrête l'infanterie.
+  //
+  // **Aucun barème n'a été touché**, et la cause reste `attaquants`.
+  assert.deepEqual(r.butin, { quartz: 20_999, scorie: 6_999 });
+  assert.notDeepEqual(r.butin, { quartz: 20_971, scorie: 6_990 },
+    'le butin de la version intermédiaire est revenu : le heurt s\'applique de '
+    + 'nouveau entre escouades');
+  assert.notDeepEqual(r.butin, { quartz: 20_885, scorie: 6_961 },
+    'le butin d\'avant le lot ÉCRASEMENT est revenu : le heurt ne coûte plus rien');
   assert.notDeepEqual(r.butin, { quartz: 20_898, scorie: 6_966 },
     'le butin d\'avant le lot PRÉDILECTION est revenu : le ciblage ne préfère plus');
   // ⚠ ET LE SURVIVANT REVIENT — trois au premier geste, **quatre** au second.
   // La première moitié du lot faisait s'arrêter les anti-structure sous le feu
   // des tourelles ; la seconde écarte les défenseuses de leur trajet. Les deux
   // effets jouent en sens contraire, et le second l'emporte ici.
-  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 4);
+  //
+  // ⚠⚠ ET LE LOT ÉCRASEMENT EN REND UN CINQUIÈME, CE QUI EST LA GRANDEUR QUI
+  // EXPLIQUE LES DEUX AUTRES. Un survivant de plus sur quatre, c'est un quart de
+  // puissance de feu conservée jusqu'au bout — c'est de là que viennent les onze
+  // ticks et les quatre-vingt-six quartz. Le heurt du contact refusé est ce qui
+  // le sauve : la garnison qui lui barrait la route paie maintenant le passage.
+  assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, 5);
+  assert.notEqual(r.resultat.attaquants.filter((a) => !a.detruit).length, 4,
+    'le compte d\'avant le lot ÉCRASEMENT est revenu');
 });
 
 // ---------------------------------------------------------------------------
@@ -746,8 +787,26 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // sur vingt et un.
   //
   // **Aucun barème n'a été touché**, et l'arbitrage revient à Ethan.
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09) : ILS SONT TROIS, ET LA LISTE BOUGE DES DEUX
+  // CÔTÉS — ce qu'un allongement uniforme ne ferait pas. `blindeLourd/camp/1`
+  // SORT, et `blindeLourd/avantPoste/42`, `blindeLourd/camp/11` et
+  // `mixte/camp/11` entrent. C'est le point 11 d'Ethan, « un pionnier roule trop
+  // facilement » : la durée d'un écrasement se dérive désormais du rapport des
+  // masses, et le contact refusé de la famille A cesse d'être muet — une
+  // écraseuse paie des dégâts à ce qu'elle heurte sans pouvoir l'écraser.
+  //
+  // ⚠⚠ ET L'AGRÉGAT DIT LE SENS, LÀ OÙ LA LISTE NE DIT QUE SON AMPLEUR. Sur les
+  // cinquante-quatre raids : attaquants détruits **398 → 390**, bâtiments tombés
+  // **28 → 40 (+42,9 %)**, défenseurs tombés **586 → 594**, somme des ticks
+  // **28 458 → 28 751 (+1,03 %)**. Les assauts perdent MOINS d'unités et
+  // griffent PLUS de bâtiments : le bélier du contact refusé fait payer à la
+  // garnison ce qu'elle encaissait gratuitement en barrant la route. C'est le
+  // même mécanisme que le cinquième survivant de `T4`, vu à l'échelle du
+  // balayage. **Aucun barème n'a été touché ; le calibrage revient à Ethan.**
   assert.deepEqual(
-    expires.sort(), ['blindeLourd/camp/1'],
+    expires.sort(),
+    ['blindeLourd/avantPoste/42', 'blindeLourd/camp/11', 'mixte/camp/11'],
     'la liste des raids qui touchent le plafond de 900 a changé',
   );
   // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DE LA LISTE D'HIER : un lot qui
@@ -755,6 +814,23 @@ test('T5 — sur les 54 raids, aucune cible stérile ne survit à un ciblage', (
   // repasserait au vert sous une assertion qui ne dirait que « exactement un ».
   assert.notDeepEqual(expires.sort(), ['infanterie/base/3'],
     'la liste d\'avant le lot FREIN est revenue');
+  assert.notDeepEqual(expires.sort(), ['blindeLourd/camp/1'],
+    'la liste d\'avant le lot ÉCRASEMENT est revenue');
+  // ⚠⚠ ET CE N'EST PAS UN GEL — C'EST LE MEILLEUR DÉPASSEMENT QUE CE TEST AIT
+  // JAMAIS RELEVÉ, LES TROIS ENSEMBLE. Vérifié comme les fois précédentes en
+  // portant `maxTicks` à 20 000 : les trois se concluent par `attaquants`, aux
+  // ticks **930** (`blindeLourd/camp/11`, 1,03 fois le plafond), **938**
+  // (`blindeLourd/avantPoste/42`, 1,04) et **1 026** (`mixte/camp/11`, 1,14).
+  // À comparer aux précédents — 4 645 au lot CARTE, 5 478 au lot COLONNE, 3 539
+  // au lot DISPOSITION-OUVRAGE, 2 618 au lot MUR, 940 au lot APPROCHE, 1 018 au
+  // lot BARÈME-ET-REJEU, 1 020 au lot CONTACT, 1 973 au lot PRÉDILECTION, 2 629
+  // au lot FREIN. Le « autre régime » n'a plus d'équivalent : le pire des trois
+  // vaut cent vingt-six ticks de trop.
+  //
+  // ⚠ ET AUCUN DES TROIS NE FAIT TOMBER UN SEUL BÂTIMENT, MÊME À PLAFOND LEVÉ —
+  // 0 sur 14, 0 sur 19, 0 sur 14. C'est la propriété de `blindeLourd/camp/1` du
+  // lot FREIN, reconduite : ces raids-là ne traînent pas parce qu'ils griffent
+  // l'objectif, ils traînent parce que la garnison les retient.
   assert.equal(plusLong, 900, 'le plus long des cinquante-quatre — il EST le raid au plafond');
   // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DE LA LISTE VIDE : un lot qui
   // déferait la préférence de prédilection rendrait `[]` et 895, et il repasserait

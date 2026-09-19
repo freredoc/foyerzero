@@ -674,7 +674,61 @@ function placerBatiments(placement, liste, niveau) {
       poses[i] = { id: liste[i], rangee: cases[p][s].rangee, colonne: cases[p][s].colonne, niveau };
     });
   });
+  souchereDerriereLEtai(poses, uniques);
   return { poses, compteur };
+}
+
+/**
+ * Met la Souche DERRIÈRE l'Étai — Ethan, 17/09, point 13 : « dans la génération
+ * de base ouvrage : toujours faire en sorte que la souche soit derrière l'etai.
+ * Donc inverser position en fonction des seed. »
+ *
+ * ⚠⚠ « DERRIÈRE » VEUT DIRE RANGÉE PLUS GRANDE, et c'est la convention que
+ * `CLAUDE.md` §6 fixe : l'assaillant part des rangées 1–2 et MONTE en numéro,
+ * donc la 18 est le FOND, la dernière qu'il atteint. La Souche rase le site ;
+ * la mettre au fond, c'est faire payer la traversée pour l'objectif qui compte.
+ *
+ * ⚠⚠ ET LA PRÉMISSE DU POINT 13 EST INVERSÉE — MESURÉ AVANT D'ÉCRIRE UNE LIGNE,
+ * 2 880 sites, trois types, niveaux 3 à 50. La Souche était derrière l'Étai
+ * **29,0 %** du temps, DEVANT **41,6 %**, et sur la **même rangée 30,1 %**. Le
+ * biais n'est pas un tirage : `liste` porte la Souche en premier, les uniques
+ * prennent leur créneau par `paquet.indexOf(null)`, donc la Souche rafle le
+ * créneau le moins profond de son paquet. D'où l'asymétrie mesurée à un cran
+ * d'écart — 379 fois devant contre 180 fois derrière.
+ *
+ * ⚠⚠ ON ÉCHANGE LES COORDONNÉES, JAMAIS LES ENTRÉES DU TABLEAU, ET C'EST CE QUI
+ * ÉVITE UN `SAVE_VERSION`. `site-entame.js` range `pvBatimentsMilli` PAR INDICE
+ * dans `montage.batiments`, qui suit l'ordre de `poses` : permuter deux entrées
+ * appliquerait les PV de l'Étai à la Souche sur tout site déjà entamé. En
+ * échangeant `rangee` et `colonne` À INDICE CONSTANT, la correspondance
+ * indice → identifiant ne bouge pas d'un cran, et aucune migration n'est due.
+ *
+ * ⚠⚠ TRENTE POUR CENT DES SITES LES POSENT SUR LA MÊME RANGÉE, ET LÀ LA RÈGLE
+ * EST VACUEUSE — « derrière » n'a pas de sens à profondeur égale. 79 % de ces
+ * cas sont côte à côte, c'est-à-dire dans le même paquet. Les séparer
+ * demanderait de choisir les créneaux des uniques AVANT de remplir le paquet,
+ * donc de déplacer les bâtiments proportionnels : c'est un autre lot, et
+ * **Ethan tranche**. Ce qui est garanti ici est l'absence de Souche DEVANT.
+ *
+ * ⚠ LA SOUCHE SE RECONNAÎT À `raseLeSite`, JAMAIS À SON NOM — c'est le champ que
+ * `combat.js` teste pour le rasage et que `BASE_BATIMENTS` porte à l'identique
+ * côté joueur. Un `id === 'souche'` écrit ici serait la seconde vérité que
+ * `CLAUDE.md` §4 interdit.
+ */
+function souchereDerriereLEtai(poses, uniques) {
+  if (uniques.length < 2) return;
+  const souche = uniques.find((i) => BATIMENTS[poses[i].id].raseLeSite === true);
+  if (souche === undefined) {
+    throw new Error('générateur : aucun des uniques ne porte `raseLeSite`');
+  }
+  const etai = uniques.find((i) => i !== souche);
+  if (poses[souche].rangee >= poses[etai].rangee) return;
+  const rangee = poses[souche].rangee;
+  const colonne = poses[souche].colonne;
+  poses[souche].rangee = poses[etai].rangee;
+  poses[souche].colonne = poses[etai].colonne;
+  poses[etai].rangee = rangee;
+  poses[etai].colonne = colonne;
 }
 
 /**
@@ -911,15 +965,15 @@ function verifierParametres({ type, niveau, saveur, graine }) {
  * @returns {string[]} noms triés, sans doublon.
  */
 function modulesOuvrageAu(niveau) {
-  const noms = new Set();
+  const pieces = new Set();
   for (const table of [UNITES, DEFENSES]) {
-    for (const piece of Object.values(table)) {
+    for (const [id, piece] of Object.entries(table)) {
       if (!piece.moduleOuvrage) continue;
       if (piece.apparitionModule > niveau) continue;
-      noms.add(piece.moduleOuvrage);
+      pieces.add(id);
     }
   }
-  return [...noms].sort();
+  return [...pieces].sort();
 }
 
 /**
@@ -1031,6 +1085,53 @@ function tirerSousBudget(rng, repartition, budget, maxEmplacements) {
   return { choisis, reste };
 }
 
+/**
+ * Les colonnes de chaque rangée d'une vague de l'Ouvrage, tirées.
+ *
+ * ⚠⚠ C'EST LA FORME QUI ÉTAIT FIGÉE, PAS LA COMPOSITION — Ethan, 17/09,
+ * point 7 : « les raids ouvrage semblent identique ». Le constat est juste et sa
+ * cause est l'inverse de ce qu'on lit : mesuré sur 200 graines par niveau,
+ * **la composition varie au maximum** — 200 suites d'identifiants distinctes sur
+ * 200 aux niveaux 25 et 40, 87 sur 200 au niveau 12, où le budget ne paie que
+ * cinq à neuf unités. Ce qui ne variait pas, c'est la POSE : `colonne` valait
+ * `(i % largeur) + 1`, donc **à nombre d'unités égal il n'existait EXACTEMENT
+ * QU'UNE forme**, mesuré sur les dix comptes atteignables. Trois à cinq formes
+ * pour deux cents raids : la vague était toujours le même bloc, aligné à
+ * gauche, la dernière rangée toujours amputée par la droite.
+ *
+ * ⚠ ON PERMUTE DANS LA RANGÉE, JAMAIS ENTRE RANGÉES. L'ordre des rangées porte
+ * l'arbitrage de `genererVague` — les unités qui s'arrêtent devant, celles qui
+ * doivent arriver avec des munitions derrière : brasser les rangées le
+ * détruirait. Une permutation de colonnes laisse chaque unité sur sa rangée,
+ * donc l'ordre de spécialité intact, et ne change que l'endroit où elle entre.
+ *
+ * ⚠⚠ UN SEUL MÉLANGE FAIT LE SOUS-ENSEMBLE ET L'ORDRE, ET SON COÛT NE DÉPEND
+ * PAS DU RÉSULTAT. On mélange les neuf colonnes puis on prend les k premières :
+ * une rangée pleine est permutée, une rangée partielle est en plus DISPERSÉE au
+ * lieu d'être collée à gauche. `melanger` consomme `largeur − 1` tirages quelle
+ * que soit la valeur de k — c'est la discipline du §6, « on contraint avant de
+ * tirer », et non un `while` qui relancerait jusqu'à tomber juste.
+ *
+ * ⚠ LE FLUX EST LOCAL À `genererVague` — `creerRng(graine)`, consommé par elle
+ * seule et par personne après. Les tirages ajoutés ici ne décalent donc AUCUN
+ * autre système, ce qui n'aurait pas été vrai dans `genererSite`.
+ *
+ * @param {object} rng le flux de la vague
+ * @param {number} nb le nombre d'unités à poser
+ * @returns {Array<number[]>} une permutation des colonnes par rangée
+ */
+function colonnesDesRangees(rng, nb) {
+  const rangees = Math.ceil(nb / GRILLE.largeur);
+  const sortie = [];
+  for (let r = 0; r < rangees; r += 1) {
+    const colonnes = [];
+    for (let c = 1; c <= GRILLE.largeur; c += 1) colonnes.push(c);
+    melanger(rng, colonnes);
+    sortie.push(colonnes);
+  }
+  return sortie;
+}
+
 /** Rang d'une unité dans l'ordre de vagues de l'Ouvrage. */
 function rangSpecialite(id) {
   const rang = RAID_OUVRAGE.ordreVagues.indexOf(UNITES[id].specialite);
@@ -1069,12 +1170,16 @@ export function genererVague({ niveau, budgetPoints, graine }) {
 
   choisis.sort((a, b) => rangSpecialite(a) - rangSpecialite(b));
   const rangeeFront = GRILLE.bandes.deploiement.derniere;
-  const unites = choisis.map((id, i) => ({
-    id,
-    colonne: (i % GRILLE.largeur) + 1,
-    rangee: rangeeFront - Math.floor(i / GRILLE.largeur),
-    niveau,
-  }));
+  const colonnes = colonnesDesRangees(rng, choisis.length);
+  const unites = choisis.map((id, i) => {
+    const rang = Math.floor(i / GRILLE.largeur);
+    return {
+      id,
+      colonne: colonnes[rang][i % GRILLE.largeur],
+      rangee: rangeeFront - rang,
+      niveau,
+    };
+  });
   return { unites, pointsEngages: budgetPoints - reste, pointsRestants: reste };
 }
 

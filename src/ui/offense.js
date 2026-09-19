@@ -40,7 +40,7 @@ import {
   problemesDeLaPermutationDEffectif,
   problemesDeLAmeliorationDEffectif, ameliorerEffectif,
 } from '../sim/state.js';
-import { acquisesDe } from '../sim/recherche.js';
+import { acquisesDe, moduleEstAcquis, nomDuModule } from '../sim/recherche.js';
 import { niveauDeLArmee } from '../sim/niveau-de-base.js';
 import {
   plafondDeLaReserve, direLaDuree, CHASSIS_REPARABLES,
@@ -587,6 +587,7 @@ export function couchesDeLUniteDAssaut(id) {
   });
 }
 
+
 export function vueDeLOffense(etat) {
   // ⚠ L'ENVELOPPE SE VÉRIFIE AVANT D'ÊTRE DÉRÉFÉRENCÉE — lot BASES-0, même
   // leçon que `resumeDeLaBase` : `baseCourante(null)` lève un message qui parle
@@ -610,6 +611,19 @@ export function vueDeLOffense(etat) {
       nom: UNITES[piece.id].nom.joueur,
       niveau: piece.niveau,
       degatsMilli: piece.degatsMilli,
+      // ⚠⚠ ETHAN, 18/09 : « il faudrait un élément visible pour le joueur quand
+      // il voit des unités avec modules débloqués, à côté du numéro de niveau ».
+      // Le drapeau se calcule ICI, dans la vue, et jamais dans l'écran : le
+      // pavé du `<span class="niveau">` plus bas interdit nommément de relire
+      // `baseCourante(etat)` depuis le DOM, et un module se lit de la même
+      // façon — une seule vérité, rendue par `vueDeLOffense`.
+      //
+      // ⚠ DEUX CONDITIONS, PAS UNE : la pièce doit PORTER un module dans cette
+      // branche, et le joueur doit l'avoir ACQUIS. Sans la première, une pièce
+      // sans module hériterait de l'étoile d'une homonyme — c'est exactement la
+      // faute « par nom » que le lot du 18/09 vient de refermer dans le moteur.
+      moduleAcquis: nomDuModule('offense', piece.id) !== null
+        && moduleEstAcquis(etat, 'offense', piece.id),
     };
   });
 
@@ -755,6 +769,11 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     // deux. Un `transform: translateX` aurait déplacé le dessin sans déplacer
     // la géométrie du pointage — la faute que le dépôt refuse depuis toujours
     // sur la grille du Chantier.
+    //
+    // ⚠ ET C'EST LE SEUL ÉCRAN QUI LE PORTE, DEPUIS QUE LE POINT 5 A ÉTÉ ANNULÉ
+    // le 17/09 : la règle avait été extraite pour être partagée avec la grille de
+    // préparation du raid, l'annulation a défait les deux. Elle est donc revenue
+    // ici, en une seule écriture, à son seul appelant.
     if (vague.numero % 2 === 0) rangee.classList.add('decalee');
     rangee.style.gridTemplateColumns = `repeat(${NB_COLONNES * 2 + 1}, 1fr)`;
     for (let colonne = 1; colonne <= NB_COLONNES; colonne++) {
@@ -769,7 +788,17 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     corps.appendChild(bloc);
   }
 
-  /** Défait tous les modes — après une pose, un retrait, ou un geste à côté. */
+  /**
+   * Défait tous les modes — et depuis le 17/09, la POSE seule l'appelle.
+   *
+   * ⚠⚠ SON EN-TÊTE DISAIT « après une pose, un retrait, ou un geste à côté », et
+   * les deux derniers sont devenus faux le jour où le mode s'est mis à coller
+   * (point 1 d'Ethan). Ses cinq appelants sont `choisirUnite` — retoucher la
+   * vignette choisie — et les quatre sorties de `poserIci` : une pose n'est pas
+   * un mode de bouton, elle se termine d'elle-même. **Un retrait, une
+   * amélioration ou un toucher dans le vide ne passent plus par ici**, et
+   * `FIX T1` de `test/offense.test.js` tombe si l'un d'eux y revient.
+   */
   function desarmer() {
     choisie = null;
     apercu = null;
@@ -789,10 +818,17 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   /**
    * Arme ou désarme une action.
    *
-   * Les quatre règles du Chantier, reprises telles quelles : retoucher l'action
-   * armée la désarme ; armer une action désarme l'autre ; armer défait la
-   * palette — un seul mode à la fois ; et l'action se désarme dans tous les cas
-   * après un toucher, réussite comme refus.
+   * Les règles du Chantier, reprises telles quelles : retoucher l'action armée
+   * la désarme ; armer une action désarme l'autre ; armer défait la palette —
+   * un seul mode à la fois.
+   *
+   * ⚠⚠ ET LA QUATRIÈME EST RETOURNÉE DEPUIS LE 17/09. Ce pavé écrivait « et
+   * l'action se désarme dans tous les cas après un toucher, réussite comme
+   * refus » : c'est exactement ce qu'Ethan renverse au point 1, « il faut
+   * rester que le bouton en mode hold, donc on reclique pas, ça part pas ». Le
+   * mode ne se quitte plus que PAR CE BOUTON, par un autre bouton de la barre,
+   * ou par une vignette de palette. Un commentaire laissé à l'ancienne règle
+   * aurait fait « corriger » le lock au lot suivant.
    */
   function armer(nom) {
     const suivant = actionArmee === nom ? null : nom;
@@ -885,10 +921,14 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
   function appliquerAction(index) {
     const nom = actionArmee;
     const action = ACTIONS_ARMEE[nom];
-    // Quoi qu'il arrive, le mode se désarme : réussite comme refus.
-    actionArmee = null;
-    ligneDeMode('');
-    marquerBoutonsAction();
+    // ⚠⚠ LE MODE NE SE DÉSARME PLUS — Ethan, 17/09, point 1 : « il faut rester
+    // que le bouton en mode hold ». Même règle qu'au Chantier, sur la même
+    // barre de quatre boutons : le mode vit jusqu'à ce qu'on retouche son
+    // bouton, qu'on en arme un autre, ou qu'on choisisse une vignette. Retirer
+    // six unités demandait douze touchers ; il en faut sept.
+    //
+    // ⚠ ET LA LIGNE DE MODE RESTE ÉCRITE, parce qu'elle décrit ce que le
+    // PROCHAIN toucher fera — et il y en aura un.
 
     if (action.agir === null) {
       // ⚠ « L'ARMÉE », PAS « LA DÉFENSE » — et « unité », pas « bâtiment ». Les
@@ -946,7 +986,11 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     const index = enMain;
     const action = ACTIONS_ARMEE.deplacer;
     enMain = null;
-    ligneDeMode('');
+    // ⚠ LA LIGNE REVIENT AU PREMIER TEMPS DU MODE, elle ne s'efface pas — le
+    // mode « Déplacer » est resté armé (point 1 du 17/09) et le toucher suivant
+    // redésignera une pièce. Un `ligneDeMode('')` tenait ici : il laissait un
+    // mode actif sans un mot, et le dépôt refuse ce couple depuis le 28/08.
+    ligneDeMode(actionArmee === null ? '' : MESSAGES_MODE_ARMEE[actionArmee]);
     const occupant = baseCourante(etatCourant).armee.findIndex(
       (p) => p.vague === vague && p.colonne === colonne,
     );
@@ -1009,13 +1053,21 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
       return;
     }
 
-    // Toucher une case VIDE désarme, sans rien dire : c'est le geste « à côté
-    // du menu », pas une erreur. Le panneau se ferme avec la sélection : il
-    // décrivait la pièce qu'on vient de lâcher.
+    // Toucher une case VIDE ne dit rien — geste « à côté du menu », pas une
+    // erreur. Le panneau se ferme avec la sélection : il décrivait la pièce
+    // qu'on vient de lâcher.
+    //
+    // ⚠⚠ MAIS IL NE DÉSARME PLUS L'ACTION — Ethan, 17/09, point 1. `desarmer()`
+    // tenait ici et défaisait les quatre modes d'un coup ; il ne défait plus
+    // que la POSE (la vignette choisie et son aperçu), qui n'est pas un mode de
+    // bouton. Viser entre deux unités coûtait le mode et faisait rater le geste
+    // suivant.
     if (occupant === -1) {
       selection = null;
       fermerPanneau();
-      desarmer();
+      choisie = null;
+      apercu = null;
+      if (actionArmee === null) ligneDeMode('');
       peindre(etatCourant);
       return;
     }
@@ -1169,6 +1221,20 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
           niveau.className = 'niveau';
           niveau.textContent = String(occupant.niveau);
           element.appendChild(niveau);
+          // ⚠⚠ L'ÉTOILE DU MODULE — Ethan, 18/09. Elle se pose À CÔTÉ du niveau,
+          // dans le coin bas-GAUCHE, parce que le coin bas-droit est pris depuis
+          // le 06/09 et qu'un second occupant y aurait recouvert le nombre.
+          //
+          // ⚠ AUCUN CALCUL ICI : `moduleAcquis` vient de `vueDeLOffense`, comme
+          // le niveau lui-même. Le relire depuis `etat` serait la seconde vérité
+          // que le pavé du dessus interdit pour la même case.
+          if (occupant.moduleAcquis) {
+            const module = doc.createElement('span');
+            module.className = 'module';
+            module.textContent = '★';
+            element.appendChild(module);
+            element.title = `${occupant.nom} — niveau ${occupant.niveau} · module débloqué`;
+          }
         } else {
           element.removeAttribute('title');
         }

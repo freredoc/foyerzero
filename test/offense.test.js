@@ -28,7 +28,7 @@ import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, messageSansBatiment, FAMILLE_DE_CHASSIS,
 } from '../src/data/base.js';
 import { acquisesDe } from '../src/sim/recherche.js';
-import { ligneAAfficher, posablesDeLaDefense } from '../src/ui/chantier.js';
+import { ligneAAfficher, posablesDeLaDefense, messageDeRefus } from '../src/ui/chantier.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
 import { NB_VAGUES, NB_COLONNES, NB_EMPLACEMENTS, budgetDuNiveau } from '../src/ui/arsenal.js';
 import { EMPLACEMENTS_ASSAUT, POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
@@ -36,10 +36,12 @@ import { GRILLE, ORDRE_CHASSIS, UNITES } from '../src/data/combat.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import {
   plafondDeLaReserve, plafondDeLaReserveDesBatiments, direLaDuree,
-  coutDeLaReparation, reservoirsDeLArmee,
+  coutDeLaReparation, reservoirsDeLArmee, problemesDeLaReparationDUnePiece,
 } from '../src/sim/reparation.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
+import { decoderRgba } from './png-rgba.js';
+import { acheter, moduleEstAcquis, nomDuModule } from '../src/sim/recherche.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -2098,4 +2100,360 @@ test('VIT T4 ter — la boucle repeint l\'écran Offense, pas seulement la base'
   // cherche existe ailleurs dans le fichier, et la tranche l'a bien écarté.
   assert.ok(source.includes('ecranOffense.peindre('),
     'plus personne ne repeint l\'Offense : la bascule a perdu son appel');
+});
+
+// ---------------------------------------------------------------------------
+// FIX T1 — le mode COLLE, et le seul désarmement qui reste est le bouton
+// ---------------------------------------------------------------------------
+
+test('FIX T1 — une action armée survit au refus, au vide et à la réussite', () => {
+  // ⚠⚠ ETHAN, 17/09, POINT 1 : « il faut rester que le bouton en mode hold donc
+  // on reclique pas ça part pas ». Le mode se défaisait après CHAQUE toucher —
+  // réussite comme refus —, si bien que retirer six unités demandait douze
+  // gestes. Le code de `src/ui/offense.js` porte la règle depuis ce lot-là ;
+  // rien ne la mesurait, et c'est ce test qui la tient.
+  //
+  // ⚠ IL EST LE JUMEAU DE `RÉPARER T6` DE `test/chantier.test.js`, sur la même
+  // barre de quatre boutons et pour le même arbitrage : les deux écrans doivent
+  // se comporter pareil, et deux gardes séparées sont ce qui l'assure.
+  const arme = (parId, bouton) => parId.get(bouton).classList.contains('arme');
+  const avisDe = (parId) => parId.get('offense-avis').textContent;
+
+  // --- (1) LE REFUS NE DÉSARME PAS -----------------------------------------
+  {
+    const etat = baseAvecCommandement(12);
+    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+    const { parId } = ecranOffenseMonte(etat);
+
+    // ⚠ LE MONTAGE PROUVE SON MORDANT AVANT D'ASSERTER QUOI QUE CE SOIT : une
+    // pièce INTACTE ne se répare pas, et c'est le moteur qui le dit. Sur une
+    // pièce abîmée et payable, la réparation réussirait et le test mesurerait
+    // la branche d'à côté.
+    const refus = problemesDeLaReparationDUnePiece(etat, 0);
+    assert.equal(refus.length, 1,
+      'le montage ne mesure pas un refus : le moteur accepte cette réparation');
+    assert.equal(refus[0].code, 'rien-a-reparer');
+
+    parId.get('offense-reparer').envoyer('click');
+    assert.ok(arme(parId, 'offense-reparer'), 'le bouton ne s\'arme pas');
+    toucher(parId, 1, 1);
+
+    assert.equal(avisDe(parId), messageDeRefus(refus),
+      'le refus du moteur n\'est pas repris mot pour mot');
+    assert.ok(arme(parId, 'offense-reparer'),
+      'un refus désarme le mode : le joueur doit réarmer après chaque erreur');
+  }
+
+  // --- (2) UN TOUCHER DANS LE VIDE NE DÉSARME PAS --------------------------
+  {
+    // ⚠⚠ C'EST LA BRANCHE DONT `desarmer()` A ÉTÉ RETIRÉ LE 17/09. Viser entre
+    // deux unités coûtait les quatre modes d'un coup, et faisait rater le geste
+    // suivant sans qu'un mot ne l'annonce.
+    const etat = baseAvecCommandement(12);
+    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+    const { parId } = ecranOffenseMonte(etat);
+
+    parId.get('offense-retirer').envoyer('click');
+    assert.equal(avisDe(parId), MESSAGES_MODE_ARMEE.retirer);
+    toucher(parId, 4, 9); // une case vide, à l'autre bout de la grille
+
+    assert.ok(arme(parId, 'offense-retirer'),
+      'toucher une case vide désarme encore le mode');
+    // ⚠ ET LA LIGNE DE MODE RESTE ÉCRITE : un mode actif et muet est le couple
+    // que le dépôt refuse depuis le 28/08.
+    assert.equal(avisDe(parId), MESSAGES_MODE_ARMEE.retirer,
+      'le mode est armé et la ligne ne dit plus rien');
+    // ⚠ ET LA PIÈCE EST TOUJOURS LÀ : un toucher dans le vide ne retire rien.
+    assert.equal(baseCourante(etat).armee.length, 1);
+  }
+
+  // --- (3) LA RÉUSSITE NON PLUS, ET C'EST LE GAIN CHIFFRÉ D'ETHAN ----------
+  {
+    // ⚠⚠ SIX UNITÉS, SEPT GESTES — UN ARMEMENT PLUS SIX TOUCHERS. Sous l'ancienne
+    // règle il en fallait DOUZE, et c'est exactement ce que ce bloc mesure : sur
+    // le code d'avant, le deuxième toucher ne retirerait rien (le mode étant
+    // tombé au premier), et l'armée finirait à cinq pièces au lieu de zéro.
+    const etat = baseAvecCommandement(12);
+    for (let colonne = 1; colonne <= 6; colonne++) {
+      poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne, niveau: 1 });
+    }
+    assert.equal(baseCourante(etat).armee.length, 6,
+      'le montage ne pose pas ses six pièces');
+    const { parId } = ecranOffenseMonte(etat);
+
+    let gestes = 0;
+    parId.get('offense-retirer').envoyer('click');
+    gestes += 1;
+    for (let colonne = 1; colonne <= 6; colonne++) {
+      assert.ok(arme(parId, 'offense-retirer'),
+        `le mode est tombé avant la ${colonne}ᵉ unité : il faut le réarmer`);
+      toucher(parId, 1, colonne);
+      gestes += 1;
+      assert.equal(baseCourante(etat).armee.length, 6 - colonne,
+        `la ${colonne}ᵉ unité n'a pas été retirée`);
+    }
+
+    assert.equal(gestes, 7, 'retirer six unités ne coûte plus sept gestes');
+    assert.ok(arme(parId, 'offense-retirer'),
+      'le mode tombe après la dernière unité, alors qu\'il doit tenir');
+  }
+
+  // --- (4) LE SEUL DÉSARMEMENT QUI RESTE : RETOUCHER LE BOUTON -------------
+  {
+    // ⚠⚠ SANS CE BLOC, LES TROIS PRÉCÉDENTS PASSERAIENT SUR UN MODE QU'ON NE
+    // POURRAIT PLUS JAMAIS QUITTER — ce qui serait pire que le défaut corrigé.
+    const etat = baseAvecCommandement(12);
+    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: 1, niveau: 1 });
+    const { parId } = ecranOffenseMonte(etat);
+
+    parId.get('offense-retirer').envoyer('click');
+    assert.ok(arme(parId, 'offense-retirer'));
+    parId.get('offense-retirer').envoyer('click');
+
+    assert.ok(!arme(parId, 'offense-retirer'),
+      'retoucher le bouton armé ne désarme plus : le mode est sans issue');
+    assert.equal(avisDe(parId), '', 'le mode est défait et sa ligne reste écrite');
+    // ⚠ ET LE MODE EST BIEN PARTI, PAS SEULEMENT SON LISERÉ : toucher la pièce
+    // ne la retire plus, elle se SÉLECTIONNE.
+    toucher(parId, 1, 1);
+    assert.equal(baseCourante(etat).armee.length, 1,
+      'le bouton est éteint et le mode agit encore');
+  }
+
+  // --- (5) ARMER UN AUTRE BOUTON CHANGE DE MODE, IL N'EN AJOUTE PAS -------
+  {
+    const etat = baseAvecCommandement(12);
+    const { parId } = ecranOffenseMonte(etat);
+    parId.get('offense-reparer').envoyer('click');
+    parId.get('offense-deplacer').envoyer('click');
+
+    const armes = Object.values(ACTIONS_ARMEE)
+      .filter((a) => arme(parId, a.bouton)).map((a) => a.bouton);
+    assert.deepEqual(armes, ['offense-deplacer'],
+      `deux modes armés à la fois : ${armes.join(', ')}`);
+    assert.equal(avisDe(parId), MESSAGES_MODE_ARMEE.deplacer);
+  }
+
+  // --- (6) UNE VIGNETTE DE PALETTE DÉFAIT LE MODE ------------------------
+  {
+    // ⚠ « UN SEUL MODE À LA FOIS » : la POSE et une action armée ne peuvent pas
+    // coexister, sinon un toucher de case voudrait dire deux choses. C'est la
+    // troisième des quatre règles du Chantier, et elle survit au point 1.
+    const etat = baseAvecCommandement(12);
+    const { parId } = ecranOffenseMonte(etat);
+    parId.get('offense-retirer').envoyer('click');
+    assert.ok(arme(parId, 'offense-retirer'));
+
+    const posable = unitesDeLaPalette(etat).find((u) => u.disponible);
+    assert.ok(posable !== undefined, 'le montage n\'a aucune unité posable');
+    const vignette = parId.get('offense-palette').children
+      .find((b) => b.dataset.id === posable.id);
+    assert.ok(vignette !== undefined, `la palette ne porte pas « ${posable.id} »`);
+    parId.get('offense-palette').envoyer('click', { target: vignette });
+
+    assert.ok(!arme(parId, 'offense-retirer'),
+      'choisir une vignette laisse le mode armé : un toucher voudrait dire deux choses');
+    assert.ok(avisDe(parId).includes(posable.nom),
+      `la ligne n'annonce pas la pose de ${posable.nom} : ${avisDe(parId)}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// FIX T2 — le niveau se LIT : le fond opaque, mesuré contre les vrais sprites
+// ---------------------------------------------------------------------------
+
+test('FIX T2 — le nombre de niveau porte un fond opaque, et le montage prouve qu\'il le fallait', () => {
+  // ⚠⚠ ETHAN, 17/09, POINT 4 : « Niveau en défense et offense sont illisibles ».
+  // Le lot ERGONOMIE du 04/09 avait déjà traité ce nombre-là, et il avait traité
+  // la TAILLE — 8 px en graisse 400 → 11 px en 700, puis un tiers de case. Ce
+  // qui restait est le CONTRASTE, et c'est une autre grandeur : l'os `#F5F3E8`
+  // était posé DIRECTEMENT sur le sprite, sous une ombre d'un seul pixel qui ne
+  // couvre que le bord bas du glyphe.
+  //
+  // ⚠⚠ CE TEST PROUVE SA PROPRE PRÉMISSE AVANT D'ASSERTER LE REMÈDE, et il la
+  // prouve sur les PIXELS du dépôt, jamais sur une opinion. Sans le premier
+  // bloc, « on a mis un fond » serait une décoration qu'aucune mesure ne
+  // demande — et c'est exactement ce qu'un lot d'interface se raconte trop
+  // facilement.
+  const OS = '#F5F3E8';
+  const FOND = '#161914';
+
+  const composante = (c) => {
+    const x = c / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  const clarte = (r, v, b) =>
+    0.2126 * composante(r) + 0.7152 * composante(v) + 0.0722 * composante(b);
+  const clarteHex = (hex) => clarte(
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  );
+  const contraste = (a, b) => {
+    const [haut, bas] = a > b ? [a, b] : [b, a];
+    return (haut + 0.05) / (bas + 0.05);
+  };
+  const CLARTE_OS = clarteHex(OS);
+
+  // --- (1) SUR LE DESSIN NU, LE NOMBRE DISPARAÎT — MESURÉ ------------------
+  {
+    // ⚠ LA ZONE EST CELLE OÙ LE NOMBRE TOMBE : `right: 0/1px, bottom: 0`, soit
+    // le coin bas-droit. Un balayage du sprite ENTIER dirait la lisibilité
+    // moyenne d'un dessin, ce qui n'est la question de personne.
+    const sprites = [
+      'unite/128/off_j_enclume.png',
+      'unite/128/off_o_guetteur.png',
+      'defense/128/def_j_casemate.png',
+      'defense/128/def_j_batterie.png',
+    ];
+    let pireGlobal = Infinity;
+    let sousTrois = 0;
+    let opaques = 0;
+    for (const relatif of sprites) {
+      const { largeur, hauteur, pixels } = decoderRgba(
+        join(RACINE, 'art', 'sprites', relatif),
+      );
+      const x0 = Math.floor(largeur * 0.66);
+      const y0 = Math.floor(hauteur * 0.70);
+      let pireDuSprite = Infinity;
+      for (let y = y0; y < hauteur; y++) {
+        for (let x = x0; x < largeur; x++) {
+          const i = (y * largeur + x) * 4;
+          if (pixels[i + 3] < 128) continue;
+          opaques += 1;
+          const c = contraste(
+            CLARTE_OS,
+            clarte(pixels[i], pixels[i + 1], pixels[i + 2]),
+          );
+          if (c < 3) sousTrois += 1;
+          if (c < pireDuSprite) pireDuSprite = c;
+        }
+      }
+      assert.ok(opaques > 0, `${relatif} n'a aucun pixel opaque dans ce coin`);
+      if (pireDuSprite < pireGlobal) pireGlobal = pireDuSprite;
+    }
+    // ⚠ LE MONTAGE EXIGE DE VOIR DE LA MATIÈRE : un coin entièrement
+    // transparent rendrait « zéro pixel sous 3:1 » et passerait pour une bonne
+    // nouvelle.
+    assert.ok(opaques > 500,
+      `le coin mesuré ne porte que ${opaques} pixels opaques : il ne mesure rien`);
+    assert.ok(pireGlobal < 1.2,
+      `le pire contraste du dessin nu vaut ${pireGlobal.toFixed(2)} : `
+      + 'le nombre ne se confondait donc avec rien, et ce lot n\'a pas lieu d\'être');
+    assert.ok(sousTrois / opaques > 0.10,
+      `seuls ${(sousTrois / opaques * 100).toFixed(1)} % des pixels passent sous 3:1`);
+  }
+
+  // --- (2) LE FOND OPAQUE, SUR LES DEUX RÈGLES ----------------------------
+  {
+    // ⚠⚠ LES DEUX SÉLECTEURS SONT NOMMÉS. Ethan dit « défense ET offense » : la
+    // bande Défense est peinte par `ui/chantier.js` sous `.jeton .niveau`,
+    // l'Offense par `ui/offense.js` sous `#ecran-offense .emplacement .niveau`.
+    // N'en corriger qu'un laisserait la moitié de la demande, et les deux écrans
+    // apprendraient deux grammaires pour le même nombre.
+    const regles = {
+      '.jeton .niveau': regleCss('.jeton .niveau'),
+      'les deux grilles de composition': regleCss(
+        '#ecran-offense .emplacement .niveau,\n  #ecran-raid .emplacement .niveau',
+      ),
+    };
+    for (const [nom, corps] of Object.entries(regles)) {
+      const fond = corps.match(/background:\s*(#[0-9A-Fa-f]{6})/);
+      assert.ok(fond, `« ${nom} » ne déclare aucun fond : le nombre reste sur le sprite`);
+      assert.equal(fond[1].toUpperCase(), FOND,
+        `« ${nom} » emploie un fond qui n'est pas celui de l'ombre d'hier`);
+      assert.match(corps, /color:\s*#F5F3E8/i,
+        `« ${nom} » a changé la couleur du chiffre`);
+      // ⚠ UNE PASTILLE SANS MARGE COLLE LE CHIFFRE À SON BORD.
+      assert.match(corps, /padding:\s*0 \d+px/,
+        `« ${nom} » ne réserve rien autour du chiffre`);
+      // ⚠⚠ ET L'OMBRE PART : sur un aplat de sa PROPRE couleur elle ne peint
+      // plus rien. Une déclaration dont le motif est parti se retire ; la garder
+      // ferait relire au lot suivant un mécanisme qui n'opère pas.
+      assert.ok(!/text-shadow/.test(corps),
+        `« ${nom} » garde une ombre devenue inerte sous son propre fond`);
+      // ⚠ ET LE NOMBRE NE POUSSE TOUJOURS RIEN : c'est ce qui rend la pastille
+      // sûre sur des vignettes calibrées au pixel.
+      assert.match(corps, /position:\s*absolute/,
+        `« ${nom} » n'est plus en absolu : la pastille déplacerait la vignette`);
+    }
+    // ⚠ ET LE GAIN SE CHIFFRE, IL NE S'AFFIRME PAS.
+    const gagne = contraste(CLARTE_OS, clarteHex(FOND));
+    assert.ok(gagne > 15,
+      `le fond retenu ne rend que ${gagne.toFixed(2)}:1 contre l'os`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// FIX T7 — l'étoile du module se pose à côté du niveau, et seulement si acquis
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ ETHAN, 18/09 : « il faudrait un élément visible pour le joueur quand il voit
+// des unités avec modules débloqués, à côté du numéro de niveau, une étoile ou
+// autre ». C'est la suite directe du point 4 du 17/09 — le niveau est entré sur
+// la case le 06/09, l'étoile prend l'angle qui reste.
+//
+// ⚠⚠ ET LE MONTAGE PROUVE SES DEUX MOITIÉS. Une étoile posée partout passerait
+// la moitié « elle s'affiche » ; une étoile jamais posée passerait la moitié
+// « une pièce sans module n'en a pas ». Il faut donc, dans le MÊME écran peint,
+// une pièce qui la porte et une qui ne la porte pas — et la bascule se mesure
+// sur l'ACHAT, pas sur deux montages différents.
+test('FIX T7 — l\'étoile du module se pose à côté du niveau, et seulement si acquis', () => {
+  const etat = baseAvecCommandement(30);
+  // Le Bélier porte `flashbang` en offense ; le Fendeur porte `ecraseur`.
+  poserEffectif(etat, 'armee', { id: 'belier', vague: 1, colonne: 2, niveau: 4 });
+  poserEffectif(etat, 'armee', { id: 'fendeur', vague: 2, colonne: 5, niveau: 9 });
+  const { doc, parId } = fauxDocumentOffense();
+  const ecran = initialiserEcranOffense(doc);
+
+  const enfantsDe = (vague, colonne, classe) => caseDe(parId, vague, colonne).children
+    .filter((e) => e.classList.contains(classe));
+  const etoileDe = (vague, colonne) => {
+    const trouvees = enfantsDe(vague, colonne, 'module');
+    return trouvees.length === 0 ? null : trouvees[0].textContent;
+  };
+
+  // ⚠ LA PRÉMISSE D'ABORD : les deux pièces portent bien un module d'offense,
+  // sinon le test mesurerait l'absence d'un module en croyant mesurer un refus.
+  assert.notEqual(nomDuModule('offense', 'belier'), null, 'montage : le Bélier n\'a plus de module');
+  assert.notEqual(nomDuModule('offense', 'fendeur'), null, 'montage : le Fendeur n\'a plus de module');
+
+  // Avant tout achat : aucune étoile, et le niveau, lui, est bien là. La seconde
+  // assertion est celle qui empêche de conclure d'un écran vide.
+  ecran.peindre(etat);
+  assert.equal(etoileDe(1, 2), null, 'une étoile se pose sans que le module soit acquis');
+  assert.equal(etoileDe(2, 5), null, 'une étoile se pose sans que le module soit acquis');
+  assert.equal(enfantsDe(1, 2, 'niveau').length, 1, 'montage : la case ne porte même pas son niveau');
+
+  // ⚠⚠ ET L'ACHAT EST LE GESTE RÉEL, pas un drapeau posé à la main : c'est lui
+  // qui prouve que l'écran lit l'ÉTAT et non une constante.
+  etat.recherche.pointsMilli = String(10n ** 15n);
+  acheter(etat, 'offense', 'belier', 'unite');
+  acheter(etat, 'offense', 'belier', 'module');
+  assert.equal(moduleEstAcquis(etat, 'offense', 'belier'), true, 'montage : l\'achat n\'a pas pris');
+
+  ecran.peindre(etat);
+  assert.equal(etoileDe(1, 2), '★', 'le Bélier n\'a pas son étoile après achat');
+  // ⚠⚠ ET LE FENDEUR N'EN A TOUJOURS PAS — c'est la moitié qui compte, et c'est
+  // le défaut « par nom » du 18/09 vu depuis l'écran : le Bélier et le Fendeur
+  // portent deux modules DIFFÉRENTS, mais une lecture par nom aurait pu armer
+  // l'un en achetant l'autre. `moduleEstAcquis` lit la PIÈCE.
+  assert.equal(etoileDe(2, 5), null,
+    'le Fendeur porte l\'étoile du Bélier : le module se lit par NOM et non par pièce');
+
+  // ⚠ ET UNE CASE VIDE N'EN PORTE PAS : l'étoile n'est pas un décor de case.
+  assert.equal(etoileDe(4, 9), null, 'une case vide porte une étoile');
+
+  // ⚠⚠ ENFIN, L'ÉTOILE ET LE NIVEAU NE SE RECOUVRENT PAS — c'est la demande
+  // d'Ethan, « à côté du numéro de niveau ». La feuille les pose dans deux coins
+  // opposés du même bas de case ; on le vérifie sur la SOURCE, parce qu'aucun
+  // faux document ne calcule une mise en page.
+  const html = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  const regle = html.match(/#ecran-offense \.emplacement \.module,[\s\S]{0,400}?\}/);
+  assert.ok(regle, 'la classe « module » n\'a pas de règle CSS');
+  assert.match(regle[0], /left: 1px/, 'l\'étoile n\'est pas au coin bas-gauche');
+  assert.match(regle[0], /#ecran-raid \.emplacement \.module/,
+    'la règle ne sert pas les DEUX écrans : l\'armée est la même des deux côtés');
+  const regleNiveau = html.match(/#ecran-offense \.emplacement \.niveau,[\s\S]{0,400}?\}/);
+  assert.match(regleNiveau[0], /right: 1px/, 'le niveau n\'est plus au coin bas-droit');
 });

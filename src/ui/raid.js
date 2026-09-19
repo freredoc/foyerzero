@@ -57,7 +57,7 @@ import {
   estPassager, estPorteur, passagerDe,
   MODULE_DE_TRANSPORT, CHASSIS_DU_PASSAGER,
 } from '../sim/formation-de-raid.js';
-import { nomDuModule } from '../sim/recherche.js';
+import { nomDuModule, moduleEstAcquis } from '../sim/recherche.js';
 import {
   reparerUnePiece, toutReparer, problemesDeLaReparationDUnePiece,
 } from '../sim/reparation.js';
@@ -69,7 +69,7 @@ import { siteDeLaCase } from '../sim/site-de-la-case.js';
 import { coutDUnRaid } from '../sim/prix-du-raid.js';
 import { creerCombat, tick as tickCombat } from '../sim/combat.js';
 import {
-  creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES,
+  creerAccumulateur, ticksDus, alphaMilli, prendrePositions, VITESSES, PLAFOND_RATTRAPAGE_MS,
 } from '../render/interpolation.js';
 import { calculerProjection } from '../render/projection.js';
 // ⚠⚠ LA RAMPE D'ARRIVÉE A DISPARU AU LOT APPROCHE, 11/09, AVEC SON MODULE.
@@ -108,7 +108,7 @@ import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // il faut `attaque`, ce que son propre commentaire annonce.
 import {
   COTE_CASE_MAX, poserCouches, formaterEntier, LIBELLE_VERDICT,
-  peindreVueDuPanneau, LIBELLES_COLONNE_DEGATS,
+  peindreVueDuPanneau, LIBELLES_COLONNE_DEGATS, formaterDelai,
 } from './chantier.js';
 import { couchesDeLUniteDAssaut } from './offense.js';
 // ⚠ LES PICTOGRAMMES SE DEMANDENT — voir `./pictogramme.js`.
@@ -202,6 +202,17 @@ export function vaguesDeLArmee(etat, formation) {
       // la ligne qui PORTE le module, acquis ou non, pour que le refus
       // « le module Garnison n'est pas acquis » puisse s'afficher.
       porteur: estPorteur(etat, piece.id),
+      // ⚠⚠ ETHAN, 18/09 : l'étoile du module, à côté du niveau. Elle se décide
+      // ICI, dans la vue, et jamais dans le DOM — c'est la même règle que pour le
+      // niveau lui-même, deux cents lignes plus bas.
+      //
+      // ⚠ ET CE N'EST PAS `porteur` CI-DESSUS : celui-là dit « ce joueur-là peut
+      // s'en servir » et sert le survol du transport, sans regarder si le module
+      // est acquis. L'étoile, elle, dit « acquis » — les deux questions sont
+      // distinctes, et les confondre mettrait une étoile sur tout ce qui porte un
+      // module, acheté ou non.
+      moduleAcquis: nomDuModule('offense', piece.id) !== null
+        && moduleEstAcquis(etat, 'offense', piece.id),
       passager: indexPassager === null ? null
         : vignetteDeLaPiece(formation[indexPassager], indexPassager),
     };
@@ -683,6 +694,27 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   let projection = null;
   let simulation = false;
   /**
+   * Le combat simulé qu'on n'a pas encore regardé, ou `null`.
+   *
+   * ⚠⚠ ETHAN, 17/09, POINT 8 : « quand on lance le simulateur, l'écran reste
+   * bloqué dessus, on ne revoit pas la cible avant simulateur. D'ailleurs,
+   * n'afficher que les résultats directement et un bouton pour visualiser la
+   * simulation. » Le simulateur ne déroule donc plus rien de lui-même : il
+   * RANGE de quoi dérouler, et c'est « Visualiser » qui le demande.
+   *
+   * ⚠ ON RANGE LE MONTAGE ET LES VAGUES, PAS LE COMBAT. `creerCombat` est ce
+   * qui rend un déroulé rejouable depuis son départ ; garder l'objet `combat`
+   * ferait repartir la seconde visualisation de l'état où la première s'est
+   * arrêtée, c'est-à-dire d'un champ de ruines.
+   *
+   * ⚠ ET `null` N'EST PAS `simulation === false` : `simulation` dit de quel
+   * genre est le rapport affiché — donc dans lequel des deux panneaux il va —,
+   * ce champ-ci dit s'il reste quelque chose à regarder. Les deux se
+   * désynchronisent à l'instant où le joueur visualise : `simulation` reste
+   * vrai pendant tout le déroulé, et le montage, lui, a déjà servi.
+   */
+  let simulationEnAttente = null;
+  /**
    * Millisecondes écoulées depuis la fin du combat, ou `null` hors effondrement.
    *
    * ⚠ `null` ET PAS ZÉRO, ET LA DIFFÉRENCE PORTE TOUT LE CÂBLAGE. Zéro est le
@@ -691,6 +723,22 @@ export function initialiserEcranRaid(doc, crochets = {}) {
    * s'il doit montrer le rapport tout de suite.
    */
   let effondrementMs = null;
+
+  /**
+   * L'écran a-t-il été masqué depuis la dernière image vue, et combien de temps
+   * le navigateur a-t-il compté pendant qu'il l'était.
+   *
+   * ⚠ MESURÉS SUR LA BOUCLE D'IMAGES, JAMAIS SUR L'HORLOGE MURALE — `Date.now`
+   * est interdit dans ce fichier (`banc.test.js` §11). Voir le bloc d'`image` :
+   * c'est ce couple qui distingue « le joueur est parti » de « l'écran a
+   * clignoté », et c'est la borne basse qui manquait au lot RETOUR-DE-RAID.
+   *
+   * ⚠ `etaitMasque` NE SE DÉDUIT PAS D'`absenceMs > 0` : un navigateur qui
+   * coupe `requestAnimationFrame` en arrière-plan ne compte RIEN pendant
+   * l'absence, et `absenceMs` vaut alors zéro pour une absence de cinq minutes.
+   */
+  let etaitMasque = false;
+  let absenceMs = 0;
 
   // --- la vue : quelle bande, à quelle taille, et où -------------------------
   //
@@ -912,6 +960,43 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     idImage = null;
     const ecoule = derniereImageMs === null ? 0 : horodatageMs - derniereImageMs;
     derniereImageMs = horodatageMs;
+
+    // ⚠⚠ L'ABSENCE SE MESURE ICI, SUR LA BOUCLE D'IMAGES, ET NULLE PART
+    // AILLEURS — point 3 du 17/09. Deux raisons, et aucune n'est de confort.
+    //
+    // 1. `Date.now` EST INTERDIT DANS CE FICHIER. `banc.test.js` §11 n'admet
+    //    l'horloge murale que dans `src/ui/session.js`, exactement une fois, et
+    //    interdit aussi `new Date` et `performance.timeOrigin` — les deux
+    //    contournements nommés. L'écart entre deux horodatages de
+    //    `requestAnimationFrame` est une DURÉE, pas une heure : il ne dit rien
+    //    de quand on est, seulement de combien de temps a passé.
+    // 2. C'EST LA BONNE GRANDEUR. `visibilitychange` ne dit QUE « l'écran s'en
+    //    va » ou « l'écran revient » ; il ne dit pas combien de temps s'est
+    //    écoulé entre les deux. C'est faute de cette durée que le lot
+    //    RETOUR-DE-RAID concluait le combat au départ, sans pouvoir distinguer
+    //    deux secondes de cinq minutes.
+    //
+    // ⚠ LES DEUX RÉGIMES DE NAVIGATEUR SONT COUVERTS, ET IL LE FAUT : certains
+    // coupent `requestAnimationFrame` en arrière-plan (l'absence tombe alors
+    // ENTIÈRE dans l'`ecoule` de l'image du retour), d'autres le ralentissent à
+    // une image par seconde (l'absence s'accumule alors par tranches). On
+    // additionne les deux, et `etaitMasque` dit qu'il y a eu une absence, même
+    // quand `absenceMs` vaut zéro.
+    if (doc.hidden === true) {
+      absenceMs += ecoule;
+    } else if (etaitMasque) {
+      etaitMasque = false;
+      const absence = absenceMs + ecoule;
+      absenceMs = 0;
+      // ⚠ UNE SIMULATION NE CONCLUT JAMAIS — c'était déjà la deuxième garde de
+      // `visibilitychange`, et elle survit telle quelle : elle ne commande rien
+      // à personne, quittée puis reprise elle se reprend où elle en était.
+      if (deroule && !simulation && absence >= ECRAN_RAID.absenceQuiConclutMs) {
+        if (effondrementMs !== null) { finDuDeroule(); return; }
+        if (combat !== null && !combat.termine) { conclureLeDeroule(); return; }
+      }
+    }
+
     if (combat !== null && !combat.termine && !enPause) {
       const dus = ticksDus(accumulateur, ecoule, vitesse);
       for (let k = 0; k < dus && !combat.termine; k += 1) {
@@ -941,9 +1026,21 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       && effondrementMs === null && doitSEffondrer()) {
       effondrementMs = 0;
     } else if (effondrementMs !== null) {
-      effondrementMs += ecoule;
+      // ⚠⚠ ET IL AVANCE DU MÊME TEMPS PLAFONNÉ QUE LES TICKS, PAS DE L'`ecoule`
+      // BRUT — point 3 du 17/09. `ticksDus` borne son injection à
+      // `PLAFOND_RATTRAPAGE_MS` depuis toujours ; l'effondrement, lui, prenait
+      // l'écart entier. Une image de retour d'arrière-plan porte des secondes :
+      // les deux secondes d'effondrement étaient donc franchies d'un coup, et
+      // le champ de ruines — la seule chose que ce lot-là servait à montrer —
+      // ne s'affichait pas. Un seul temps de rattrapage pour les deux horloges
+      // de cette boucle, sinon elles se désynchronisent au premier retour.
+      effondrementMs += Math.min(ecoule, PLAFOND_RATTRAPAGE_MS);
     }
     dessiner();
+    // ⚠ LE REBOURS SE RÉÉCRIT SUR LA MÊME BOUCLE QUE LE DESSIN, et pour la même
+    // raison que l'effondrement : une seconde horloge à côté de celle-ci ne se
+    // figerait pas avec elle en arrière-plan. C'est la leçon d'`EFF T9`.
+    ecrireLeRebours();
     if (effondrementMs !== null) {
       if (effondrementMs >= ECRAN_RAID.effondrementMs) { finDuDeroule(); return; }
     } else if (combat !== null && combat.termine) { finDuDeroule(); return; }
@@ -1016,7 +1113,44 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // s'il le veut —, il ne s'applique simplement pas de lui-même.
     coteVoulu = null;
     marquerBascule();
+    ecrireLeRebours();
     pendantLeDeroule(true);
+  }
+
+  /**
+   * Le temps de combat qu'il reste à regarder — point 2 du 17/09.
+   *
+   * ⚠⚠ LA DURÉE VIENT DU RAPPORT, PAS D'UN PLAFOND. Le combat est résolu AVANT
+   * la première image (arbitrage « A » du 01/09), donc `rapportCourant.ticks`
+   * est sa longueur EXACTE, au tick près. `dureeMaxCombatSec` aurait donné un
+   * plafond que la plupart des combats n'atteignent jamais : le rebours aurait
+   * annoncé quatre-vingt-dix secondes pour un assaut qui en dure vingt-cinq, et
+   * il serait tombé d'un coup à zéro — pire que pas de rebours du tout.
+   *
+   * ⚠ ET IL SE DIVISE PAR LA VITESSE, parce que la question d'Ethan est
+   * « combien de temps il reste », pas « combien de ticks il reste ». En ×4, il
+   * reste quatre fois moins de temps à regarder ; l'écrire autrement ferait
+   * mentir le seul écran où les vitesses existent.
+   *
+   * ⚠ IL NE PARAÎT PAS SANS DÉROULÉ : hors combat il n'y a rien à décompter, et
+   * un « 0 s » posé sur la préparation se lirait comme une limite de temps pour
+   * composer son armée.
+   */
+  function ecrireLeRebours() {
+    const bloc = $('raid-rebours');
+    if (bloc === null) return;
+    const total = rapportCourant?.ticks;
+    if (!deroule || combat === null || !Number.isFinite(total)) {
+      bloc.hidden = true;
+      return;
+    }
+    // ⚠ `Math.max(0, …)` N'EST PAS DE LA PRUDENCE DÉCORATIVE : un rejeu peut
+    // dépasser d'un tick le compte du rapport si le montage a dérivé, et un
+    // rebours négatif s'afficherait « -1 s » sous les yeux du joueur au lieu de
+    // se taire. `formaterDelai` LÈVE sur un négatif — ce serait l'écran noir.
+    const restantSec = (Math.max(0, total - combat.tick) * TICK_MS) / 1000 / vitesse;
+    bloc.hidden = false;
+    bloc.textContent = formaterDelai(restantSec);
   }
 
   function quitterLeDeroule() {
@@ -1027,6 +1161,18 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // Les vitesses sont un contrôle du déroulé : elles s'en vont avec lui.
     const vitesses = $('raid-vitesses');
     if (vitesses !== null) vitesses.hidden = true;
+    // ⚠ ET LE REBOURS AUSSI — il compte un combat, pas une préparation.
+    // ⚠⚠ IL PART ICI ET PAS DANS `finDuDeroule` : `quitterLeDeroule` est la
+    // porte COMMUNE des trois sorties (fin du combat, `fermerPanneaux`,
+    // `masquer`). Le cacher dans `finDuDeroule` seule laisserait le rebours
+    // figé par-dessus la carte quand le joueur quitte l'écran en plein combat.
+    //
+    // ⚠⚠ ET ON LE DEMANDE À `ecrireLeRebours`, ON NE POSE PAS `hidden` ICI. Un
+    // seul écrivain par grandeur : `deroule` vient de passer à faux, donc elle
+    // le cache d'elle-même. Deux lignes qui écrivent la même visibilité
+    // divergent au premier réglage, et la divergence se lirait comme un rebours
+    // fantôme par-dessus la préparation.
+    ecrireLeRebours();
     // ⚠ ON REVIENT À LA BANDE, DONC LE CADRAGE CHANGE : `#raid-bas` reparaît et
     // la vue redevient celle d'une bande. Le `ResizeObserver` verra la hauteur
     // bouger, mais pas la bande — c'est ici qu'on le dit.
@@ -1188,6 +1334,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       bloc.className = 'vague';
       const rangee = doc.createElement('div');
       rangee.className = 'emplacements';
+      // ⚠⚠ PAS DE QUINCONCE ICI — LE POINT 5 A ÉTÉ ANNULÉ PAR ETHAN LE 17/09,
+      // APRÈS AVOIR ÉTÉ LIVRÉ. Cette grille-ci reste sur ses neuf colonnes
+      // pleines, alignées, et c'est une DÉCISION, pas un oubli : l'écran Offense
+      // porte le quinconce depuis le 03/09, celui-ci ne le porte pas, et les deux
+      // montrent pourtant la même armée. Un lot qui « harmoniserait » les deux
+      // écrans sans arbitrage défera cette annulation-là.
       rangee.style.gridTemplateColumns = `repeat(${NB_COLONNES}, 1fr)`;
       for (let colonne = 1; colonne <= NB_COLONNES; colonne += 1) {
         const occupant = vague.cases[colonne - 1];
@@ -1225,6 +1377,18 @@ export function initialiserEcranRaid(doc, crochets = {}) {
           niveau.className = 'niveau';
           niveau.textContent = String(occupant.niveau);
           emplacement.appendChild(niveau);
+          // ⚠⚠ L'ÉTOILE DU MODULE — Ethan, 18/09, et elle est posée des DEUX
+          // côtés. Ce sont les mêmes pièces que l'écran Offense, dans la même
+          // grille de composition : l'écrire d'un côté seulement laisserait au
+          // joueur un écran où le module se lit et un autre où il ne se lit pas,
+          // pour une armée qui est la même. C'est mot pour mot le motif qui a
+          // fait entrer le NIVEAU ici le 06/09.
+          if (occupant.moduleAcquis) {
+            const module = doc.createElement('span');
+            module.className = 'module';
+            module.textContent = '★';
+            emplacement.appendChild(module);
+          }
           // ⚠⚠ LE BADGE PASSAGER EST LE POINT LE PLUS FRAGILE DU LOT, ET IL VAUT
           // MIEUX LE DIRE QUE L'ESPÉRER. La cible est un téléphone et une case
           // de vague fait une trentaine de pixels : le badge fait 24 px CSS de
@@ -1798,6 +1962,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // le joueur enfermé dans un écran sans onglets.
     quitterLeDeroule();
     fermerLaFiche();
+    // ⚠⚠ ET LA SIMULATION EN ATTENTE SE SOLDE ICI. C'est la porte COMMUNE —
+    // « Carte », « Offense », « Ré-attaquer », les deux boutons du rapport et
+    // l'ouverture d'une cible y passent tous. Un montage laissé là ferait
+    // « Visualiser » rejouer, sur une AUTRE cible, le combat simulé de la
+    // précédente : le panneau est masqué juste en dessous, donc rien ne le
+    // dirait avant que le joueur ne touche le bouton.
+    simulationEnAttente = null;
     for (const id of ['raid-sim', 'raid-fin', 'raid-bandeau', 'raid-vitesses']) {
       const bloc = $(id);
       if (bloc !== null) bloc.hidden = true;
@@ -1832,13 +2003,32 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // même raison.
     if (!simule) { sonDeGeste('attaque', {}); apresGeste(); }
     peindreVagues();
-    // ⚠ UN BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ,
-    // pour qu'on ne le confonde jamais avec la vraie attaque.
-    $('raid-bandeau').hidden = !simule;
+    // ⚠⚠ UNE SIMULATION NE DÉROULE PLUS RIEN D'ELLE-MÊME — ETHAN, 17/09,
+    // POINT 8. Elle range de quoi dérouler et montre ses RÉSULTATS tout de
+    // suite ; « Visualiser » demande le combat, « Fermer » rend la cible.
+    // C'est la moitié qui corrige « l'écran reste bloqué dessus » : sans
+    // déroulé, le chrome n'est jamais masqué, donc il n'y a rien à rendre.
+    //
+    // ⚠ ET ON SORT AVANT `entrerDansLeDeroule`, PAS APRÈS. Y entrer puis en
+    // sortir aussitôt masquerait `#raid-bas`, redimensionnerait le canevas et
+    // annoncerait un déroulé à la session — trois effets pour un combat que
+    // personne ne regarde.
+    if (simule) {
+      simulationEnAttente = { montage, vagues };
+      montrerResultat(rapportCourant, true);
+      return;
+    }
+    // ⚠ LE BANDEAU « SIMULATEUR » ET LES VITESSES APPARTIENNENT AU DÉROULÉ
+    // SIMULÉ, ET UN VRAI RAID N'EN A NI L'UN NI L'AUTRE. Ils s'écrivaient
+    // `!simule` quand les deux chemins partageaient cette ligne ; le chemin
+    // simulé est parti plus haut, donc la valeur est désormais constante, et
+    // l'écrire telle quelle dit ce qu'elle veut dire.
+    //
     // ⚠ LE VRAI RAID SE REGARDE EN TEMPS RÉEL, SANS CONTRÔLE DE VITESSE — Ethan.
     // `dureeMaxCombatSec` vaut 90 : il ne peut pas durer plus d'une minute
     // trente, donc il n'y a pas de durée à gérer.
-    $('raid-vitesses').hidden = !simule;
+    $('raid-bandeau').hidden = true;
+    $('raid-vitesses').hidden = true;
     vitesse = 1;
     // ⚠ AVANT `rejouer`, ET C'EST UNE QUESTION DE MESURE : masquer `#raid-bas`
     // agrandit le canevas, et `rejouer` appelle `dimensionner`. Dans l'autre
@@ -1846,6 +2036,86 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // `ResizeObserver` la referait aussitôt.
     entrerDansLeDeroule();
     rejouer(montage, vagues);
+  }
+
+  /**
+   * Rejoue le combat simulé qu'on vient de ranger — le bouton « Visualiser ».
+   *
+   * ⚠⚠ ELLE REPART DU MONTAGE, DONC DU DÉPART, ET C'EST CE QUI LA REND
+   * REJOUABLE. `rejouer` refait `creerCombat` : on peut donc regarder deux fois
+   * la même simulation, et les deux passes rendent le même combat — il n'y a
+   * aucun hasard dans `sim/combat.js`. Garder l'objet `combat` d'une passe
+   * ferait repartir la suivante d'un champ de ruines.
+   *
+   * ⚠ ET `simulationEnAttente` N'EST PAS VIDÉ ICI : c'est « Fermer » qui rend
+   * la cible, donc lui qui solde. Le vider au premier visionnage désarmerait le
+   * bouton alors que son panneau revient à la fin du déroulé.
+   *
+   * ⚠⚠ LE PANNEAU REVIENT PAR `finDuDeroule`, AVEC LE MÊME RAPPORT — donc les
+   * MÊMES chiffres, sans une ligne pour les recopier. `simulation` reste vrai
+   * pendant tout le déroulé, et c'est lui qui route `montrerResultat` vers le
+   * petit panneau plutôt que vers celui du vrai raid.
+   */
+  function deroulerLaSimulation() {
+    if (simulationEnAttente === null) return;
+    const { montage, vagues } = simulationEnAttente;
+    $('raid-sim').hidden = true;
+    // ⚠ UN BANDEAU « SIMULATEUR » COUVRE LA VUE PENDANT TOUT LE DÉROULÉ SIMULÉ,
+    // pour qu'on ne le confonde jamais avec la vraie attaque.
+    $('raid-bandeau').hidden = false;
+    $('raid-vitesses').hidden = false;
+    vitesse = 1;
+    entrerDansLeDeroule();
+    rejouer(montage, vagues);
+  }
+
+  /**
+   * Referme le simulateur et REND LA CIBLE — la seconde moitié du point 8.
+   *
+   * ⚠⚠ C'ÉTAIT LA LIGNE FAUTIVE, ET ELLE TENAIT EN UN `hidden`. Le bouton
+   * « Fermer » ne cachait que `#raid-sim` : le bandeau « Simulateur » restait à
+   * l'écran, `simulation` restait vrai, et le canevas montrait encore la scène
+   * d'APRÈS le combat. C'est mot pour mot « on ne revoit pas la cible avant
+   * simulateur ».
+   *
+   * ⚠ LE RAPPORT PART AVEC LE PANNEAU. Le laisser ferait reparaître ces
+   * résultats-là au prochain `finDuDeroule` — celui d'un autre combat.
+   *
+   * ⚠ ET LES DEUX COUPURES SONT IDEMPOTENTES : le joueur ne peut pas atteindre
+   * ce bouton pendant un déroulé — `#raid-sim` y est masqué — mais
+   * `quitterLeDeroule` sort d'elle-même quand il n'y en a aucun, et
+   * `arreterBoucle` de même. On les appelle donc sans avoir à savoir par où
+   * l'on arrive, ce qui est la discipline de `fermerPanneaux`.
+   *
+   * ⚠⚠ ET `simulation = false` NE MORD SUR AUCUN ÉTAT D'AUJOURD'HUI — MESURÉ,
+   * PAS SUPPOSÉ. Le retirer ne fait tomber aucun test, et la lecture dit
+   * pourquoi : `simulation` n'a que TROIS lecteurs, et chacun est gardé par une
+   * grandeur que cette fonction solde deux lignes plus bas. `doitSEffondrer` et
+   * le `montrerResultat` de `finDuDeroule` exigent `rapportCourant !== null`,
+   * qui passe à `null` juste après ; la deuxième garde de `visibilitychange`
+   * exige `deroule`, que `quitterLeDeroule` éteint. Et `lancer` réécrit
+   * `simulation = simule` à chaque départ, donc le drapeau est rétabli avant
+   * qu'un quatrième lecteur ne puisse le lire de travers.
+   * ⚠ ON L'ÉCRIT QUAND MÊME — c'est ce que la ligne VEUT dire, « la simulation
+   * est finie » —, et le fait est inscrit ici plutôt que compté comme une
+   * falsification qui mord. Même idiome que le `+ sens` du lot MURS. *Un test
+   * qui ne peut tomber sur aucun état d'aujourd'hui se déclare, il ne se compte
+   * pas.*
+   */
+  function fermerLaSimulation() {
+    $('raid-sim').hidden = true;
+    $('raid-bandeau').hidden = true;
+    $('raid-vitesses').hidden = true;
+    simulationEnAttente = null;
+    simulation = false;
+    rapportCourant = null;
+    arreterBoucle();
+    quitterLeDeroule();
+    // ⚠ ET LA CIBLE SE REPEINT, elle ne se rétablit pas toute seule : `rejouer`
+    // a remplacé `combat` par le combat simulé, et `dessiner` peint ce que
+    // `combat` porte. Sans cet appel, refermer le panneau laisserait le champ
+    // de ruines de la simulation sous les yeux du joueur.
+    peindreLApercu();
   }
 
   brancher('raid-attaquer', () => lancer(false));
@@ -1875,7 +2145,8 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     ouvrirSurLaCible(etatCourant, cibleCourante);
   });
 
-  brancher('raid-sim-fermer', () => { $('raid-sim').hidden = true; });
+  brancher('raid-sim-voir', () => { deroulerLaSimulation(); });
+  brancher('raid-sim-fermer', () => { fermerLaSimulation(); });
   // ⚠ LES DEUX PORTES DU RETOUR PASSENT PAR LE MÊME CROCHET : celle d'abandon
   // (« Carte », avant le combat) et celle du rapport (« Carte », après). Ethan a
   // parlé de la seconde ; laisser la première recadrer chez soi aurait fait deux
@@ -1919,14 +2190,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   // remplacerait une attente de quatre-vingt-dix secondes par un gel de
   // plusieurs secondes à la reprise.
   //
-  // ⚠ ET PAS DE BOUTON « PASSER » — Ethan, 06/09, mot pour mot : « bouton passer
-  // non ». On emprunte le CHEMIN DE CODE de `#raid-instantane`, on n'expose pas
-  // son bouton : `#raid-vitesses` garde son `hidden = !simule`.
+  // ⚠⚠ LES QUATRE GARDES D'ORIGINE VIVENT DÉSORMAIS DANS `image`, où elles sont
+  // lues au RETOUR. Aucune n'est facultative, et la troisième reste la moins
+  // évidente :
   //
-  // ⚠⚠ QUATRE GARDES, ET AUCUNE N'EST FACULTATIVE.
-  //
-  // 1. `doc.hidden` — l'évènement se déclenche dans les DEUX sens, et le retour
-  //    n'a rien à conclure.
+  // 1. `doc.hidden` — l'évènement se déclenche dans les DEUX sens.
   // 2. `!simulation` — une simulation ne commande rien à personne, et le bandeau
   //    « SIMULATEUR » existe justement pour qu'on ne la confonde pas avec un
   //    ordre. Quittée puis reprise, elle se reprend où elle en était.
@@ -1937,29 +2205,38 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   //    d'aperçu à chaque fois que le joueur quitte le jeu depuis la PRÉPARATION :
   //    la cible se figerait sur un combat conclu « attaquants », que le joueur
   //    n'a pas lancé. `deroule` est exactement « un déroulé est en cours ».
-  // 4. `combat !== null && !combat.termine` — masquer l'écran alors que rien ne
-  //    tourne ne doit rien déclencher, et surtout pas un second `montrerResultat`
-  //    sur un rapport déjà affiché.
+  // 4. `combat !== null && !combat.termine` — revenir alors que rien ne tourne
+  //    ne doit rien déclencher, et surtout pas un second `montrerResultat` sur
+  //    un rapport déjà affiché.
   //
   // ⚠ ET `src/ui/session.js` N'A PAS UNE LIGNE DE CHANGÉE. Il porte déjà son
   // `visibilitychange`, qui suspend et reprend l'horloge économique, et son
   // `pagehide`, qui sauvegarde. Le déroulé appartient à l'écran de raid : c'est
   // lui qui en a un, donc c'est lui qui l'écoute.
+  //
+  // ⚠⚠ CE QUI A CHANGÉ LE 17/09, POINT 3 : « j'ai trouvé un exploit — si on
+  // lance un raid, qu'on quitte l'appli et qu'on revient très vite, même pas
+  // besoin de forcer l'arrêt, le raid est déjà complété. » Le lot RETOUR-DE-RAID
+  // concluait AU DÉPART, et n'avait donc aucun moyen de savoir combien de temps
+  // le joueur allait rester parti : deux secondes et cinq minutes empruntaient
+  // le même chemin. Ce qui suit ne fait plus que POSER LE DRAPEAU ; la décision
+  // se prend au RETOUR, dans `image`, quand la durée de l'absence est connue.
+  //
+  // ⚠ LES QUATRE GARDES D'ORIGINE N'ONT PAS DISPARU, ELLES ONT DÉMÉNAGÉ. Elles
+  // se lisent maintenant dans `image` (`deroule`, `!simulation`,
+  // `effondrementMs`, `combat.termine`), au moment où elles décident vraiment de
+  // quelque chose. Les garder ici EN PLUS aurait fait deux jeux de gardes pour
+  // une seule règle — et la première divergence aurait rendu l'autre muette.
+  //
+  // ⚠ ET IL N'Y A TOUJOURS PAS DE BOUTON « PASSER » — Ethan, 06/09, mot pour
+  // mot : « bouton passer non ».
   if (typeof doc.addEventListener === 'function') {
     doc.addEventListener('visibilitychange', () => {
       if (doc.hidden !== true) return;
-      if (simulation) return;
-      if (!deroule) return;
-      // ⚠⚠ ET UNE CINQUIÈME GARDE DEPUIS LE LOT EFFONDREMENT, 07/09 — ELLE PASSE
-      // AVANT LA QUATRIÈME, ET C'EST TOUT SON INTÉRÊT. Pendant l'effondrement le
-      // combat est TERMINÉ : la garde `combat.termine` juste dessous renverrait
-      // donc sans rien conclure, et le joueur qui revient trouverait deux
-      // secondes d'animation figée devant son rapport. C'est très exactement le
-      // défaut que ce lot-là réparait, refait un cran plus loin. On coupe
-      // l'effondrement et on va droit au rapport.
-      if (effondrementMs !== null) { arreterBoucle(); finDuDeroule(); return; }
-      if (combat === null || combat.termine) return;
-      conclureLeDeroule();
+      // ⚠ `absenceMs` REPART DE ZÉRO À CHAQUE DÉPART, jamais au retour : deux
+      // absences successives sont deux absences, pas une longue.
+      etaitMasque = true;
+      absenceMs = 0;
     });
   }
 
@@ -1968,6 +2245,58 @@ export function initialiserEcranRaid(doc, crochets = {}) {
   }
 
   fermerPanneaux();
+  // ⚠⚠ ET LE REBOURS SE FERME EXPLICITEMENT AU CÂBLAGE. Le `hidden` du balisage
+  // suffit aujourd'hui, mais il serait la SEULE chose à le tenir fermé au
+  // démarrage : un attribut oublié à la prochaine reprise du HTML l'afficherait
+  // par-dessus la préparation sans qu'aucun test le voie. C'est la discipline du
+  // panneau de détail du Chantier, reprise au mot. ⚠ `fermerPanneaux` ne suffit
+  // pas : il passe par `quitterLeDeroule`, qui SORT quand aucun déroulé n'est en
+  // cours — et au câblage il n'y en a aucun.
+  ecrireLeRebours();
+
+  /**
+   * Remonte l'aperçu de la cible : le site tel qu'il est, aucune vague.
+   *
+   * ⚠⚠ UNE ÉCRITURE, DEUX LECTEURS — `ouvrirSurLaCible` et `fermerLaSimulation`.
+   * Le point 8 du 17/09 demande qu'on REVOIE la cible en refermant le
+   * simulateur ; recomposer ce bloc dans le bouton en aurait donné un second,
+   * voisin et non éprouvé, et le premier réglage de décor n'en aurait touché
+   * qu'un. C'est le motif d'`ouvrirSurLaCible` elle-même, un cran plus bas.
+   *
+   * ⚠ ELLE RELIT `siteDeLaCase`, ET C'EST CE QU'ON LUI DEMANDE : après un VRAI
+   * raid le site porte ses dégâts, et l'aperçu doit les montrer. Une simulation,
+   * elle, travaille sur une copie — `simulerRaid` clone l'état — donc elle rend
+   * exactement le même aperçu qu'avant, ce qui est très précisément ce
+   * qu'« on ne revoit pas la cible » réclame.
+   *
+   * @returns {object|null} le site, pour que l'appelant n'ait pas à le relire
+   */
+  function peindreLApercu() {
+    if (etatCourant === null || cibleCourante === null) return null;
+    const site = siteDeLaCase(etatCourant, cibleCourante.rangee, cibleCourante.colonne);
+    if (site === null) return null;
+    // ⚠ ON MONTRE LA CIBLE AVANT MÊME D'ATTAQUER : le montage courant, donc la
+    // garnison RÉELLE et les bâtiments à leurs PV du jour. Aucune information
+    // n'est cachée — arbitrage d'Ethan du 01/09.
+    combat = creerCombat({ ...montageDuRaid(etatCourant, site), vagues: [] });
+    // ⚠⚠ LE PROPRIÉTAIRE SE LIT SUR LE MONTAGE, JAMAIS `'ouvrage'` EN DUR.
+    // `sim/raid-ouvrage.js` monte des combats où la défense appartient au
+    // JOUEUR ; l'écrire en dur passerait le test d'aujourd'hui et donnerait
+    // un décor de l'Ouvrage à la base du joueur le jour où cet écran-là
+    // s'ouvrira. Même leçon que `pointsRecherche` au lot MODULES-E, et que
+    // le camp du mur au lot MURS-OUVRAGE.
+    //
+    // ⚠ ET CE JOUR-LÀ, LA CASE À PASSER SERA `fondation`, PAS LA CIBLE :
+    // c'est elle qui identifie une base du joueur, comme sur l'écran de la
+    // base. Ici la cible EST le site, qui ne se déplace pas.
+    fondCourant = fondDeLaBase(
+      combat.proprietaireDefense, site.type, site.rangee, site.colonne,
+    );
+    precedentes = prendrePositions(combat);
+    dimensionner();
+    dessiner();
+    return site;
+  }
 
   /**
    * Entre sur une cible : la vue à neuf, les panneaux fermés, le bouton armé.
@@ -2026,7 +2355,6 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     fermerPanneaux();
     desarmer();
     peindreVagues();
-    const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
     // ⚠⚠ LE PRIX SE PREND DANS `vueDuRaid`, ET NULLE PART AILLEURS. C'est
     // elle qui appelle `coutDUnRaid`, une fois ; le libellé LIT ce qu'elle
     // rend. Rappeler le barème ici donnerait deux nombres qui peuvent
@@ -2037,32 +2365,15 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // une activation ne changent. Il se peint donc à l'ouverture, comme le
     // titre, et pas à chaque image.
     armerLAttaque(vueDuRaid(etat, cibleCourante, formation).cout);
+    // ⚠ LE TITRE LIT LE SITE QUE L'APERÇU A DÉJÀ RÉSOLU. Rappeler
+    // `siteDeLaCase` ici en ferait une seconde lecture de la même case, et les
+    // deux pourraient désigner deux sites le jour où la fonction prendrait un
+    // argument de plus.
+    const site = peindreLApercu();
     const titre = $('raid-titre');
     if (titre !== null && site !== null) {
       titre.textContent = `${site.type} · niveau ${site.niveau}`
         + ` · rangée ${site.rangee}, colonne ${site.colonne}`;
-    }
-    // ⚠ ON MONTRE LA CIBLE AVANT MÊME D'ATTAQUER : le montage courant, donc la
-    // garnison RÉELLE et les bâtiments à leurs PV du jour. Aucune information
-    // n'est cachée — arbitrage d'Ethan du 01/09.
-    if (site !== null) {
-      combat = creerCombat({ ...montageDuRaid(etat, site), vagues: [] });
-      // ⚠⚠ LE PROPRIÉTAIRE SE LIT SUR LE MONTAGE, JAMAIS `'ouvrage'` EN DUR.
-      // `sim/raid-ouvrage.js` monte des combats où la défense appartient au
-      // JOUEUR ; l'écrire en dur passerait le test d'aujourd'hui et donnerait
-      // un décor de l'Ouvrage à la base du joueur le jour où cet écran-là
-      // s'ouvrira. Même leçon que `pointsRecherche` au lot MODULES-E, et que
-      // le camp du mur au lot MURS-OUVRAGE.
-      //
-      // ⚠ ET CE JOUR-LÀ, LA CASE À PASSER SERA `fondation`, PAS LA CIBLE :
-      // c'est elle qui identifie une base du joueur, comme sur l'écran de la
-      // base. Ici la cible EST le site, qui ne se déplace pas.
-      fondCourant = fondDeLaBase(
-        combat.proprietaireDefense, site.type, site.rangee, site.colonne,
-      );
-      precedentes = prendrePositions(combat);
-      dimensionner();
-      dessiner();
     }
   }
 
@@ -2169,7 +2480,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ⚠ QUITTER L'ÉCRAN REND LE CHROME. Sans cette ligne, changer d'onglet
     // pendant un déroulé laisserait la page sans onglets — donc sans moyen d'en
     // revenir. Troisième porte, la même fonction idempotente.
-    masquer() { arreterBoucle(); quitterLeDeroule(); },
+    //
+    // ⚠ ET ELLE SOLDE LA SIMULATION EN ATTENTE, comme `fermerPanneaux`. C'est la
+    // seule des trois portes qui ne passe PAS par elle : sans cette ligne, un
+    // montage survivrait à un changement d'onglet.
+    masquer() { arreterBoucle(); quitterLeDeroule(); simulationEnAttente = null; },
     /**
      * Les unités attaquantes et leur état de mouvement — pour le son.
      *

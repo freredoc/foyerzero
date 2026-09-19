@@ -53,7 +53,16 @@ export function executer(ctx, liste, atlas = null) {
         ctx.fillStyle = p.couleur;
         ctx.font = `${p.taille}px system-ui, sans-serif`;
         ctx.textBaseline = 'middle';
+        // ⚠⚠ `align` EST OPTIONNEL ET VAUT `left` QUAND IL MANQUE — lot
+        // MUNITIONS, 19/09. Les quatre `texte` d'avant ce lot ne le portent pas
+        // et ne doivent PAS le porter : un champ ajouté partout ferait tomber
+        // les comparaisons de primitives sur une différence qui ne se voit pas
+        // à l'écran. Seules les étiquettes calées à DROITE le posent, et elles
+        // le posent parce que la largeur d'un texte ne se mesure pas dans un
+        // module pur — c'est le canvas qui sait, et c'est lui qui aligne.
+        ctx.textAlign = p.align ?? 'left';
         ctx.fillText(p.texte, p.x, p.y);
+        ctx.textAlign = 'left';
         break;
       case 'sprite': {
         const image = atlas === null ? undefined : atlas[p.famille];

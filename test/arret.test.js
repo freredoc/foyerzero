@@ -32,6 +32,7 @@ import { dirname, join } from 'node:path';
 import { creerCombat, tick, TICKS_AVANT_REPLI } from '../src/sim/combat.js';
 import { MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
+import { portants } from './portants.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -373,7 +374,7 @@ test('ARRÊT T7 — devant un mur bloquant, le porteur de l\'Écraseur force', (
     vagues: [[{ id: 'broyeur', colonne: 5 }]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: [] },
-      joueur: { offense: modules, defense: [] },
+      joueur: { offense: portants('joueur', 'offense', ...modules), defense: [] },
     },
   }));
   assert.equal(UNITES.broyeur.module, 'ecraseur', 'montage : le porteur n\'a plus l\'Écraseur');
@@ -476,7 +477,7 @@ test('ARRÊT T8 — devant un mur bloquant, aucune ne se replie', () => {
     vagues: [[{ id, colonne: 5 }]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: [] },
-      joueur: { offense: modules, defense: [] },
+      joueur: { offense: portants('joueur', 'offense', ...modules), defense: [] },
     },
   }));
 

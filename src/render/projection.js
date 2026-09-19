@@ -183,9 +183,7 @@ export function xDeColonneMilli(projection, colonneMilli) {
  *   y = margeY + (18000 − m) × tailleCase / 1000
  *
  * (à m = r × 1000 exactement : y = margeY + (18 − r) × tailleCase). Un seul
- * floor, en bout. La valeur est BORNÉE EN HAUT : une entité peut porter un m
- * intermédiaire au sommet (un stoppeur arrêté à 18950) sans être dessinée
- * au-dessus du champ.
+ * floor, en bout.
  *
  * ⚠⚠ ET ELLE N'EST PLUS BORNÉE EN BAS DEPUIS LE LOT APPROCHE, 11/09 — C'EST
  * EXACTEMENT CE QUI PERMET DE VOIR UNE VAGUE ARRIVER. Ethan : « qu'elles
@@ -200,14 +198,32 @@ export function xDeColonneMilli(projection, colonneMilli) {
  * ⚠ CE QUI EN DÉCOULE ET QU'IL FAUT SAVOIR : la valeur peut désormais tomber
  * HORS du canevas, sous son bord bas. C'est voulu — « en dessous hors écran » —
  * et le canevas rogne de lui-même ; il n'y a rien à garder ici.
+ *
+ * ⚠⚠ ET LA BORNE DU HAUT TOMBE À SON TOUR — ETHAN, 18/09 : « il est figé en haut
+ * alors qu'il doit partir par le haut. Un vrai passage d'avion. » C'EST LE MÊME
+ * CORRECTIF QUE CELUI DU LOT APPROCHE, PAR L'AUTRE BOUT, et il faut le lire
+ * comme ça : la borne du BAS avait été retirée pour qu'on voie une vague
+ * ARRIVER ; celle du haut empêchait de voir un avion PARTIR.
+ *
+ * ⚠⚠ MESURÉ AVANT D'ÊTRE CORRIGÉ, et le symptôme d'Ethan s'explique au pixel.
+ * Un Frappeur traversant franchit les rangées 18 à 19 en QUATRE ticks à sa
+ * vitesse de 240 milli-cases ; `Math.max(brut, margeY)` rendait `y = margeY`
+ * pour les quatre, donc le sprite RESTAIT IMMOBILE en haut du champ, puis
+ * disparaissait d'un coup quand `estSortiParLeHaut` passait à vrai. Ce n'était
+ * ni le moteur — il sort proprement au tick 80, mesuré sur 60 raids — ni le
+ * prédicat de dessin. C'était cette ligne.
+ *
+ * ⚠⚠ ET C'ÉTAIT UN DESSIN QUI MENTAIT, ce que le §4 refuse : l'entité était à
+ * 18,7 et le sprite disait 18,0. La borne existait pour qu'« un stoppeur arrêté
+ * à 18950 » ne dépasse pas du champ ; mais un stoppeur À 18950 EST à 18950, et
+ * le montrer un demi-sprite plus haut est la vérité, pas un défaut. Le canevas
+ * rogne de lui-même, en haut comme en bas.
  */
 export function yDeRangeeMilli(projection, rangeeMilli) {
   const { tailleCase, margeY } = projection;
-  const brut = margeY + Math.floor(
+  return margeY + Math.floor(
     ((GRILLE.longueur * MILLI_PAR_CASE - rangeeMilli) * tailleCase) / MILLI_PAR_CASE,
   );
-  const haut = margeY;
-  return Math.max(brut, haut);
 }
 
 /** Bord haut de la case d'une RANGÉE entière (1 à 18) — obstacles, bâtiments. */

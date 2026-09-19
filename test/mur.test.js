@@ -28,6 +28,7 @@ import assert from 'node:assert/strict';
 import { creerCombat, tick } from '../src/sim/combat.js';
 import { MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { DEFENSES, GRILLE, UNITES } from '../src/data/combat.js';
+import { portants } from './portants.js';
 
 /** Un montage nu — la gangue lointaine donne au combat une raison de durer. */
 const montage = (o) => ({
@@ -413,7 +414,7 @@ test('MUR T5 — le porteur de l\'Écraseur force dès le tick où il bute au co
     vagues: [[{ id: 'broyeur', colonne: 5 }]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: [] },
-      joueur: { offense: modules, defense: [] },
+      joueur: { offense: portants('joueur', 'offense', ...modules), defense: [] },
     },
   }));
   assert.equal(UNITES.broyeur.module, 'ecraseur', 'montage : le porteur n\'a plus l\'Écraseur');

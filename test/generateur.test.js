@@ -832,9 +832,29 @@ test('T12 — l’invariance du miroir sur 50 montages, 5 niveaux, 500 paires', 
   // qu'une cible de sa prédilection est à portée, donc les combats que le
   // plafond tronquait se concluent d'eux-mêmes. Le plancher de 450 ci-dessous
   // n'a pas eu à bouger, et il a désormais trente comparaisons de marge.
-  assert.equal(ecarts.length, 480, `${ecarts.length} comparaisons au lieu de 480`);
-  assert.equal(pairesSautees, 20, `${pairesSautees} paires écartées au lieu de 20`);
-  assert.equal(combatsAuPlafond, 10, `${combatsAuPlafond} combats au plafond de 900 au lieu de 10`);
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT ÉCRASEMENT (17/09-18/09) : **480 → 470 comparées, 20 → 30
+  // sautées, 10 → 15 au plafond**, ET LA COUVERTURE BAISSE POUR LA PREMIÈRE FOIS
+  // DEPUIS DEUX LOTS. Il faut le dire dans ce sens-là, parce que c'est
+  // contre-intuitif : le lot fait GAGNER du temps à l'assaut lourd — `roster
+  // T6` et `assaut T7` le mesurent, B repasse de 900 à 424 ticks — et pourtant
+  // cinq combats DE PLUS touchent le plafond ici.
+  //
+  // ⚠⚠ ET LES DEUX NE SE CONTREDISENT PAS : ce balayage-ci joue **cinquante
+  // montages en miroir**, dont beaucoup opposent des pièces de masses PROCHES.
+  // C'est précisément là que le nouveau quantum est le plus lent — à masses
+  // égales il vaut 80 ticks contre 4 auparavant —, donc les combats qui se
+  // décidaient par écrasement s'y étirent. Là où les masses sont écartées, il
+  // reste quasi instantané. Le lot n'allonge pas les combats en général ; il
+  // allonge ceux qui se gagnaient en roulant sur un adversaire de son poids.
+  //
+  // ⚠ LE PLANCHER DE 450 CI-DESSOUS N'A PAS EU À BOUGER, et il a encore vingt
+  // comparaisons de marge.
+  assert.equal(ecarts.length, 470, `${ecarts.length} comparaisons au lieu de 470`);
+  assert.equal(pairesSautees, 30, `${pairesSautees} paires écartées au lieu de 30`);
+  assert.equal(combatsAuPlafond, 15, `${combatsAuPlafond} combats au plafond de 900 au lieu de 15`);
+  assert.notEqual(ecarts.length, 480,
+    'la couverture est revenue à sa valeur d’avant ÉCRASEMENT sans qu’on l’ait remesurée');
   assert.notEqual(ecarts.length, 460,
     'la couverture est revenue à sa valeur d’avant FREIN sans qu’on l’ait remesurée');
   // ⚠ ET LA COUVERTURE NE DOIT PAS FONDRE : neuf dixièmes des paires au moins.

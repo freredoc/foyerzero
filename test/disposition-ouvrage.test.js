@@ -596,6 +596,14 @@ test('DO T8 — un site entamé retrouve ses dégâts sur les mêmes bâtiments'
   // donc **six survivants abîmés** — la marge la plus large des quarante-six, et
   // la seule qui l'atteigne. C'est la PRÉMISSE qu'on répare, jamais l'assertion :
   // les trois seuils du montage ne bougent pas d'une unité.
+  //
+  // ⚠ LOT MUNITIONS (19/09) : LA GRAINE NE BOUGE PAS, ET IL A FALLU LA MESURER
+  // DEUX FOIS POUR LE SAVOIR. Une version antérieure du lot rabotait la réserve
+  // du Pilon — que cette vague porte un cycle sur quatre — et la 141 ne touchait
+  // plus que QUATRE bâtiments, un sous le seuil ; elle avait été réancrée sur la
+  // 211. Le rabot a été annulé par Ethan, et la 141 reprend ses douze touchés
+  // dont six détruits. La réserve du Foudre, seul nombre que le lot garde, ne
+  // concerne pas ce montage : aucun Foudre dans la vague.
   const etat = creerEtat(141);
   const vagues = [Array.from({ length: GRILLE.largeur }, (_, k) => ({
     id: ['belier', 'pilon', 'broyeur', 'crecelle'][k % 4], colonne: k + 1, niveau: 25,
@@ -827,5 +835,38 @@ test('DO T12 — l\'empreinte de trente montages, en clair', () => {
   assert.equal(morceaux.length, 36);
   const empreinte = createHash('sha256').update(morceaux.join('|')).digest('hex').slice(0, 16);
   // ⚠ LOT PAQUETS (09/09) : `41bf9bd339d8ae8f` → `dfd5f7409f5f4c64`, déclaré.
-  assert.equal(empreinte, 'dfd5f7409f5f4c64', 'la disposition d\'un site a changé sans être déclarée');
+  //
+  // ⚠⚠ LOT SILHOUETTES (17/09) : `dfd5f7409f5f4c64` → `044fc3afc757b4b8`,
+  // déclaré. Ce qui bouge est le point 13 — la Souche passe DERRIÈRE l'Étai —,
+  // et ce test est le seul du dépôt à le voir en clair : il compare la
+  // disposition ENTIÈRE de trente-six sites, donc deux poses qui échangent leurs
+  // coordonnées le font tomber.
+  //
+  // ⚠⚠ ET L'ATTRIBUTION EST MESURÉE PAR NEUTRALISATION, TROIS EXÉCUTIONS.
+  // **Point 7 neutralisé seul : `044fc3afc757b4b8`, inchangé** — il ne déplace
+  // RIEN ici. **Point 13 neutralisé seul, et les deux ensemble :
+  // `dfd5f7409f5f4c64`**, l'ancre d'avant le lot, retrouvée au caractère. Ce
+  // test mesure donc le point 13 et lui seul.
+  // ⚠⚠ ET LE ZÉRO DU POINT 7 EST STRUCTUREL, PAS UN ACCIDENT DE GRAINE :
+  // il ne touche que `genererVague`, dont l'unique appelant de production est
+  // `sim/raid-ouvrage.js` — l'Ouvrage qui vient attaquer. `genererSite`, que ce
+  // test appelle, ne la joint par aucun chemin : il compose un SITE, jamais la
+  // vague qui en part.
+  //
+  // ⚠⚠ LOT « MODULES PAR PIÈCE » (18/09, audit défaut n° 2) : `044fc3afc757b4b8`
+  // → `2736e7c26e38e0d3`, ET LA DISPOSITION N'A PAS BOUGÉ D'UNE CASE. L'empreinte
+  // sérialise le montage ENTIER, `modulesDebloques` compris, et c'est ce champ-là
+  // — et lui seul — qui change : sa liste portait des NOMS de modules, elle porte
+  // désormais des IDENTIFIANTS DE PIÈCES, parce que `data/combat.js` déclare un
+  // seuil d'`apparitionModule` PAR PIÈCE et que le déblocage par nom n'en lisait
+  // que le plus bas.
+  //
+  // ⚠ ET C'EST VÉRIFIABLE SANS CROIRE CE PAVÉ : les onze tests au-dessus tiennent
+  // la disposition case par case, et ils sont tous verts. Une empreinte qui bouge
+  // pendant qu'ils tiennent ne peut pas accuser la disposition.
+  assert.equal(empreinte, '2736e7c26e38e0d3', 'la disposition d\'un site a changé sans être déclarée');
+  assert.notEqual(empreinte, '044fc3afc757b4b8',
+    'l\'empreinte d\'avant le lot « modules par pièce » est revenue');
+  assert.notEqual(empreinte, 'dfd5f7409f5f4c64',
+    'l\'ancre d\'avant SILHOUETTES est revenue : la Souche ne passe plus derrière l\'Étai');
 });

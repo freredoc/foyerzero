@@ -278,6 +278,17 @@
     padding: 4px 8px; text-align: center; letter-spacing: 0.2em;
     font-size: 11px; color: #161914; background: #F5B636;
   }
+  /* ⚠ LE REBOURS DU COMBAT — point 2 du 17/09. Coin HAUT-DROIT, sous le
+     bandeau « SIMULATEUR » qui occupe toute la largeur en z-index 4 : les deux
+     coexistent pendant une simulation, et le rebours ne doit pas le recouvrir.
+     ⚠ AUCUNE TEINTE NEUVE : le fond et le texte sont ceux de `#raid-vitesses`
+     juste dessous, et le liseré celui de ses boutons. La palette est fermée. */
+  #raid-rebours {
+    position: absolute; top: 26px; right: 6px; z-index: 3;
+    padding: 3px 8px; font-size: 11px; font-variant-numeric: tabular-nums;
+    color: #8C9A72; background: #1E2124; border: 1px solid #4E5742;
+    pointer-events: none;
+  }
   #raid-vitesses {
     position: absolute; bottom: 4px; left: 0; right: 0; z-index: 3;
     display: flex; justify-content: center; gap: 4px;
@@ -1428,11 +1439,32 @@
      ⚠ IL EST EN `position: absolute`, DONC IL NE POUSSE RIEN. C'est ce qui rend
      ce changement sûr sur des vignettes calibrées au pixel : la hauteur du
      jeton, celle de la case et celle des barres ne bougent pas d'un pixel —
-     mesuré avant et après, voir `RAPPORT-lotERGONOMIE.md`. */
+     mesuré avant et après, voir `RAPPORT-lotERGONOMIE.md`.
+
+     ⚠⚠ ET IL PORTE UN FOND OPAQUE DEPUIS LE 17/09 — Ethan, point 4 : « niveau en
+     défense et offense sont illisibles ». Le lot ERGONOMIE avait traité la
+     TAILLE ; ce qui restait était le CONTRASTE, et il se mesure. L'os `#F5F3E8`
+     était posé sur le sprite, sous une ombre d'UN pixel qui ne couvre que le
+     bord bas du glyphe : relevé sur les pixels opaques du coin bas-droit des
+     sprites de 128 — le quart de case où le nombre tombe —, **29,7 % des pixels
+     d'unité et 11,1 % de ceux de défense rendent moins de 3:1**, et le pire vaut
+     **1,00**, c'est-à-dire un pixel de la clarté exacte du chiffre. Sur ceux-là
+     le nombre ne disparaît pas à moitié : il disparaît.
+
+     ⚠ LE FOND EST `#161914`, ET CE N'EST PAS UNE TEINTE NEUVE — c'est celle de
+     l'ombre que ce même nombre portait déjà. Contre l'os elle rend **15,95:1**,
+     partout et quel que soit le dessin dessous : le pire cas passe de 1,00 à
+     15,95. ⚠ Et l'ombre PART AVEC : posée sur un aplat de sa propre couleur,
+     elle ne peint plus rien — une déclaration dont le motif est parti se retire,
+     elle ne se garde pas « au cas où ».
+
+     ⚠ `bottom` PASSE DE −1 À 0. Le −1 tuckait un glyphe sans jambage sous le
+     bord ; un APLAT qui dépasse d'un pixel se lit comme un défaut d'alignement.
+     Le nombre ne bouge donc que d'un pixel, et la pastille tient dans le jeton. */
   .jeton .niveau {
-    position: absolute; right: 0; bottom: -1px;
+    position: absolute; right: 0; bottom: 0;
     font-size: max(11px, calc(var(--case-cote) / 3.2)); font-weight: 700;
-    line-height: 1; color: #F5F3E8; text-shadow: 0 1px 0 #161914;
+    line-height: 1; color: #F5F3E8; background: #161914; padding: 0 2px;
   }
 
   /* --- le panneau de détail d'un bâtiment ----------------------------------
@@ -1523,6 +1555,14 @@
      défilement sans barre, et la tête en `sticky` qui reste visible quand la
      liste des rapports est longue. */
   #ecran-journal { position: static; max-height: none; border-top: 0; }
+  /* ⚠ « REJOUER » EST DANS LA TÊTE DEPUIS LE 17/09 (point 6), donc il perd la
+     géométrie du bouton de PIED : `margin: 8px` et `padding: 9px` feraient une
+     tête deux fois plus haute que la ligne de titre qu'elle porte. La teinte,
+     la graisse et les capitales de `.ameliorer` restent — c'est le même bouton,
+     pas un second dessin. */
+  #ecran-journal .tete .ameliorer {
+    flex: 0 0 auto; margin: 0; padding: 4px 8px; font-size: 10px;
+  }
   .panneau-detail .corps { padding: 4px 8px 8px; }
   .panneau-detail .section { margin-top: 6px; }
   /* ⚠⚠ UNE SECTION QUI S'OUVRE LE DIT PAR SON TITRE — lot du 11/09, le dépliant
@@ -2150,6 +2190,13 @@
      laissait le END à `auto` — donc UNE seule colonne. Mesuré dans Chromium à
      360 px CSS : première case 15,5 px, les huit autres 34, et 37 px de vide
      perdus au bord droit. On écrit donc la position ET la portée d'un coup. */
+  /* ⚠⚠ ET CES TROIS RÈGLES NE SERVENT QUE L'OFFENSE — LE POINT 5 A ÉTÉ ANNULÉ
+     PAR ETHAN LE 17/09, APRÈS AVOIR ÉTÉ LIVRÉ. Elles avaient été élargies à
+     `#ecran-raid` pour que les deux grilles partagent un quinconce ; l'annulation
+     les rend à leur seul écran. ⚠ LES RENDRE À `#ecran-raid` SANS RENDRE AUSSI
+     `poserLeQuinconce` à `ui/raid.js` CASSERAIT LA GRILLE DU RAID : ses
+     emplacements occuperaient deux colonnes sur neuf au lieu d'une. Les deux
+     moitiés se défont ensemble, ou pas du tout. */
   #ecran-offense .emplacements { display: grid; gap: 3px; }
   #ecran-offense .emplacement { grid-column: span 2; }
   #ecran-offense .emplacements .emplacement:first-child { grid-column: 1 / span 2; }
@@ -2226,12 +2273,42 @@
      le flux les déplacerait. Même raison qu'au Chantier.
 
      ⚠ ET LA RÈGLE SERT LES DEUX ÉCRANS, comme celle de `.piece` juste au-dessus :
-     ce sont les mêmes pièces, dans la même grille de composition. */
+     ce sont les mêmes pièces, dans la même grille de composition.
+
+     ⚠⚠ ET IL PORTE LE MÊME FOND OPAQUE QUE LE JETON DU CHANTIER DEPUIS LE
+     17/09 — Ethan, point 4 : « niveau en défense et offense sont illisibles ».
+     La cause est le CONTRASTE et elle est mesurée au pixel : dans le coin
+     bas-droit des sprites d'unité, **29,7 % des pixels opaques rendent moins de
+     3:1** contre l'os `#F5F3E8`, et le pire vaut **1,00**. Le fond `#161914` —
+     celle de l'ombre que ce nombre portait déjà, donc aucune teinte neuve — rend
+     **15,95:1** quel que soit le dessin dessous. ⚠ L'ombre part avec : sur un
+     aplat de sa propre couleur, elle ne peint plus rien.
+
+     ⚠⚠ ET LES DEUX RÈGLES RESTENT DEUX, DÉLIBÉRÉMENT. Elles ne diffèrent que par
+     la TAILLE — l'une suit `--case-cote`, l'autre est au plancher — et les
+     fondre demanderait de donner un `--case-cote` à deux grilles qui ne zooment
+     pas. C'est `.niveau` qui est la convention, pas le sélecteur ; `FIX T2` les
+     confronte pour qu'elles ne puissent pas diverger sur le fond. */
   #ecran-offense .emplacement .niveau,
   #ecran-raid .emplacement .niveau {
     position: absolute; right: 1px; bottom: 0;
     font-size: 11px; font-weight: 700; line-height: 1;
-    color: #F5F3E8; text-shadow: 0 1px 0 #161914; pointer-events: none;
+    color: #F5F3E8; background: #161914; padding: 0 2px; pointer-events: none;
+  }
+  /* ⚠⚠ L'ÉTOILE DU MODULE — Ethan, 18/09 : « un élément visible pour le joueur
+     quand il voit des unités avec modules débloqués, à côté du numéro de
+     niveau ». Elle est au coin bas-GAUCHE, pas à droite : le coin bas-droit est
+     pris par `.niveau` depuis le 06/09, et deux occupants du même coin se
+     recouvriraient. Même fond, même graisse, même interlignage que le niveau —
+     c'est la MÊME pastille, l'autre angle.
+     ⚠ `#F5B636` EST DÉJÀ DE LA PALETTE, et c'est sa seule couleur d'accent
+     (`FICHE-STYLE.md`) : l'étoile est le seul élément doré de la grille, donc
+     elle se voit sans qu'on ait à inventer une teinte. La palette reste fermée. */
+  #ecran-offense .emplacement .module,
+  #ecran-raid .emplacement .module {
+    position: absolute; left: 1px; bottom: 0;
+    font-size: 11px; font-weight: 700; line-height: 1;
+    color: #F5B636; background: #161914; padding: 0 2px; pointer-events: none;
   }
   /* Le premier des deux touchers : l'unité est MONTRÉE, pas encore posée. Un
      liseré tireté et un mot éteint disent « pas encore là » — pas de
@@ -3011,19 +3088,26 @@
     <div id="ecran-journal" class="panneau-detail" hidden>
       <div class="tete">
         <b id="journal-titre" class="titre">—</b>
-      </div>
-      <div id="journal-corps" class="corps"></div>
       <!-- ⚠⚠ REJOUER UN RAID — arbitrage d'Ethan du 12/09. Il ne paraît que sur
            un rapport DÉPLIÉ qui porte son montage : les rapports d'avant la v33
            n'en ont pas, et la migration ne peut pas le leur inventer. C'est la
            session qui décide, `rapportRejouable` qui répond, et `vueDuJournal`
            qui reste pure — ce bouton-ci n'a aucune règle.
-           ⚠ IL REPREND `.ameliorer`, LA RÈGLE DU BOUTON DE PIED D'UN
-           `.panneau-detail`, ET N'EN AJOUTE AUCUNE : même place, même taille,
-           même teinte que « Améliorer » des deux fiches. Il ne passe PAS par le
+           ⚠ IL REPREND `.ameliorer`, ET N'EN AJOUTE AUCUNE : même taille, même
+           teinte que « Améliorer » des deux fiches. Il ne passe PAS par le
            bouton du rendu partagé — celui-là pose le pictogramme de flèche
-           montante de l'amélioration, qui promettrait une montée de niveau. -->
-      <button type="button" id="journal-rejouer" class="ameliorer" hidden></button>
+           montante de l'amélioration, qui promettrait une montée de niveau.
+           ⚠⚠ ET IL EST PASSÉ EN HAUT LE 17/09 — Ethan, point 6 : « bouton raid
+           rejouer en haut ». Il était le DERNIER enfant de l'écran, donc sous
+           les dix rapports du journal ET sous le dépliant ouvert : déplier un
+           raid poussait le bouton qui le rejoue hors de l'écran, et il fallait
+           faire défiler tout le détail qu'on venait d'ouvrir pour le trouver.
+           Il est désormais DANS LA TÊTE, qui est `sticky` : il reste sous les
+           yeux même au fond d'un dépliant de quinze lignes, là qu'un simple
+           « premier enfant du corps » aurait défilé avec le reste. -->
+        <button type="button" id="journal-rejouer" class="ameliorer" hidden></button>
+      </div>
+      <div id="journal-corps" class="corps"></div>
     </div>
     <!-- ⚠ L'ÉCRAN DU TUTORIEL. Il ne porte AUCUNE règle : ce qui est fait ou
          non se décide dans `sim/missions.js`, qui lit la base. Il n'a pas de
@@ -3497,6 +3581,18 @@
         <!-- Le bandeau qui couvre la vue pendant tout un déroulé SIMULÉ, pour
              qu'on ne le confonde jamais avec la vraie attaque. -->
         <div id="raid-bandeau" hidden>SIMULATEUR</div>
+        <!-- ⚠⚠ LE REBOURS DU COMBAT — Ethan, 17/09, point 2 : « afficher un
+             timer de raid quand on lance, pour voir combien de temps il
+             reste ». Il ne paraît que pendant un déroulé, et il dit le temps
+             qui reste À REGARDER, vitesse comprise.
+             ⚠ IL N'INVENTE AUCUNE DURÉE : le rapport est résolu AVANT la
+             première image (arbitrage « A » du 01/09), donc `rapport.ticks`
+             est la longueur EXACTE du combat qu'on regarde. Compter sur
+             `dureeMaxCombatSec` aurait affiché un plafond que presque aucun
+             combat n'atteint — un rebours qui se trompe d'un facteur trois.
+             ⚠ ET IL SE POSE SUR LE CANEVAS, comme le bandeau et la bascule :
+             aucune barre de plus, le chrome de l'écran ne bouge pas. -->
+        <div id="raid-rebours" hidden></div>
         <p id="raid-titre"></p>
         <canvas id="raid-canvas"></canvas>
         <div id="raid-vitesses" hidden>
@@ -3590,9 +3686,15 @@
       <!-- Le petit panneau du simulateur, et le plein cadre du vrai raid. Les
            DEUX rendent `lignesDuResultat` du même rapport : ils ne peuvent pas
            annoncer des nombres différents. -->
+      <!-- ⚠⚠ ETHAN, 17/09, POINT 8 : « n'afficher que les résultats directement
+           et un bouton pour visualiser la simulation. » Le simulateur ouvre donc
+           sur CE panneau, sans déroulé ; « Visualiser » rejoue le combat, et il
+           revient ici à la fin avec les MÊMES chiffres — c'est le même rapport,
+           il n'y a rien à recalculer. -->
       <div id="raid-sim" hidden>
         <h2>Simulation</h2>
         <div id="raid-sim-corps"></div>
+        <button type="button" id="raid-sim-voir">Visualiser</button>
         <button type="button" id="raid-sim-fermer">Fermer</button>
       </div>
       <div id="raid-fin" hidden>

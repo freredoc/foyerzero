@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 
 import {
   creerCombat, tick, resoudre, serialiserEtat, butin, pointsRecherche,
-  TICKS_PAR_VAGUE, ECRASEMENT_TICKS,
+  TICKS_PAR_VAGUE, ECRASEMENT_TICKS, ticksDEcrasement,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
@@ -40,6 +40,11 @@ import {
   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE,
   COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS,
   COMBATS_DEPLACES_PAR_RASAGE_PAYANT,
+  COMBATS_DEPLACES_PAR_SILHOUETTES,
+  COMBATS_DEPLACES_PAR_ECRASEMENT,
+  COMBATS_DEPLACES_PAR_ECRASEMENT_AVANT_PAQUETS,
+  COMBATS_DEPLACES_PAR_MUNITIONS,
+  COMBATS_DEPLACES_PAR_MUNITIONS_AVANT_PAQUETS,
 } from './temoins-combat.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -213,6 +218,29 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
     // DIX-HUIT champs, tous déjà couverts par celle d'au-dessus : elle déplace
     // des valeurs sans élargir la surface, donc `surcharges` ne bouge pas.
     const deplacesRasage = COMBATS_DEPLACES_PAR_RASAGE_PAYANT[i] ?? {};
+    // ⚠⚠ ET LE LOT SILHOUETTES EN EMPILE UNE HUITIÈME, LA PREMIÈRE QUI NE VIENNE
+    // PAS DU MOTEUR : `src/sim/combat.js` n'a pas une ligne de changée, c'est le
+    // PLACEMENT des deux uniques d'un site qui bouge — la Souche passe derrière
+    // l'Étai. Même doctrine, même ordre de lecture : la plus récente l'emporte.
+    const deplacesSilhouettes = COMBATS_DEPLACES_PAR_SILHOUETTES[i] ?? {};
+    // ⚠⚠ ET LE LOT ÉCRASEMENT EN EMPILE UNE NEUVIÈME, IL N'EN REMPLACE AUCUNE
+    // DES HUIT AUTRES. Même doctrine depuis le lot BARÈME-ET-REJEU : on EMPILE,
+    // on ne recapture pas. La plus récente l'emporte, sinon SILHOUETTES, sinon
+    // RASAGE-PAYANT, et ainsi de suite jusqu'au témoin d'APPROCHE.
+    //
+    // ⚠⚠ ET LA CONSIGNE NE CHANGE PAS : **le prochain lot qui touchera au combat
+    // devra EMPILER une couche, jamais recapturer.** `test/temoins-combat.js`
+    // n'a jamais été recapturé et ne doit pas l'être.
+    const deplacesEcrasement = COMBATS_DEPLACES_PAR_ECRASEMENT[i] ?? {};
+    // ⚠⚠ ET LE LOT MUNITIONS EN EMPILE UNE DIXIÈME, IL N'EN REMPLACE AUCUNE DES
+    // NEUF AUTRES. Même doctrine, dixième fois. ⚠ Elle touche les DEUX CENTS
+    // combats, mais 400 de ses 472 champs sont les deux EMPREINTES : `reserve`
+    // et `reserveMax` vivent dans le résultat et dans l'état sérialisés, donc
+    // raboter quatre réserves déplace les hachages de tout combat qui porte une
+    // des quatre. Ce qui change d'ISSUE tient en 72 champs. Voir le pavé de la
+    // table dans `temoins-combat.js` — une falsification qui ne mord pas se
+    // vérifie avant d'être crue, et celle-ci mord surtout sur les empreintes.
+    const deplacesMunitions = COMBATS_DEPLACES_PAR_MUNITIONS[i] ?? {};
     for (let c = 1; c < vu.length; c += 1) {
       let reference = attendu[c];
       let couvert = false;
@@ -242,6 +270,18 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
       }
       if (Object.prototype.hasOwnProperty.call(deplacesRasage, c)) {
         reference = deplacesRasage[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesSilhouettes, c)) {
+        reference = deplacesSilhouettes[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesEcrasement, c)) {
+        reference = deplacesEcrasement[c];
+        couvert = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(deplacesMunitions, c)) {
+        reference = deplacesMunitions[c];
         couvert = true;
       }
       if (couvert) surcharges += 1;
@@ -330,8 +370,76 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
   // champs dans huit colonnes. Celle-ci ne touche qu'une colonne sur huit : un
   // lot qui prétendrait ne changer que le barème de la recherche et ferait bouger
   // une neuvième colonne mentirait, et c'est cette assertion-ci qui le dirait.
-  assert.equal(surcharges, 1240, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT SILHOUETTES (17/09) : LA SURCHARGE PASSE DE 1 240 À **1 257**, ET IL
+  // RESTE **343 CHAMPS GARDÉS** contre la capture d'APPROCHE — 360 avant. La
+  // couche neuve déplace **306 champs sur 1 600** et n'en ajoute que
+  // **DIX-SEPT** à l'union.
+  //
+  // ⚠⚠ ET C'EST LA PREMIÈRE COUCHE DE CETTE PILE QUI NE VIENNE PAS DU MOTEUR.
+  // `src/sim/combat.js` n'a pas une ligne de changée : ce qui bouge est le
+  // PLACEMENT des deux uniques d'un site — la Souche passe DERRIÈRE l'Étai —,
+  // donc deux entités changent de case et tout le combat se rejoue autrement
+  // autour d'elles. **Neuf causes de fin basculent, vingt-sept ticks de fin se
+  // déplacent.**
+  //
+  // ⚠⚠ ET SA LARGEUR EST PRÉDITE AVANT D'ÊTRE MESURÉE : sur les **cent sites
+  // distincts** que ces deux cents montages emploient — cinq graines × quatre
+  // niveaux × cinq types —, **cinquante** voient leurs deux uniques permutés
+  // (avant : 12 derrière / 50 devant / 38 sur la même rangée ; après : 62 / 0 /
+  // 38). Chaque site sert DEUX montages, `toutes` et `moitie` : la couche touche
+  // donc **exactement cent combats et en laisse cent intacts**. Un lot qui
+  // déplacerait un combat hors d'un site permuté, ou qui en laisserait un intact
+  // sur un site permuté, ferait tomber le compte ci-dessous.
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09, point 11 d'Ethan) : LA NEUVIÈME COUCHE DÉPLACE
+  // **805 CHAMPS SUR 179 COMBATS**, ET N'EN AJOUTE **AUCUN** À L'UNION —
+  // 1 257 AVANT, **1 257** APRÈS, **343 gardés**, exactement comme avant le lot.
+  // Vingt et un combats restent intacts, deux causes de fin changent, et la
+  // couche touche les HUIT colonnes — c'est la signature d'un lot de combat, par
+  // opposition aux couches de placement qui n'en touchent qu'une.
+  //
+  // ⚠⚠ DONC `surcharges` NE PEUT PAS GARDER CETTE COUCHE, ET IL FAUT LE DIRE :
+  // une couche qui n'ajoute rien au compte est invisible pour lui. Ce sont les
+  // 805 comparaisons `vu[c] === reference` ci-dessus qui la tiennent — les
+  // retirer ferait tomber le test sur la VALEUR, pas sur le compte —, plus les
+  // trois assertions de forme qui suivent, qui mordent si la table se vide.
+  //
+  // ⚠⚠ LOT MUNITIONS (19/09) : LA SURCHARGE NE BOUGE PAS — 1 257 AVANT,
+  // **1 257** APRÈS, 343 GARDÉS —, ET C'EST LE RÉSULTAT, PAS UN OUBLI. La
+  // dixième couche déplace **414 champs sur les 200 combats**, dont **400 sont
+  // les deux EMPREINTES** : `reserve` et `reserveMax` sont sérialisés dans le
+  // résultat et dans l'état, donc changer la réserve du Foudre déplace les deux
+  // hachages de tout combat qui en porte un — et les deux cents en portent tous
+  // un. **L'issue ne bouge que sur 14 champs**, et aucune cause de fin ne
+  // bascule. Neuf couches couvraient déjà tout ce que celle-ci touche.
+  //
+  // ⚠⚠ DONC `surcharges` NE PEUT PAS GARDER CETTE COUCHE, ET IL FAUT LE DIRE :
+  // ce sont les 414 comparaisons `vu[c] === reference` ci-dessus qui la
+  // tiennent, plus les trois assertions de forme qui suivent.
+  assert.equal(surcharges, 1257, `champs surchargés : ${surcharges}`);
+  assert.notEqual(surcharges, 1240, 'la couche de SILHOUETTES a disparu');
   assert.notEqual(surcharges, 1213, 'la couche d\'ÉCHELLE-RECHERCHE a disparu');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUNITIONS).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_MUNITIONS).filter((d) => Object.keys(d).length > 0).length,
+    200, 'la couche de MUNITIONS a changé de largeur');
+  assert.deepEqual(
+    [...new Set(Object.values(COMBATS_DEPLACES_PAR_MUNITIONS).flatMap((d) => Object.keys(d)))].sort(),
+    ['1', '2', '4', '5', '7'],
+    'la couche de MUNITIONS a changé de colonnes : elle ne touche ni la cause ni les points');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ECRASEMENT).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_ECRASEMENT).filter((d) => Object.keys(d).length > 0).length,
+    179, 'la couche d\'ÉCRASEMENT a changé de largeur');
+  assert.deepEqual(
+    [...new Set(Object.values(COMBATS_DEPLACES_PAR_ECRASEMENT).flatMap((d) => Object.keys(d)))].sort(),
+    ['1', '2', '3', '4', '5', '6', '7', '8'],
+    'la couche d\'ÉCRASEMENT ne touche plus les huit colonnes');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_SILHOUETTES).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_SILHOUETTES).filter((d) => Object.keys(d).length > 0).length,
+    100, 'la couche de SILHOUETTES a changé de largeur');
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE).length, 200);
   assert.deepEqual(
     [...new Set(Object.values(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE)
@@ -365,7 +473,11 @@ test('JOURNAL T1 — deux cents combats rendent le résultat capturé au lot APP
   assert.equal(
     Object.values(COMBATS_DEPLACES_PAR_FREIN).filter((d) => Object.keys(d).length > 0).length,
     200, 'la couche de FREIN a changé de largeur');
-  assert.equal(champs - surcharges, 360, 'le compte des champs encore gardés a changé');
+  // ⚠ 360 avant le lot SILHOUETTES, 343 après : les dix-sept champs que la
+  // huitième couche ajoute à l'union sont autant de champs qui cessent d'être
+  // adossés à la capture d'APPROCHE.
+  assert.equal(champs - surcharges, 343, 'le compte des champs encore gardés a changé');
+  assert.notEqual(champs - surcharges, 360, 'la couche de SILHOUETTES a disparu');
 });
 
 // ---------------------------------------------------------------------------
@@ -461,6 +573,19 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
           // neufs seulement : la pile en portait dix, et il ne restait que 259
           // champs à couvrir.
           const deplacesRecherche = COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS[i] ?? {};
+          // ⚠⚠ ET LE LOT ÉCRASEMENT EN EMPILE UNE DOUZIÈME — LA PREMIÈRE DE
+          // TOUTE L'HISTOIRE DE CE TÉMOIN À N'AJOUTER **AUCUN** CHAMP NEUF À
+          // L'UNION. Elle déplace 856 champs sur 171 combats, et la surcharge ne
+          // bouge pas d'un pouce : 1 343 avant, 1 343 après, 257 gardés dans les
+          // deux cas. C'est exactement ce qu'on veut lire ici : le lot déplace le
+          // COMBAT, pas le PLACEMENT — sur l'ancien placement rejoué, il ne
+          // découvre rien que les onze couches précédentes ne couvraient déjà.
+          const deplacesEcrasement = COMBATS_DEPLACES_PAR_ECRASEMENT_AVANT_PAQUETS[i] ?? {};
+          // ⚠⚠ ET LE LOT MUNITIONS EN EMPILE UNE TREIZIÈME. Elle déplace 435
+          // champs sur les 200 combats, dont les MÊMES 400 empreintes qu'en
+          // `T1` : 35 champs d'issue réelle, et la colonne 6 — les points de
+          // recherche — ne bouge pas d'un seul combat sur l'ancien placement.
+          const deplacesMunitions = COMBATS_DEPLACES_PAR_MUNITIONS_AVANT_PAQUETS[i] ?? {};
           for (let c = 1; c < vu.length; c += 1) {
             let reference = attendu[c];
             if (Object.prototype.hasOwnProperty.call(deplaces, c)) reference = deplaces[c];
@@ -494,6 +619,12 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
             if (Object.prototype.hasOwnProperty.call(deplacesRecherche, c)) {
               reference = deplacesRecherche[c];
             }
+            if (Object.prototype.hasOwnProperty.call(deplacesEcrasement, c)) {
+              reference = deplacesEcrasement[c];
+            }
+            if (Object.prototype.hasOwnProperty.call(deplacesMunitions, c)) {
+              reference = deplacesMunitions[c];
+            }
             assert.equal(vu[c], reference,
               `${vu[0]} : le champ ${c} a bougé depuis le témoin d'avant le lot`);
             champs += 1;
@@ -507,7 +638,9 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
               || Object.prototype.hasOwnProperty.call(deplacesContact2, c)
               || Object.prototype.hasOwnProperty.call(deplacesPredilection, c)
               || Object.prototype.hasOwnProperty.call(deplacesFrein, c)
-              || Object.prototype.hasOwnProperty.call(deplacesRecherche, c)) surcharges += 1;
+              || Object.prototype.hasOwnProperty.call(deplacesRecherche, c)
+              || Object.prototype.hasOwnProperty.call(deplacesEcrasement, c)
+              || Object.prototype.hasOwnProperty.call(deplacesMunitions, c)) surcharges += 1;
           }
           i += 1;
     }
@@ -618,8 +751,40 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
   // GARDÉS DE 259 À **257**. Deux champs neufs ; la mesure comparable est celle
   // de `T1`, dont la pile n'en porte que cinq : vingt-sept champs neufs, et la
   // même unique colonne.
-  assert.equal(surcharges, 1343, `champs surchargés : ${surcharges}`);
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09) : LA SURCHARGE NE BOUGE PAS — 1 343 AVANT,
+  // 1 343 APRÈS —, ET C'EST LE RÉSULTAT, PAS UN OUBLI. La douzième couche
+  // déplace 856 champs sur 171 combats et n'en ajoute AUCUN à l'union.
+  //
+  // ⚠⚠ DONC `surcharges` NE PEUT PAS GARDER CETTE COUCHE, et il faut le dire :
+  // une couche qui n'ajoute rien au compte est invisible pour lui. Ce sont les
+  // 856 comparaisons `vu[c] === reference` ci-dessus qui la tiennent — les
+  // retirer ferait tomber le test sur la valeur, pas sur le compte —, plus les
+  // deux assertions de forme qui suivent, qui mordent si la table se vide.
+  //
+  // ⚠⚠ LOT MUNITIONS (19/09) : LA SURCHARGE NE BOUGE PAS NON PLUS ICI — 1 346
+  // AVANT, **1 346** APRÈS, 254 GARDÉS. La treizième couche déplace 406 champs,
+  // dont les **mêmes 400 empreintes** qu'en `T1` : **6 champs d'issue** contre
+  // 14 sur le placement courant. ⚠ Ni la cause de fin ni les points de recherche
+  // ne bougent d'un seul combat, des deux côtés.
+  assert.equal(surcharges, 1346, `champs surchargés : ${surcharges}`);
+  assert.notEqual(surcharges, 1343, 'la couche d\'ÉCRASEMENT a disparu');
   assert.notEqual(surcharges, 1341, 'la couche d\'ÉCHELLE-RECHERCHE a disparu');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_MUNITIONS_AVANT_PAQUETS).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_MUNITIONS_AVANT_PAQUETS)
+      .filter((d) => Object.keys(d).length > 0).length,
+    200, 'la couche de MUNITIONS a changé de largeur');
+  assert.deepEqual(
+    [...new Set(Object.values(COMBATS_DEPLACES_PAR_MUNITIONS_AVANT_PAQUETS)
+      .flatMap((d) => Object.keys(d)))].sort(),
+    ['1', '2', '5', '7', '8'],
+    'la couche de MUNITIONS a changé de colonnes sur l\'ancien placement');
+  assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ECRASEMENT_AVANT_PAQUETS).length, 200);
+  assert.equal(
+    Object.values(COMBATS_DEPLACES_PAR_ECRASEMENT_AVANT_PAQUETS)
+      .filter((d) => Object.keys(d).length > 0).length,
+    179, 'la couche d\'ÉCRASEMENT a changé de largeur');
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ECHELLE_RECHERCHE_AVANT_PAQUETS).length, 200);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_ARRET).length, 181);
   assert.equal(Object.keys(COMBATS_DEPLACES_PAR_COLONNE).length, 200);
@@ -643,7 +808,8 @@ test('JOURNAL T1 bis — l\'ancien placement rejoué : 0 écart sous les sept co
     Object.values(COMBATS_DEPLACES_PAR_FREIN_AVANT_PAQUETS)
       .filter((d) => Object.keys(d).length > 0).length,
     200, 'la couche de FREIN a changé de largeur');
-  assert.ok(champs - surcharges === 257, 'le compte des champs encore gardés a changé');
+  assert.ok(champs - surcharges === 254, 'le compte des champs encore gardés a changé');
+  assert.notEqual(champs - surcharges, 257, 'la couche d\'ÉCRASEMENT a disparu');
 });
 
 // ---------------------------------------------------------------------------
@@ -878,6 +1044,26 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   // que `generateur.test.js T12` a payée au lot CONTACT-2. ⚠ Le plafond gagne
   // donc une assertion qui le rend BRUYANT : `etat.termine` à la sortie. Un lot
   // futur qui allongerait encore le combat le saura au lieu de le taire.
+  // ⚠⚠ LA BORNE SE DÉRIVE DU COUPLE DE MASSES DEPUIS LE 18/09, ET SANS ÇA ELLE
+  // NE MORDAIT PLUS. Elle valait `ceil(pvMax / ECRASEMENT_TICKS)` — le quantum
+  // de l'écrasement FORFAITAIRE d'avant le lot. Le lot dérive désormais la durée
+  // du rapport des masses, donc le quantum réel est PLUS PETIT, donc l'ancienne
+  // borne laissait passer quatre fois trop : mesuré, excès réel 3 313 200 contre
+  // une borne de 13 252 800. Une garde qui ne mord plus n'est pas une garde.
+  //
+  // ⚠ C'EST LA BORNE LA PLUS SERRÉE QU'ON PUISSE ÉCRIRE SANS CONNAÎTRE
+  // L'ÉCRASEUSE : le relevé ne dit pas QUI a broyé, donc on prend l'écraseuse la
+  // plus lourde que la donnée permette — la masse maximale des unités, DOUBLÉE
+  // parce que l'Écraseur double la masse contre une escouade. Plus lourde =
+  // écrasement plus rapide = quantum plus gros, donc c'est bien un majorant.
+  //
+  // ⚠ ET IL SE LIT DANS LA DONNÉE, jamais écrit en dur : le jour où une unité
+  // plus lourde entre, la borne suit toute seule au lieu de devenir fausse.
+  const MASSE_ECRASEUSE_MAX = 2 * Math.max(...Object.values(UNITES).map((u) => u.masse));
+  const quantumMaximal = (e) => Math.ceil(
+    e.pvMaxMilli / ticksDEcrasement(MASSE_ECRASEUSE_MAX, UNITES[e.id]?.masse ?? 1),
+  );
+
   const etat = creerCombat(montageDe('base', null, 45, 35));
   let ticks = 0;
   let vus = 0;
@@ -924,7 +1110,7 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
       // en bloc plus bas, contre une caractérisation POSITIVE qui peut tomber.
       if (i.encaisseMilli < perdu) {
         ecartsNonPublies.push({ indice: i.indice, perdu, encaisse: i.encaisseMilli,
-          quantum: Math.ceil(e.pvMaxMilli / ECRASEMENT_TICKS) });
+          quantum: quantumMaximal(e) });
       }
       parts.push(Math.round((1000 * i.encaisseMilli) / i.pvMaxMilli));
       vus += 1;
@@ -1038,10 +1224,33 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   // portent le motif COMPLET des quatre ticks — trois excès à l'exact quantum
   // 13 252 800, puis le reste — là où l'arbre d'avant n'en avait qu'une sur deux
   // (le Guetteur 28 n'écartait que sur un seul tick). Huit écarts contre cinq.
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09, point 11) : `[10, 11]` → **`[10]`**, ET LA CARAPACE
+  // 11 NE MEURT PLUS ÉCRASÉE PARCE QU'ELLE MEURT AUTREMENT. Mesuré pièce par
+  // pièce contre le livrable d'avant le lot :
+  //
+  //                                    AVANT              APRÈS
+  //   Carapace de garnison, ind. 10    écrasée, tick 246  écrasée, tick 270
+  //   Carapace de garnison, ind. 11    écrasée, tick 274  tombe SOUS LE TIR, 370
+  //   impacts publiés                  1 486              1 476
+  //   ticks de combat                  421                408
+  //
+  // C'est le mécanisme que le lot CONTACT-2 avait déjà décrit, amplifié : le
+  // quantum d'écrasement se dérive maintenant du RAPPORT DES MASSES, donc broyer
+  // une Carapace prend plus longtemps qu'avant, et la victime a le temps de
+  // tomber sous le tir pendant qu'on la broie. L'écrasement est la mort de ce
+  // qui SURVIT au tir ; il en survit moins.
+  //
+  // ⚠ ET UNE SEULE ÉCRASÉE SUFFIT À EXERCER L'EXCEPTION, ce que la garde du bas
+  // vérifie : c'est le nombre d'ÉCARTS qui doit rester non nul, pas le nombre
+  // d'écrasées.
   const ecrasees = etat.entites.filter((e) => e.ecrase === true)
     .map((e) => e.indice).sort((a, b) => a - b);
-  assert.deepEqual(ecrasees, [10, 11],
+  assert.deepEqual(ecrasees, [10],
     `le montage écrase ${ecrasees.join(', ')} : l'exception ci-dessus ne se mesure plus`);
+  assert.notDeepEqual(ecrasees, [10, 11],
+    'la liste des écrasées est revenue à celle du lot PRÉDILECTION : le quantum '
+    + 'd\'écrasement a cessé de dépendre des masses');
   assert.notDeepEqual(ecrasees, [10, 20, 21, 28],
     'la liste des écrasées est revenue à celle du lot CONTACT-2 : le ciblage a cessé '
     + 'de préférer la prédilection');
@@ -1067,8 +1276,21 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
   // deux portent le motif complet — Carapace 10 sur les ticks 249 à 252,
   // Carapace 11 sur les ticks 277 à 280, trois excès à l'exact quantum puis le
   // reste, chaque fois. La garde n'est pas relâchée, elle mord davantage.
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09) : **SIX ÉCARTS SUR 1 476 IMPACTS, UNE SEULE
+  // PIÈCE** — la Carapace 10, sur cinq ticks consécutifs à l'excès exact
+  // 3 313 200 puis le reste, 12 653 197, au tick 270. Le motif est le même
+  // qu'avant, étalé sur seize ticks au lieu de quatre : c'est la définition
+  // même du lot.
+  //
+  // ⚠⚠ ET LE HEURT NE FIGURE PLUS DANS CES ÉCARTS, PARCE QU'IL SE PUBLIE —
+  // arbitrage d'Ethan du 17/09. La première version du lot le laissait muet, et
+  // ce test l'a attrapée : **33 écarts sur quatre pièces**, dont trois qui
+  // n'étaient jamais écrasées. Un heurt n'est pas une mort, c'est un coup ; il
+  // entre au journal comme n'importe quel dégât, et l'exception redevient ce
+  // qu'elle a toujours été — l'ÉCRASEMENT, et lui seul.
   const indicesEnEcart = [...new Set(ecartsNonPublies.map((x) => x.indice))].sort((a, b) => a - b);
-  assert.deepEqual(indicesEnEcart, [10, 11],
+  assert.deepEqual(indicesEnEcart, [10],
     `des pièces perdent plus que leur impact sans être écrasées : ${indicesEnEcart.join(', ')}`);
   for (const x of indicesEnEcart) {
     assert.ok(ecrasees.includes(x),
@@ -1079,8 +1301,21 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
       `la pièce ${e.indice} perd ${e.perdu - e.encaisse} de plus que son impact, `
       + `au-dessus du quantum d'écrasement ${e.quantum} : ce n'est plus l'exception connue`);
   }
-  assert.equal(ecartsNonPublies.length, 8,
-    `${ecartsNonPublies.length} écarts au lieu des 8 mesurés`);
+  // ⚠⚠ ET LE MOTIF EXACT EST ÉPINGLÉ, PAS SEULEMENT BORNÉ. Une borne dit ce qui
+  // ne doit pas être dépassé ; elle ne dit pas que la règle est la bonne. Les
+  // six excès mesurés sont **cinq fois 3 313 200 puis 12 653 197** — le quantum
+  // du couple de masses répété, puis le reste au tick de la mort. Un lot qui
+  // reviendrait à l'écrasement forfaitaire les changerait tous les six.
+  assert.deepEqual(
+    ecartsNonPublies.map((x) => x.perdu - x.encaisse),
+    [3_313_200, 3_313_200, 3_313_200, 3_313_200, 3_313_200, 12_653_197],
+    'le motif des excès a changé : remesurer, et dire ce qui l\'a déplacé');
+  assert.equal(ecartsNonPublies.length, 6,
+    `${ecartsNonPublies.length} écarts au lieu des 6 mesurés`);
+  assert.notEqual(ecartsNonPublies.length, 33,
+    'le heurt a cessé de publier son impact : il perce des PV en silence');
+  assert.notEqual(ecartsNonPublies.length, 8,
+    'le compte des écarts est revenu à celui du lot PRÉDILECTION');
   assert.notEqual(ecartsNonPublies.length, 5,
     'le compte des écarts est revenu à celui du lot CONTACT-2');
   assert.ok(ecartsNonPublies.length > 0,

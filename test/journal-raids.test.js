@@ -514,7 +514,15 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 36);
+  // ⚠⚠ ET LE LOT « MODULES PAR PIÈCE » Y PASSE, LE 18/09 — 33 → **36**, ET IL
+  // N'Y EST PAS PASSÉ DU PREMIER COUP. Il a d'abord été livré SANS bump, sur la
+  // vérification — trop courte — que `modulesDebloques` n'apparaissait pas dans
+  // `sim/state.js`. Il n'y apparaît pas, et il y passe quand même, par
+  // `rapport.rejeu`. Une relecture adverse l'a trouvé ; `MODULES-PIÈCE T1` de
+  // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
+  // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
+  // un numéro inférieur OU ÉGAL.
+  assert.equal(SAVE_VERSION, 37);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();
@@ -786,4 +794,127 @@ test('VIT T7 — la ligne d\'issue nomme ce qui s\'est passé, et sa couleur sui
   assert.ok(feuille.indexOf('.panneau-detail .section.raid-subi h3')
     > feuille.indexOf('.panneau-detail .section.depliable h3'),
     'la règle du sens passe avant celle du dépliant : la teinte du sens est perdue');
+});
+
+// ---------------------------------------------------------------------------
+// FIX T4 / T5 — point 6 du 17/09 : « afficher niveau des assaillants », et le
+// bouton « Rejouer » remonte en tête du journal.
+// ---------------------------------------------------------------------------
+
+test('FIX T4 — un raid SUBI dit combien d\'assaillants sont venus, et à quel niveau', () => {
+  // ⚠⚠ ETHAN, 17/09, POINT 6 : « afficher niveau des assaillants ». Le rapport
+  // d'un raid subi disait ce qui était tombé et ce qu'il en restait, jamais ce
+  // qui était venu : le joueur ne pouvait pas savoir s'il avait repoussé six
+  // Meutes de niveau 3 ou trente-six de niveau 40.
+  //
+  // ⚠ LE MONTAGE EST UN VRAI RAID SUBI, PAS UN RAPPORT FORGÉ. Ce qui est mesuré
+  // ici est un CHEMIN DE DONNÉE — `subirUnRaid` range un `rejeu`, `pourLeRejeu`
+  // y laisse les vagues, la vue les lit — et un objet écrit à la main dans le
+  // test ne garderait que lui-même.
+  //
+  // ⚠⚠ ET LE MONTAGE DOIT DISCRIMINER, SANS QUOI LA CONTRE-ASSERTION DU BAS NE
+  // DIT RIEN. `baseSousLeFeu` monte le Chantier de la base ATTAQUÉE au niveau
+  // 20 — qui est aussi celui d'`ATTAQUANTE` : `notEqual(20, 20)` tombait sur du
+  // code JUSTE, et il aurait passé sur un code qui lit le niveau de la base
+  // défendue au lieu de celui des assaillants. On l'écarte AVANT le raid.
+  // ⚠ Mesuré des deux côtés : les douze assaillants sortent au niveau 20 que le
+  // Chantier soit à 20 ou à 7, et la disposition survit au rasage — donc le
+  // montage ne change que ce qu'il doit changer.
+  const etat = baseSousLeFeu();
+  baseCourante(etat).disposition[0].niveau = 7;
+  const niveauDeLaBase = baseCourante(etat).disposition[0].niveau;
+  assert.notEqual(niveauDeLaBase, ATTAQUANTE.niveau,
+    'le montage remet les deux niveaux à égalité : il cesse de discriminer');
+  subirUnRaid(etat, ATTAQUANTE, 5);
+  const rapport = etat.rapports[0];
+
+  const vagues = rapport.rejeu?.vagues;
+  assert.ok(Array.isArray(vagues) && vagues.length > 0,
+    'le montage ne range aucune vague : il ne mesure pas ce qu\'il annonce');
+  const venues = vagues.flat();
+  assert.ok(venues.length > 1, 'le montage n\'a qu\'un assaillant : il ne mesure pas un compte');
+
+  const ligne = lignesDeLaDefense(rapport).find((l) => l.libelle === 'Assaillants');
+  assert.ok(ligne !== undefined, 'le rapport d\'un raid subi ne dit pas qui est venu');
+
+  // ⚠ LE COMPTE EST EXACT, PAS « À PEU PRÈS » : c'est le nombre d'unités des
+  // vagues rangées, et rien d'autre — ni les survivantes, ni les tombées.
+  assert.match(ligne.avant, new RegExp(`^${venues.length} unité`),
+    `la ligne annonce « ${ligne.avant} » pour ${venues.length} assaillants`);
+
+  // ⚠ ET LE NIVEAU EST CELUI DES ASSAILLANTS, PAS CELUI DE LA BASE ATTAQUÉE.
+  const niveaux = venues.map((u) => u.niveau);
+  const bas = Math.min(...niveaux);
+  const haut = Math.max(...niveaux);
+  assert.match(ligne.avant, new RegExp(`niv\\. ${bas}${bas === haut ? '$' : ` à ${haut}`}`),
+    `la ligne annonce « ${ligne.avant} » pour des niveaux ${bas}…${haut}`);
+  assert.notEqual(bas, niveauDeLaBase,
+    'la ligne annonce le niveau de la base attaquée, pas celui des assaillants');
+});
+
+test('FIX T4 bis — un rapport SANS rejeu ne dit rien, il n\'invente pas un zéro', () => {
+  // ⚠⚠ LA FENÊTRE DE SAUVEGARDES EST RÉELLE, ET C'EST LA MÊME QUE CELLE DES
+  // POINTS DE RECHERCHE au lot ÉCRANS : `etat.rapports` existe depuis la v19,
+  // `rejeu` n'est entré qu'au lot REJEU, et aucune migration ne vide la file. Un
+  // rapport de cette fenêtre-là n'a pas de vagues à lire.
+  //
+  // ⚠ ABSENT VAUT « PAS DE LIGNE », JAMAIS « 0 unité(s) » : un zéro se lirait
+  // « personne n'est venu », c'est-à-dire l'inverse de ce qui s'est passé.
+  const sans = rapportSubi(12);
+  assert.equal(sans.rejeu, undefined, 'le montage porte un rejeu : il ne mesure pas l\'absence');
+  const lignes = lignesDeLaDefense(sans);
+  assert.ok(lignes.length > 0, 'un rapport sans rejeu ne rend plus AUCUNE ligne');
+  assert.equal(lignes.find((l) => l.libelle === 'Assaillants'), undefined,
+    'un rapport sans rejeu invente une ligne d\'assaillants');
+
+  // ⚠ ET UNE VAGUE VIDE NON PLUS — c'est la même absence par l'autre bout.
+  const vide = { ...rapportSubi(12), rejeu: { vagues: [[], []] } };
+  assert.equal(lignesDeLaDefense(vide).find((l) => l.libelle === 'Assaillants'), undefined,
+    'des vagues vides rendent une ligne d\'assaillants');
+});
+
+test('FIX T5 — « Rejouer » est dans la TÊTE du journal, pas au bout du défilé', () => {
+  // ⚠⚠ ETHAN, 17/09, POINT 6 : « bouton raid rejouer en haut ». Le rapport du
+  // lot REJEU le disait déjà, mesuré : « le bouton tombe à y = 783, donc sous le
+  // pli — il est le dernier enfant du journal, qui défile, et le joueur doit
+  // descendre pour le trouver après avoir déplié un rapport ».
+  //
+  // ⚠ LE DÉPÔT N'A NI JSDOM NI NAVIGATEUR (CLAUDE.md §3) : ce qui se mesure ici
+  // est la STRUCTURE — le bouton est dans la tête collante, avant le corps qui
+  // défile —, jamais une position en pixels.
+  const feuille = lire('src/index.src.html').replace(/<!--[\s\S]*?-->/g, '');
+  const tete = feuille.indexOf('<div class="tete">', feuille.indexOf('id="ecran-journal"'));
+  const corps = feuille.indexOf('id="journal-corps"');
+  const bouton = feuille.indexOf('id="journal-rejouer"');
+  assert.ok(tete !== -1 && corps !== -1 && bouton !== -1,
+    'le journal a perdu sa tête, son corps ou son bouton');
+  assert.ok(bouton > tete && bouton < corps,
+    'le bouton « Rejouer » n\'est plus dans la tête du journal : il redescend sous le pli');
+
+  // ⚠⚠ ET CE QUI GARDE LE BOUTON À L'ÉCRAN N'EST PAS LE CORPS, C'EST LA TÊTE
+  // COLLANTE — relevé dans la feuille, pas supposé. `#journal-corps` ne porte
+  // AUCUNE règle de défilement : c'est `.panneau-detail` lui-même qui défile
+  // (`overflow-y: auto`), et `.panneau-detail .tete` qui reste par
+  // `position: sticky; top: 0`. Un bouton posé dans le corps s'en irait donc
+  // sous le pli, et c'est exactement le défaut du lot REJEU.
+  // ⚠ LES DEUX DÉCLARATIONS SE MESURENT ENSEMBLE : la tête collante sans
+  // conteneur qui défile ne colle à rien, et le conteneur qui défile sans tête
+  // collante emmène le bouton avec lui. En retirer une seule fait tomber ce
+  // test.
+  const bloc = (selecteur) => {
+    const i = feuille.indexOf(`${selecteur} {`);
+    return i === -1 ? '' : feuille.slice(i, feuille.indexOf('}', i));
+  };
+  assert.match(bloc('.panneau-detail'), /overflow-y:\s*auto/,
+    'le journal ne défile plus : sa tête n\'a plus rien à garder sous les yeux');
+  assert.match(bloc('.panneau-detail .tete'), /position:\s*sticky/,
+    'la tête du journal ne colle plus : le bouton « Rejouer » repart sous le pli');
+  assert.match(bloc('.panneau-detail .tete'), /top:\s*0/,
+    'la tête collante n\'a pas de bord de collage : `sticky` y est inerte');
+
+  // ⚠⚠ ET LA CLASSE QU'IL PORTE A UNE RÈGLE. Une classe que le balisage pose et
+  // que la feuille ignore est un bouton qui ne se voit pas — c'est la faute du
+  // lot ÉCRAN-ACTIONS, gardée depuis par `chantier.test.js`.
+  assert.match(feuille, /#ecran-journal \.tete \.ameliorer\s*\{/,
+    'le bouton de la tête du journal n\'a aucune règle : il reprend la mise en page d\'un panneau');
 });

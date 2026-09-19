@@ -701,7 +701,12 @@ function ajouterEntite(
   // départ, et depuis le lot POI les DÉGÂTS en dépendent aussi. La même valeur
   // est reprise plus bas dans le littéral.
   const proprietaireEntite = proprietaire ?? (camp === 'attaque' ? 'joueur' : 'ouvrage');
-  const commeEntite = { camp, proprietaire: proprietaireEntite };
+  // ⚠⚠ ET SON `id` EN FAIT PARTIE DEPUIS LE 17/09 — SANS LUI, `moduleActif` NE
+  // PEUT PLUS RIEN ACTIVER ICI. Le déblocage se lit PAR PIÈCE depuis le défaut
+  // n° 2 de l'audit : une entité de circonstance sans identifiant ferait un
+  // `liste.includes(undefined)`, donc `false`, donc PV +20 % éteint en silence
+  // pour tout le monde — c'est exactement ce que `MODULES-D T9` a attrapé.
+  const commeEntite = { camp, proprietaire: proprietaireEntite, id };
   // ⚠ LES POI MAJORENT LES DÉGÂTS, PAS LE FRANCHISSEMENT. C'est le précédent
   // exact de la Munition spéciale : le franchissement des barrières passe par
   // `degatsDeFranchissement`, sa propre table en milli-PV et son propre barème.
@@ -1293,13 +1298,20 @@ const MUNITION_PCT = 120;
  * nuit encore : les deux questions sont la même, et deux prédicats parallèles
  * finiraient par répondre différemment.
  *
- * Il rend zéro dans trois cas, tous déjà connus de tir() :
- *   — la colonne de dégâts du tireur est nulle contre le châssis de la cible ;
- *   — les PV du tireur sont tombés sous 1 ‰ de son maximum, sa santé arrondie
- *     vaut alors 0 et son tir ne retire plus rien ;
- *   — la cible est un bâtiment et la réserve de l'attaquant est épuisée. Le
- *     plancher de réserve ne protège que les bâtiments : le tir sur une entité
- *     de la défense reste gratuit, donc toujours valide.
+ * Il rend zéro dans trois cas, tous déjà connus de tir() — mais UN SEUL est une
+ * garde écrite ici, et l'audit du 17/09 (défaut n° 3) a montré que le dire
+ * autrement égarait le lecteur :
+ *   — LE SEUL `return 0` DE CETTE FONCTION : la cible est un bâtiment et la
+ *     réserve de l'attaquant est épuisée. Le plancher de réserve ne protège que
+ *     les bâtiments : le tir sur une entité de la défense reste gratuit, donc
+ *     toujours valide.
+ *   — PAR L'ARITHMÉTIQUE DE `degatsDUnTir`, PAS PAR UNE GARDE : la colonne de
+ *     dégâts du tireur est nulle contre le châssis de la cible ;
+ *   — PAR LA MÊME ARITHMÉTIQUE : les PV du tireur sont tombés sous 1 ‰ de son
+ *     maximum, `ratioMilli` vaut alors 0 et son tir ne retire plus rien.
+ *
+ * ⚠ LES TROIS `return` ANTICIPÉS QU'ON LIT PLUS BAS NE SONT AUCUN DE CEUX-LÀ :
+ * ce sont trois `return degats`, qui décident si la Munition spéciale majore.
  */
 function degatsContre(etat, e, p, cible) {
   const pc = profil(cible);
@@ -2341,7 +2353,10 @@ function modulesDunProprietaire(brut, qui) {
       throw new Error(`combat : modulesDebloques.${qui} n'a pas de branche « ${branche} »`);
     }
     if (!Array.isArray(liste) || liste.some((n) => typeof n !== 'string')) {
-      throw new Error(`combat : modulesDebloques.${qui}.${branche} n'est pas une liste de noms`);
+      throw new Error(
+        `combat : modulesDebloques.${qui}.${branche} n'est pas une liste `
+        + 'd\'identifiants de pièces',
+      );
     }
     sortie[branche] = [...liste];
   }
@@ -2440,8 +2455,50 @@ function majorationPoi(etat, e, p) {
 function moduleActif(etat, e, p, nom) {
   const porte = moduleDuCamp(e, p);
   if (porte !== nom) return false;
+  // ⚠⚠ LA LISTE PORTE DES PIÈCES, PAS DES NOMS — ARBITRÉ PAR ETHAN LE 17/09,
+  // DÉFAUT N° 2 DE L'AUDIT : « par pièce ». Elle a porté des NOMS jusque-là, et
+  // c'était une fuite dans les deux camps, mesurée :
+  //   — OUVRAGE : `data/combat.js` déclare TREIZE seuils d'`apparitionModule`,
+  //     le déblocage par nom n'en lisait que CINQ — le plus bas de chaque
+  //     module. Un Créneau tirait à +20 % dès le niveau 30 quand sa donnée dit
+  //     38 ; les Fouisseurs se camouflaient DIX niveaux trop tôt. Quarante
+  //     niveaux de site, en tout, où une pièce sortait de sa donnée.
+  //   — JOUEUR : SIX pièces portent `autoReparation`, de 1,2 M (Merlon) à 450 M
+  //     (Batterie). Acheter la moins chère les armait toutes les six.
+  //
+  // ⚠ ET C'EST LA MÊME LIGNE QUI CORRIGE LES DEUX, parce que les deux listes ont
+  // la même forme depuis MODULES-E : `recherche.js` y met les pièces que le
+  // joueur a achetées, `generateur.js` celles dont le site a passé le seuil.
+  // Le NOM reste lu — par `moduleDuCamp` — pour savoir CE QUE la pièce porte ;
+  // la liste dit seulement SI CETTE pièce-ci l'a gagné.
   const liste = etat.modulesDebloques?.[e.proprietaire]?.[BRANCHE_DU_CAMP[e.camp]];
-  return Array.isArray(liste) && liste.includes(nom);
+  return Array.isArray(liste) && liste.includes(e.id);
+}
+
+/**
+ * CETTE PIÈCE-CI PORTE-T-ELLE UN MODULE ACQUIS ? — point 17 d'Ethan, 18/09 :
+ * « un élément visible pour le joueur quand il voit des unités avec modules
+ * débloqués (joueur et ouvrage) ».
+ *
+ * ⚠⚠ ELLE EST EXPORTÉE POUR LE DESSIN, ET C'EST POUR ÇA QU'ELLE VIT ICI. Le
+ * rendu ne doit pas réécrire la règle : `src/render/scene.js` importe déjà
+ * `estNeutralisee` d'ici pour la même raison, et un prédicat recopié là-bas
+ * dériverait au premier ajustement de `moduleActif`. Ce module reste sans DOM
+ * et sans effet de bord ; celle-ci ne fait que LIRE l'état.
+ *
+ * ⚠ LES TROIS CHAMPS SONT ROUTÉS PAR `moduleDuCamp`, PAS LUS À LA MAIN : une
+ * unité porte `module` en offense, `defense.module` dans la garnison du joueur
+ * et `moduleOuvrage` quand elle défend pour l'Ouvrage. Les confondre mettrait
+ * l'étoile sur une pièce qui ne porte rien de ce côté-là.
+ *
+ * ⚠ ET UN BÂTIMENT REND `false` SANS PASSER PAR `profil` : il n'a pas de profil
+ * de combat au sens de `profil()`, et l'appeler lèverait.
+ */
+export function porteUnModuleAcquis(etat, e) {
+  if (e.genre !== 'unite' && e.genre !== 'defense') return false;
+  const p = profil(e);
+  const porte = moduleDuCamp(e, p);
+  return porte !== null && moduleActif(etat, e, p, porte);
 }
 
 /**
@@ -2503,6 +2560,119 @@ const ECRASEUR_PCT_PAR_TICK = 1;
  */
 export const ECRASEMENT_TICKS = 4;
 export const ECRASEMENT_FREIN = 4;
+
+/**
+ * Le rapport de masse à partir duquel un écrasement tourne à PLEINE VITESSE.
+ *
+ * Ethan, 13/09/2026, point 11 : « Changer calcul écrasement. Bien trop
+ * efficace. Pas assez de dégâts sur les véhicules. Un pionnier roule trop
+ * facilement. » Les trois phrases sont UN SEUL défaut, et il est dans
+ * `peutEcraser` : la masse y était un SEUIL BINAIRE — plus lourd d'un gramme, on
+ * broie en quatre ticks ; plus léger d'un gramme, il ne se passe **rien du
+ * tout**. Un Bélier de masse 5 tuait une Meute de masse 1 exactement aussi vite
+ * qu'un Pilon de masse 20, et deux blindés de même masse se traversaient sans
+ * s'abîmer.
+ *
+ * ⚠⚠ LES TROIS PHRASES SONT MESURÉES, PAS DEVINÉES — balayage de 240 combats,
+ * trois types de site × quatre niveaux × dix graines × deux compositions,
+ * 101 158 ticks :
+ *   • « bien trop efficace » — **672 contacts d'écrasement, 199 morts**, et
+ *     CHAQUE écrasement tue en quatre ticks quel que soit le rapport des masses,
+ *     les rapports en jeu allant de 2 à 20 ;
+ *   • « un pionnier roule trop facilement » — le **Bélier (Pionnier, masse 5)
+ *     est le deuxième écraseur du jeu, 242 contacts et 58 morts**, à la même
+ *     vitesse que le Broyeur qui pèse quatre fois plus ;
+ *   • « pas assez de dégâts sur les véhicules » — sur 93 162 appels de
+ *     `peutEcraser` entre camps opposés, **70 675 rendent NON**, dont **44 371
+ *     sur une cible pourtant écrasable** (26 174 plus lourde, 18 197 de masse
+ *     ÉGALE) — et **33 831 d'entre eux, soit 76,2 %, ont une victime de la
+ *     colonne `vehicule`**. Un contact refusé ne coûtait rien à personne.
+ *
+ * ⚠⚠ DEUX AUTRES LECTURES DE LA TROISIÈME PHRASE ONT ÉTÉ MESURÉES ET RÉFUTÉES,
+ * et il faut le dire pour qu'on ne les rouvre pas. (a) « l'écrasement fait trop
+ * peu de dégâts à une victime véhicule » : faux, il la tue en quatre ticks, ce
+ * qui est déjà le maximum. (b) « la table anti-véhicule est trop faible » :
+ * faux, la colonne `vehicule` porte les PLUS HAUTES valeurs du roster défensif —
+ * Créneau 35, Carapace 35, Broyeur 28, Fendeur 23. Ce qui manquait n'était pas
+ * un barème, c'était que le contact refusé soit un non-événement.
+ *
+ * ⚠⚠ VINGT, ET LE NOMBRE SE LIT DANS LES MASSES DU JEU. Elles valent 1
+ * (escouades), 5 (Ratisseur, Bélier), 10 (Fendeur) et 20 (Broyeur, Pilon) : le
+ * rapport 20 est celui du PLUS LOURD contre la PLUS LÉGÈRE, donc le seul couple
+ * qui mérite la pleine vitesse. Tous les autres ralentissent, et le plus léger
+ * des écrasements — un Bélier sur une Meute — passe de 4 à 16 ticks.
+ *
+ * ⚠ C'EST UNE CONSTANTE DE MOTEUR, PAS DU CALIBRAGE, et elle vit donc ici comme
+ * ses deux voisines : elle dit la FORME de la règle du tick, et le §6 du brief
+ * de CONTACT-2 l'écrit de face — « Aucune ligne de `src/data/`. »
+ */
+export const ECRASEMENT_RAPPORT_PLEIN = 20;
+
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LE HEURT EST L'AFFAIRE DES VÉHICULES — ARBITRÉ PAR ETHAN LE 18/09, APRÈS
+// MESURE. Une pièce qui ne peut pas ÉCRASER paie quand même des dégâts à ce
+// qu'elle percute ; mais seulement si elle pèse quelque chose. Sans ce seuil, le
+// heurt débordait sur toute l'infanterie : `peutEcraser` demande une masse
+// STRICTEMENT supérieure, or toutes les escouades pèsent 1, donc deux escouades
+// au contact se heurtaient l'une l'autre à chaque tick. Mesuré sur un montage nu
+// au niveau 1 — un Grenadier contre une Meute : **5 000 de tir contre 8 750 de
+// heurt**, le heurt tapant presque deux fois plus fort que l'arme, et la Meute
+// rendant 22 000. Deux escouades se tuaient en 80 ticks sans tirer un coup.
+//
+// ⚠ LA DEMANDE D'ETHAN ÉTAIT « pas assez de dégâts sur les véhicules, un
+// pionnier roule trop facilement » : le rapport de masses règle la seconde
+// moitié, le heurt la première. Ni l'une ni l'autre ne parle d'infanterie.
+//
+// ⚠⚠ ET C'EST `p.masse`, PAS `masseEffective` — la masse INTRINSÈQUE. L'Écraseur
+// double la masse contre une escouade ; une Meute qui le porte reste une
+// escouade, et la lire par `masseEffective` la ferait heurter comme un blindé.
+// Ici on demande « est-ce un véhicule ? », pas « pèse-t-elle lourd ce tick-ci ? ».
+export const MASSE_MINI_HEURT = 2;
+
+/**
+ * En combien de ticks de CONTACT une masse en use une autre, victime intacte.
+ *
+ * `ticks = max(ECRASEMENT_TICKS, ceil(ECRASEMENT_TICKS × RAPPORT_PLEIN × mV / mE))`
+ *
+ * ⚠⚠ UNE SEULE GRANDEUR POUR L'ÉCRASEMENT **ET** POUR LE HEURT, ET C'EST TOUT
+ * L'INTÉRÊT. Le seuil binaire d'hier demandait deux règles — « je broie » ou
+ * « rien » — et la seconde était vide. Le rapport n'en demande qu'une, continue :
+ * plus on est lourd devant, plus vite on use. Le passage du rapport 1 (deux
+ * blindés de même masse) au rapport 0,999 ne crée plus de falaise ; il n'y a
+ * plus de falaise du tout.
+ *
+ * ⚠ ENTIER DE BOUT EN BOUT, comme tout ce qui traverse un tick. Le numérateur
+ * est un produit d'entiers, le `ceil` borne, et `masseEffective` rend une masse
+ * de `src/data/combat.js`, qui sont toutes entières.
+ *
+ * ⚠⚠ LE PLANCHER `ECRASEMENT_TICKS` N'EST PAS UNE PRUDENCE : IL TIENT
+ * L'ARBITRAGE DU 13/09. Ethan avait tranché « quatre ticks » pour l'écrasement
+ * plein, et « bien trop efficace » demande de RALENTIR — jamais d'accélérer. Sans
+ * ce plancher, un rapport de 40 tuerait en deux ticks et un rapport de 80 en un
+ * seul, c'est-à-dire qu'on rouvrirait le franchissement instantané que le lot
+ * CONTACT-2 a fermé. Il mord aujourd'hui sur le seul couple 20 contre 1.
+ *
+ * ⚠⚠ ET IL REND L'ÉCRASEUR NON NUL POUR LA PREMIÈRE FOIS — FAIT NEUF, DÉCLARÉ.
+ * `masseEffective` DOUBLE la masse contre une escouade quand le module est
+ * acquis ; son propre pavé écrit « CET EFFET EST NUL AVEC LES MASSES
+ * D'AUJOURD'HUI », et c'était vrai d'un seuil binaire — un blindé écrasait déjà
+ * toute escouade, doublé ou non. Avec un rapport, doubler la masse DIVISE PAR
+ * DEUX la durée : un Fendeur passe de 8 à 4 ticks sur une Meute. Le module
+ * gagne donc un effet que sa propre documentation regrettait de ne pas avoir.
+ * **Ce n'est pas un effet de bord à corriger, c'est une conséquence de la règle,
+ * et elle est plafonnée par le plancher ci-dessus.**
+ *
+ * ⚠ EXPORTÉE, COMME SES DEUX VOISINES ET POUR LA MÊME RAISON — l'idiome de
+ * `TICKS_AVANT_REPLI` : `CONTACT-2 T1` en DÉRIVE le nombre de ticks de son
+ * montage au lieu de retaper 8, et un test qui recopie un nombre ne garde plus
+ * que lui-même. ⚠ Mais un test qui ne ferait QUE dériver serait vrai sous
+ * n'importe quelle valeur : les trois constantes restent ÉPINGLÉES là-bas.
+ */
+export function ticksDEcrasement(masseEcraseuse, masseVictime) {
+  const plein = ECRASEMENT_TICKS * ECRASEMENT_RAPPORT_PLEIN * masseVictime;
+  return Math.max(ECRASEMENT_TICKS, Math.ceil(plein / masseEcraseuse));
+}
 
 /**
  * L'entité qu'une unité à Écraseur est en train de FORCER — ou `undefined`.
@@ -2614,10 +2784,59 @@ function bloqueuseSur(etat, e, p, occupation, rangee, colonne) {
  * toucher la même victime au même tick, et la seconde ne doit ni la retuer ni la
  * repousser dans le journal.
  */
-function ecraserAuContact(etat, occupation, victime) {
+/**
+ * Ajoute au journal ce qu'un HEURT vient de retirer — en enrichissant l'impact
+ * du tick s'il y en a déjà un pour cette cible, sinon en en poussant un.
+ *
+ * ⚠⚠ ARBITRÉ PAR ETHAN LE 17/09 : **le heurt se publie, l'écrasement se tait.**
+ * `JOURNAL T8` a trouvé la faute avant nous — il exige qu'une pièce ne puisse
+ * perdre plus que ce que le journal annonce QUE d'une seule façon, et le heurt
+ * en avait ouvert une seconde : 33 écarts sur 1 470 impacts, trois pièces qui
+ * perdaient des PV sans trace. Un heurt n'est pas une mort, c'est un COUP : il
+ * se voit, se compte et se sonne comme n'importe quel dégât. L'écrasement, lui,
+ * garde son silence — c'est la SECONDE MORT du moteur, posée à l'étape 7 hors
+ * d'`appliquerDegats`, et `JOURNAL T8` la documente comme l'unique exception.
+ *
+ * ⚠⚠ ON ENRICHIT, ON N'EMPILE PAS, ET C'EST UN INVARIANT QUI TIENT DEPUIS
+ * TOUJOURS : `appliquerDegats` publie UN impact par cible et par tick, en
+ * agrégeant son tampon. Pousser un second impact pour une cible déjà touchée au
+ * tir ferait deux entrées dont AUCUNE ne dirait la perte du tick, et `JOURNAL
+ * T8` retomberait sur la même faute par l'autre bout. L'étape 5 passe avant
+ * l'étape 7, donc l'impact du tir est déjà là quand celui-ci arrive.
+ *
+ * @param {object} etat
+ * @param {object} victime
+ * @param {number} retires milli-PV réellement retirés — jamais le nominal
+ */
+function publierLeHeurt(etat, victime, retires) {
+  if (retires <= 0) return;
+  const deja = etat.journal.impacts.find((i) => i.indice === victime.indice);
+  if (deja !== undefined) {
+    deja.encaisseMilli += retires;
+    return;
+  }
+  etat.journal.impacts.push({
+    ...faitDeLEntite(victime), encaisseMilli: retires, pvMaxMilli: victime.pvMaxMilli,
+  });
+}
+
+function ecraserAuContact(etat, occupation, victime, e, p, publie = false) {
   if (victime.pvMilli <= 0) return;
-  const degats = Math.ceil(victime.pvMaxMilli / ECRASEMENT_TICKS);
+  // ⚠⚠ LE QUANTUM DÉPEND DU COUPLE DE MASSES DEPUIS LE POINT 11, ET LA MASSE SE
+  // DEMANDE À `masseEffective` — jamais à `p.masse`. Les deux diffèrent sous
+  // l'Écraseur, et lire la seconde ferait dire à cette fonction autre chose qu'à
+  // `peutEcraser`, qui décide s'il y a écrasement : l'écraseuse broierait à une
+  // vitesse que le prédicat n'a pas autorisée. Les deux APPELLENT la même
+  // fonction, elles ne recopient pas sa formule.
+  const pv = profil(victime);
+  const ticks = ticksDEcrasement(masseEffective(etat, e, p, pv), pv.masse);
+  const degats = Math.ceil(victime.pvMaxMilli / ticks);
+  // ⚠ CE QUI EST PUBLIÉ EST CE QUI A ÉTÉ RETIRÉ, PAS LE NOMINAL : un coup qui
+  // dépasse les PV restants n'est encaissé par personne au-delà. Même règle
+  // qu'`appliquerDegats`, et c'est elle qui fait tomber l'écart à zéro.
+  const pvAvant = victime.pvMilli;
   victime.pvMilli = Math.max(0, victime.pvMilli - degats);
+  if (publie) publierLeHeurt(etat, victime, pvAvant - victime.pvMilli);
   if (victime.pvMilli > 0) return;
   victime.vivant = false;
   victime.ecrase = true;
@@ -2725,7 +2944,9 @@ const AXE_COLONNE = {
  * millier, la fenêtre de deux cases deviendrait fausse **en silence** : une
  * bloqueuse en troisième case borne alors le pas, et personne ne la regarde.
  */
-function margeDeContact(etat, e, p, occupation, rangee, colonne, axe, sens, ecrasees) {
+function margeDeContact(
+  etat, e, p, occupation, rangee, colonne, axe, sens, ecrasees, heurtees,
+) {
   const m = axe.milliDe(e);
   const perp = axe.perpDe(e);
   let marge = Infinity;
@@ -2764,6 +2985,31 @@ function margeDeContact(etat, e, p, occupation, rangee, colonne, axe, sens, ecra
         if (ecart === 0) ecrasees.push(b);
         continue;
       }
+      // ⚠⚠⚠ LE HEURT — POINT 11, ET C'EST LA MOITIÉ QUI RÉPOND À « PAS ASSEZ DE
+      // DÉGÂTS SUR LES VÉHICULES ». Le contact dont l'écrasement est REFUSÉ ne
+      // faisait strictement rien : **44 371 contacts sur les 240 combats du
+      // relevé, dont 76,2 % avec une victime véhicule**, où deux masses se
+      // touchaient et repartaient intactes. Elles s'usent désormais, à la
+      // vitesse que leur rapport de masse commande — une seule grandeur pour les
+      // deux cas, donc pas de falaise au rapport 1.
+      //
+      // ⚠⚠ `pb.ecrasable` EST LA GARDE QUI TIENT TOUT LE RESTE DU MOTEUR, ET
+      // L'OUBLIER DÉTRUIRAIT DEUX MÉCANIQUES D'UN COUP. Elle n'est vraie que sur
+      // les UNITÉS — `profilDefense` et `profilBatiment` la posent à `false`. Sans
+      // elle, n'importe quelle unité rongerait un mur, une tourelle et un bâtiment
+      // par simple contact : le forçage de l'Écraseur — la SEULE façon d'ouvrir
+      // une brèche, `ECRASEUR_PCT_PAR_TICK` — deviendrait un ornement, et le
+      // butin d'un site se prendrait en s'appuyant dessus.
+      //
+      // ⚠ ET LE FREIN N'EN EST PAS : il reste indexé sur `ecrasees` seul, et
+      // c'est sans conséquence — une heurtée BORNE, donc la ligne suivante met
+      // la marge à zéro et le pas vaut zéro de toute façon. L'invariant du frein
+      // du lot CONTACT-2 n'est pas touché.
+      // ⚠ ET LA MASSE DE L'HEURTEUSE COMMANDE, voir `MASSE_MINI_HEURT` : sous le
+      // seuil, la pièce borne toujours son pas mais ne coûte rien à ce qu'elle
+      // touche. L'infanterie se bouscule, elle ne se broie pas.
+      if (ecart === 0 && b.camp !== e.camp && profil(b).ecrasable
+        && p.masse >= MASSE_MINI_HEURT) heurtees.push(b);
       if (ecart < marge) marge = ecart;
     }
   }
@@ -3215,8 +3461,9 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   // CONTACT-2. C'est lui qui dit s'il y a un écrasement en cours, donc lui qui
   // décide du frein, donc il ne peut pas venir après la vitesse qu'il freine.
   const ecrasees = [];
+  const heurtees = [];
   const marge = margeDeContact(
-    etat, e, p, occupation, rangee, colonne, AXE_COLONNE, sens, ecrasees,
+    etat, e, p, occupation, rangee, colonne, AXE_COLONNE, sens, ecrasees, heurtees,
   );
   const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
   // ⚠⚠ LES DÉGÂTS SE PAIENT ICI, AVANT TOUT `return`, PARCE QUE LE CONTACT EST UN
@@ -3225,7 +3472,11 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   // **et depuis le lot FREIN : pièce qui freine** — touche quand même ce qu'elle
   // broie. La quatrième entrée de cette liste est la raison pour laquelle le
   // frein sort SOUS cette ligne et non au-dessus.
-  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
+  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime, e, p);
+  // ⚠ LES HEURTÉES PAIENT AU MÊME ENDROIT ET PAR LE MÊME ÉCRIVAIN : le §2.2 du
+  // brief de CONTACT-2 interdit une seconde mort du moteur, et un `pvMilli = 0`
+  // écrit ailleurs « serait la quatrième, et personne ne la verrait ».
+  for (const victime of heurtees) ecraserAuContact(etat, occupation, victime, e, p, true);
   // ⚠⚠⚠ LE FREIN — ÉTAGE A DU LOT FREIN, ET IL SORT **APRÈS** LE PAIEMENT DU
   // CONTACT, PAS AVANT. Ethan, 13/09 : « les unités défensives en déplacement
   // latéral semblent aller très vite », arbitrage **A** — une pièce qui a une
@@ -3320,7 +3571,7 @@ function seDecaler(etat, e, p, occupation, obstacles) {
     // balayage : une occupante déjà au contact y a déjà payé son quart quinze
     // lignes plus haut. Sans ce test, une écraseuse assez rapide pour franchir
     // depuis le contact tuerait en DEUX ticks au lieu de quatre.
-    ecraserAuContact(etat, occupation, occupante);
+    ecraserAuContact(etat, occupation, occupante, e, p);
   }
   // ⚠⚠⚠ ET PLUS AUCUN DÉPLACEMENT ICI — LOT CONTACT-2. Cette branche portait la
   // TROISIÈME mort du moteur : `occupante.pvMilli = 0`, puis l'échange de cases
@@ -3376,8 +3627,9 @@ function avancer(etat, e, p, occupation, obstacles) {
   // lui qui décide du frein, donc il vient avant ce qu'il freine. L'ordre est
   // désormais balayage → frein → vitesse → dégâts → pas.
   const ecrasees = [];
+  const heurtees = [];
   const marge = margeDeContact(
-    etat, e, p, occupation, rangee, colonne, AXE_RANGEE, 1, ecrasees,
+    etat, e, p, occupation, rangee, colonne, AXE_RANGEE, 1, ecrasees, heurtees,
   );
   const frein = ecrasees.length > 0 ? ECRASEMENT_FREIN : 1;
   const vitesse = vitesseDuTick(etat, e, p, obstacles, rangee, frein);
@@ -3390,7 +3642,11 @@ function avancer(etat, e, p, occupation, obstacles) {
   // ⚠⚠ ET C'EST AUSSI CE QUI FAIT DU FRANCHISSEMENT UN NON-ÉVÉNEMENT : la
   // victime qui tombe ici libère sa cellule AVANT que la branche d'occupation ne
   // la lise, donc l'écraseuse entre par le chemin ordinaire.
-  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime);
+  for (const victime of ecrasees) ecraserAuContact(etat, occupation, victime, e, p);
+  // ⚠ LES HEURTÉES PAIENT AU MÊME ENDROIT ET PAR LE MÊME ÉCRIVAIN : le §2.2 du
+  // brief de CONTACT-2 interdit une seconde mort du moteur, et un `pvMilli = 0`
+  // écrit ailleurs « serait la quatrième, et personne ne la verrait ».
+  for (const victime of heurtees) ecraserAuContact(etat, occupation, victime, e, p, true);
   const pas = Math.min(vitesse, marge);
   const destinationMilli = e.rangeeMilli + pas;
   const caseDestination = caseDepuisMilli(destinationMilli);
@@ -3568,7 +3824,7 @@ function avancer(etat, e, p, occupation, obstacles) {
     // ⚠⚠ LE `includes` EMPÊCHE UN DOUBLE COUP, il n'est pas décoratif : sans lui,
     // une écraseuse assez rapide pour franchir depuis le contact paierait deux
     // quarts dans le même tick et tuerait en DEUX ticks au lieu de quatre.
-    ecraserAuContact(etat, occupation, occupante);
+    ecraserAuContact(etat, occupation, occupante, e, p);
   }
   // ⚠⚠⚠ ET PLUS AUCUNE AVANCE ICI — LOT CONTACT-2. Cette branche portait la
   // SECONDE mort du moteur, `occupante.pvMilli = 0`, et l'échange de cases qui
@@ -4061,7 +4317,17 @@ export function pointsRecherche(resultat, montage) {
       : (d.pvInitialMilli === undefined
         ? d.pvPerdusMilli : d.pvInitialMilli - d.pvMilli);
     if (perduIci <= 0) continue;
-    const facteur = d.module !== null && debloques.has(d.module) ? bonusMilli : neutre;
+    // ⚠ PAR PIÈCE DEPUIS LE 17/09, comme `moduleActif` : le bonus de 20 % allait
+    // à toute pièce dont un HOMONYME avait débloqué le module.
+    // ⚠ ICI `d.module` EST COHÉRENT AVEC LA LISTE — les deux portent sur la
+    // branche défense —, et IL RESTE. Il a été retiré une fois, le 18/09, au
+    // motif qu'il serait redondant : les trois producteurs ne mettent dans ces
+    // listes que des pièces qui portent un module dans la branche. C'est vrai en
+    // PRODUCTION, et faux pour un montage écrit à la main — `MODULES-D T4` en
+    // pose un qui arme une Meute côté Ouvrage, où elle n'a pas de module, et le
+    // retrait lui donnait +20 % pour un module inexistant. Le garde-fou est donc
+    // remis : il ne coûte rien et il ferme un état absurde.
+    const facteur = d.module !== null && debloques.has(d.id) ? bonusMilli : neutre;
     // Niveau de la CIBLE, plus celui du site. La division BigInt tronque vers
     // zéro : sur des grandeurs positives, c'est exactement le plancher voulu.
     // Le facteur économique est en millièmes, d'où le MILLE au dénominateur ;
@@ -4119,7 +4385,19 @@ export function pointsRechercheDefense(resultat, montage) {
     if (bareme === undefined) continue;
     const perduIci = a.pvPerdusMilli;
     if (perduIci <= 0) continue;
-    const facteur = a.module !== null && debloques.has(a.module) ? bonusMilli : neutre;
+    // ⚠⚠ ET ICI LE GARDE-FOU A ÉTÉ RETIRÉ LE 18/09, PARCE QU'IL LISAIT LA
+    // MAUVAISE BRANCHE — trouvé par une relecture adverse, et faux bien avant ce
+    // lot. `a.module` vient de `ligneResultat`, qui publie `moduleDeDefense` : la
+    // branche DÉFENSE d'une pièce. Or `debloques` est ici la branche OFFENSE de
+    // l'attaquant. Pour un attaquant de l'Ouvrage, `moduleDeDefense` rend
+    // `moduleOuvrage`, qui n'existe que sur QUATRE unités sur quatorze : les dix
+    // autres ne touchaient jamais le bonus, même inscrites dans la liste.
+    //
+    // ⚠ SON JUMEAU DE DÉFENSE LE GARDE, et ce n'est pas une incohérence : là-bas
+    // les deux portent sur la même branche, donc le garde-fou dit quelque chose
+    // de vrai. Ici il ne pouvait rien dire de vrai, quelle que soit sa forme —
+    // `ligneResultat` ne publie tout simplement pas le module qu'il faudrait.
+    const facteur = debloques.has(a.id) ? bonusMilli : neutre;
     total += (BigInt(bareme) * BigInt(facteurRechercheMilli(a.niveau)) * facteur
       * BigInt(perduIci) * tarifMilli) / (BigInt(a.pvMaxMilli) * mille * mille);
   }

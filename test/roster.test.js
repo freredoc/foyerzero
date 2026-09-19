@@ -182,6 +182,31 @@ test('T1 bis — les seuls flottants restants sont ceux que le relevé écrit ai
   assert.ok(Number.isInteger(OBSTACLES.diviseurVitesse * 1000));
 });
 
+/**
+ * LES QUATRE RÉSERVES QUE LE LOT MUNITIONS (19/09) SORT DE LA RÈGLE « ÷ 10 ».
+ *
+ * ⚠⚠ ELLE EST ICI, AU MODULE, ET NULLE PART AILLEURS. `T2` reconstruit la table
+ * du §6 et `T7` tient la règle des munitions : les deux ont besoin de la même
+ * liste d'exceptions, et deux copies dériveraient. Une seule table fait foi par
+ * grandeur. `T7` porte le raisonnement complet ; `T2` s'y réfère.
+ */
+const RESERVES_AVANT_MUNITIONS = { frappeur: 450 };
+const RESERVES_RECALIBREES = {
+  // id : [réserve, besoin arithmétique pour trois casernes de niveau 20]
+  //
+  // ⚠⚠ UNE SEULE, ET C'EST UN RETOUR EN ARRIÈRE ASSUMÉ. Le lot avait d'abord
+  // raboté QUATRE réserves — Fouisseurs 500 → 150, Pilon 500 → 150, Enclume
+  // 400 → 188 —, puis multiplié leurs dégâts de structure du même rapport pour
+  // conserver le total. Les deux étapes ont été MESURÉES et ANNULÉES par Ethan,
+  // 19/09 : « on annule le rabotage, on repart sur avant, avec le Foudre qui est
+  // modifié ». Ce que la mesure disait, et qui reste vrai pour le jour où la
+  // question reviendra : ces trois-là n'épuisaient JAMAIS leur réserve — elles
+  // étaient limitées par le TEMPS —, donc le rabot seul leur retirait 18 % de
+  // PV rendus aux bâtiments, et le rabot compensé leur en rendait +84 %. Aucune
+  // des deux n'était neutre, et c'est pour ça qu'aucune n'est retenue.
+  frappeur: [25, '3 × 15 290 / 1 834,8 = 25,000 pile'],
+};
+
 // ---------------------------------------------------------------------------
 // T2 — les données égalent la source
 // ---------------------------------------------------------------------------
@@ -208,8 +233,16 @@ test('T2 — les 23 profils reconstruisent exactement la table du §6', () => {
     // relevé — et sa colonne aviation y est nulle, par la bascule du §3.
     assert.equal(u.degats.structureOuAviation * PAS, r.bat, `${id} : colonne structure`);
     assert.equal(r.air, 0, `${id} : une unité consultée en attaque a sa colonne air à zéro`);
-    // ⚠ La RÉSERVE est le seul champ non mesuré : le relevé ÷ 10. Voir T7.
-    assert.equal(u.reserve * 10, r.mun, `${id} : réserve = munitions ÷ 10`);
+    // ⚠ La RÉSERVE est le seul champ non mesuré : le relevé ÷ 10 — SAUF pour les
+    // quatre que le lot MUNITIONS a calées sur le besoin de trois bâtiments.
+    // `T7` porte la règle, le raisonnement et les contre-assertions ; ici on ne
+    // fait que ne pas reprocher au profil de suivre la règle neuve.
+    const recalibree = RESERVES_RECALIBREES[id];
+    if (recalibree === undefined) {
+      assert.equal(u.reserve * 10, r.mun, `${id} : réserve = munitions ÷ 10`);
+    } else {
+      assert.equal(u.reserve, recalibree[0], `${id} : réserve recalibrée — ${recalibree[1]}`);
+    }
   }
 
   for (const [id, r] of Object.entries(RELEVE_DEFENSES)) {
@@ -488,7 +521,25 @@ test('T5 — un même site à deux niveaux se résout dans le même temps', () =
   // `colonneMatrice`, `camp` et `porteeCarree`, dont aucun ne dépend du niveau —
   // les PV et les dégâts montent ensemble, la portée ne monte pas. Un frein qui
   // aurait mordu au niveau 1 et pas au niveau 50 aurait rendu neuf durées.
-  assert.deepEqual([...ticks], [199], `durées observées : ${[...ticks].join(', ')}`);
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09-18/09) : 199 → **192**, SEPT TICKS, ET **LA
+  // PROPRIÉTÉ NE BOUGE PAS D'UN CHEVEU** — c'est toujours UNE seule durée sur
+  // les neuf niveaux, et c'est la seule chose que ce test mesure. Cet assaut-ci
+  // est LOURD : ses six pièces sont des véhicules et des structures, donc le
+  // heurt et le nouveau quantum d'écrasement le concernent tous les deux, et il
+  // ouvre la colonne plus vite.
+  //
+  // ⚠ ET L'INVARIANCE EN NIVEAU TIENT POUR LA MÊME RAISON QU'AVANT : les trois
+  // étages ne lisent que `colonnePredilection`, `colonneMatrice`, `camp` et
+  // `porteeCarree`, dont aucun ne dépend du niveau — et le quantum
+  // d'écrasement, lui, se dérive d'un RAPPORT de masses, qui ne dépend pas du
+  // niveau non plus. Un lot qui aurait fait dépendre l'écrasement d'une valeur
+  // absolue aurait rendu neuf durées ici, et ce test serait tombé.
+  assert.deepEqual([...ticks], [192], `durées observées : ${[...ticks].join(', ')}`);
+  assert.notDeepEqual(
+    [...ticks], [199],
+    'la durée d\'avant le lot ÉCRASEMENT est revenue sans qu\'on l\'ait remesurée',
+  );
   assert.notDeepEqual(
     [...ticks], [200],
     'la durée d\'avant ne doit pas revenir sans qu\'on l\'ait remesurée',
@@ -703,7 +754,22 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     // partant au plafond. Aucun barème n'a été touché ; le calibrage revient à
     // Ethan, et `rapports/RAPPORT-lotFREIN.md` §9 le porte.
     { nom: 'A', type: 'avantPoste', assaut: 'infanterie', cause: 'attaquants', tick: 695, butin: { quartz: 24_987, scorie: 8_329 }, survivants: 3 },
-    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'duree', tick: TICKS_MAX_COMBAT, butin: { quartz: 33_380, scorie: 11_126 }, survivants: 9 },
+    // ⚠⚠ LOT ÉCRASEMENT (17/09-18/09) : **B REPASSE DE `duree` À `attaquants`,
+    // AU TICK 424**, avec 30 371 / 10 123 de butin et huit survivants au lieu de
+    // neuf. C'est le retour exact de ce que le lot FREIN lui avait coûté, et
+    // c'est le point 11 d'Ethan mot pour mot — « pas assez de dégâts sur les
+    // véhicules ». Un assaut LOURD qui fait payer le contact ouvre la colonne au
+    // lieu de s'y user jusqu'au plafond. Le plafond, lui, n'a pas bougé d'une
+    // seconde : `TICKS_MAX_COMBAT` vaut toujours 900, et l'assertion du bas le
+    // vérifie encore.
+    //
+    // ⚠ ET C'EST LE CONTRASTE QUI ATTRIBUE, comme au lot FREIN : A ne bouge
+    // d'aucun champ — `attaquants` au tick 695, même butin, trois survivants —
+    // et C non plus, parce que ce sont des assauts d'INFANTERIE et que les deux
+    // moitiés du lot demandent un véhicule (`MASSE_MINI_HEURT`, arbitré le
+    // 18/09). Seul B, qui est blindé, se déplace. Un lot qui aurait touché un
+    // barème aurait déplacé les trois.
+    { nom: 'B', type: 'camp', assaut: 'blindeLourd', cause: 'attaquants', tick: 424, butin: { quartz: 30_371, scorie: 10_123 }, survivants: 8 },
     // ⚠ Lot COURBE : le quartz de C passe de 26 319 à 26 321. C'est le SEUL
     // déplacement des trois raids — A et B sont identiques au champ près, et
     // les trois causes, les trois ticks et les trois comptes de survivants ne
@@ -721,17 +787,19 @@ test('T6 — A, B et C, mesurés après conversion', () => {
     assert.deepEqual(r.butin, c.butin, `raid ${c.nom} : butin`);
     assert.equal(r.resultat.attaquants.filter((a) => !a.detruit).length, c.survivants,
       `raid ${c.nom} : survivants`);
-    // ⚠⚠ LOT FREIN : CETTE ASSERTION EST RETOURNÉE, JAMAIS ASSOUPLIE. Elle
+    // ⚠⚠ LOT FREIN : CETTE ASSERTION AVAIT ÉTÉ RETOURNÉE, JAMAIS ASSOUPLIE. Elle
     // exigeait des TROIS raids qu'ils se concluent avant le plafond ; B ne le
-    // fait plus. Écrire `<=` aurait effacé la propriété pour les trois, alors
-    // que deux la tiennent encore : elle les NOMME donc, et elle exige de B
-    // l'égalité STRICTE au plafond. Un B qui reviendrait sous la barre fait
-    // tomber le test, et c'est ce qu'on lui demande.
-    if (c.nom === 'B') {
-      assert.equal(r.nbTicks, TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
-    } else {
-      assert.ok(r.nbTicks < TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
-    }
+    // faisait plus. Écrire `<=` aurait effacé la propriété pour les trois, alors
+    // que deux la tenaient encore : elle les NOMMAIT donc, et exigeait de B
+    // l'égalité STRICTE au plafond.
+    //
+    // ⚠⚠ LOT ÉCRASEMENT (17/09-18/09) : ELLE SE REMET À L'ENDROIT, ET C'EST LE
+    // CAS DE SORTIE PRÉVU. « Un B qui reviendrait sous la barre fait tomber le
+    // test, et c'est ce qu'on lui demande » — il est revenu, le test est tombé,
+    // et voilà le réancrage. Les TROIS raids se concluent de nouveau avant le
+    // plafond, donc le cas particulier disparaît au lieu d'être inversé : c'est
+    // la forme la plus stricte des deux, et elle redevient vraie.
+    assert.ok(r.nbTicks < TICKS_MAX_COMBAT, `raid ${c.nom} : ${r.nbTicks} ticks`);
   }
 
   // Le fait qui compte : à assaut budgété, B ne rase PLUS la Souche. Le
@@ -748,22 +816,53 @@ test('T6 — A, B et C, mesurés après conversion', () => {
 // ---------------------------------------------------------------------------
 
 test('T7 — aucune unité ne peut tirer plus longtemps que le raid', () => {
-  // ⚠ LE SEUL NOMBRE NON MESURÉ DU LOT. Le relevé donne les munitions au pied
+  // ⚠ LE SEUL NOMBRE NON MESURÉ DU LOT 4A. Le relevé donne les munitions au pied
   // de la lettre ; à un tir par tick et 10 tirs/s, elles vaudraient de 40 s
   // (Sniper) à 500 s (Commando et Juggernaut) de tir continu, pour un raid qui
   // en dure 90. DIX unités sur quatorze auraient de quoi tirer plus longtemps
   // que le combat entier, et le plancher de 10 % — le cœur du modèle offensif —
-  // ne mordrait plus sur personne.
+  // ne mordrait plus sur personne. Retenu alors : ÷ 10.
   //
-  // Retenu : ÷ 10. Les quatorze valeurs sont des multiples de 100, la division
-  // est donc exacte, et l'ordre relatif du relevé est conservé.
+  // ⚠⚠ ET QUATRE UNITÉS EN SORTENT DEPUIS LE LOT MUNITIONS (19/09) — LA RÈGLE
+  // ÷ 10 NE VAUT PLUS QUE POUR DIX. Le ÷ 10 était un rabot uniforme sur un
+  // nombre que personne n'avait relié à ce que l'unité TIRE vraiment. Mesuré,
+  // Foudre seul contre trois casernes de niveau 20 : il tire 21 ticks et sort
+  // avec 429 de réserve sur 450. Ethan, 19/09 : « dans TA, il vide tout en
+  // quelques secondes, sur 3 cases ». La règle neuve cale la réserve sur le
+  // BESOIN — les ticks qu'il faut pour abattre trois bâtiments —, et ce besoin
+  // est INVARIANT PAR NIVEAU, PV et dégâts montant du même pas : vérifié aux
+  // niveaux 1, 20, 35 et 50, même entier aux quatre.
+  //
+  // ⚠⚠ ELLE NE TOUCHE QUE CELLES QUI AVAIENT DU SURPLUS, ET IL N'Y EN A QUE
+  // QUATRE. Les dix autres ont déjà une réserve TROP PETITE pour trois
+  // bâtiments — Meute 70 pour 1 072 nécessaires, Carapace 60 pour 1 250,
+  // Fendeur 100 pour 750 : chez elles la munition mord déjà, et l'aligner sur
+  // le besoin la MULTIPLIERAIT. Arbitrage d'Ethan sur cette mesure : ne raboter
+  // que le surplus.
   const secondes = {};
   for (const [id, u] of Object.entries(UNITES)) {
     assert.equal(RELEVE[id].mun % 100, 0, `${id} : munitions non multiples de 100`);
-    assert.equal(u.reserve * 10, RELEVE[id].mun, `${id} : réserve = munitions ÷ 10`);
+    const recalibree = RESERVES_RECALIBREES[id];
+    if (recalibree === undefined) {
+      assert.equal(u.reserve * 10, RELEVE[id].mun, `${id} : réserve = munitions ÷ 10`);
+    } else {
+      const [attendue, calcul] = recalibree;
+      assert.equal(u.reserve, attendue, `${id} : réserve calée sur le besoin — ${calcul}`);
+      // ⚠ LA CONTRE-ASSERTION : sans elle, la liste d'exceptions pourrirait en
+      // silence le jour où une réserve reviendrait par hasard au relevé ÷ 10.
+      assert.notEqual(
+        u.reserve * 10, RELEVE[id].mun,
+        `${id} : plus une exception — elle est revenue au relevé ÷ 10, sortir la de RESERVES_RECALIBREES`,
+      );
+      assert.ok(
+        u.reserve < RESERVES_AVANT_MUNITIONS[id],
+        `${id} : le lot MUNITIONS RABOTE, il n'augmente aucune réserve`,
+      );
+    }
     // Un tir par tick, 10 ticks par seconde.
     secondes[id] = u.reserve / 10;
   }
+  assert.equal(Object.keys(RESERVES_RECALIBREES).length, 1, 'une seule exception, pas une de plus');
 
   const dureeRaid = TICKS_MAX_COMBAT / 10;
   assert.equal(dureeRaid, 90);
@@ -771,25 +870,32 @@ test('T7 — aucune unité ne peut tirer plus longtemps que le raid', () => {
     assert.ok(s <= dureeRaid, `${id} : ${s} s de tir pour un raid de ${dureeRaid} s`);
   }
 
-  // La plage obtenue : de 4 s à 50 s, contre 15 à 30 s avant la conversion.
-  // ⚠ Le §6 du brief annonce « de 7 s pour le Guetteur à 50 s pour les
-  // Fouisseurs ». Le plancher est bien celui du Guetteur, mais il vaut 4 s et
-  // non 7 : 400 munitions ÷ 10 = 40 de réserve, soit 4 s. Les 7 s sont celles
-  // du Fusilier (700 ÷ 10 = 70). Et le plafond de 50 s est partagé par les
-  // Fouisseurs ET le Pilon, tous deux à 5 000 munitions. Consigné au rapport.
+  // ⚠ LA PLAGE EST RÉANCRÉE, ET LES DEUX VALEURS D'AVANT SONT ÉCRITES À CÔTÉ.
+  // Avant le lot MUNITIONS : de 4 s (Guetteur) à 50 s, plafond partagé par les
+  // Fouisseurs ET le Pilon. Après : de 2,5 s (Foudre, qui passe sous le
+  // Guetteur) à 25 s, plafond partagé par les Perceurs ET le Bélier — les deux
+  // seules à 2 500 munitions que le rabot n'a pas touchées. Le §6 du brief
+  // annonçait « de 7 s pour le Guetteur à 50 s pour les Fouisseurs » : le
+  // plancher était déjà celui du Guetteur mais à 4 s et non 7 (les 7 s sont
+  // celles du Fusilier), et il ne l'est plus du tout.
   const valeurs = Object.values(secondes);
-  assert.equal(Math.min(...valeurs), 4);
-  assert.equal(Math.max(...valeurs), 50);
-  assert.equal(secondes.guetteur, 4, 'le plancher, et c\'est bien le Guetteur');
+  assert.equal(Math.min(...valeurs), 2.5); // était 4
+  assert.equal(Math.max(...valeurs), 50); //  INCHANGÉ : le rabot des trois est annulé
+  assert.equal(secondes.frappeur, 2.5, 'le plancher neuf, et c\'est le Foudre');
+  assert.equal(secondes.guetteur, 4, 'le Guetteur ne bouge pas, il n\'avait pas de surplus');
   assert.equal(secondes.meute, 7, 'les 7 s du brief sont celles du Fusilier');
   assert.deepEqual(
     Object.keys(secondes).filter((id) => secondes[id] === 50).sort(),
     ['fouisseurs', 'pilon'],
+    'le plafond de 50 s a bougé : le rabot annulé serait revenu',
   );
+  assert.notEqual(Math.min(...valeurs), 4, 'le Foudre est revenu au relevé ÷ 10');
 
   // Et le plancher de 10 % mord bien : il vaut au moins 1 pour les quatorze,
-  // donc aucune n'échappe à la règle par un arrondi à zéro.
+  // donc aucune n'échappe à la règle par un arrondi à zéro. Le Foudre est le
+  // plus serré des quatorze — 25 × 0,1 = 2 —, et il reste au-dessus.
   for (const [id, u] of Object.entries(UNITES)) {
     assert.ok(Math.floor(u.reserve * 0.1) >= 1, `${id} : plancher nul, la règle ne mord pas`);
   }
+  assert.equal(Math.floor(UNITES.frappeur.reserve * 0.1), 2, 'le plancher le plus bas des quatorze');
 });

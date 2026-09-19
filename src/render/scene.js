@@ -65,7 +65,7 @@ import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
 import { angleDeLaPiece } from '../sim/rendu-pose.js';
 import { nomDeVariante } from './variante.js';
 import { caseDepuisMilli } from '../sim/grille.js';
-import { estNeutralisee } from '../sim/combat.js';
+import { estNeutralisee, porteUnModuleAcquis } from '../sim/combat.js';
 
 /**
  * L'opacité pleine, en millièmes — la valeur que porte TOUTE primitive.
@@ -245,6 +245,21 @@ export const NB_PRIMITIVES = {
 const rect = (x, y, l, h, couleur) => ({ forme: 'rect', x, y, l, h, couleur });
 const texte = (x, y, contenu, couleur, taille) =>
   ({ forme: 'texte', x, y, texte: contenu, couleur, taille });
+/**
+ * Le même texte, mais calé sur son bord DROIT — lot MUNITIONS, 19/09.
+ *
+ * ⚠⚠ L'ALIGNEMENT EST DÉLÉGUÉ AU CANVAS PARCE QUE CE MODULE NE PEUT PAS MESURER
+ * UN TEXTE. `measureText` demande un contexte 2D, et il n'en entre aucun ici —
+ * c'est tout ce qui fait que les primitives sont testables sans navigateur.
+ * Estimer une largeur à « 0,6 × taille par caractère » marcherait pour deux
+ * chiffres et raterait sur une étoile ; `canvas2d.js` sait, donc il aligne.
+ *
+ * ⚠ ET LE CHAMP RESTE ABSENT DES QUATRE AUTRES `texte` : voir le pavé de
+ * `canvas2d.js`. Une primitive sans `align` est une primitive calée à gauche,
+ * inchangée depuis le premier jour.
+ */
+const texteDroite = (x, y, contenu, couleur, taille) =>
+  ({ forme: 'texte', x, y, texte: contenu, couleur, taille, align: 'right' });
 const cadre = (x, y, l, h, couleur, epaisseur) => ({ forme: 'cadre', x, y, l, h, couleur, epaisseur });
 const disque = (x, y, rayon, couleur) => ({ forme: 'disque', x, y, rayon, couleur });
 const ligne = (x1, y1, x2, y2, couleur, epaisseur) => ({ forme: 'ligne', x1, y1, x2, y2, couleur, epaisseur });
@@ -921,6 +936,59 @@ function dessinee(e) {
 }
 
 /**
+ * Cette unité est-elle EN L'AIR ?
+ *
+ * ⚠⚠ LE DISCRIMINANT EST `comportementAerien`, JAMAIS `chassis === 'aeronef'`.
+ * Les deux désignent exactement les mêmes quatre pièces aujourd'hui — Crécelle,
+ * Busard, Frappeur, Enclume, mesuré et gardé par `AER T1` — mais ils ne disent
+ * pas la même chose : `chassis` est une FAMILLE de coût, de réparation et de
+ * bâtiment de production, `comportementAerien` est le champ que
+ * `src/sim/combat.js` lit pour décider qui survole quoi. C'est celui-là qui veut
+ * dire « en l'air », donc c'est celui-là qu'on lit pour décider qui se dessine
+ * par-dessus. Le jour où les deux divergeront — un blindé qui saute, un aéronef
+ * posé au sol — `AER T1` tombera et obligera à trancher.
+ *
+ * ⚠ UNE ENTITÉ DE GENRE `unite` DONT L'IDENTIFIANT N'EST PAS DANS `UNITES` EST
+ * UNE FAUTE DE PROGRAMME, ET ELLE LÈVE. `profilUnite` ne fabrique un profil
+ * qu'à partir de cette table : un `?? false` ferait retomber une entité inconnue
+ * au sol en silence. ⚠ Et elle ne s'appelle QUE sur `genre === 'unite'` : une
+ * `DEFENSES` ne porte ni l'un ni l'autre champ — ils y valent `undefined`, pas
+ * `null` —, donc un prédicat qui lirait `!== null` la classerait aérienne.
+ */
+function estAerienne(e) {
+  const u = UNITES[e.id];
+  if (u === undefined) {
+    throw new Error(`scene : « ${e.id} » n'est pas une unité`);
+  }
+  return u.comportementAerien !== null;
+}
+
+/**
+ * L'ordre des couches de la liste d'affichage — du dessous vers le dessus.
+ *
+ * ⚠⚠ LES AÉRONEFS SONT TOUJOURS AU-DESSUS — Ethan, point 12. Ils l'étaient par
+ * ACCIDENT : la passe `unite` parcourait `etat.entites` dans l'ordre où
+ * `creerCombat` les avait ajoutées, donc un aéronef passait sous une escouade
+ * simplement parce que la vague de celle-ci était postérieure. Un aéronef qui
+ * survole une case occupée disparaissait derrière ce qu'il survole.
+ *
+ * ⚠ `aerien: null` VEUT DIRE « TOUT CE GENRE », PAS « AU SOL ». Les bâtiments et
+ * les structures n'ont pas de `comportementAerien` : leur poser `false` ferait
+ * appeler `estAerienne` sur une entité dont l'identifiant n'est pas dans
+ * `UNITES`, donc lever.
+ *
+ * ⚠ ET LES TROIS PREMIÈRES LIGNES SONT CELLES D'HIER, DANS LE MÊME ORDRE : le
+ * lot ne déplace que les unités entre elles. `T5` de `test/rendu.test.js` garde
+ * l'ordre bâtiments < structures < unités < barres, et il ne bouge pas.
+ */
+const COUCHES = [
+  { genre: 'batiment', aerien: null },
+  { genre: 'defense', aerien: null },
+  { genre: 'unite', aerien: false },
+  { genre: 'unite', aerien: true },
+];
+
+/**
  * Position affichée d'une entité : interpolée entre l'instantané pris avant le
  * dernier tick et la position courante, SUR LES DEUX AXES. Une entité née après
  * la prise — indice ≥ instantane.length — se dessine sans interpolation.
@@ -1102,10 +1170,14 @@ export function listeAffichage(
    */
   const estTombee = (e) => tombees !== null && tombees.has(e.indice);
 
-  // 3. Bâtiments — 4. structures — 5. unités.
-  for (const genreVoulu of ['batiment', 'defense', 'unite']) {
+  // 3. Bâtiments — 4. structures — 5. unités au sol — 5 bis. aéronefs.
+  for (const couche of COUCHES) {
+    const genreVoulu = couche.genre;
     for (const e of etat.entites) {
       if (!dessinee(e) || e.genre !== genreVoulu) continue;
+      // ⚠ LE FILTRE DE COUCHE VIENT APRÈS CELUI DE GENRE, et pas par
+      // commodité : `estAerienne` LÈVE sur ce qui n'est pas une unité.
+      if (couche.aerien !== null && estAerienne(e) !== couche.aerien) continue;
       const x = xDe(e);
       const y = yDe(e);
       // ⚠⚠ DEUX CHEMINS MÈNENT AU MÊME DESSIN, ET C'EST VOULU. Une pièce
@@ -1217,6 +1289,54 @@ export function listeAffichage(
     // boucle des barres a déjà calculées. Les recalculer donnerait un cadre qui
     // glisse d'un demi-pixel derrière la pièce qu'il entoure.
     if (estNeutralisee(e)) liste.push(cadre(x, y, t, t, PALETTE.metalClair, 2));
+  }
+
+  // 6 bis. NIVEAU ET ÉTOILE, EN BAS À DROITE DE LA CASE.
+  //
+  // ⚠⚠ ETHAN, 18–19/09, POINT 17 : « il faudrait un élément visible pour le
+  // joueur quand il voit des unités avec modules débloqués (joueur et ouvrage),
+  // genre à côté du numéro de niveau, une étoile ou autre », puis « il faut
+  // afficher niv ouvrage + étoiles » et « le niveau et étoiles en dessous à
+  // droite ». Les écrans Offense et Raid portent déjà les deux dans le DOM ;
+  // le CANVAS est la seule surface où le joueur voit les pièces de l'OUVRAGE,
+  // et il n'y lisait ni l'un ni l'autre.
+  //
+  // ⚠⚠ ET LA RÈGLE EST LA MÊME POUR LES DEUX CAMPS, sans un `=== 'ouvrage'`
+  // écrit à la main. Le champ de bataille montre les deux armées côte à côte :
+  // écrire le niveau d'un côté seulement laisserait au joueur une moitié
+  // d'écran lisible. C'est le motif exact qui a fait entrer le niveau dans
+  // l'écran Raid le 06/09 — « pour une armée qui est la même ».
+  //
+  // ⚠ L'ÉTOILE DEMANDE LE PRÉDICAT DU MOTEUR, elle ne le réécrit pas :
+  // `porteUnModuleAcquis` route les TROIS champs de module et lit la liste des
+  // pièces débloquées dans l'état. Même import et même raison qu'`estNeutralisee`.
+  //
+  // ⚠ ET LE NOM DU CHAMP N'EST ÉCRIT NULLE PART DANS CE FICHIER, PAS MÊME EN
+  // COMMENTAIRE : `NEUT T12` refuse les deux noms d'état que le rendu pourrait
+  // être tenté de relire lui-même. Une garde qui ne lirait que le CODE
+  // laisserait un commentaire préparer la seconde vérité qu'elle empêche.
+  //
+  // ⚠⚠ LA COULEUR N'EST PAS L'AMBRE DE L'ÉTOILE DU DOM, ET C'EST UNE CONTRAINTE
+  // DE FICHE, PAS UN OUBLI. `#F5B636` est l'accent `structureOuAviation`, et
+  // l'en-tête de `COULEUR_BARRE_PV` rappelle que « la fiche interdit d'employer
+  // une couleur d'accent pour autre chose que la cible ». Le badge prend donc le
+  // kaki lumière, celui des libellés de légende. Si Ethan préfère l'ambre, c'est
+  // la règle de fiche qu'il faudra desserrer, ici et dans la fiche.
+  //
+  // ⚠ NI RUINE NI PIÈCE TOMBÉE : le niveau d'un tas de planches ne dit rien, et
+  // l'étoile d'une pièce morte dirait qu'elle porte encore quelque chose.
+  const tailleBadge = Math.max(7, Math.floor(t / 4));
+  for (const e of etat.entites) {
+    if (!visible(e) || estTombee(e)) continue;
+    const x = xDe(e);
+    const y = yDe(e);
+    // ⚠ L'ÉTOILE PRÉCÈDE LE NIVEAU DANS LA CHAÎNE, donc elle se lit à sa
+    // GAUCHE : le nombre reste collé au bord droit, à la même place qu'il porte
+    // une étoile ou non. Un badge dont le chiffre se déplacerait selon le module
+    // obligerait l'œil à le chercher d'une pièce à l'autre.
+    const contenu = (porteUnModuleAcquis(etat, e) ? '★' : '') + String(e.niveau);
+    liste.push(texteDroite(x + t - 1, y + t - Math.floor(tailleBadge / 2) - 1,
+      contenu, PALETTE.kakiLumiere, tailleBadge));
   }
 
   // 7. Traits de tir : bref segment tireur → cible pour toute entité qui a

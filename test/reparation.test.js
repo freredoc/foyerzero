@@ -22,7 +22,7 @@ import {
   devisDeLaReparation, problemesDeToutReparer, coutDeLaReparation,
   crediterLesReserves, plafondDeLaReserve, reservesVides, problemesDesReserves,
   problemesDeLaReparationDUnePiece, reparerUnePiece, toutReparer,
-  CHASSIS_REPARABLES,
+  CHASSIS_REPARABLES, plafondDeLaReserveDeLaBase,
   plafondDeLaReserveDesBatiments, secondesPleinesDUnBatiment,
   coutDeLaReparationDUnBatiment, devisDeLaReparationDesBatiments,
   problemesDeLaReparationDUnBatiment, reparerUnBatiment,
@@ -34,6 +34,7 @@ import {
 import {
   creerEtat, rattraperJeu, tickJeu, serialiser, charger, migrer, SAVE_VERSION,
   poserEffectif, problemesDeLaPoseDEffectif, poser, problemesDeLaPose,
+  retirerEffectif,
 } from '../src/sim/state.js';
 import { executerRaid } from '../src/sim/raid.js';
 import { UNITES, GRILLE } from '../src/data/combat.js';
@@ -872,7 +873,20 @@ test('RÉSERVE-BASE T7 — le coût est le prix du niveau ÷ 230, et zéro dans 
   abimerLeBatiment(etat, 1, 1);
   const cout = coutDeLaReparationDUnBatiment(etat, 1);
   assert.ok(Math.abs(cout.part - 1) < 1e-12, 'le montage ne demande pas une réparation PLEINE');
-  assert.ok(Math.abs(cout.quartz - coutDeMontee('caserne', 20).quartz / 230) < 1e-6);
+  // ⚠⚠ LE COÛT EST UN ENTIER DEPUIS LE 17/09 — AUDIT, DÉFAUT N° 4. Il sortait
+  // fractionnaire et chacun de ses QUATRE appelants l'arrondissait pour son
+  // compte, dont l'écran. L'arrondi est maintenant fait UNE fois, à la source.
+  //
+  // ⚠⚠ MAIS AU PLUS PROCHE, PAS VERS LE HAUT, ET CE TEST-CI EN EST LA RAISON.
+  // L'audit réclamait un `Math.ceil` au nom de « un manque s'arrondit vers le
+  // HAUT » ; le passage a été fait, et la gratuité du bas d'échelle — arbitrée
+  // par `MODELE-REPARATION-1.md` §3 — est tombée avec, exactement comme le pavé
+  // vingt lignes plus bas l'avait prédit. La correction a donc été défaite.
+  const brut = coutDeMontee('caserne', 20).quartz / 230;
+  assert.equal(cout.quartz, Math.round(brut));
+  assert.ok(Number.isInteger(cout.quartz), 'le coût ressort encore fractionnaire');
+  assert.notEqual(Math.round(brut), brut,
+    `montage : le prix ${brut} tombe rond, il ne discrimine aucun arrondi`);
 
   // ⚠⚠ ET LA GRATUITÉ DU BAS D'ÉCHELLE EST L'ARRONDI AU PLUS PROCHE, MESURÉ.
   // `MODELE-REPARATION-1.md` §3 : « jusqu'au niveau 5, 6 pour la CLASSE LA PLUS
@@ -921,7 +935,13 @@ test('RÉSERVE-BASE T8 — coût et temps sont au prorata des PV perdus', () => 
   const b = coutDeLaReparationDUnBatiment(moitie, 1);
   assert.ok(a.quartz > 1, 'le montage ne mesure rien : la réparation pleine est déjà gratuite');
   assert.ok(Math.abs(b.part - 0.5) < 1e-9);
-  assert.ok(Math.abs(b.quartz - a.quartz / 2) < 1e-9, `${b.quartz} contre ${a.quartz / 2}`);
+  // ⚠ LE PRORATA SE MESURE À L'ARRONDI PRÈS DEPUIS LE 17/09 : les deux coûts
+  // sont des entiers montés séparément, donc la moitié d'un `ceil` n'est pas le
+  // `ceil` de la moitié. L'écart est borné par UN quartz, et c'est la propriété
+  // qu'on garde — la borne, pas l'égalité, sinon on mesurerait l'arrondi.
+  assert.ok(Math.abs(b.quartz - a.quartz / 2) <= 1, `${b.quartz} contre ${a.quartz / 2}`);
+  assert.ok(Number.isInteger(a.quartz) && Number.isInteger(b.quartz),
+    'les coûts ressortent encore fractionnaires');
   assert.ok(Math.abs(b.secondes - a.secondes / 2) < 1e-9);
   assert.ok(Math.abs(b.ticks - a.ticks / 2) <= 1, `${b.ticks} contre ${a.ticks / 2}`);
 
@@ -1766,4 +1786,95 @@ test('F-J T9 — le retour de la garnison ne nomme ni ressource ni réserve', ()
     reserves: laBase.reserveReparation,
     batiments: laBase.reserveReparationBatiments,
   }), avant, 'le retour de la garnison a dépensé quelque chose');
+});
+
+// ---------------------------------------------------------------------------
+// RÉSERVE T13 — le GEL au-dessus du plafond, sur les QUATRE réservoirs
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE TEST COMBLE LE TROU N° 1 DE L'AUDIT DU 17/09, ET IL FAUT DIRE POURQUOI
+// IL N'EXISTAIT PAS. La propriété « un stock au-dessus de son plafond est GELÉ,
+// jamais amputé » était écrite DEUX FOIS en commentaire — `problemesDesReserves`
+// et `problemesDeLaReserveDesBatiments` — et gardée ZÉRO fois. Pire : c'est sur
+// cette promesse que les deux contrôles de chargement renoncent à vérifier le
+// plafond. Une propriété sur laquelle une autre s'appuie et que rien ne mesure
+// est exactement la forme que prend une régression silencieuse.
+//
+// ⚠⚠ ET LE MONTAGE PASSE PAR LE GESTE RÉEL, PAS PAR UNE ÉCRITURE À LA MAIN. Un
+// stock posé au-dessus du plafond par affectation directe ne prouverait que
+// lui-même ; on VEND une pièce — le geste du point 14, arbitré le même jour —,
+// ce qui fait baisser `niveauDeLArmee`, donc le plafond, donc met le stock
+// au-dessus de lui sans qu'aucune ligne du test ne l'ait décidé.
+//
+// ⚠ MESURÉ AVANT LE CORRECTIF : 32 h de réserve, plafond tombé à 12 h, et le
+// tick suivant en DÉTRUISAIT 20. Le correctif est `max(plafond, avant)`, la
+// forme qu'`economie-base.js` porte depuis le 26/08 pour les ressources.
+test('RÉSERVE T13 — un stock AU-DESSUS de son plafond est GELÉ, jamais amputé', () => {
+  const etat = creerEtat(2026);
+  const base = baseCourante(etat);
+
+  // Une armée de haut niveau : le plafond monte avec elle.
+  base.armee.push({ id: 'fendeur', rangee: 0, colonne: 0, niveau: 20, degatsMilli: 0, actif: true });
+  const plafondHaut = plafondDeLaReserveDeLaBase(base);
+  crediterLesReserves(etat, 1_000_000_000);
+  const pleinArmee = base.reserveReparation.blinde;
+  const pleinBatiments = base.reserveReparationBatiments;
+  assert.equal(pleinArmee, plafondHaut, 'la réserve n\'a pas saturé son plafond');
+  assert.ok(plafondHaut > 0, 'le plafond est nul : le montage ne mesure rien');
+
+  // ⚠ LE GESTE, ET SA PRÉMISSE SE PROUVE : vendre doit VRAIMENT faire baisser le
+  // plafond, sinon les assertions du bas seraient vraies sans rien dire.
+  retirerEffectif(etat, 'armee', 0);
+  const plafondBas = plafondDeLaReserveDeLaBase(base);
+  assert.ok(plafondBas < plafondHaut,
+    `la vente n'a pas fait baisser le plafond (${plafondHaut} → ${plafondBas}) : `
+    + 'le montage a perdu sa prémisse');
+  assert.ok(base.reserveReparation.blinde > plafondBas,
+    'le stock n\'est pas au-dessus du plafond : il n\'y a rien à geler');
+
+  // Le crédit suivant GÈLE. Il ne rabat pas.
+  crediterLesReserves(etat, 1);
+  for (const chassis of CHASSIS_REPARABLES) {
+    assert.equal(base.reserveReparation[chassis], pleinArmee,
+      `le réservoir ${chassis} a été amputé de `
+      + `${pleinArmee - base.reserveReparation[chassis]} ticks par un simple crédit`);
+  }
+  assert.notEqual(base.reserveReparation.blinde, plafondBas,
+    'le réservoir a été rabattu au plafond : c\'est le rabot d\'avant le 17/09, pas le gel');
+
+  // ⚠ ET IL NE MONTE PAS NON PLUS : geler, c'est ne rien faire, pas créditer.
+  assert.ok(base.reserveReparation.blinde <= pleinArmee,
+    'un stock au-dessus du plafond a CONTINUÉ de monter');
+
+  // ⚠⚠ LE QUATRIÈME RÉSERVOIR SE MESURE À PART, PARCE QU'IL A SON PROPRE
+  // PLAFOND ET SA PROPRE LIGNE DE CODE. Une correction appliquée à une seule des
+  // deux lignes passerait toutes les assertions ci-dessus.
+  const plafondBatiments = plafondDeLaReserveDesBatiments(base);
+  base.reserveReparationBatiments = pleinBatiments + plafondBatiments;
+  const hautBatiments = base.reserveReparationBatiments;
+  crediterLesReserves(etat, 1);
+  assert.equal(base.reserveReparationBatiments, hautBatiments,
+    `la réserve des bâtiments a été amputée de `
+    + `${hautBatiments - base.reserveReparationBatiments} ticks`);
+  assert.notEqual(base.reserveReparationBatiments, plafondBatiments,
+    'la réserve des bâtiments a été rabattue au plafond');
+});
+
+// ---------------------------------------------------------------------------
+// RÉSERVE T13 bis — et SOUS le plafond, le crédit crédite toujours
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LA CONTRE-ÉPREUVE DE T13, ET ELLE N'EST PAS DÉCORATIVE : un `crediterLes-
+// Reserves` qui ne ferait plus RIEN du tout passerait `T13` en entier. Ce qu'on
+// exige est un gel CONDITIONNEL — au-dessus du plafond seulement.
+test('RÉSERVE T13 bis — sous le plafond, le crédit crédite et le plafond mord', () => {
+  const etat = creerEtat(2026);
+  const base = baseCourante(etat);
+  const plafond = plafondDeLaReserveDeLaBase(base);
+  base.reserveReparation.blinde = 0;
+  crediterLesReserves(etat, 50);
+  assert.equal(base.reserveReparation.blinde, 50, 'le crédit ne crédite plus sous le plafond');
+  crediterLesReserves(etat, 1_000_000_000);
+  assert.equal(base.reserveReparation.blinde, plafond,
+    'le plafond ne mord plus : le gel a été posé sans condition');
 });

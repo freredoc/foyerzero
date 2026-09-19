@@ -444,14 +444,24 @@ function pvCourantsMilli(pvMax, degatsMilli) {
  * @returns {string[]} noms triés, sans doublon.
  */
 export function modulesOuvrageOffenseAu(niveau) {
-  const noms = new Set();
+  // ⚠⚠ DES PIÈCES, PAS DES NOMS — ETHAN, 17/09, DÉFAUT N° 2 DE L'AUDIT. C'est la
+  // SECONDE liste de l'Ouvrage, celle de son assaut sur la base du joueur ; sa
+  // jumelle est `modulesOuvrageAu` de `sim/generateur.js`, pour sa défense. Les
+  // deux souffraient du même défaut et se corrigent de la même façon : le
+  // déblocage par NOM armait toutes les porteuses dès que la PREMIÈRE d'entre
+  // elles passait son seuil, et `data/combat.js` déclare un seuil PAR PIÈCE.
+  //
+  // ⚠ LA GARDE `nomDuModule(...) === null` RESTE, et elle ne fait pas double
+  // emploi avec le seuil : une unité sans module dans cette branche n'a rien à
+  // débloquer, et la laisser entrer mettrait dans la liste un identifiant qui ne
+  // veut rien dire pour elle.
+  const pieces = new Set();
   for (const id of Object.keys(UNITES)) {
     if (UNITES[id].apparitionModule > niveau) continue;
-    const nom = nomDuModule('offense', id);
-    if (nom === null) continue;
-    noms.add(nom);
+    if (nomDuModule('offense', id) === null) continue;
+    pieces.add(id);
   }
-  return [...noms].sort();
+  return [...pieces].sort();
 }
 
 export function montageDeLaBaseDuJoueur(

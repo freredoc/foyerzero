@@ -5357,3 +5357,225 @@ export const EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE = {
   24: "2926af39b26c2ff5",
   25: "906ea0e11f46ca34",
 };
+
+/**
+ * LA TRENTIÈME COUCHE — LOT SILHOUETTES, 17/09/2026, LES DEUX POINTS ENSEMBLE.
+ *
+ * ⚠⚠ **TRENTE-DEUX COUPLES SUR 350**, phases **p07 à p14** : les SIX PREMIÈRES
+ * PHASES sont identiques AU BIT — la construction, l'économie, la garnison et
+ * l'armée d'une base neuve ne dépendent ni du placement des uniques d'un site,
+ * ni de la colonne d'où part une vague d'assaut.
+ *
+ * ⚠⚠ ET C'EST LA PREMIÈRE COUCHE DE CE TÉMOIN QUI NE VIENNE PAS DU MOTEUR DE
+ * COMBAT. `src/sim/combat.js` n'a pas une ligne de changée : ce qui bouge est
+ * `src/sim/generateur.js` — la Souche passe DERRIÈRE l'Étai (point 13), et les
+ * colonnes d'une vague d'assaut se tirent au lieu de se suivre (point 7).
+ *
+ * ⚠⚠ **ET L'ATTRIBUTION EST MESURÉE, PAS DÉDUITE — LES DEUX POINTS NEUTRALISÉS
+ * ENSEMBLE RENDENT `bases.test.js` ENTIÈREMENT VERT, 31 pass / 0 fail.** C'est
+ * la seule chose qui dise que le lot ne déplace rien d'autre par un troisième
+ * chemin.
+ *
+ * ⚠⚠ ET LES DEUX MOITIÉS NE MORDENT PAS AU MÊME ENDROIT, CE QUI EST LA MESURE.
+ * **Point 13 seul : 22 couples, p07 à p14, 14 graines sur 25** — il change la
+ * disposition d'un site GÉNÉRÉ, donc tout raid MENÉ sur lui. **Point 7 seul :
+ * 12 couples, p13 et p14 UNIQUEMENT, 25 graines sur 25** — `genererVague` ne
+ * compose que les vagues de l'Ouvrage, donc il ne mord que là où le joueur
+ * SUBIT un assaut, et il y mord sur toutes les parties. Les douze premières
+ * phases sont identiques au bit sous le point 7 seul. L'union fait 32, les deux
+ * se recouvrant sur deux couples de p13 et p14.
+ *
+ * ⚠⚠ **ET AUCUN DES DIX-SEPT SCALAIRES NE BOUGE, SUR 25 GRAINES SUR 25** — les
+ * gestes de construction, les gestes d'armement, **la taille de la sauvegarde**,
+ * les cases atteignables, le déplacement, le nombre de bases attaquantes, le
+ * nombre de cibles des deux raids et la cible retenue. C'est cette moitié-là qui
+ * dit que `SAVE_VERSION` n'avait pas à bouger : le lot déplace deux entités sur
+ * une grille de combat, il n'ajoute pas un champ.
+ */
+export const DEPLACES_PAR_SILHOUETTES = {
+  p07_raidProcheApres: {
+    sitesEntames: "de79153f13450b96",
+    rapports: "b2249bd8a28aa593",
+    economie: "0d2ec7d5babeb936",
+  },
+  p08_100ticks: {
+    sitesEntames: "de79153f13450b96",
+    rapports: "b2249bd8a28aa593",
+    economie: "a885dc8d3344da38",
+  },
+  p09_deplace: {
+    sitesEntames: "de79153f13450b96",
+    rapports: "b2249bd8a28aa593",
+    economie: "a885dc8d3344da38",
+  },
+  p10_montee: {
+    sitesEntames: "de79153f13450b96",
+    rapports: "b2249bd8a28aa593",
+    economie: "a885dc8d3344da38",
+  },
+  p11_raidOuvrageApres: {
+    sitesEntames: "fe82e4243bfd9862",
+    rapports: "509592521276ce29",
+    economie: "a885dc8d3344da38",
+  },
+  p12_veilleDuRaid: {
+    sitesEntames: "182e88d54c61b675",
+    rapports: "509592521276ce29",
+    economie: "a885dc8d3344da38",
+  },
+  p13_apresLeRaid: {
+    recherche: "a725caa1f3585439",
+    sitesEntames: "278d908749d4e467",
+    poisAcquis: "4642b561e438e5b8",
+    rapports: "9335eb8764e199b8",
+    position: "36529cbd4d2208ab",
+    disposition: "4077ff9c39f644de",
+    garnison: "f21dc22321fd4b5c",
+    economie: "aa6b7afa099d8586",
+    reserveReparation: "70810e5c5869ee79",
+  },
+  p14_sousLeFeu: {
+    recherche: "303635954d66faea",
+    sitesEntames: "c41e13fc6e33437e",
+    rapports: "8e828c980a5d4fc8",
+    disposition: "4e1580d921e24b5b",
+    reserveReparation: "fee429b63729d481",
+  },
+};
+
+/**
+ * Les empreintes par graine, lot SILHOUETTES — les 25 sur 25.
+ *
+ * ⚠ ET IL NE POUVAIT PAS EN RESTER UNE : le point 7 mord sur les vingt-cinq
+ * parties — chacune subit un assaut dans la fenêtre de p13, et toute vague
+ * d'assaut change de colonnes. Le point 13, lui, n'en déplace que **quatorze**,
+ * mesuré en le neutralisant seul : sur les onze autres, les deux uniques des
+ * sites raidés étaient déjà dans le bon ordre ou sur la même rangée. Le `??` de
+ * `bases.test.js` reste donc NÉCESSAIRE pour les couches d'avant, qu'il chaîne.
+ */
+export const EMPREINTES_PAR_GRAINE_SILHOUETTES = {
+  1: "048f425462cb3a9f",
+  2: "5c5178ce2221fe0d",
+  3: "e06acf00e8e888ab",
+  4: "d703b6436814e3a0",
+  5: "78c5785362da7e77",
+  6: "d722c487c29f8bdc",
+  7: "18a36b6ad42e5918",
+  8: "ddbba8a0a8cb177d",
+  9: "63ec90edfafbab58",
+  10: "002bfb82576ebe71",
+  11: "c4c6ae5ff87d0203",
+  12: "dc254e65098058fb",
+  13: "b1442531319e61e4",
+  14: "1e86426c1571aee7",
+  15: "a86790fc0ed8a771",
+  16: "25716e7fd52008e4",
+  17: "a229e613c1ac63a7",
+  18: "49210f3ec3356be1",
+  19: "dfc7923250329a02",
+  20: "579b670fe972f22d",
+  21: "c20c0f354482d11c",
+  22: "449409c40d1d41b8",
+  23: "9d9ef19191818a95",
+  24: "ade6cbb0bd0b68e1",
+  25: "71af2f778a0e0777",
+};
+
+/**
+ * Les rapports de raid, lot SILHOUETTES — **7 sur 25 côté proximité, 8 sur 25
+ * côté Ouvrage**, et les deux tables sont CREUSES.
+ *
+ * ⚠⚠ ET LES QUINZE VIENNENT DU POINT 13 SEUL — mesuré : le point 7 neutralisé,
+ * les quinze restent ; le point 13 neutralisé, **les deux tables sont VIDES**.
+ * C'est juste, et c'est ce qui distingue les deux moitiés du lot : les deux
+ * raids que ce scénario RELÈVE sont menés PAR le joueur, donc leurs vagues
+ * viennent de son armée composée et jamais de `genererVague`. Le point 7 ne
+ * peut pas les atteindre.
+ *
+ * ⚠ ET ELLES NE SONT PAS PLEINES : sur dix-huit parties côté proximité et
+ * dix-sept côté Ouvrage, permuter les deux uniques du site raidé ne change rien
+ * au rapport — soit ils étaient déjà dans le bon ordre, soit ils partagent une
+ * rangée, soit le combat se conclut sans que la permutation ait mordu.
+ */
+export const RAPPORTS_PROCHE_SILHOUETTES = {
+  3: "44cc463faf8c9caf",
+  4: "0e12b2d9fb1f64a7",
+  6: "9f33ace0dbfc3210",
+  10: "cba2533091c8c5b5",
+  17: "bea72f8c5d87ed7c",
+  20: "447f2295de27df00",
+  22: "5d1f1a8ec6ab6041",
+};
+
+export const RAPPORTS_OUVRAGE_SILHOUETTES = {
+  5: "2e52c495b68f92dd",
+  11: "6d1f2b45b753ad24",
+  12: "178dfd5e455a3f6f",
+  13: "db6af77b38b3ba25",
+  17: "8a74f79817ec8b38",
+  21: "d6cfaae281f168a2",
+  23: "4a00940dd7f25587",
+  24: "dd20cd2286862510",
+};
+
+// ---------------------------------------------------------------------------
+// Lot ÉCRASEMENT — 17/09-18/09, point 11 d'Ethan
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ TRENTE ET UNIÈME COUCHE, ET LA DOCTRINE NE CHANGE PAS : **on EMPILE, on ne
+// recapture pas.** `test/temoins-bases-0.js` n'a jamais été recapturé et ne doit
+// pas l'être ; le `??` de `bases.test.js` lit de la plus RÉCENTE à la plus
+// ancienne, donc celle-ci l'emporte là où elle nomme un champ, et se tait
+// partout ailleurs.
+//
+// ⚠⚠ ELLE NE DÉPLACE QUE **CINQ CHAMPS, SUR DEUX PHASES** — `p13_apresLeRaid`
+// et `p14_sousLeFeu`. Les douze autres phases ne bougent d'aucun octet, et c'est
+// la mesure qui attribue : le lot change la RÈGLE D'ÉCRASEMENT et le coût d'un
+// contact entre véhicules, donc il ne peut mordre que là où un raid se déroule.
+// Un lot qui aurait touché à l'économie, à la pose ou à la sauvegarde aurait
+// déplacé les quatorze phases.
+//
+// ⚠ ET `disposition` BOUGE À LA PHASE 13, `recherche` ET `rapports` AUX DEUX :
+// c'est la trace d'un raid subi dont l'issue change — ce qui reste debout après
+// n'est plus la même chose, et les points qu'il rapporte non plus.
+export const DEPLACES_PAR_ECRASEMENT = {
+  p13_apresLeRaid: {
+    recherche: "e57d5be936c1a78f",
+    rapports: "d87fcd930947fa61",
+    disposition: "51c68b8140ffb15c",
+  },
+  p14_sousLeFeu: {
+    recherche: "3265d53e06d5286f",
+    rapports: "e866da5b4fe2a315",
+  },
+};
+
+// ⚠⚠ QUINZE GRAINES SUR VINGT-CINQ, ET LES DIX AUTRES TOMBENT À L'OCTET SUR LA
+// COUCHE D'AVANT. C'est la même leçon qu'aux lots MUR, VITESSE et
+// BARÈME-ET-REJEU : un lot qui touche au DÉROULÉ d'un combat ne mord que là où
+// sa règle a de quoi mordre. Ici il faut un CONTACT ENTRE VÉHICULES — le heurt
+// est borné à `MASSE_MINI_HEURT` depuis l'arbitrage d'Ethan du 18/09, et
+// l'écrasement demande une masse strictement supérieure, que deux escouades
+// n'ont jamais l'une sur l'autre. Sur dix parties, aucun des deux raids du
+// scénario n'oppose de véhicule à quoi que ce soit d'écrasable.
+//
+// ⚠ LE `??` DE `bases.test.js` RESTE DONC NÉCESSAIRE, et ce n'est pas une
+// précaution : sans lui, ces dix graines seraient comparées à `undefined` et le
+// test dirait qu'elles divergent alors qu'elles sont IDENTIQUES.
+export const EMPREINTES_PAR_GRAINE_ECRASEMENT = {
+  3: "2be6ba8d6b40ae40",
+  5: "baa068a6a685c133",
+  6: "37e00c2744d346aa",
+  7: "845868b6dc89cfc8",
+  8: "0387cb7b0d2cc6e3",
+  11: "8025ca4617b9d182",
+  12: "827236a877a871ff",
+  13: "9c559ec15d932f65",
+  15: "3bcb8636576bd7fa",
+  17: "aa29040b9e081aa4",
+  18: "78d40307033c9622",
+  20: "e27226c92f537033",
+  21: "335f1b52c47dbd82",
+  24: "4b01b272eb5a0c1b",
+  25: "465244fc3927f2e2",
+};

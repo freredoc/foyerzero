@@ -330,7 +330,15 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 36);
+  // ⚠⚠ ET LE LOT « MODULES PAR PIÈCE » Y PASSE, LE 18/09 — 33 → **36**, ET IL
+  // N'Y EST PAS PASSÉ DU PREMIER COUP. Il a d'abord été livré SANS bump, sur la
+  // vérification — trop courte — que `modulesDebloques` n'apparaissait pas dans
+  // `sim/state.js`. Il n'y apparaît pas, et il y passe quand même, par
+  // `rapport.rejeu`. Une relecture adverse l'a trouvé ; `MODULES-PIÈCE T1` de
+  // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
+  // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
+  // un numéro inférieur OU ÉGAL.
+  assert.equal(SAVE_VERSION, 37);
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

@@ -464,6 +464,15 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // décalage — elle ne court plus après une cible qu'elle a déjà à portée, elle
   // tire. Les deux préréglages figés qui bougent RACCOURCISSENT tous les deux,
   // et les trois causes restent `attaquants`.
+  //
+  // ⚠⚠ LOT MUNITIONS (19/09) : `A 793 → 793`, `B 676 → 676`, `C 478 → 478` —
+  // **AUCUN DES TROIS NE BOUGE D'UN TICK**, et c'est une mesure, pas un saut de
+  // lot. Le lot ne change qu'un nombre de données, la réserve du Foudre
+  // (450 → 25), et **aucun des trois préréglages figés n'aligne de Foudre**.
+  // ⚠ Une version antérieure du lot rabotait aussi Fouisseurs, Pilon et Enclume :
+  // B tombait alors à **628**. Ce rabot-là a été annulé par Ethan, et B est
+  // revenu à 676 — donc un 628 qui réapparaîtrait ici dirait que le rabot
+  // annulé est de retour.
   assert.equal(figes[0].cause, 'attaquants');
   assert.equal(figes[0].tick, 793);
   assert.equal(figes[1].cause, 'attaquants', 'le préréglage figé de B rase de nouveau la Souche');
@@ -471,6 +480,7 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   assert.equal(figes[2].cause, 'attaquants');
   assert.equal(figes[2].tick, 478);
   assert.notEqual(figes[0].tick, 834, 'le tick d\'avant le lot FREIN est revenu');
+  assert.notEqual(figes[1].tick, 628, 'le rabot des trois réserves, annulé le 19/09, est revenu');
 
   // Série 2 — assauts BUDGÉTÉS. ⚠ LOT COLONNE : aucun des trois ne rase, alors
   // que le figé de B rase : les deux séries se distinguent de nouveau par leur
@@ -562,9 +572,22 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // de traverser sa bande pour rejoindre une cible qu'elle avait déjà à portée,
   // donc elle tient sa colonne, donc l'assaut lourd met beaucoup plus longtemps
   // à l'ouvrir. **Le calibrage revient à Ethan ; rien n'a été compensé.**
-  assert.equal(budgetes[1].cause, 'duree');
-  assert.notEqual(budgetes[1].cause, 'attaquants',
-    'l\'assaut lourd budgété ne touche plus le plafond : la prémisse a changé');
+  //
+  // ⚠⚠⚠ LOT ÉCRASEMENT (17/09-18/09) : **L'ASSAUT LOURD BUDGÉTÉ REPASSE DE
+  // `duree` À `attaquants`, AU TICK 424**, et il faut le lire comme le retour
+  // exact de ce que le lot FREIN avait coûté. Le §9 du brief tenait : le plafond
+  // n'a toujours pas bougé d'une seconde. Ce qui a changé est la capacité de
+  // l'assaut lourd à ouvrir une colonne — c'est le point 11 d'Ethan, mot pour
+  // mot : « pas assez de dégâts sur les véhicules ».
+  //
+  // ⚠⚠ ET LE TICK EST CELUI D'AVANT LE LOT FREIN, AU TICK PRÈS : 424. Le raid
+  // qui se traînait jusqu'au plafond de 900 depuis FREIN se conclut de nouveau
+  // là où il se concluait avant. Ce n'est pas une compensation — aucun barème
+  // n'a été touché —, c'est la mesure : un véhicule qui fait payer le contact
+  // n'a plus besoin de deux fois plus de temps pour passer.
+  assert.equal(budgetes[1].cause, 'attaquants');
+  assert.notEqual(budgetes[1].cause, 'duree',
+    'l\'assaut lourd budgété touche de nouveau le plafond : le lot ÉCRASEMENT a disparu');
   // ⚠ LOT PAQUETS : 323 → 287, 528 → 396.
   // ⚠ LOT MUR (10/09) : B passe de 287 à 244 ticks, et C de 396 à 458 — en sens
   // CONTRAIRE l'un de l'autre. C'est ce qu'on attend d'un lot qui change le
@@ -584,7 +607,9 @@ test('T7 — A, B et C : préréglages figés puis assauts budgétés', () => {
   // juste au-dessus. Le nombre se LIT donc dans `TICKS_MAX_COMBAT` plutôt que
   // de se retaper : un 900 écrit en clair ici cesserait de dire « ce raid
   // expire » le jour où Ethan déplacerait la durée maximale d'un combat.
-  assert.equal(budgetes[1].nbTicks, TICKS_MAX_COMBAT);
+  assert.equal(budgetes[1].nbTicks, 424);
+  assert.ok(budgetes[1].nbTicks < TICKS_MAX_COMBAT,
+    'l\'assaut lourd budgété sort de nouveau par le plafond');
   assert.equal(TICKS_MAX_COMBAT, 900, 'le plafond a bougé : ce réancrage est à reprendre');
   assert.equal(budgetes[2].cause, 'attaquants');
   // ⚠ LOT BARÈME-ET-REJEU : 489 → 509, puis LOT CONTACT : 509 → 501. Voir le

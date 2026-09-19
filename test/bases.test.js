@@ -125,6 +125,9 @@ import {
   DEPLACES_PAR_ECHELLE_RECHERCHE, EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE,
   RAPPORTS_PROCHE_ECHELLE_RECHERCHE, RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE,
   RAPPORTS_PROCHE_CONTACT_2, RAPPORTS_OUVRAGE_CONTACT_2,
+  DEPLACES_PAR_SILHOUETTES, EMPREINTES_PAR_GRAINE_SILHOUETTES,
+  DEPLACES_PAR_ECRASEMENT, EMPREINTES_PAR_GRAINE_ECRASEMENT,
+  RAPPORTS_PROCHE_SILHOUETTES, RAPPORTS_OUVRAGE_SILHOUETTES,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -312,7 +315,44 @@ function empreinteAttendue(phase, champ) {
   // seules phases où le joueur SUBIT un assaut. Les douze autres, qui
   // contiennent des raids menés et deux rapports d'offense complets, ne bougent
   // pas d'un bit — c'est ce qui prouve que le lot ne paie que la défense.
-  return DEPLACES_PAR_RECHERCHE_DEFENSE[phase]?.[champ]
+  // ⚠⚠ TRENTIÈME COUCHE — lot SILHOUETTES, 17/09. **TRENTE-DEUX couples sur
+  // 350**, phases p07 à p14 : les SIX PREMIÈRES PHASES sont identiques AU BIT.
+  // ⚠⚠ ET C'EST LA PREMIÈRE COUCHE DE CETTE PILE QUI NE VIENNE PAS D'UN BARÈME
+  // NI DU MOTEUR DE COMBAT — `src/sim/combat.js` n'a pas une ligne de changée.
+  // Ce qui bouge est la FORME de ce que `src/sim/generateur.js` produit : la
+  // Souche passe DERRIÈRE l'Étai (point 13), et les colonnes d'une vague de
+  // l'Ouvrage sont tirées rangée par rangée au lieu d'être toujours 1…9
+  // (point 7). Deux entités changent de case, et tout le combat se rejoue
+  // autrement autour d'elles.
+  // ⚠⚠ L'ATTRIBUTION EST MESURÉE PAR NEUTRALISATION, TROIS EXÉCUTIONS, PAS
+  // DÉDUITE. **Les deux points neutralisés ensemble rendent ce fichier
+  // ENTIÈREMENT VERT — 30 pass / 0 fail** : rien d'autre dans le lot ne touche
+  // ce témoin. ⚠ La mesure elle-même en annonçait 31, et c'était le harnais :
+  // elle tournait avec un test de DUMP temporaire appendu ici, qui a été retiré.
+  // Le compte reproductible est celui du fichier tel qu'il est commité.
+  // **Point 13 seul : 22 couples, p07 à p14, 14 graines sur 25, plus
+  // 7 rapports de proximité et 8 de l'Ouvrage. Point 7 seul : 12 couples, p13
+  // et p14 UNIQUEMENT, 25 graines sur 25, et ZÉRO rapport.**
+  // ⚠⚠ ET LE ZÉRO DU POINT 7 EST STRUCTUREL, PAS UN ACCIDENT DE GRAINE :
+  // `genererVague` ne compose que les vagues d'assaut de l'OUVRAGE, donc elle
+  // ne peut déplacer que les deux phases où le joueur SUBIT un assaut — les
+  // deux raids que le scénario relève sont MENÉS par le joueur, et leurs vagues
+  // viennent de son armée composée.
+  // ⚠⚠ AUCUN DES DIX-SEPT SCALAIRES NE BOUGE, SUR 25 GRAINES SUR 25, la taille
+  // de la sauvegarde comprise : aucun champ neuf ne traverse `serialiser`, et
+  // c'est cette absence qui dit que `SAVE_VERSION` n'avait pas à bouger. ⚠ Le
+  // placement échange les COORDONNÉES de deux poses à indice constant, jamais
+  // les entrées du tableau, donc la correspondance indice → identifiant que
+  // `site-entame.js` emploie pour `pvBatimentsMilli` est intacte.
+  // ⚠⚠ TRENTE ET UNIÈME COUCHE — lot ÉCRASEMENT, 17/09-18/09, point 11
+  // d'Ethan. **CINQ champs sur deux phases**, `p13_apresLeRaid` et
+  // `p14_sousLeFeu` : le lot change la règle d'écrasement et fait payer le
+  // contact entre véhicules, donc il ne mord que là où un raid se déroule. Les
+  // douze autres phases ne bougent d'aucun octet, et c'est cette absence-là qui
+  // attribue. On EMPILE, on ne recapture pas.
+  return DEPLACES_PAR_ECRASEMENT[phase]?.[champ]
+    ?? DEPLACES_PAR_SILHOUETTES[phase]?.[champ]
+    ?? DEPLACES_PAR_RECHERCHE_DEFENSE[phase]?.[champ]
     ?? DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
     ?? DEPLACES_PAR_FREIN[phase]?.[champ]
     ?? DEPLACES_PAR_PREDILECTION[phase]?.[champ]
@@ -768,7 +808,21 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // les deux raids du scénario cassent quelque chose sur les vingt-cinq.
     // ⚠⚠ RECHERCHE-DEFENSE (14/09) déplace les vingt-cinq : les vingt-cinq
     // parties subissent un assaut dans la fenêtre de p13.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE[g]
+    // ⚠⚠ SILHOUETTES (17/09) DÉPLACE LES VINGT-CINQ, ET LE POINT 7 SEUL Y
+    // SUFFIT — mesuré : en ne neutralisant que le point 13, les vingt-cinq
+    // bougent encore. Les colonnes d'une vague de l'Ouvrage sont tirées, donc
+    // les deux assauts que chaque partie subit se déroulent autrement, donc son
+    // empreinte entière bouge. Le point 13 seul, lui, n'en déplace que
+    // **quatorze** : une base à deux uniques déjà rangés dans le bon ordre ne
+    // voit pas la permutation.
+    // ⚠⚠ ÉCRASEMENT (17/09-18/09) N'EN DÉPLACE QUE **QUINZE SUR VINGT-CINQ**,
+    // et les dix autres tombent à l'octet sur `SILHOUETTES`. Même leçon qu'aux
+    // lots MUR, VITESSE et BARÈME-ET-REJEU : un lot qui touche au DÉROULÉ ne
+    // mord que là où sa règle a de quoi mordre — ici, il faut un contact entre
+    // VÉHICULES. Le `??` reste donc NÉCESSAIRE, et pas par précaution.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_ECRASEMENT[g]
+      ?? EMPREINTES_PAR_GRAINE_SILHOUETTES[g]
+      ?? EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE[g]
       ?? EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]
       ?? EMPREINTES_PAR_GRAINE_FREIN[g]
       ?? EMPREINTES_PAR_GRAINE_PREDILECTION[g]
@@ -978,8 +1032,20 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
       // aucune. ⚠ Et les deux tables ne sont PAS pleines : sur six parties côté
       // proximité et quatre côté Ouvrage, aucune pièce de garnison n'a eu à se
       // décaler, donc les trois étages n'y changent rien.
+      // ⚠⚠ ET LE LOT SILHOUETTES EN DÉPLACE PEU DES DEUX CÔTÉS — **7 sur 25
+      // côté proximité, 8 sur 25 côté Ouvrage** —, alors qu'il déplace
+      // l'empreinte des VINGT-CINQ parties. Les deux comptes ne mesurent pas la
+      // même chose : l'empreinte porte le déroulé entier d'une partie, ces deux
+      // tables ne portent que le RAPPORT de deux raids nommés. ⚠⚠ Et ces
+      // sept-là comme ces huit-là viennent ENTIÈREMENT du point 13 — mesuré : le
+      // point 7 seul en déplace **zéro sur vingt-cinq**, des deux côtés, parce
+      // que `genererVague` ne compose que les vagues d'assaut de l'Ouvrage et
+      // que les deux raids relevés ici sont MENÉS par le joueur. Un lot futur
+      // qui remplirait ces tables depuis le point 7 dirait que cette partition
+      // a cessé d'être vraie.
       const attenduRapport = cle === 'raidOuvrage'
-        ? (RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE[g]
+        ? (RAPPORTS_OUVRAGE_SILHOUETTES[g]
+          ?? RAPPORTS_OUVRAGE_ECHELLE_RECHERCHE[g]
           ?? RAPPORTS_OUVRAGE_FREIN[g]
           ?? RAPPORTS_OUVRAGE_PREDILECTION[g]
           ?? RAPPORTS_OUVRAGE_CONTACT_2[g]
@@ -1003,7 +1069,8 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         // porte trois `meute` et rien d'autre, donc aucun attaquant n'a jamais
         // deux CLASSES de cible à portée — zéro couple (entité, tick) sur les
         // 483 ticks du combat.
-        : (RAPPORTS_PROCHE_ECHELLE_RECHERCHE[g]
+        : (RAPPORTS_PROCHE_SILHOUETTES[g]
+          ?? RAPPORTS_PROCHE_ECHELLE_RECHERCHE[g]
           ?? RAPPORTS_PROCHE_FREIN[g]
           ?? RAPPORTS_PROCHE_CONTACT_2[g]
           ?? RAPPORTS_PROCHE_CONTACT[g]

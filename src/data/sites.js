@@ -420,6 +420,27 @@ export const ECRAN_RAID = {
   // l'application passe en arrière-plan, et c'est exactement le défaut que le
   // lot RETOUR-DE-RAID a réparé. `EFF T9` refuse qu'elle apparaisse.
   effondrementMs: 2000,
+
+  // Au-delà de combien d'absence un raid quitté en cours atterrit sur son
+  // rapport au lieu de reprendre son animation — lot FIX-17/09, point 3.
+  //
+  // ⚠⚠ LE LOT RETOUR-DE-RAID (06/09) N'AVAIT PAS DE BORNE BASSE, ET C'EST LE
+  // DÉFAUT QU'ETHAN RAPPORTE : « je lance un raid, je quitte l'appli et je
+  // reviens très vite — même pas besoin de forcer l'arrêt — le raid est déjà
+  // complété ». Une bascule d'application, une notification, un verrouillage
+  // d'écran par réflexe : `visibilitychange` partait, et le combat entier se
+  // résolvait sur-le-champ. Le geste voulu était « le joueur est PARTI », pas
+  // « l'écran a clignoté ».
+  //
+  // ⚠ ET RIEN N'EST PERDU DANS UN CAS COMME DANS L'AUTRE : `executerRaid` a
+  // versé le butin AVANT la première image (arbitrage « A » du 01/09). Ce que ce
+  // seuil arbitre est l'ANIMATION, et elle seule.
+  //
+  // ⚠ VINGT SECONDES EST UN NOMBRE À RÉGLER, PAS UNE LOI. Il est ici, dans
+  // `src/data/`, précisément pour ça (§4 de `CLAUDE.md`) : au-dessus, une
+  // absence brève reprend le combat là où il en était ; en dessous, on va droit
+  // au rapport. Un combat dure au plus `dureeMaxCombatSec`.
+  absenceQuiConclutMs: 20_000,
 };
 
 /**

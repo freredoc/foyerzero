@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 
 import { GRILLE, UNITES, DEFENSES } from '../src/data/combat.js';
 import { BATIMENTS } from '../src/data/sites.js';
-import { creerCombat, tick, resoudre, TICKS_AVANT_REPLI } from '../src/sim/combat.js';
+import {
+  creerCombat, tick, resoudre, TICKS_AVANT_REPLI, ticksDEcrasement,
+} from '../src/sim/combat.js';
 import { caseDepuisMilli } from '../src/sim/grille.js';
 import {
   calculerProjection, caseDepuisPixels, xDeColonne, yDeRangee,
@@ -107,25 +109,45 @@ test('T1 — un blindé n\'écrase plus son infanterie alliée, mais écrase l\'
   // « 2 000 + 11 × 90 = 2 990, encore en case 2 ; la rencontre a lieu au tick
   // 12 » : l'écrasement tuait au FRANCHISSEMENT de l'index. Depuis le lot
   // CONTACT la marge colle l'écraseuse à sa victime dès le premier tick, et
-  // depuis celui-ci la victime perd `ceil(pvMax / 4)` par tick de contact —
-  // quatre ticks sur une pièce intacte — pendant que l'écraseuse avance au
-  // quart de sa vitesse, floor(90 / 4) = 22.
-  // Ce que ce test garde n'a pas bougé : entre camps opposés l'écrasement a
-  // bien lieu, et la mobile ne s'arrête pas pour autant.
-  jouer(combat, 3);
-  assert.equal(defenseur.vivant, true, 'la victime tient encore au troisième tick de contact');
+  // depuis celui-ci la victime perd `ceil(pvMax / ticks)` par tick de contact,
+  // pendant que l'écraseuse avance au quart de sa vitesse, floor(90 / 4) = 22.
+  //
+  // ⚠⚠ RÉANCRÉ UNE SECONDE FOIS AU LOT ÉCRASEMENT, 17/09 — POINT 11 D'ETHAN,
+  // « un pionnier roule trop facilement ». La durée n'est plus quatre ticks
+  // pour tout le monde : elle se DÉRIVE du rapport des masses, et un Fendeur
+  // (10) sur une Meute (1) y met **HUIT** ticks. Le montage ne bouge pas, les
+  // deux propriétés que ce test garde ne bougent pas — entre camps opposés
+  // l'écrasement a bien lieu, et la mobile ne s'arrête pas pour autant — seuls
+  // les trois nombres se déplacent.
+  //
+  //                          CONTACT-2   ÉCRASEMENT
+  //   ticks de contact               4            8
+  //   rangée à la mort           2 088        2 176
+  //   rangée au tick 11          2 718        2 446
+  //
+  // ⚠ LA DURÉE SE DEMANDE AU MOTEUR, elle ne se retape pas : une seconde
+  // écriture du rapport ici rendrait le test vrai sous n'importe quelle règle.
+  const ticks = ticksDEcrasement(UNITES.fendeur.masse, UNITES.meute.masse);
+  assert.equal(ticks, 8, 'Fendeur (10) contre Meute (1) : huit ticks de contact');
+  assert.notEqual(ticks, 4, 'le quatre plat est revenu : la durée ne dérive plus des masses');
+
+  jouer(combat, ticks - 1);
+  assert.equal(defenseur.vivant, true,
+    `la victime tient encore au tick ${ticks - 1} de contact`);
   assert.ok(
     defenseur.pvMilli < defenseur.pvMaxMilli,
     'et elle est déjà entamée — sans quoi le contact ne mordrait pas',
   );
-  jouer(combat, 4);
-  assert.equal(defenseur.vivant, false, 'écrasée au quatrième tick de contact');
+  jouer(combat, ticks);
+  assert.equal(defenseur.vivant, false, `écrasée au tick ${ticks} de contact`);
   assert.equal(defenseur.ecrase, true);
-  assert.equal(attaquant.rangeeMilli, 2088, 'quatre pas freinés de 22');
-  // Le frein tombe avec sa cause : 2 088 + 7 × 90 = 2 718 au tick 11, contre
-  // 2 990 avant le lot.
+  assert.equal(attaquant.rangeeMilli, 2176, 'huit pas freinés de 22');
+  assert.notEqual(attaquant.rangeeMilli, 2088, 'les quatre pas freinés d\'hier sont revenus');
+  // Le frein tombe avec sa cause : 2 176 + 3 × 90 = 2 446 au tick 11, contre
+  // 2 718 avant ce lot et 2 990 avant CONTACT-2.
   jouer(combat, 11);
-  assert.equal(attaquant.rangeeMilli, 2718, 'et la mobile continue sans s\'arrêter');
+  assert.equal(attaquant.rangeeMilli, 2446, 'et la mobile continue sans s\'arrêter');
+  assert.notEqual(attaquant.rangeeMilli, 2718, 'l\'ancre du lot CONTACT-2 est revenue');
 });
 
 // ---------------------------------------------------------------------------
@@ -521,7 +543,27 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // même cause. Ce qui change est ce que la garnison fait de ce temps-là — voir
   // le bloc du butin ci-dessous. Ni la disposition, ni la garnison, ni un barème
   // ne bougent d'un identifiant : `src/data/` n'a pas une ligne au diff.
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09-18/09) : **493, INCHANGÉ**, ET C'EST LE RÉSULTAT,
+  // PAS UN OUBLI DE REMESURE. Le lot change deux choses au déroulé — la durée
+  // d'un écrasement se dérive du rapport des masses, et une pièce qui ne peut
+  // pas écraser paie désormais des dégâts à ce qu'elle HEURTE — et **les deux
+  // demandent un véhicule**. Le heurt est borné par `MASSE_MINI_HEURT`, arbitré
+  // par Ethan le 18/09 ; l'écrasement, lui, demande une masse strictement
+  // supérieure, que deux escouades n'ont jamais l'une sur l'autre.
+  //
+  // ⚠⚠ OR CE RAID-CI EST UN ASSAUT D'INFANTERIE — `assaut: 'infanterie'`, trois
+  // lignes plus haut. Aucune de ses pièces ne pèse plus de 1. Le lot ne peut donc
+  // rien y déplacer, et le tick qui ne bouge pas EST la mesure : c'est la
+  // contre-épreuve du seuil de masse, sur un raid entier, gratuite.
+  //
+  // ⚠ UNE VERSION INTERMÉDIAIRE DU LOT RENDAIT 492 ICI, et c'est justement ce
+  // qu'il fallait refuser : elle laissait le heurt s'appliquer entre escouades,
+  // donc ce raid d'infanterie bougeait. La contre-assertion garde cette
+  // frontière-là.
   assert.equal(r.nbTicks, 493);
+  assert.notEqual(r.nbTicks, 492,
+    'le heurt s\'applique de nouveau entre escouades : le seuil de masse a sauté');
   // ⚠ Seuils déplacés à chaque lot, et à chaque fois par un changement de RÈGLE,
   // jamais par une régression du repli. Lot 3B : 65 190 quartz + 21 730 scorie,
   // six survivants, tick 566. Lot 3C : 82 849 + 27 616, cinq survivants, même
@@ -610,10 +652,18 @@ test('T6 — le raid C ne se traîne plus jusqu\'au tick 900', () => {
   // propriété qu'elle défend n'a pas changé d'un mot — un butin qui reviendrait à
   // sa valeur d'avant sans qu'on l'ait remesuré passerait en silence —, seul le
   // couple refusé bascule avec elle.
+  // ⚠⚠ LOT ÉCRASEMENT (17/09-18/09) : **10 493 ET 3 497, INCHANGÉS**, pour la
+  // raison écrite au tick ci-dessus — ce raid est un assaut d'INFANTERIE, et les
+  // deux moitiés du lot demandent un véhicule. Le butin qui ne bouge pas est la
+  // même contre-épreuve que le tick qui ne bouge pas.
+  //
+  // ⚠ UNE VERSION INTERMÉDIAIRE RENDAIT 10 502 / 3 500 ICI, parce qu'elle
+  // laissait le heurt s'appliquer entre escouades. La contre-assertion garde
+  // cette frontière, dans ce sens-là.
   assert.deepEqual(r.butin, { quartz: 10493, scorie: 3497 });
   assert.notDeepEqual(
-    r.butin, { quartz: 6486, scorie: 2162 },
-    'le frein latéral est ce qui déplace ce butin — le nombre d\'avant ne doit pas revenir',
+    r.butin, { quartz: 10502, scorie: 3500 },
+    'le heurt s\'applique de nouveau entre escouades : le seuil de masse a sauté',
   );
   // ⚠ LOT PRÉDILECTION : trois survivants → **cinq**, et la mécanique est celle
   // du butin, vue par l'autre bout — un feu concentré tue ce qu'il vise et laisse

@@ -215,6 +215,34 @@ export function plafondDeLaReserve(etat) {
 }
 
 /**
+ * L'ARITHMÉTIQUE d'un plafond de réserve : base + pente × niveau, en ticks.
+ *
+ * ⚠⚠ UNE SEULE ÉCRITURE, DEUX PLAFONDS — AUDIT DU 17/09, DÉFAUT N° 7. Les deux
+ * fonctions ci-dessous portaient ce calcul À L'IDENTIQUE, et c'est la forme
+ * qu'un correctif d'arrondi appliqué à une seule des deux aurait transformée en
+ * divergence muette.
+ *
+ * ⚠⚠ ET CE N'EST PAS UNE FUSION DES DEUX GRANDEURS : les TABLES restent
+ * séparées — `REPARATION` de `data/sites.js` pour l'armée, `REPARATION_BASE_-
+ * JOUEUR` de `data/base.js` pour les bâtiments —, et les deux plafonds ne valent
+ * PAS la même chose pour la même base (12,0 h contre 12,1 h sur une base neuve,
+ * mesuré). Ce qui est partagé est le calcul, jamais les nombres : « une seule
+ * table fait foi par grandeur » reste respecté, et `RÉSERVE-BASE T1` le garde.
+ *
+ * ⚠ UN SEUL `Math.floor`, EN BOUT DE CHAÎNE. Arrondir au milieu — les heures,
+ * puis les ticks — perdrait la fraction de niveau que les dixièmes portent.
+ *
+ * @param {number} heuresDeBase
+ * @param {number} heuresParNiveau
+ * @param {number} dixiemes niveau moyen, en dixièmes
+ * @returns {number} ticks
+ */
+function plafondEnTicks(heuresDeBase, heuresParNiveau, dixiemes) {
+  return Math.floor((heuresDeBase + heuresParNiveau * (dixiemes / DIXIEMES_PAR_NIVEAU))
+    * TICKS_PAR_HEURE);
+}
+
+/**
  * Le même plafond, lu sur une BASE.
  *
  * ⚠⚠ ELLE EXISTE POUR LA BOUCLE DE `crediterLesReserves` — lot BASES-1. Le
@@ -226,10 +254,8 @@ export function plafondDeLaReserve(etat) {
  * @returns {number} plafond en ticks
  */
 export function plafondDeLaReserveDeLaBase(base) {
-  const dixiemes = niveauDeLArmee(base.armee) ?? 0;
-  const heures = REPARATION.plafondHeures
-    + REPARATION.plafondHeuresParNiveauArmee * (dixiemes / DIXIEMES_PAR_NIVEAU);
-  return Math.floor(heures * TICKS_PAR_HEURE);
+  return plafondEnTicks(REPARATION.plafondHeures,
+    REPARATION.plafondHeuresParNiveauArmee, niveauDeLArmee(base.armee) ?? 0);
 }
 
 /**
@@ -258,11 +284,9 @@ export function plafondDeLaReserveDeLaBase(base) {
  * @returns {number} plafond en ticks
  */
 export function plafondDeLaReserveDesBatiments(base) {
-  const dixiemes = niveauDesBatiments(base.disposition);
-  const heures = REPARATION_BASE_JOUEUR.plafondHeures
-    + REPARATION_BASE_JOUEUR.plafondHeuresParNiveauBatiments
-      * (dixiemes / DIXIEMES_PAR_NIVEAU);
-  return Math.floor(heures * TICKS_PAR_HEURE);
+  return plafondEnTicks(REPARATION_BASE_JOUEUR.plafondHeures,
+    REPARATION_BASE_JOUEUR.plafondHeuresParNiveauBatiments,
+    niveauDesBatiments(base.disposition));
 }
 
 /**
@@ -301,7 +325,20 @@ export function crediterLesReserves(etat, nbTicks) {
     const plafond = plafondDeLaReserveDeLaBase(base);
     for (const chassis of CHASSIS_REPARABLES) {
       const avant = base.reserveReparation[chassis];
-      base.reserveReparation[chassis] = Math.min(plafond, avant + nbTicks);
+      // ⚠⚠ LE PLAFOND EFFECTIF EST `max(plafond, avant)`, PAS `plafond` — AUDIT
+      // DU 17/09, DÉFAUT N° 1. Un `Math.min(plafond, …)` seul n'est pas un
+      // plafond : c'est un RABOT. Quand le stock est DÉJÀ au-dessus — le joueur
+      // a vendu une pièce de haut niveau, donc `niveauDeLArmee` a baissé, donc
+      // le plafond avec lui —, il ne gèle pas le stock, il l'ampute au tick
+      // suivant. Mesuré : un Fendeur de niveau 20 vendu fait tomber le plafond
+      // de 32 h à 12 h, et le tick d'après DÉTRUIT 20 h de réserve, sans un mot.
+      //
+      // ⚠⚠ ET LA RÈGLE N'EST PAS NEUVE, ELLE ÉTAIT SEULEMENT FAUSSE ICI :
+      // `problemesDesReserves`, deux cents lignes plus bas, écrit qu'« un stock
+      // au-dessus de son plafond est GELÉ, jamais amputé » — et c'est SUR CETTE
+      // PROMESSE qu'il renonce à vérifier le plafond au chargement. Même forme
+      // qu'`economie-base.js`, arbitrée le 26/08 pour les ressources.
+      base.reserveReparation[chassis] = Math.min(Math.max(plafond, avant), avant + nbTicks);
     }
     // ⚠⚠ LE QUATRIÈME RÉSERVOIR, DANS LA MÊME BOUCLE ET AVEC SON PROPRE
     // PLAFOND. Le sien dépend du niveau des BÂTIMENTS, celui des trois autres du
@@ -319,8 +356,12 @@ export function crediterLesReserves(etat, nbTicks) {
     // rattrape pas ce qu'il a perdu. C'est le test d'équivalence des deux
     // chemins qui doit tomber en premier.
     const plafondBatiments = plafondDeLaReserveDesBatiments(base);
+    // ⚠ MÊME GEL QUE LES TROIS AUTRES — voir le pavé ci-dessus. Ici le plafond
+    // baisse quand la MOYENNE des niveaux de bâtiments baisse, donc poser un
+    // bâtiment de niveau 1 suffit : mesuré, 39 h de réserve ramenées à 13 h.
+    const avantBatiments = base.reserveReparationBatiments;
     base.reserveReparationBatiments = Math.min(
-      plafondBatiments, base.reserveReparationBatiments + nbTicks,
+      Math.max(plafondBatiments, avantBatiments), avantBatiments + nbTicks,
     );
   }
 }
@@ -845,10 +886,32 @@ export function coutDeLaReparationDUnBatiment(etat, index) {
   // Un bâtiment de niveau 1 n'a jamais été monté : `coutDeMontee` LÈVE dessus
   // plutôt que de rendre zéro, et sa réparation est gratuite — cohérent avec un
   // premier niveau gratuit à poser.
-  const quartz = pose.niveau < ECONOMIE_NIVEAU.premierNiveauPayant ? 0
+  const quartzBrut = pose.niveau < ECONOMIE_NIVEAU.premierNiveauPayant ? 0
     : (coutDeMontee(pose.id, pose.niveau).quartz
       / REPARATION_BASE_JOUEUR.courbe.diviseurDuCout) * part;
 
+  // ⚠⚠ L'ARRONDI EST ICI, ET IL N'EST ÉCRIT QU'UNE FOIS — AUDIT DU 17/09,
+  // DÉFAUT N° 4, CORRIGÉ À MOITIÉ SEULEMENT, ET LA MOITIÉ QUI RESTE EST DITE.
+  // Il était fait QUATRE fois chez les appelants — la garde, la facturation, le
+  // tout-réparer, et jusque dans `ui/chantier.js`. ÇA, c'était le défaut : une
+  // grandeur écrite quatre fois, dont une dans l'écran, est une grandeur qui
+  // finira par diverger. Elle est maintenant écrite ici, et une seule fois.
+  //
+  // ⚠⚠ MAIS LE SENS DE L'ARRONDI, LUI, NE CHANGE PAS — ET L'AUDIT AVAIT TORT DE
+  // LE RÉCLAMER. Il voyait un `Math.round` là où la doctrine du module dit « un
+  // manque s'arrondit vers le HAUT », et concluait à une faute. Ce n'en est pas
+  // une : `MODELE-REPARATION-1.md` §3 arbitre la GRATUITÉ DU BAS D'ÉCHELLE —
+  // « jusqu'au niveau 5, 6 pour la classe la plus légère » —, et c'est
+  // exactement l'arrondi au plus proche qui la produit. Un `Math.ceil` ne
+  // rendrait plus AUCUNE réparation gratuite au-dessus du niveau 1, et
+  // `RÉSERVE-BASE T7` l'avait écrit d'avance, des mois avant cet audit. C'est
+  // le test qui a repris la correction, pas l'inverse : la tentative de passer
+  // au `Math.ceil` a été faite, elle a fait tomber ce test-là, et elle a été
+  // défaite.
+  //
+  // ⚠ ET L'ARRONDI RESTE PAR BÂTIMENT, PAS SUR LA SOMME. Le devis additionne des
+  // entiers déjà arrondis, ce que le pavé du dessus justifie : le joueur paie
+  // bâtiment par bâtiment, et la somme doit valoir ce que valent les gestes.
   return {
     batiment: pose.id,
     niveau: pose.niveau,
@@ -856,7 +919,7 @@ export function coutDeLaReparationDUnBatiment(etat, index) {
     part,
     secondes,
     ticks: Math.ceil(secondes * TICKS_PAR_SECONDE),
-    quartz,
+    quartz: Math.round(quartzBrut),
   };
 }
 
@@ -890,7 +953,7 @@ export function devisDeLaReparationDesBatiments(etat) {
     // manquer d'une unité au dernier bâtiment. Le devis dit ce qui sera
     // FACTURÉ. ⚠ L'écart n'est pas théorique : à onze bâtiments il peut
     // atteindre cinq unités.
-    quartz += Math.round(cout.quartz);
+    quartz += cout.quartz;
     batiments += 1;
   }
   return { secondes, ticks, quartz, batiments };
@@ -919,7 +982,7 @@ export function problemesDeLaReparationDUnBatiment(etat, index) {
         + `il t'en manque ${direLaDuree(cout.ticks - reserve)}.`,
     });
   }
-  const du = Math.round(cout.quartz);
+  const du = cout.quartz;
   const dispo = ressourceDisponible(etat, 'quartz');
   if (dispo < du) {
     problemes.push({
@@ -951,7 +1014,7 @@ export function reparerUnBatiment(etat, index) {
     throw new Error(`réparation impossible — ${problemes.map((p) => p.message).join(' ; ')}`);
   }
   const cout = coutDeLaReparationDUnBatiment(etat, index);
-  const quartz = Math.round(cout.quartz);
+  const quartz = cout.quartz;
   laBase.reserveReparationBatiments -= cout.ticks;
   laBase.economie.ressources.quartz -= quartz * MILLE;
   laBase.disposition[index].degatsMilli = 0;

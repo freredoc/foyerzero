@@ -283,10 +283,18 @@ test('VIT T2 ter — les trois lecteurs qui refusent une ruine sont NOMMÉS dans
   // Deux lecteurs de `dessinee` : les positions, et la boucle de dessin.
   assert.equal(compter(/[^a-zA-Z]dessinee\(/g), 2,
     '`dessinee` n\'a plus exactement deux lecteurs : positions et dessin');
-  // Quatre appels de `visible` : les TROIS qui doivent refuser une ruine — la
-  // barre de PV, le trait de tir, la cible affichée — et celui de `dessinee`.
-  assert.equal(compter(/[^a-zA-Z]visible\(/g), 4,
-    '`visible` a changé de nombre de lecteurs : la barre, le tir ou la cible a bougé');
+  // Cinq appels de `visible` : les QUATRE qui doivent refuser une ruine — la
+  // barre de PV, le trait de tir, la cible affichée, le badge de niveau — et
+  // celui de `dessinee`.
+  //
+  // ⚠⚠ LOT MUNITIONS (19/09) : 4 → 5, ET LE LECTEUR NEUF EST DU BON CÔTÉ. Le
+  // badge « niveau + étoile » du point 17 est une étiquette posée SUR la pièce :
+  // sur `dessinee` elle flotterait au-dessus d'un tas de gravats en annonçant
+  // son niveau, ce qui est exactement le défaut que ce test existe pour
+  // attraper. Il lit donc `visible`, comme la barre de PV qu'il accompagne.
+  assert.equal(compter(/[^a-zA-Z]visible\(/g), 5, // était 4
+    '`visible` a changé de nombre de lecteurs : la barre, le tir, la cible ou le badge a bougé');
+  assert.notEqual(compter(/[^a-zA-Z]visible\(/g), 4, 'le badge de niveau a quitté `visible`');
 
   // ⚠ ET L'APPÂT : le motif reconnaît encore ce qu'il cherche, déclaration ôtée.
   assert.equal(compter(/[^a-zA-Z]DECLARATION_\(/g), 3,

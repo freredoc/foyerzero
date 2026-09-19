@@ -297,7 +297,28 @@ export const UNITES = {
     nom: { ouvrage: 'Frappeur', joueur: 'Foudre' }, ta: 'Firehawk',
     chassis: 'aeronef', specialite: 'antiStructure', // rapide
     points: 10, pv: 550, portee: 1.5, porteeMini: 0, vitesse: 240,
-    reserve: 450, masse: 0, comportementAerien: 'traversant',
+    // ⚠⚠ LA RÉSERVE SEULE EST RECALIBRÉE — LES DÉGÂTS NE BOUGENT PAS D'UN POUCE.
+    // Ethan, 19/09 : « dans TA, il vide tout en quelques secondes, sur 3 cases ».
+    // MESURÉ avant de rien changer, Foudre seul contre trois casernes de niveau
+    // 20 en colonne : il tire du tick 33 au tick 53, soit **21 ticks**, et sort
+    // par le haut avec **429 de réserve sur 450**. La fenêtre était juste, les
+    // dégâts étaient justes — 1 834,8 PV par tir contre 15 290 de caserne, il
+    // faut 25 ticks pour trois : c'est la RÉSERVE qui valait vingt fois trop.
+    //
+    // ⚠⚠ ET L'AUTRE PISTE A ÉTÉ ESSAYÉE PUIS REJETÉE SUR MESURE. « Conserver le
+    // total » (réserve 21, dégâts 135 000 / 21 = 6 429) a été posé, construit et
+    // joué : le Foudre ne tirait plus que **3 coups**, tuait chaque caserne avec
+    // 257 % de surkill, et finissait à **18 de réserve sur 21**. Le total ne se
+    // dépense que si l'unité tire 21 fois ; en multipliant les dégâts on l'en
+    // empêche. La réserve ne se vidait toujours pas — on avait déplacé le
+    // symptôme. Arbitrage d'Ethan sur cette mesure : la réserve seule.
+    //
+    // ⚠ 25 ET NON 21 : la réserve se cale sur le BESOIN (3 × 15 290 / 1 834,8 =
+    // 25,000 pile, invariant par niveau — PV et dégâts montent ensemble), pas
+    // sur la fenêtre d'un seul passage. Le Foudre entame donc 2,44 bâtiments par
+    // passage comme aujourd'hui, et garde de quoi finir le troisième s'il
+    // repasse — au lieu d'être sec à mi-course.
+    reserve: 25, masse: 0, comportementAerien: 'traversant',
     degats: { infanterie: 0, vehicule: 0, structureOuAviation: 300 },
     degatsParcours: 0, reparation: 1070,
     module: 'camouflage', moduleOuvrage: null,

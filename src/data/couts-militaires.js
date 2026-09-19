@@ -58,7 +58,7 @@ import { NIVEAU } from './niveaux.js';
 // interdisent. Sa table de fractions est indexée par bâtiment ; les entités
 // militaires n'y figurent pas et prennent donc `autres`, qui vaut exactement le
 // quart annoncé par RELEVE-TA-COURBES-2.md §5.
-import { COUT_ELECTRICITE } from './base.js';
+import { COUT_ELECTRICITE, REMBOURSEMENT_DEMOLITION } from './base.js';
 
 // ---------------------------------------------------------------------------
 // Offense — les quatorze unités d'assaut, toutes en scorie
@@ -244,4 +244,79 @@ export function coutDeMonteeDefense(id, niveau) {
   // ⚠ LE COEFFICIENT EST L'ANCRE, donc le facteur vaut 1 et la rampe n'est pas
   // redressée. C'est le choix conservateur du 05/09 — voir le bloc de la table.
   return coutMilitaire(ligne.montant, ligne.montant, ligne.ressource, niveau);
+}
+
+// ---------------------------------------------------------------------------
+// Retirer une pièce — arbitré par Ethan le 17/09/2026, point 14
+// ---------------------------------------------------------------------------
+//
+// « Vendre un bâtiment/unités doit rembourser 90 % des ressources. »
+//
+// ⚠⚠ LE TAUX N'EST PAS RECOPIÉ ICI. Les bâtiments de la base remboursent à 90 %
+// depuis le 27/08, et le nombre vit dans `REMBOURSEMENT_DEMOLITION` de
+// `data/base.js`. L'arbitrage du 17/09 dit « bâtiment/unités » d'un seul
+// souffle : c'est UN taux pour les deux, donc UNE constante. En écrire une
+// seconde ici ferait deux vérités qui divergeraient au premier rééquilibrage —
+// c'est exactement la faute que le bloc d'en-tête de ce fichier raconte pour
+// les tables d'ancres.
+//
+// ⚠ ET LES TROIS RÈGLES DE LA DÉMOLITION SUIVENT, TELLES QUELLES :
+//   — le cumul depuis la pose, pas le dernier palier ;
+//   — l'électricité comprise ;
+//   — `Math.floor` par ressource, parce qu'un remboursement se perd et ne se
+//     gagne jamais. Sans le plancher, retirer et reposer en boucle finirait par
+//     rapporter.
+//
+// ⚠ RETIRER UNE PIÈCE DE NIVEAU 1 NE REND RIEN, et c'est la même cohérence que
+// pour un bâtiment de niveau 1 : poser est gratuit, donc rien n'a été investi.
+// Le joueur récupère ses POINTS de budget, pas des ressources — et c'est déjà
+// ce que `pointsEngages` lui rend, tout seul.
+
+/**
+ * Ce qu'a coûté, en tout, de porter une pièce à ce niveau — l'équivalent de
+ * `coutCumule` de `data/base.js`, pour l'armée et la garnison.
+ *
+ * ⚠ NE LÈVE PAS SUR LE NIVEAU 1, contrairement aux deux `coutDeMontee…` : un
+ * cumul de zéro palier vaut zéro, et zéro est ici la bonne réponse, pas une
+ * erreur à signaler.
+ *
+ * @param {'armee'|'garnison'} force
+ * @param {string} id
+ * @param {number} niveau niveau actuel, de 1 à `NIVEAU.plafond`
+ * @returns {{quartz: number, scorie: number, electricite: number}} en UNITÉS
+ */
+export function coutCumuleDEffectif(force, id, niveau) {
+  if (force !== 'armee' && force !== 'garnison') {
+    throw new Error(`couts-militaires : force « ${force} » inconnue`);
+  }
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
+    throw new Error(`couts-militaires : niveau ${niveau} hors de 1…${NIVEAU.plafond} pour ${id}`);
+  }
+  const palierDe = force === 'armee' ? coutDeMonteeOffense : coutDeMonteeDefense;
+  const total = { quartz: 0, scorie: 0, electricite: 0 };
+  for (let n = ECONOMIE_NIVEAU.premierNiveauPayant; n <= niveau; n += 1) {
+    const palier = palierDe(id, n);
+    total.quartz += palier.quartz;
+    total.scorie += palier.scorie;
+    total.electricite += palier.electricite;
+  }
+  return total;
+}
+
+/**
+ * Ce que rend le retrait d'une pièce à ce niveau.
+ *
+ * @param {'armee'|'garnison'} force
+ * @param {string} id
+ * @param {number} niveau
+ * @returns {{quartz: number, scorie: number, electricite: number}} en UNITÉS
+ */
+export function remboursementDEffectif(force, id, niveau) {
+  const investi = coutCumuleDEffectif(force, id, niveau);
+  const { fraction } = REMBOURSEMENT_DEMOLITION;
+  return {
+    quartz: Math.floor(investi.quartz * fraction),
+    scorie: Math.floor(investi.scorie * fraction),
+    electricite: Math.floor(investi.electricite * fraction),
+  };
 }

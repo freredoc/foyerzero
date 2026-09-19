@@ -32,6 +32,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { casesAPortee, porteeQuiTire } from '../src/render/portee.js';
 import { MUR_CASES } from '../src/render/fond.js';
+import { montageDuBanc } from '../src/ui/banc.js';
 
 /** La racine du dépôt, pour les gardes qui lisent la SOURCE. */
 const RACINE_RENDU = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -130,8 +131,32 @@ test('T1 — tailleCase, letterboxing, case carrée, rien ne déborde', () => {
   // Position intermédiaire : m = 2500 → y = margeY + (18000 − 2500) × 45/1000
   // = margeY + floor(697,5) = margeY + 697.
   assert.equal(yDeRangeeMilli(proj, 2500), proj.margeY + 697);
-  // Un stoppeur arrêté à 18950 reste DESSINÉ dans la grille : borné à margeY.
-  assert.equal(yDeRangeeMilli(proj, 18_950), proj.margeY);
+  // ⚠⚠ LA BORNE DU HAUT EST TOMBÉE LE 18/09 — ETHAN : « il est figé en haut alors
+  // qu'il doit partir par le haut. Un vrai passage d'avion. » Elle rendait
+  // `margeY` pour TOUT ce qui dépassait la rangée 18 : un Frappeur traversant
+  // franchit 18 → 19 en QUATRE ticks, et le sprite restait immobile pendant les
+  // quatre avant de disparaître d'un coup. C'était un dessin qui MENTAIT sur une
+  // position — 18,7 rendu comme 18,0 — et c'est ce que le §4 refuse.
+  //
+  // ⚠ C'EST LE MÊME CORRECTIF QUE CELUI DU LOT APPROCHE, PAR L'AUTRE BOUT : la
+  // borne du BAS était tombée le 11/09 pour qu'on voie une vague ARRIVER. Le
+  // canevas rogne de lui-même, en haut comme en bas.
+  //
+  // ⚠ ET LE STOPPEUR À 18950 EST À 18950 : le montrer un demi-sprite plus haut
+  // est la vérité. Il dépasse de 43 px sur 45, donc il reste visible — et ce
+  // que la borne prétendait protéger n'était, de toute façon, pas menacé.
+  assert.equal(yDeRangeeMilli(proj, 18_950), proj.margeY - 43);
+  assert.notEqual(yDeRangeeMilli(proj, 18_950), proj.margeY,
+    'la borne du haut est revenue : un avion se fige de nouveau au sommet');
+  // ⚠⚠ ET LA SORTIE GLISSE, elle ne saute pas : quatre positions intermédiaires,
+  // quatre ordonnées STRICTEMENT décroissantes. C'est la propriété qu'Ethan
+  // demande, et elle ne se lit pas sur une seule valeur.
+  const glisse = [18_000, 18_240, 18_480, 18_720, 18_960]
+    .map((m) => yDeRangeeMilli(proj, m));
+  for (let i = 1; i < glisse.length; i += 1) {
+    assert.ok(glisse[i] < glisse[i - 1],
+      `le sprite ne monte plus entre ${glisse[i - 1]} et ${glisse[i]} : il se fige`);
+  }
   // Colonnes : 1 à gauche.
   assert.equal(xDeColonne(proj, 1), proj.margeX);
   assert.equal(xDeColonne(proj, 9), proj.margeX + 8 * 45);
@@ -335,8 +360,9 @@ test('T5 — composition et ordre de dessin stables', () => {
   //   + meute (escouade 1) + fendeur (blinde 2) + crecelle (aeronef 1)
   //   + barres de PV : 8 vivants × 2 = 16
   //   + barres de réserve : 3 attaquants × 2 = 6
+  //   + badges niveau/étoile : 8 vivants × 1 = 8
   //   + traits de tir : 0 (personne n'a tiré au tick 0)
-  // = 1 + 1 + 1 + 2 + 1 + 1 + 2 + 1 + 2 + 1 + 16 + 6 = 35.
+  // = 1 + 1 + 1 + 2 + 1 + 1 + 2 + 1 + 2 + 1 + 16 + 6 + 8 = 43.
   //
   // ⚠ LE COMPTE EST PASSÉ DE 53 À 44 AU LOT UNITÉS-AU-COMBAT, PUIS DE 44 À 35 AU
   // LOT STRUCTURES-AU-COMBAT, et les deux BAISSES sont le fait. Les trois
@@ -349,13 +375,29 @@ test('T5 — composition et ordre de dessin stables', () => {
   // lieu de l'assouplir : il mesure exactement la chose que le lot change. Le
   // nombre se LIT dans `NB_PRIMITIVES`, il n'est pas recopié — la ligne
   // ci-dessous tomberait si la table changeait sans que ce commentaire suive.
+  //
+  // ⚠⚠ LOT MUNITIONS (19/09) : 35 → 43, ET LA HAUSSE EST LE FAIT. Point 17
+  // d'Ethan — « le niveau et étoiles en dessous à droite » : chaque entité
+  // VIVANTE et NON TOMBÉE porte désormais une étiquette, une primitive `texte`
+  // calée à droite. Huit vivants dans ce montage, donc huit de plus. ⚠ Une
+  // seule par pièce, étoile comprise : l'étoile est un caractère de la MÊME
+  // chaîne, pas une seconde primitive — un badge en deux morceaux se
+  // désaligne dès que la police change.
   const attendu = 1 + 1
     + NB_PRIMITIVES.batiment + NB_PRIMITIVES.tourelle + NB_PRIMITIVES.mur
     + NB_PRIMITIVES.barriere + NB_PRIMITIVES.artillerie
     + NB_PRIMITIVES.escouade + NB_PRIMITIVES.blinde + NB_PRIMITIVES.aeronef
-    + 8 * 2 + 3 * 2;
-  assert.equal(attendu, 35);
-  assert.equal(liste.length, 35);
+    + 8 * 2 + 3 * 2 + 8 * 1;
+  assert.equal(attendu, 43); // était 35
+  assert.equal(liste.length, 43);
+  assert.notEqual(liste.length, 35, 'les badges de niveau ont disparu');
+  // ⚠ ET LE BADGE SE VÉRIFIE, PAS SEULEMENT SE COMPTE : huit `texte` alignés à
+  // droite, un par vivant, et aucun ailleurs dans la liste.
+  const badges = liste.filter((q) => q.forme === 'texte' && q.align === 'right');
+  assert.equal(badges.length, 8, 'un badge par pièce vivante');
+  for (const badge of badges) {
+    assert.match(badge.texte, /^★?\d+$/, `badge illisible : ${badge.texte}`);
+  }
 
   // L'ordre de dessin est stable et normatif : fond, obstacles, bâtiments,
   // structures, unités, barres, traits — une barre ne passe jamais sous une
@@ -413,8 +455,10 @@ test('T5 — composition et ordre de dessin stables', () => {
   const merlon = etat.entites.find((e) => e.id === 'merlon');
   merlon.vivant = false;
   const sansMerlon = listeAffichage(etat, proj, null, 0);
-  // Le Merlon portait : mur 2 + barre de PV 2 = 4 primitives.
-  assert.equal(apres.length - sansMerlon.length, NB_PRIMITIVES.mur + 2);
+  // Le Merlon portait : mur 1 + barre de PV 2 + badge 1 = 4 primitives.
+  // ⚠ LE BADGE PART AVEC LA PIÈCE, et c'est la moitié du sens de ce test : une
+  // étiquette qui survivrait à sa pièce flotterait au-dessus d'une case vide.
+  assert.equal(apres.length - sansMerlon.length, NB_PRIMITIVES.mur + 2 + 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -539,8 +583,15 @@ function creerEnregistreur() {
   // TOURNE, plus l'un de seize sprites nommés. L'enregistreur les porte comme
   // les autres — c'est-à-dire qu'ils sont COMPTÉS et ORDONNÉS eux aussi, et
   // qu'un `save` sans son `restore` fera tomber la séquence exacte ci-dessous.
+  // ⚠⚠ `fillText` ENTRE AU LOT MUNITIONS, 19/09, ET C'EST LE MONTAGE QU'ON
+  // RÉPARE. La primitive `texte` existe depuis toujours — la légende et
+  // l'arsenal s'en servent — mais AUCUNE n'entrait jamais dans la liste d'une
+  // scène de combat, donc l'enregistreur n'avait jamais eu à la porter. Le
+  // badge de niveau du point 17 en met une par pièce vivante : sans ces
+  // méthodes, `executer` lève sur `ctx.fillText is not a function`, et ce
+  // serait l'enregistreur qui manque, pas `canvas2d` qui déciderait.
   for (const methode of ['fillRect', 'strokeRect', 'beginPath', 'arc', 'fill',
-    'moveTo', 'lineTo', 'stroke', 'drawImage',
+    'moveTo', 'lineTo', 'stroke', 'drawImage', 'fillText',
     'save', 'translate', 'rotate', 'restore']) {
     enregistreur[methode] = (...args) => appels.push([methode, ...args]);
   }
@@ -548,7 +599,11 @@ function creerEnregistreur() {
   // trois autres : COMPTÉ et ORDONNÉ. C'est un ÉTAT du contexte, pas un argument
   // de `drawImage` — l'oublier repeindrait en translucide tout ce que la liste
   // dessine ENSUITE —, et c'est la seule façon de le mesurer sans navigateur.
-  for (const propriete of ['fillStyle', 'strokeStyle', 'lineWidth', 'globalAlpha']) {
+  // ⚠ `font`, `textBaseline` ET `textAlign` SONT DES ÉTATS, comme `globalAlpha`
+  // et pour la même raison : les oublier laisserait la police et l'alignement du
+  // texte précédent peindre tout ce qui suit. Ils sont donc COMPTÉS et ORDONNÉS.
+  for (const propriete of ['fillStyle', 'strokeStyle', 'lineWidth', 'globalAlpha',
+    'font', 'textBaseline', 'textAlign']) {
     Object.defineProperty(enregistreur, propriete, {
       set(valeur) { appels.push([propriete, valeur]); },
     });
@@ -574,6 +629,14 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
     // sprite, jamais `x, y`. C'est ce recentrage qui fait tourner la tourelle
     // autour de son pivot au lieu de la faire décrire un arc de cercle.
     { forme: 'sprite', famille: 'unite', nom: 'off_j_meute', sx: 64, sy: 0, sl: 64, sh: 64, x: 12, y: 13, l: 14, h: 16, angle: 90 },
+    // ⚠⚠ LES DEUX TEXTES SONT LÀ POUR L'ALIGNEMENT, ET ILS SONT DEUX EXPRÈS.
+    // Lot MUNITIONS : `align` est OPTIONNEL, et son absence doit valoir `left`.
+    // Une seule primitive ne prouverait que la branche qu'elle emprunte ; les
+    // deux ensemble prouvent le défaut ET le cas neuf, et la séquence montre que
+    // `textAlign` est remis à `left` après CHACUNE — sans quoi un badge calé à
+    // droite décalerait le libellé de légende suivant.
+    { forme: 'texte', x: 20, y: 21, texte: 'niv', couleur: '#8C9A72', taille: 9 },
+    { forme: 'texte', x: 22, y: 23, texte: '★7', couleur: '#8C9A72', taille: 9, align: 'right' },
   ], { unite: FAUSSE_IMAGE });
   // La séquence exacte, appel pour appel : rect → 2, cadre → 3, disque → 4,
   // ligne → 6, sprite droit → 1, sprite tourné → 5. Ni plus, ni moins, ni
@@ -587,6 +650,12 @@ test('T7 — canvas2d exécute sans décider : un enregistreur suffit à le prou
     ['drawImage', FAUSSE_IMAGE, 64, 0, 64, 64, 12, 13, 14, 15],
     ['save'], ['translate', 19, 21], ['rotate', Math.PI / 2],
     ['drawImage', FAUSSE_IMAGE, 64, 0, 64, 64, -7, -8, 14, 16], ['restore'],
+    ['fillStyle', '#8C9A72'], ['font', '9px system-ui, sans-serif'],
+    ['textBaseline', 'middle'], ['textAlign', 'left'],
+    ['fillText', 'niv', 20, 21], ['textAlign', 'left'],
+    ['fillStyle', '#8C9A72'], ['font', '9px system-ui, sans-serif'],
+    ['textBaseline', 'middle'], ['textAlign', 'right'],
+    ['fillText', '★7', 22, 23], ['textAlign', 'left'],
   ]);
 
   // ⚠ ET UN ANGLE NUL NE TOUCHE PAS AU CONTEXTE DU TOUT — c'est ce que la
@@ -1085,4 +1154,276 @@ test('AC T2 — plus aucune entité ne se dessine à une opacité partielle', ()
     'le filtre mange le code en même temps que les commentaires');
   assert.ok(!nu('// const OPACITE_ARRIVEE = 350;').includes('OPACITE_ARRIVEE'),
     'le filtre ne retire pas une ligne entièrement commentée');
+});
+
+// ---------------------------------------------------------------------------
+// AER T1 à T4 — lot ALTITUDE, point 12 : « les sprite aéronef doivent sont
+// toujours au dessus »
+//
+// ⚠⚠ ILS L'ÉTAIENT PAR ACCIDENT, ET L'ACCIDENT ÉTAIT SOUS LE DOIGT DU JOUEUR.
+// La passe `unite` de `listeAffichage` parcourait `etat.entites` dans l'ordre où
+// `creerCombat` les avait ajoutées ; `composerLesVagues` de `sim/raid.js` trie
+// `.sort((a, b) => a.piece.vague - b.piece.vague || a.piece.colonne - b.piece.colonne)`.
+// L'ordre de dessin suivait donc la COLONNE DE COMPOSITION : un aéronef posé en
+// colonne 2 passait SOUS une escouade posée en colonne 7 de la même vague. Le
+// joueur décidait, en glissant ses pièces sur l'écran Offense, lequel de ses
+// sprites disparaîtrait derrière un autre — sans que rien ne le lui dise.
+// ---------------------------------------------------------------------------
+
+/** Les identifiants des unités qui volent, DÉRIVÉS de la table. */
+const AERIENNES = Object.entries(UNITES)
+  .filter(([, u]) => u.comportementAerien !== null)
+  .map(([id]) => id);
+
+/** Les trois familles d'atlas par lesquelles une unité se dessine. */
+const FAMILLES_UNITE = new Set(['unite', 'chassis', 'tourelle_unite']);
+
+const estSpriteDUnite = (p) => p.forme === 'sprite' && FAMILLES_UNITE.has(p.famille);
+const estSpriteAerien = (p) => estSpriteDUnite(p)
+  && AERIENNES.some((id) => p.nom.includes(`_${id}`));
+
+/**
+ * Le balayage des quatre gardes : neuf raids réels, assaut MÊLÉ, niveau 30.
+ *
+ * ⚠⚠ LE NIVEAU N'EST PAS DÉCORATIF, ET C'EST LA MESURE QUI L'A CHOISI. Le MÊME
+ * balayage au niveau 15 rend **ZÉRO** couple recouvrant — l'accident y jouait en
+ * faveur de l'aéronef sur les neuf raids —, et le premier relevé du lot, fait à
+ * ce niveau-là sur cinquante-quatre raids, a conclu à tort que le correctif
+ * était inerte. `AER T4` fige les deux nombres côte à côte pour qu'on ne
+ * refasse pas la mesure au mauvais endroit.
+ */
+function balayageAerien() {
+  const raids = [];
+  for (const type of ['camp', 'avantPoste', 'base']) {
+    for (let graine = 1; graine <= 3; graine++) {
+      raids.push({ type, niveau: 30, saveur: type === 'base' ? null : 'richeQuartz', graine, assaut: 'mixte' });
+    }
+  }
+  return raids;
+}
+
+test('AER T1 — « aéronef » et « en l\'air » désignent les mêmes quatre pièces', async () => {
+  const { ORDRE_CHASSIS } = await import('../src/data/combat.js');
+
+  // ⚠⚠ LE DISCRIMINANT DU RENDU EST `comportementAerien`, PAS `chassis`, ET LES
+  // DEUX S'ACCORDENT AUJOURD'HUI. `chassis` est une famille de COÛT, de
+  // RÉPARATION et de bâtiment de production — `BATIMENT_DE_CHASSIS` l'indexe ;
+  // `comportementAerien` est le champ que `sim/combat.js` lit pour décider qui
+  // survole quoi (trois lecteurs : `traversant` au tir, au déplacement, à
+  // l'arrêt). C'est celui-là qui veut dire « en l'air », donc c'est celui-là que
+  // le dessin lit. Le jour où les deux divergeront — un blindé qui saute, un
+  // aéronef posé au sol — CE test tombe, et il faudra trancher plutôt que de
+  // laisser le rendu suivre la mauvaise moitié.
+  const parComportement = Object.entries(UNITES)
+    .filter(([, u]) => u.comportementAerien !== null).map(([id]) => id).sort();
+  const parChassis = Object.entries(UNITES)
+    .filter(([, u]) => u.chassis === 'aeronef').map(([id]) => id).sort();
+  assert.deepEqual(parComportement, ['busard', 'crecelle', 'enclume', 'frappeur']);
+  assert.deepEqual(parChassis, parComportement,
+    'les deux façons de dire « en l\'air » ont divergé : arbitrer laquelle le rendu suit');
+
+  // Non-vacuité des DEUX bouts : ni vide, ni le roster entier. Sans ça,
+  // l'égalité ci-dessus serait vraie d'une table où personne ne vole, comme
+  // d'une table où tout le monde vole.
+  assert.equal(parComportement.length, 4);
+  assert.ok(parComportement.length < Object.keys(UNITES).length,
+    'toutes les unités volent : le prédicat ne discrimine plus rien');
+  assert.ok(ORDRE_CHASSIS.includes('aeronef'), 'témoin : le châssis aérien existe encore');
+
+  // ⚠⚠ ET AUCUNE `DEFENSES` NE PORTE NI L'UN NI L'AUTRE — `undefined`, pas
+  // `null`. C'est ce qui interdit d'écrire le prédicat `!== null` sans le borner
+  // au genre : appliqué à une tourelle, `undefined !== null` rend VRAI, et les
+  // neuf ouvrages fixes seraient classés aériens EN SILENCE. `estAerienne` LÈVE
+  // sur ce qui n'est pas dans `UNITES`, et la boucle ne l'appelle que sur le
+  // genre `unite`.
+  for (const [id, d] of Object.entries(DEFENSES)) {
+    assert.equal(d.comportementAerien, undefined, `DEFENSES.${id} a gagné un comportement aérien`);
+    assert.equal(d.chassis, undefined, `DEFENSES.${id} a gagné un châssis`);
+    assert.notEqual(d.comportementAerien, null,
+      'témoin : `undefined` n\'est pas `null`, et `!== null` les sépare mal');
+  }
+});
+
+test('AER T2 — la scène lit le comportement aérien, et la table des couches est nommée', () => {
+  // Le filtre à commentaires de la garde d'opacité, repris tel quel : sans lui,
+  // cette garde-ci lirait la prose qui explique la règle plutôt que la règle —
+  // la faute que ce dépôt a payée huit fois.
+  const nu = (texte) => texte
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n').map((l) => l.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
+  const scene = nu(readFileSync(join(RACINE_RENDU, 'src', 'render', 'scene.js'), 'utf8'));
+  assert.ok(scene.includes('export function listeAffichage'),
+    'témoin : le filtre a mangé le corps de `render/scene.js`');
+
+  // Le prédicat lit le bon champ, et ne nomme pas le châssis.
+  const debut = scene.indexOf('function estAerienne(');
+  assert.notEqual(debut, -1, '`estAerienne` : introuvable dans la source décommentée');
+  const fin = scene.indexOf('\n}', debut);
+  assert.notEqual(fin, -1, '`estAerienne` : pas d\'accolade fermante en colonne zéro');
+  const corps = scene.slice(debut, fin + 2);
+  assert.ok(corps.length > 100 && corps.length < 600,
+    `\`estAerienne\` : corps de ${corps.length} caractères, la tranche est fausse`);
+  assert.ok(corps.includes('comportementAerien'),
+    '`estAerienne` ne lit plus le comportement aérien');
+  assert.ok(!corps.includes('aeronef'),
+    '`estAerienne` lit le CHÂSSIS : c\'est la famille de coût, pas ce qui vole');
+  assert.ok(corps.includes('throw'),
+    '`estAerienne` ne lève plus sur ce qui n\'est pas une unité');
+
+  // ⚠ LA TABLE DES COUCHES EST NOMMÉE, ET L'ANCIENNE LISTE A DISPARU. Écrire
+  // les quatre passes à la main dans la boucle marcherait aujourd'hui et
+  // rendrait le cinquième étage invisible en relecture.
+  assert.ok(scene.includes('const COUCHES = ['), 'la table `COUCHES` a disparu');
+  assert.ok(!scene.includes("['batiment', 'defense', 'unite']"),
+    'l\'ancienne liste de genres est revenue : les aéronefs repassent sous les unités');
+
+  // Les quatre couches, dans l'ordre, telles que la table les écrit.
+  const tableDebut = scene.indexOf('const COUCHES = [');
+  const tableFin = scene.indexOf('];', tableDebut);
+  const table = scene.slice(tableDebut, tableFin);
+  const lignes = [...table.matchAll(/genre:\s*'(\w+)',\s*aerien:\s*(null|true|false)/g)]
+    .map((m) => `${m[1]}/${m[2]}`);
+  assert.deepEqual(lignes, ['batiment/null', 'defense/null', 'unite/false', 'unite/true'],
+    'l\'ordre des couches a changé : bâtiments, structures, unités au sol, aéronefs');
+
+  // Les appâts : les trois motifs doivent voir la faute qu'ils cherchent, et ne
+  // pas voir ce qui n'en est pas une.
+  assert.ok(nu('function estAerienne(e) { return u.chassis === \'aeronef\'; }').includes('aeronef'),
+    'le motif du châssis ne verrait pas la faute');
+  assert.ok(!nu('// return u.chassis === \'aeronef\';').includes('aeronef'),
+    'le filtre ne retire pas une ligne entièrement commentée');
+  assert.ok("for (const g of ['batiment', 'defense', 'unite']) {".includes("['batiment', 'defense', 'unite']"),
+    'le motif de l\'ancienne liste ne verrait pas son retour');
+  assert.deepEqual(
+    [...'{ genre: \'unite\', aerien: true }'.matchAll(/genre:\s*'(\w+)',\s*aerien:\s*(null|true|false)/g)]
+      .map((m) => `${m[1]}/${m[2]}`),
+    ['unite/true'], 'le motif de la table ne lit pas une ligne de couche');
+});
+
+test('AER T3 — la liste partitionne : tout le sol, puis tout l\'air', () => {
+  const proj = calculerProjection(412, 900);
+  let ticks = 0, ticksAvecAir = 0, ticksAvecSol = 0, spritesAeriens = 0;
+
+  for (const parametres of balayageAerien()) {
+    const etat = creerCombat(montageDuBanc(parametres));
+    for (let t = 0; t < 900 && !etat.termine; t++) {
+      tick(etat);
+      ticks++;
+      const liste = listeAffichage(etat, proj, null, 0);
+      const air = [], sol = [], batiments = [], structures = [], barres = [];
+      liste.forEach((p, i) => {
+        if (estSpriteAerien(p)) air.push(i);
+        else if (estSpriteDUnite(p)) sol.push(i);
+        else if (p.forme === 'sprite' && p.famille === 'batiment') batiments.push(i);
+        else if (p.forme === 'sprite' && (p.famille === 'defense' || p.famille === 'socle')) structures.push(i);
+        else if (p.couleur === COULEUR_BARRE_PV) barres.push(i);
+      });
+      if (air.length > 0) ticksAvecAir++;
+      if (sol.length > 0) ticksAvecSol++;
+      spritesAeriens += air.length;
+
+      // ⚠ LA PROPRIÉTÉ : aucun sprite d'unité au sol après un sprite d'aéronef.
+      if (air.length > 0 && sol.length > 0) {
+        assert.ok(Math.min(...air) > Math.max(...sol),
+          `tick ${t} : un aéronef se dessine sous une unité au sol`);
+      }
+      // ⚠⚠ ET CE QUI N'A PAS BOUGÉ — un aéronef passe par-dessus les unités, PAS
+      // par-dessus les barres de vie. Monter la couche d'un cran de trop aurait
+      // mis le sprite au-dessus de la jauge qui dit ce qu'il reste à casser, et
+      // `T5` ne l'aurait pas vu : il ne connaît que le PREMIER de chaque famille.
+      if (air.length > 0 && barres.length > 0) {
+        assert.ok(Math.max(...air) < Math.min(...barres),
+          `tick ${t} : un aéronef se dessine par-dessus les barres de vie`);
+      }
+      if (air.length > 0 && batiments.length > 0) {
+        assert.ok(Math.min(...air) > Math.max(...batiments),
+          `tick ${t} : un aéronef se dessine sous un bâtiment`);
+      }
+      if (air.length > 0 && structures.length > 0) {
+        assert.ok(Math.min(...air) > Math.max(...structures),
+          `tick ${t} : un aéronef se dessine sous une structure`);
+      }
+    }
+  }
+
+  // Non-vacuité : le balayage a bien joué, et il a bien vu voler quelque chose.
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT ÉCRASEMENT (17/09-18/09), ET AUCUNE ASSERTION N'EST
+  // RETIRÉE — ce sont les QUATRE compteurs de non-vacuité qui suivent le déroulé
+  // des six raids balayés, et le lot change ce déroulé : 3 561 → **3 546** ticks,
+  // 2 105 → **2 333** ticks avec de l'air, 3 560 → **3 512** avec du sol,
+  // 5 256 → **5 395** sprites aériens.
+  //
+  // ⚠⚠ ET LE SENS SE LIT : les combats RACCOURCISSENT de quinze ticks au total
+  // pendant que les aéronefs y vivent DEUX CENT VINGT-HUIT ticks de plus. C'est
+  // cohérent avec ce que le lot fait — le heurt et l'écrasement pèsent sur ce qui
+  // roule au sol, jamais sur ce qui vole : un aéronef a une masse de **0**, donc
+  // il ne heurte rien et rien ne le heurte. Le sol meurt plus vite, l'air reste.
+  //
+  // ⚠ LA PROPRIÉTÉ GARDÉE PAR CE TEST — un aéronef ne se dessine jamais sous un
+  // bâtiment ni sous une structure — est tenue par la boucle ci-dessus, pas par
+  // ces quatre nombres. Eux ne sont là que pour interdire un balayage vide.
+  assert.equal(ticks, 3546, 'le balayage a changé de longueur');
+  assert.equal(ticksAvecAir, 2333, 'les aéronefs ne vivent plus aussi longtemps');
+  assert.equal(ticksAvecSol, 3512, 'le balayage a changé de nombre de ticks avec du sol');
+  assert.equal(spritesAeriens, 5395, 'le nombre de sprites aériens posés a bougé');
+  assert.ok(spritesAeriens > 0, 'aucun sprite d\'aéronef : le balayage ne garde rien');
+});
+
+test('AER T4 — ce que le lot déplace : 535 recouvrements, et ZÉRO au niveau 15', () => {
+  // ⚠⚠ UN COUPLE COMPTE QUAND L'AÉRONEF A L'INDICE LE PLUS BAS **ET** QUE LES
+  // DEUX SPRITES SE RECOUVRENT. Le premier terme dit que l'ANCIEN ordre l'aurait
+  // mis dessous ; le second dit que ça se VOYAIT. Sans le second on compterait
+  // des permutations invisibles ; sans le premier, des couples que l'accident
+  // rendait déjà justes.
+  //
+  // Un sprite occupe une case pleine, donc deux se recouvrent si et seulement si
+  // leurs positions diffèrent de moins d'une case sur les DEUX axes.
+  const couples = (niveau) => {
+    let total = 0, raids = 0;
+    for (const parametres of balayageAerien()) {
+      const etat = creerCombat(montageDuBanc({ ...parametres, niveau }));
+      let ici = 0;
+      for (let t = 0; t < 900 && !etat.termine; t++) {
+        tick(etat);
+        const vus = etat.entites.filter((e) => e.vivant && !e.sorti && e.genre === 'unite');
+        const air = vus.filter((e) => AERIENNES.includes(e.id));
+        if (air.length === 0) continue;
+        const sol = vus.filter((e) => !AERIENNES.includes(e.id));
+        for (const a of air) {
+          for (const s of sol) {
+            if (a.indice > s.indice) continue;
+            if (Math.abs(a.rangeeMilli - s.rangeeMilli) >= MILLI_PAR_CASE) continue;
+            if (Math.abs(a.colonneMilli - s.colonneMilli) >= MILLI_PAR_CASE) continue;
+            ici++;
+          }
+        }
+      }
+      if (ici > 0) raids++;
+      total += ici;
+    }
+    return { total, raids };
+  };
+
+  const a30 = couples(30);
+  // ⚠⚠ RÉANCRÉ AU LOT ÉCRASEMENT (17/09-18/09) : 535 → **545 couples**, ET LES
+  // **SIX RAIDS** NE BOUGENT PAS. Le lot change le déroulé des mêmes six combats,
+  // donc les aéronefs y croisent le sol dix fois de plus ; il n'ouvre aucun raid
+  // nouveau, et c'est le second nombre qui le dit. Le correctif du point 12 mord
+  // exactement là où il mordait, un peu plus souvent.
+  assert.deepEqual(a30, { total: 545, raids: 6 },
+    'le nombre de recouvrements que le lot corrige a bougé');
+  assert.notDeepEqual(a30, { total: 535, raids: 6 },
+    'le relevé d\'avant le lot ÉCRASEMENT est revenu — remesurer avant de le croire');
+  assert.notEqual(a30.total, 0,
+    'plus aucun recouvrement : le correctif ne mord plus sur aucun raid du balayage');
+
+  // ⚠⚠ ET LE MÊME BALAYAGE AU NIVEAU 15 EN REND ZÉRO. Ce n'est pas une
+  // curiosité : c'est la mesure qui a failli faire conclure que le point 12
+  // était inerte. Les cinquante-quatre raids du premier relevé étaient tous au
+  // niveau 15, et ils rendaient 824 couples recouvrants dont **aucun** dans le
+  // mauvais sens. Un correctif qui ne mord pas se vérifie avant d'être cru — et
+  // un correctif qui paraît inerte se remesure ailleurs avant d'être jeté.
+  assert.deepEqual(couples(15), { total: 0, raids: 0 },
+    'le niveau 15 s\'est mis à recouvrir : le contraste qui justifie le niveau 30 est perdu');
 });

@@ -173,6 +173,69 @@ export function nomDuModule(branche, id) {
 }
 
 /**
+ * Le module qu'une pièce porte, pour un PROPRIÉTAIRE et une branche donnés.
+ *
+ * ⚠⚠ TROIS CHAMPS, PAS DEUX, ET LE TROISIÈME EST LE PIÈGE. Sur une UNITÉ,
+ * `moduleOuvrage` n'est NI son module d'attaque NI celui de sa garnison : c'est
+ * celui qu'elle porte quand elle défend POUR L'OUVRAGE. Le Broyeur en est
+ * l'exemple complet — `module: 'ecraseur'` à l'assaut, `defense.module:
+ * 'pvPlusVingt'` dans la garnison du joueur, `moduleOuvrage: 'volDeVie'` en
+ * défense de l'Ouvrage. Les trois sont différents.
+ *
+ * ⚠ `nomDuModule` CI-DESSUS EST LE CAS `joueur` DE CELLE-CI, et elle le reste :
+ * c'est elle que l'arbre de recherche appelle, et elle n'a pas à connaître
+ * l'Ouvrage. Celle-ci existe pour la MIGRATION, qui doit relire des listes
+ * écrites pour les deux camps.
+ *
+ * @param {'joueur'|'ouvrage'} qui
+ * @param {'offense'|'defense'} branche
+ * @param {string} id
+ * @returns {string|null}
+ */
+export function moduleDeLaPiece(qui, branche, id) {
+  exigerBranche(branche);
+  if (qui !== 'joueur' && qui !== 'ouvrage') {
+    throw new Error(`recherche : propriétaire « ${qui} » inconnu`);
+  }
+  if (branche === 'offense') return UNITES[id]?.module ?? null;
+  const d = DEFENSES[id];
+  if (d !== undefined) return (qui === 'ouvrage' ? d.moduleOuvrage : d.moduleJoueur) ?? null;
+  const u = UNITES[id];
+  if (u === undefined) return null;
+  return (qui === 'ouvrage' ? u.moduleOuvrage : u.defense?.module) ?? null;
+}
+
+/**
+ * Les PIÈCES qui portent ce module, pour ce propriétaire et cette branche.
+ *
+ * ⚠⚠ ELLE EXISTE POUR LA MIGRATION v35 → v36, ET POUR ELLE SEULE. Les listes
+ * `modulesDebloques` portaient des NOMS de modules jusqu'au 18/09 ; elles
+ * portent des identifiants de pièces depuis que le déblocage lit un seuil PAR
+ * PIÈCE. Les rapports de raid déjà sauvegardés portent l'ancien format dans leur
+ * montage de rejeu, et un rejeu faux est pire qu'aucun rejeu : il faut donc
+ * savoir traduire, et traduire comme l'ANCIENNE règle se comportait — un nom
+ * armait TOUTES ses porteuses.
+ *
+ * ⚠ ELLE NE SERT PAS À ARMER UN COMBAT NEUF. Un combat d'aujourd'hui reçoit ses
+ * pièces de `modulesDebloquesDuJoueur`, de `modulesOuvrageAu` ou de
+ * `modulesOuvrageOffenseAu`, qui lisent chacune le seuil de CHAQUE pièce.
+ *
+ * @param {'joueur'|'ouvrage'} qui
+ * @param {'offense'|'defense'} branche
+ * @param {string} nom
+ * @returns {string[]} identifiants, triés
+ */
+export function piecesPortant(qui, branche, nom) {
+  const pieces = [];
+  for (const table of [UNITES, DEFENSES]) {
+    for (const id of Object.keys(table)) {
+      if (moduleDeLaPiece(qui, branche, id) === nom) pieces.push(id);
+    }
+  }
+  return pieces.sort();
+}
+
+/**
  * Le coût, en MILLI-points, d'une ligne de l'arbre.
  *
  * ⚠ LE FACTEUR MILLE EST ICI ET NULLE PART AILLEURS. `ARBRE_RECHERCHE` est en
@@ -238,12 +301,14 @@ export function modulesDebloquesDuJoueur(etat) {
   exigerEtat(etat);
   const parBranche = {};
   for (const branche of BRANCHES) {
-    const noms = new Set();
+    const pieces = new Set();
     for (const id of etat.recherche.modules[branche]) {
-      const nom = nomDuModule(branche, id);
-      if (nom !== null) noms.add(nom);
+      // ⚠ UNE PIÈCE SANS MODULE DANS CETTE BRANCHE NE RENTRE PAS : elle ne
+      // pourrait rien activer, et la laisser entrer ferait porter à la liste des
+      // identifiants qui ne veulent rien dire pour elle.
+      if (nomDuModule(branche, id) !== null) pieces.add(id);
     }
-    parBranche[branche] = [...noms].sort();
+    parBranche[branche] = [...pieces].sort();
   }
   return parBranche;
 }

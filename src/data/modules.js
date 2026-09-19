@@ -151,7 +151,15 @@ export const MODULES = {
     // qu'il est achetable. `offense` reste faux — aucune unité d'assaut ne le
     // porte, et `degatsContre` ne le lit que sur le tireur qui le PORTE.
     cable: { offense: false, defense: true },
-    description: '+0,2 sur la matrice de la cible de prédilection',
+    // ⚠⚠ LA DESCRIPTION DIT CE QUE LE CODE FAIT — CORRIGÉ À L'AUDIT DU 17/09,
+    // DÉFAUT N° 5. Elle disait « +0,2 sur la matrice », vocabulaire du modèle de
+    // facteurs bornés que le lot 4A a retiré : il n'y a plus de matrice, et
+    // `degatsContre` fait `floor(degats × MUNITION_PCT / 100)`. L'équivalence
+    // était exacte — porter un facteur de 1,0 à 1,2 est bien +20 % — mais une
+    // description qui parle d'une addition invite à en écrire une, et un « +0,2 »
+    // additif casserait l'invariance du prédicat de ciblage que `floor(0 × 1,2)
+    // = 0` garantit aujourd'hui.
+    description: '+20 % de dégâts dans la colonne de la cible de prédilection',
   },
   volDeVie: {
     libelle: 'Vol de vie',

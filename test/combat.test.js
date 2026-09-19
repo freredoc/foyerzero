@@ -25,10 +25,12 @@ import {
   CAUSES,
   TICKS_MAX_COMBAT,
   TICKS_PAR_VAGUE,
+  ticksDEcrasement,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli, MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { BUTIN } from '../src/data/sites.js';
-import { GRILLE } from '../src/data/combat.js';
+import { GRILLE, UNITES } from '../src/data/combat.js';
+import { portants } from './portants.js';
 
 // ---------------------------------------------------------------------------
 // T2 — aucun aléa, pour TOUTE la durée du fichier
@@ -147,7 +149,7 @@ function montageRiche() {
       [{ rangee: DEPART, id: 'broyeur', colonne: 8 }, { rangee: DEPART, id: 'enclume', colonne: 9 }],
     ],
     modulesDebloques: {
-      ouvrage: { offense: [], defense: ['pvPlusVingt', 'munitionSpeciale'] },
+      ouvrage: { offense: [], defense: portants('ouvrage', 'defense', 'pvPlusVingt', 'munitionSpeciale') },
       joueur: { offense: [], defense: [] },
     },
   };
@@ -467,33 +469,63 @@ test('T7 a — masse supérieure : la bloquante meurt, la mobile ne s\'arrête p
   // QUART de sa vitesse. Ce que le test garde n'a pas bougé d'un mot : la
   // bloquante meurt, la mobile ne s'arrête pas.
   //
+  // ⚠⚠ RÉANCRÉ UNE SECONDE FOIS AU LOT ÉCRASEMENT, 17/09 — POINT 11 D'ETHAN,
+  // « Changer calcul écrasement. Bien trop efficace. Pas assez de dégâts sur
+  // les véhicules. Un pionnier roule trop facilement. » La durée d'un
+  // écrasement ne vaut plus quatre ticks pour tout le monde : elle se DÉRIVE du
+  // rapport des masses, et un Fendeur (10) sur une Meute (1) y met **HUIT**
+  // ticks. Ce que ce test garde n'a toujours pas bougé d'un mot — la bloquante
+  // meurt, la mobile ne s'arrête pas — seuls les nombres se déplacent, et TOUS
+  // dans le même sens : l'écrasement coûte plus cher à l'écraseuse.
+  //
+  //                          CONTACT-2   ÉCRASEMENT
+  //   ticks de contact               4            8
+  //   rangée à la mort           2 088        2 176
+  //   rangée au tick 11          2 718        2 446
+  //
+  // ⚠ LA DURÉE SE DEMANDE AU MOTEUR, elle ne se retape pas : une seconde
+  // écriture du rapport ici rendrait le test vrai sous n'importe quelle règle.
+  const ticks = ticksDEcrasement(UNITES.fendeur.masse, UNITES.meute.masse);
+  assert.equal(ticks, 8, 'Fendeur (10) contre Meute (1) : huit ticks de contact');
+  assert.notEqual(ticks, 4, 'le quatre plat est revenu : la durée ne dérive plus des masses');
+
   // Le Meute défensif (masse 1) occupe la case 3, qui commence à 3000, et il
-  // porte 700 000 milli-PV — donc 175 000 par tick d'écrasement. Les tirs du
-  // Fendeur s'y ajoutent, si bien que les PV tombent un peu plus vite que le
-  // seul quart : 519 000 · 338 066 · 157 186 · 0.
+  // porte 700 000 milli-PV — donc ceil(700 000 / 8) = 87 500 par tick
+  // d'écrasement, contre 175 000 avant ce lot. Les tirs du Fendeur s'y ajoutent,
+  // si bien que les PV tombent un peu plus vite que le seul quantum.
   const pvParTick = [];
-  for (let t = 1; t <= 3; t += 1) {
+  for (let t = 1; t < ticks; t += 1) {
     jouer(etat, t);
     pvParTick.push(meute.pvMilli);
   }
-  assert.deepEqual(pvParTick, [519_000, 338_066, 157_186], 'les PV décroissent à chaque tick de contact');
-  assert.equal(meute.vivant, true, 'le Meute tient encore au troisième tick de contact');
-  // Et l'écraseuse avance au quart : floor(90 / 4) = 22, trois fois.
-  assert.equal(fendeur.rangeeMilli, 2000 + 3 * 22);
+  assert.deepEqual(
+    pvParTick,
+    [606_500, 513_066, 419_692, 326_366, 233_082, 139_828, 46_592],
+    'les PV décroissent à chaque tick de contact',
+  );
+  assert.notDeepEqual(
+    pvParTick.slice(0, 3), [519_000, 338_066, 157_186],
+    'la descente d\'avant le lot ÉCRASEMENT est revenue',
+  );
+  assert.equal(meute.vivant, true, `le Meute tient encore au tick ${ticks - 1} de contact`);
+  // Et l'écraseuse avance au quart : floor(90 / 4) = 22, sept fois.
+  assert.equal(fendeur.rangeeMilli, 2000 + (ticks - 1) * 22);
 
-  jouer(etat, 4);
-  assert.equal(meute.vivant, false, 'écrasé au quatrième tick de contact');
+  jouer(etat, ticks);
+  assert.equal(meute.vivant, false, `écrasé au tick ${ticks} de contact`);
   assert.equal(meute.ecrase, true);
   assert.equal(meute.pvMilli, 0);
-  assert.equal(fendeur.rangeeMilli, 2088, 'quatre pas freinés de 22');
+  assert.equal(fendeur.rangeeMilli, 2176, 'huit pas freinés de 22');
+  assert.notEqual(fendeur.rangeeMilli, 2088, 'les quatre pas freinés d\'hier sont revenus');
 
   // Et la mobile continue sans s'arrêter : le frein tombe avec sa cause, elle
-  // reprend 90 milli-cases par tick. 2 088 + 7 × 90 = 2 718 au tick 11, contre
-  // 2 990 avant le lot — l'écart vaut EXACTEMENT les quatre ticks de frein,
-  // 4 × (90 − 22) = 272.
+  // reprend 90 milli-cases par tick. 2 176 + 3 × 90 = 2 446 au tick 11, contre
+  // 2 718 avant ce lot et 2 990 avant CONTACT-2 — l'écart au nombre du dépôt
+  // vaut EXACTEMENT les huit ticks de frein, 8 × (90 − 22) = 544.
   jouer(etat, 11);
-  assert.equal(fendeur.rangeeMilli, 2718);
-  assert.equal(2990 - 2718, 4 * (90 - 22), 'l’écart au nombre d’avant EST le frein');
+  assert.equal(fendeur.rangeeMilli, 2446);
+  assert.notEqual(fendeur.rangeeMilli, 2718, 'l\'ancre du lot CONTACT-2 est revenue');
+  assert.equal(2990 - 2446, ticks * (90 - 22), 'l’écart au nombre d’avant EST le frein');
 });
 
 test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
@@ -538,11 +570,45 @@ test('T7 b — masse égale : blocage mutuel, aucune n\'avance', () => {
   // floor(23 × floor(pv × 1000 / 1 000 000)) = 23 × floor(pv/1000) par tick,
   // soit 23 000 à pleine vie — 2,3 % de la cible, contre 4,0 % avant. Le combat
   // en miroir est donc plus lent, et c'est le sens du T = 16 s : après 20 ticks
-  // chacun est à 628 044 milli-PV, là où il tombait à ~132 000 avant.
-  // Ils sont bien encore en vie — le blocage n'est pas un artefact d'une mort.
+  // chacun tombait à 628 044 milli-PV, là où il tombait à ~132 000 avant.
+  //
+  // ⚠⚠⚠ ET LE LOT ÉCRASEMENT (17/09) CASSE CE MIROIR-LÀ, VOLONTAIREMENT. Ce
+  // n'est PAS une assertion affaiblie, c'est une assertion RETOURNÉE, et le sens
+  // du retournement est le point 11 d'Ethan : « pas assez de dégâts sur les
+  // véhicules ». Le lot fait payer au contact ce que le contact refusait de
+  // faire payer — deux masses ÉGALES ne s'écrasent pas, mais elles se HEURTENT,
+  // et le heurt coûte désormais `ceil(pvMax / ticksDEcrasement)` par tick.
+  //
+  // ⚠⚠ ET LE MIROIR SE CASSE PARCE QUE LE MONTAGE N'EST PAS SYMÉTRIQUE, ce que
+  // vingt lots n'avaient jamais eu à dire : le bélier ne se paie qu'à celui qui
+  // AVANCE. L'attaquant marche sur le défenseur et lui rend son heurt ; le
+  // défenseur est une garnison — il ne se décale pas (`sens` vaut zéro, c'est
+  // l'assertion du dessus) — donc il ne heurte rien, jamais. Le défenseur
+  // encaisse 12 500 milli-PV par tick que l'attaquant n'encaisse pas, il tire
+  // donc plus faible en retour, et l'attaquant finit avec PLUS de PV qu'avant le
+  // lot. Les deux nombres se déplacent en sens CONTRAIRE, et c'est la signature
+  // du lot :
+  //
+  //                        CONTACT-2   ÉCRASEMENT
+  //   attaquant             628 044      683 451     (+ 55 407, il encaisse moins)
+  //   défenseur             628 044      370 477     (− 257 567, il prend le bélier)
+  //
+  // ⚠ CE QUE CE TEST EXISTE POUR TENIR EST INTACT, et c'est ce qui autorise le
+  // retournement : **aucun ne change de case, aucun n'écrase l'autre, le blocage
+  // mutuel est le même** — les trois assertions de position ci-dessus n'ont pas
+  // bougé d'un millième, et les deux pièces sont toujours vivantes au tick 20.
+  // Le miroir des PV n'était pas la propriété gardée, c'était son symptôme.
+  const ticksHeurt = ticksDEcrasement(UNITES.fendeur.masse, UNITES.fendeur.masse);
+  assert.equal(ticksHeurt, 80, 'masse égale : le heurt s\'étale sur quatre-vingts ticks');
   assert.ok(attaquant.vivant && defenseur.vivant);
-  assert.equal(attaquant.pvMilli, 628_044);
-  assert.equal(defenseur.pvMilli, 628_044, 'le miroir est exact : mêmes PV des deux côtés');
+  assert.equal(attaquant.pvMilli, 683_451);
+  assert.equal(defenseur.pvMilli, 370_477, 'le miroir est cassé : le bélier ne va que dans un sens');
+  assert.notEqual(attaquant.pvMilli, 628_044, 'le miroir d\'avant le lot ÉCRASEMENT est revenu');
+  assert.notEqual(defenseur.pvMilli, 628_044, 'le miroir d\'avant le lot ÉCRASEMENT est revenu');
+  assert.ok(
+    attaquant.pvMilli > defenseur.pvMilli,
+    'et il penche du côté de celui qui AVANCE — sans quoi le bélier ne mord pas',
+  );
 
   // Le Fendeur s'arrête aussi pour prédilection (colonne véhicule dominante).
   // Pour isoler le SEUL blocage par masse égale, on rejoue avec un couple qui
@@ -920,7 +986,7 @@ test('T13 — un Merlon de niveau 3 détruit à 50 % rapporte 13 734 milli-point
   // « la moitié » n'est plus le même nombre de PV. C'est une VRAIE interaction,
   // pas un effet de bord : le module fait enfin ce qu'il dit.
   const avecModule = { ...montage, modulesDebloques: {
-    ouvrage: { offense: [], defense: ['pvPlusVingt'] },
+    ouvrage: { offense: [], defense: portants('ouvrage', 'defense', 'pvPlusVingt') },
     joueur: { offense: [], defense: [] },
   } };
   const etatModule = creerCombat(avecModule);
@@ -1132,7 +1198,7 @@ test('§11 — `modulesActifs` et `effetsTemporises` ne se remplissent QUE sous 
     vagues: [[{ id: 'carapace', colonne: 5, rangee: 2, niveau: 20 }]],
     modulesDebloques: {
       ouvrage: { offense: [], defense: [] },
-      joueur: { offense: ['booster'], defense: [] },
+      joueur: { offense: portants('joueur', 'offense', 'booster'), defense: [] },
     },
   });
   const cuirassier = entite(boostee, parId('carapace'));
@@ -1513,22 +1579,28 @@ test('T17 — les attaquantes détruites paient la défense, à moitié tarif', 
   assert.equal(pointsRecherche(resultat, montage) > 0n, true);
 
   // ⚠⚠ LA MAJORATION LIT LA BRANCHE `offense` DE L'ATTAQUANT, PAS SA DÉFENSE.
-  // La Carapace porte le module `camouflage` : le débloquer côté offense de
-  // l'Ouvrage majore de 20 %, soit 137 340 × 1,2 = 164 808. Mettre le même nom
-  // dans la branche `defense` de l'Ouvrage, ou dans l'une des deux du joueur, ne
-  // doit RIEN changer — sinon le joueur se paierait ses propres modules.
+  // La Carapace porte le module `camouflage` : débloquer LA PIÈCE côté offense de
+  // l'Ouvrage majore de 20 %, soit 137 340 × 1,2 = 164 808. La ranger dans la
+  // branche `defense` de l'Ouvrage, ou dans l'une des deux du joueur, ne doit
+  // RIEN changer — sinon le joueur se paierait ses propres modules.
+  //
+  // ⚠⚠ ET C'EST `carapace.id`, PLUS `carapace.module`, DEPUIS LE 18/09 — audit,
+  // défaut n° 2, « par pièce ». La liste portait des NOMS, donc débloquer le
+  // Camouflage pour la Carapace le débloquait aussi pour les Fouisseurs, qui le
+  // portent et dont le seuil est DIX niveaux plus haut. Le barème de points
+  // souffrait du même défaut que le combat, et il se corrige sur la même ligne.
   const arme = {
     ...montage,
     modulesDebloques: {
-      ouvrage: { offense: [carapace.module], defense: [] },
+      ouvrage: { offense: [carapace.id], defense: [] },
       joueur: { offense: [], defense: [] },
     },
   };
   assert.equal(carapace.module !== null, true, 'la Carapace n’a plus de module : le test ne mesure plus rien');
   assert.equal(pointsRechercheDefense(resultat, arme), 164_808n);
   for (const fuite of [
-    { ouvrage: { offense: [], defense: [carapace.module] }, joueur: { offense: [], defense: [] } },
-    { ouvrage: { offense: [], defense: [] }, joueur: { offense: [carapace.module], defense: [carapace.module] } },
+    { ouvrage: { offense: [], defense: [carapace.id] }, joueur: { offense: [], defense: [] } },
+    { ouvrage: { offense: [], defense: [] }, joueur: { offense: [carapace.id], defense: [carapace.id] } },
   ]) {
     assert.equal(
       pointsRechercheDefense(resultat, { ...montage, modulesDebloques: fuite }), 137_340n,

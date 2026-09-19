@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 
 import {
   creerCombat, tick, ECRASEMENT_TICKS, ECRASEMENT_FREIN,
+  ECRASEMENT_RAPPORT_PLEIN, ticksDEcrasement, MASSE_MINI_HEURT,
 } from '../src/sim/combat.js';
 import { MILLI_PAR_CASE } from '../src/sim/grille.js';
 import { genererSite } from '../src/sim/generateur.js';
@@ -287,7 +288,7 @@ test('CONTACT T1 — aucune entité ne franchit plus que son pas nominal en un t
 });
 
 // ---------------------------------------------------------------------------
-// CONTACT-2 T1 — UN ÉCRASEMENT PREND QUATRE TICKS, ET IL USE LA VICTIME
+// CONTACT-2 T1 — UN ÉCRASEMENT DURE LE RAPPORT DES MASSES, ET IL USE LA VICTIME
 // ---------------------------------------------------------------------------
 
 // ⚠⚠ VU ROUGE SUR L'ARBRE FUSIONNÉ AVANT D'ÊTRE ÉCRIT — ET PAS PAR L'ASSERTION
@@ -301,19 +302,55 @@ test('CONTACT T1 — aucune entité ne franchit plus que son pas nominal en un t
 // commencé. C'est l'arbitrage d'Ethan du 13/09 pris à l'envers : « On prend c
 // plus vitesse divisée par quatre. »
 //
-// ⚠⚠ ET LE COMPORTEMENT SE DÉRIVE DES DEUX CONSTANTES, DONC LES DEUX SE PINNENT.
-// Le test lit `ECRASEMENT_TICKS` et `ECRASEMENT_FREIN` au lieu de retaper 4 —
-// une seule table fait foi par grandeur — mais un test qui ne ferait QUE dériver
-// serait vrai sous n'importe quelle valeur : **mesuré, à `ECRASEMENT_TICKS = 1`
-// la boucle des trois premiers ticks ne tourne plus et tout le reste passe.** Les
-// deux valeurs sont donc ÉPINGLÉES ci-dessous, comme témoins de calibrage, et
-// c'est ce qui fait tomber le test quand la règle change de paramètre.
-test('CONTACT-2 T1 — un écrasement prend quatre ticks de contact, et il use la victime', () => {
-  // ⚠ TÉMOINS DE CALIBRAGE — valeurs arbitrées par Ethan le 13/09, à réaligner
-  // au prochain arbitrage sans jamais servir d'argument CONTRE lui. Elles sont
-  // épinglées ici, et là seulement : tout le reste du test les DÉRIVE.
-  assert.equal(ECRASEMENT_TICKS, 4, 'un écrasement prend quatre ticks de contact');
+// ⚠⚠ ET LA DURÉE N'EST PLUS QUATRE TICKS POUR TOUT LE MONDE DEPUIS LE LOT E
+// (point 11 d'Ethan, 17/09 : « Changer calcul écrasement. Bien trop efficace.
+// Pas assez de dégâts sur les véhicules. Un pionnier roule trop facilement. »).
+// Elle se DÉRIVE du rapport des masses par `ticksDEcrasement` :
+//
+//     ticks = max(ECRASEMENT_TICKS, ceil(ECRASEMENT_TICKS × RAPPORT × mV / mE))
+//
+// Sur ce montage — Fendeur masse 10 contre Meute masse 1 — elle vaut **HUIT**,
+// le double de l'ancien barème. Le Bélier, qui est le **Pionnier** sous le jeu
+// de noms du joueur, y met **seize** ticks : c'est exactement le « roule trop
+// facilement » d'Ethan, et c'est ce que ce lot fait payer.
+//
+// ⚠⚠ ET LE COMPORTEMENT SE DÉRIVE DE TROIS CONSTANTES, DONC LES TROIS SE
+// PINNENT. Le test lit `ECRASEMENT_TICKS`, `ECRASEMENT_FREIN` et
+// `ECRASEMENT_RAPPORT_PLEIN` au lieu de retaper 4, 4 et 20 — une seule table
+// fait foi par grandeur — mais un test qui ne ferait QUE dériver serait vrai
+// sous n'importe quelle valeur : **mesuré, à `ECRASEMENT_TICKS = 1` la boucle
+// des premiers ticks ne tourne plus et tout le reste passe.** Les trois valeurs
+// sont donc ÉPINGLÉES ci-dessous, comme témoins de calibrage, et c'est ce qui
+// fait tomber le test quand la règle change de paramètre.
+//
+// ⚠ ET LE NOMBRE MESURÉ SUR CE MONTAGE EST ÉPINGLÉ À CÔTÉ DE LA DÉRIVATION,
+// avec la contre-assertion qui refuse le retour du quatre plat : une durée qui
+// ne dériverait plus des masses redeviendrait `ECRASEMENT_TICKS` pour tout le
+// monde, et le seul `assert.equal(ticks, 8)` ne le dirait pas — c'est
+// `notEqual(ticks, ECRASEMENT_TICKS)` qui le dit.
+test('CONTACT-2 T1 — un écrasement dure le rapport des masses, et il use la victime', () => {
+  // ⚠ TÉMOINS DE CALIBRAGE — valeurs arbitrées par Ethan les 13/09 et 17/09, à
+  // réaligner au prochain arbitrage sans jamais servir d'argument CONTRE lui.
+  // Elles sont épinglées ici, et là seulement : tout le reste du test les DÉRIVE.
+  assert.equal(ECRASEMENT_TICKS, 4, 'le plancher d\'un écrasement vaut quatre ticks');
   assert.equal(ECRASEMENT_FREIN, 4, 'et l\'écraseuse y avance au quart de sa vitesse');
+  assert.equal(ECRASEMENT_RAPPORT_PLEIN, 20,
+    'et le plein se paie à vingt fois le plancher, par unité de masse victime');
+  // ⚠⚠ ET LA QUATRIÈME, ÉPINGLÉE LE 18/09 : le heurt est l'affaire des
+  // VÉHICULES. Elle manquait ici alors que ses trois sœurs y étaient, et c'est
+  // la relecture adverse du lot qui l'a vu. Sa propriété n'était gardée
+  // qu'indirectement, par un témoin de butin dans `cible.test.js`.
+  assert.equal(MASSE_MINI_HEURT, 2,
+    'le seuil de masse du heurt a bougé : c\'est un arbitrage d\'Ethan, 18/09');
+  // ⚠⚠ ET L'ÉPINGLE SEULE NE SUFFIT PAS — elle ne dirait pas que le seuil SÉPARE
+  // quelque chose. Avec les masses d'aujourd'hui (1 pour les escouades, 5, 10 et
+  // 20 pour les véhicules), les valeurs 2 à 5 sont indiscernables : on mesure
+  // donc ce que le seuil SÉPARE, pas seulement ce qu'il vaut.
+  const masses = [...new Set(Object.values(UNITES).map((u) => u.masse))].sort((a, b) => a - b);
+  assert.ok(masses.some((m) => m > 0 && m < MASSE_MINI_HEURT),
+    'plus aucune pièce ne tombe SOUS le seuil : le heurt ne sépare plus rien');
+  assert.ok(masses.some((m) => m >= MASSE_MINI_HEURT),
+    'plus aucune pièce n\'atteint le seuil : le heurt est mort');
 
   const etat = creerCombat(ECRASEMENT);
   const ecraseuse = etat.entites.find((e) => e.camp === 'attaque');
@@ -329,31 +366,44 @@ test('CONTACT-2 T1 — un écrasement prend quatre ticks de contact, et il use l
     'une case pile : la marge vaut zéro dès le premier tick');
 
   const depart = ecraseuse.rangeeMilli;
-  const quart = Math.ceil(victime.pvMaxMilli / ECRASEMENT_TICKS);
+
+  // ⚠⚠ LA DURÉE SE DEMANDE AU MOTEUR, ELLE NE SE RECALCULE PAS ICI. Une seconde
+  // écriture du rapport dans le test le rendrait vrai sous n'importe quelle
+  // règle — c'est la faute que `MODULES-F T14` a payée en opposant les points
+  // d'aujourd'hui à des nombres relevés sur un autre code.
+  // ⚠ Et la masse de l'écraseuse est celle de la TABLE : le montage n'arme aucun
+  // module (`SANS_MODULE`), donc `masseEffective` rend `p.masse` telle quelle.
+  const ticks = ticksDEcrasement(masseDe(ecraseuse), masseDe(victime));
+  assert.equal(ticks, 8,
+    'Fendeur (10) contre Meute (1) : huit ticks, le double de l\'ancien barème');
+  assert.notEqual(ticks, ECRASEMENT_TICKS,
+    'le quatre plat est revenu : la durée ne dérive plus du rapport des masses');
+
+  const quantum = Math.ceil(victime.pvMaxMilli / ticks);
   const pasFreine = Math.floor(UNITES[ecraseuse.id].vitesse / ECRASEMENT_FREIN);
 
-  // ⚠ LES TROIS PREMIERS TICKS DE CONTACT : la victime tient, ses PV décroissent
-  // STRICTEMENT, et chaque chute vaut AU MOINS le quart — au moins, parce que
+  // ⚠ LES SEPT PREMIERS TICKS DE CONTACT : la victime tient, ses PV décroissent
+  // STRICTEMENT, et chaque chute vaut AU MOINS le quantum — au moins, parce que
   // l'écraseuse lui tire dessus en même temps, et un test qui exigerait
   // l'égalité mesurerait le barème de tir au lieu de l'écrasement.
   let precedent = victime.pvMilli;
-  for (let t = 1; t < ECRASEMENT_TICKS; t += 1) {
+  for (let t = 1; t < ticks; t += 1) {
     tick(etat);
     assert.ok(victime.pvMilli < precedent,
       `tick ${t} : les PV doivent décroître (${precedent} → ${victime.pvMilli})`);
-    assert.ok(precedent - victime.pvMilli >= quart,
-      `tick ${t} : la chute (${precedent - victime.pvMilli}) doit valoir au moins le quart (${quart})`);
+    assert.ok(precedent - victime.pvMilli >= quantum,
+      `tick ${t} : la chute (${precedent - victime.pvMilli}) doit valoir au moins le quantum (${quantum})`);
     assert.equal(victime.vivant, true,
-      `la victime doit tenir jusqu'au tick ${ECRASEMENT_TICKS - 1} de contact (tick ${t})`);
+      `la victime doit tenir jusqu'au tick ${ticks - 1} de contact (tick ${t})`);
     precedent = victime.pvMilli;
   }
 
-  // ⚠ ET ELLE MEURT AU QUATRIÈME, PAR L'ÉCRASEMENT — pas par un tir, pas par
+  // ⚠ ET ELLE MEURT AU DERNIER, PAR L'ÉCRASEMENT — pas par un tir, pas par
   // `retirerLesMorts` : `ecrase` est vrai, et son fait est au journal DU TICK
   // QUI TUE. C'est la comptabilité que le lot JOURNAL-DE-COMBAT a payée une fois
   // pour l'avoir oubliée — « une pièce sur vingt-trois manquait au journal ».
   tick(etat);
-  assert.equal(victime.vivant, false, `morte au tick ${ECRASEMENT_TICKS} de contact`);
+  assert.equal(victime.vivant, false, `morte au tick ${ticks} de contact`);
   assert.equal(victime.ecrase, true, 'écrasée, et non abattue');
   assert.equal(victime.pvMilli, 0);
   assert.ok(
@@ -361,11 +411,15 @@ test('CONTACT-2 T1 — un écrasement prend quatre ticks de contact, et il use l
     'le fait de la destruction doit être publié au tick qui tue',
   );
 
-  // ⚠⚠ ET LE FREIN EST LA SECONDE MOITIÉ DE L'ARBITRAGE : pendant les quatre
-  // ticks, l'écraseuse avance au QUART de sa vitesse. Le pas se dérive de la
-  // table — `floor(90 / 4) = 22` — et jamais d'un nombre retapé.
-  assert.equal(ecraseuse.rangeeMilli - depart, ECRASEMENT_TICKS * pasFreine,
-    'quatre pas freinés, et pas un de plus');
+  // ⚠⚠ ET LE FREIN EST LA SECONDE MOITIÉ DE L'ARBITRAGE : pendant TOUT
+  // l'écrasement, l'écraseuse avance au QUART de sa vitesse. Le pas se dérive de
+  // la table — `floor(90 / 4) = 22` — et jamais d'un nombre retapé.
+  // ⚠ Le frein dure donc plus longtemps qu'avant, puisque l'écrasement dure plus
+  // longtemps : c'est la même règle, appliquée à une durée qui a doublé.
+  assert.equal(ecraseuse.rangeeMilli - depart, ticks * pasFreine,
+    `${ticks} pas freinés, et pas un de plus`);
+  assert.notEqual(ecraseuse.rangeeMilli - depart, ECRASEMENT_TICKS * pasFreine,
+    'le frein est retombé sur les quatre pas de l\'ancien barème');
   assert.ok(pasFreine < UNITES[ecraseuse.id].vitesse,
     'le frein doit mordre — sans quoi cette dernière assertion ne dirait rien');
 
@@ -415,9 +469,9 @@ test('CONTACT-2 T1 — un écrasement prend quatre ticks de contact, et il use l
 // mourrait en silence — donc l'écraseuse entre dans le pavé de sa victime et
 // les deux se recouvrent jusqu'à la mort. Ce que CONTACT-2 change est la DURÉE
 // de cet épisode, pas son existence : la victime meurt désormais au CONTACT, en
-// quatre ticks de `ceil(pvMax / 4)`, là où elle mourait au franchissement de
-// l'INDEX, ce qui pouvait prendre bien plus longtemps et enfoncer l'écraseuse
-// presque entièrement dans le pavé de sa victime.
+// `ticksDEcrasement` ticks de `ceil(pvMax / ticks)`, là où elle mourait au
+// franchissement de l'INDEX, ce qui pouvait prendre bien plus longtemps et
+// enfoncer l'écraseuse presque entièrement dans le pavé de sa victime.
 // **Mesuré sur les quatre raids réels, même filtre que ce test : profondeur
 // maximale 930 → 138 millièmes, durée maximale 22 → 4 ticks.** ⚠ Le brief
 // annonçait « 952 millièmes et huit ticks » ; les deux sont faux, et le second
@@ -482,12 +536,12 @@ test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé 
   // portée, lui fait tenir sa cible de décalage, et la ramène à son poste quand
   // il n'en reste aucune. Ce qui change est donc encore QUI se trouve devant qui.
   //
-  //   montage                CONTACT-2   PRÉDILECTION   FREIN
-  //   camp/n5/g1                     4              4       4
-  //   avantPoste/n20/g2             15              6       6
-  //   base/n35/g3                    4              4       0
-  //   base/n50/g4                    3              0       3
-  //   TOTAL                         26             14      13
+  //   montage                CONTACT-2   PRÉDILECTION   FREIN   ÉCRASEMENT
+  //   camp/n5/g1                     4              4       4           13
+  //   avantPoste/n20/g2             15              6       6           14
+  //   base/n35/g3                    4              4       0            0
+  //   base/n50/g4                    3              0       3            7
+  //   TOTAL                         26             14      13           34
   //
   // ⚠⚠ ET LA BASCULE EST LA MOITIÉ QUI COMPTE : `base/n35/g3` TOMBE À ZÉRO ET
   // `base/n50/g4` REVIENT À TROIS. Un total qui descend de un en cachant deux
@@ -499,13 +553,43 @@ test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé 
   // ⚠ ET LA PROFONDEUR, LA DURÉE ET LE NOMBRE D'ÉPISODES NE BOUGENT PAS D'UN
   // MILLIÈME — **138 millièmes, 4 ticks et 4 épisodes**, mesurés des DEUX côtés
   // sur le même filtre. Ce sont les bornes que l'écrasement en quatre ticks du
-  // lot CONTACT-2 a posées ; ce lot-ci ne les touche pas non plus.
-  const ATTENDUS = { A: 13 };
+  // lot CONTACT-2 a posées ; ce lot-là ne les touchait pas non plus.
+  //
+  // ⚠⚠⚠ RÉANCRÉ AU LOT ÉCRASEMENT (17/09) : **13 → 34, ET C'EST LA PREMIÈRE
+  // FOIS QUE LA FAMILLE A GROSSIT.** Les trois réancrages précédents la
+  // faisaient maigrir sans qu'une ligne de l'écrasement ne bouge ; celui-ci
+  // change l'écrasement lui-même, et il le fait DURER. Un épisode de
+  // recouvrement dure exactement le temps que la victime met à mourir : le
+  // rapport des masses la fait mourir plus lentement, donc l'écraseuse reste
+  // plus longtemps dans son pavé. **Ce n'est pas une régression du lot CONTACT,
+  // c'est le prix de l'arbitrage d'Ethan sur le point 11**, et il se paie très
+  // exactement là où CONTACT-2 avait acheté sa réduction.
+  //
+  // ⚠⚠ ET LES TROIS BORNES BOUGENT ENSEMBLE, DANS LE MÊME SENS, MESURÉES SUR LE
+  // MÊME FILTRE : **profondeur maximale 138 → 408 millièmes**, **durée maximale
+  // 4 → 13 ticks**, **épisodes 4 → 4**. Le nombre d'ÉPISODES ne bouge pas d'une
+  // unité — ce sont les mêmes quatre rencontres — et c'est ce qui dit que le lot
+  // allonge les épisodes existants au lieu d'en créer. **À REGARDER AU PREMIER
+  // ESSAI** : une écraseuse enfoncée aux quatre dixièmes dans le pavé de sa
+  // victime pendant treize ticks se VOIT, là où 138 millièmes pendant quatre
+  // ticks ne se voyaient pas. Ethan tranche s'il la trouve trop visible ; la
+  // fermer demanderait de tuer AVANT d'entrer, donc de renoncer à l'écrasement
+  // progressif qu'il a arbitré le 13/09.
+  //
+  // ⚠⚠ LOT ÉCRASEMENT (17/09, point 11 d'Ethan) : **34 → 36**, ET LES DEUX
+  // RECOUVREMENTS DE PLUS SONT TOUS SUR `avantPoste/n20/g2` — 14 → 16, les trois
+  // autres montages ne bougent pas d'une unité. C'est cohérent avec ce que le lot
+  // fait : l'écrasement s'étale sur plus de ticks quand l'écraseuse est à peine
+  // plus lourde que sa victime, donc la victime reste sous elle plus longtemps,
+  // donc la fenêtre de recouvrement différé s'ouvre plus souvent. Un montage où
+  // les masses sont très écartées — `camp/n5/g1`, où l'écrasement reste quasi
+  // instantané — ne voit rien changer, et c'est la lecture qui attribue.
+  const ATTENDUS = { A: 36 };
   const PAR_MONTAGE = {
-    'camp/n5/g1': { A: 4 },
-    'avantPoste/n20/g2': { A: 6 },
+    'camp/n5/g1': { A: 13 },
+    'avantPoste/n20/g2': { A: 16 },
     'base/n35/g3': { A: 0 },
-    'base/n50/g4': { A: 3 },
+    'base/n50/g4': { A: 7 },
   };
 
   let paires = 0;
@@ -579,8 +663,11 @@ test('CONTACT-2 T2 — la famille B est fermée : seul l\'écrasement différé 
     'le compte de la famille A a bougé : remesurer et réécrire le pavé ci-dessus, '
     + 'jamais relever le nombre pour faire passer le lot');
   assert.deepEqual(parMontage, PAR_MONTAGE, 'la répartition par montage a bougé');
-  // ⚠ ET LA CONTRE-ASSERTION REFUSE LE RETOUR DU COMPTE D'HIER : un lot qui
-  // déferait les trois étages du frein rendrait 14, et il repasserait au vert
-  // sous une assertion qui ne dirait que « au plus quatorze ».
+  // ⚠ ET LES DEUX CONTRE-ASSERTIONS REFUSENT LE RETOUR DES COMPTES D'HIER : un
+  // lot qui déferait les trois étages du frein rendrait 14, un lot qui
+  // remettrait l'écrasement à quatre ticks plats rendrait 13, et l'un comme
+  // l'autre repasserait au vert sous une assertion qui ne dirait que « au plus
+  // trente-quatre ».
   assert.notEqual(comptes.A, 14, 'le compte d\'avant le lot FREIN est revenu');
+  assert.notEqual(comptes.A, 13, 'le compte d\'avant le lot ÉCRASEMENT est revenu');
 });

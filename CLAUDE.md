@@ -7,22 +7,33 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **17/09/2026**, version 0.99.63 · build 175.
-⚠⚠ **LES BUILDS 164 À 173 SONT BRÛLÉS HORS DÉPÔT, ET LE BUMP FANTÔME DU 17/09
-LES A FRANCHIS.** Des livrables ont été publiés sur l'appareil d'Ethan hors de ce
-dépôt, jusqu'au build 173 ; `PolitiqueVersion.miseAJourAcceptable` refusant un
-build inférieur **ou égal** à l'installé, les builds 163 et avant ne pouvaient
-atteindre aucun de ces appareils. Le 174 est le premier qui le peut. Le
-franchissement est **fait** : le prochain bump repart normalement de 175, et il
-n'y a plus de trou à sauter.
-⚠⚠ **`SAVE_VERSION` RESTE À 33, ET CE TROU-LÀ N'EST PAS COMBLÉ.** Les builds hors
-dépôt écrivaient en **35** ; `migrer` LÈVE sur « sauvegarde de version 35 plus
-récente que le jeu (33) ». Une partie sauvegardée sous ces builds n'est donc pas
-reprise par le 174, et elle ne peut pas l'être : les changements de schéma qui
-ont mené 33 à 35 ne sont nulle part dans ce dépôt. Ne PAS écrire 36 pour faire
-passer la sauvegarde — le numéro ne migre rien, il ne fait que décrire un schéma,
-et l'avancer sans migration correspondante rendrait la levée silencieuse au lieu
-de la rendre juste.
+Dernière révision : **19/09/2026**, version 0.99.65 · build 177.
+⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
+164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
+**175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
+**ou égal** à l'installé, tout bump repart désormais de **175** — donc **177**
+ici. Ne plus lire ce paragraphe comme une consigne de saut : il ne reste qu'un
+incrément normal.
+⚠⚠ **`SAVE_VERSION` EST À 37, ET DEUX MAILLONS TRADUISENT AU LIEU D'UN.** La PR
+test du 17/09 (`test-bump-175-save-36`, merge `e4b0359`) a posé **trois maillons
+vides** 33 → 34 → 35 → 36 et laissé en §0 la consigne inverse (« `SAVE_VERSION`
+reste à 33 […] ne PAS écrire 36 ») : le dépôt se contredisait lui-même, le code
+faisait ce que le document interdisait. Le présent lot tranche dans le sens du
+code : 33 → 34 et 34 → 35 restent vides — les schémas des builds hors dépôt ne
+sont nulle part ici et les inventer produirait une sauvegarde plausible et
+fausse —, **35 → 36 traduit les listes de modules d'un rejeu, des NOMS vers les
+PIÈCES**, et **36 → 37 REFAIT la même traduction**. Le second maillon n'est pas
+une redite : une partie jouée sous le **build 175** est écrite `version: 36`
+SANS avoir été traduite, et une sauvegarde déjà en 36 ne repasse jamais par le
+maillon 35 → 36. Sans 36 → 37, ces parties-là gardent le défaut pour toujours —
+chaque rapport se rejoue **tous modules éteints des deux camps, sans une
+erreur** : mesuré sur un Merlon de niveau 20, 12 232 000 PV au rejeu contre
+14 678 400, le compte exact d'une liste vide. La conversion est idempotente,
+donc une sauvegarde venue de 35 ne perd ni ne double rien.
+⚠⚠ **ET `SAVE_VERSION` N'EST PAS CE QUI FAIT ARRIVER UNE MISE À JOUR.** C'est le
+BUILD, par `PolitiqueVersion.miseAJourAcceptable`. Avancer `SAVE_VERSION` pour
+« pousser » une livraison ne sert à rien et coûte un maillon vide, que la §0
+interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
 
 ---
 
@@ -56,6 +67,213 @@ de la rendre juste.
    même. Un `grep` de trente secondes sur la grandeur en jeu vaut mieux qu'une
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
+
+**Référence au 19/09/2026 (après le lot MUNITIONS), à confronter :**
+⚠⚠ **UN SEUL NOMBRE DE DONNÉES CHANGE : LA RÉSERVE DU FOUDRE, 450 → 25.** Ses
+dégâts ne bougent pas. `src/sim/combat.js` ne gagne qu'un EXPORT
+(`porteUnModuleAcquis`) lu par le rendu ; aucune règle de combat ne bouge.
+Ethan, 19/09 : « dans TA, il vide tout en quelques secondes, sur 3 cases ».
+Mesuré AVANT de rien toucher, Foudre seul contre trois casernes n20 en colonne :
+il tire du tick 33 au tick 53, soit **21 ticks**, et sort avec **429 de réserve
+sur 450**. Les dégâts étaient déjà justes — 25 ticks pour trois casernes —, la
+réserve valait dix-huit fois le besoin. Après : 21 tirs, **4 de réserve sur 25**,
+rendu identique bâtiment par bâtiment.
+⚠⚠ **DEUX PISTES ONT ÉTÉ CONSTRUITES, MESURÉES ET ANNULÉES, ET IL FAUT SAVOIR
+POURQUOI AVANT DE LES REPROPOSER.**
+  1. **« Conserver le total » sur le Foudre** (réserve 21, dégâts 6 429) : il ne
+     tirait plus que **3 coups**, avec **257 % de surkill** par caserne, et
+     finissait à **18 de réserve sur 21**. Le total ne se dépense que si l'unité
+     tire 21 fois ; en multipliant les dégâts on l'en empêche.
+  2. **Le même geste sur Fouisseurs, Pilon et Enclume** (500 → 150, 500 → 150,
+     400 → 188). Rabot seul : **−18 %** de PV rendus aux bâtiments, **−10,6 %**
+     de bâtiments tombés, le Pilon à **−78 %** à lui seul. Rabot compensé par
+     ×3,34 / ×3,34 / ×2,15 sur la colonne structure : **+84 %** de PV rasés et
+     **+88 %** sur le poids moyen d'un bâtiment qui tombe.
+  ⚠⚠ **LA CAUSE DES DEUX EST LA MÊME, ET ELLE SE MESURE :** « total conservé »
+  n'est conservé que si l'unité DÉPENSE toute sa réserve. Ces trois-là ne la
+  dépensaient jamais — 428, 2 895 et 3 611 tirs sur 200 combats pour des réserves
+  de 500, 500 et 400 : elles étaient limitées par le **TEMPS**, pas par les
+  munitions. Le Foudre, lui, était le seul cas inverse.
+⚠⚠ **`SAVE_VERSION` PASSE À 37 POUR RATTRAPER LE BUILD 175, PAS POUR POUSSER UN
+NUMÉRO.** Voir l'en-tête : le maillon 36 → 37 REFAIT la traduction des listes de
+modules, parce qu'une partie écrite par le build 175 est estampillée 36 sans
+avoir été traduite et ne repasserait jamais par 35 → 36. Idempotente, vérifiée
+sur les trois cas (v35, v36 non traduite, v36 déjà traduite).
+⚠⚠ **LE BADGE « NIVEAU + ÉTOILE » ENTRE SUR LE CANVAS — point 17.** Ethan :
+« le niveau et étoiles en dessous à droite ». C'est la seule surface où le joueur
+voit les pièces de l'OUVRAGE. Une primitive `texte` par pièce VIVANTE, calée à
+droite, étoile et chiffre dans la MÊME chaîne. ⚠ **La couleur n'est PAS l'ambre
+du DOM** : `#F5B636` est l'accent `structureOuAviation`, et la fiche interdit un
+accent pour autre chose que la cible — le badge prend le kaki lumière. Desserrer
+cette règle est un arbitrage d'Ethan, pas un geste de lot.
+⚠ **`align` EST OPTIONNEL SUR LA PRIMITIVE `texte`**, absent des quatre anciennes
+et posé seulement par `texteDroite` : un champ ajouté partout ferait tomber des
+comparaisons sur une différence qui ne se voit pas à l'écran. `canvas2d` lit
+`p.align ?? 'left'` et REMET `left` après chaque texte.
+⚠⚠ **LE TÉMOIN GAGNE UNE DIXIÈME COUCHE, ET SA SIGNATURE DOIT SE LIRE AVANT
+D'ÊTRE CRUE.** `COMBATS_DEPLACES_PAR_MUNITIONS` déplace **414 champs sur les 200
+combats**, mais **400 sont les deux EMPREINTES** : `construireResultat` écrit
+`reserve` dans chaque entité et `reserveMax` vit dans l'état sérialisé, donc
+changer la valeur de départ déplace les hachages de tout combat qui porte un
+Foudre — et les deux cents en portent tous un. **L'issue ne bouge que sur 14
+champs** (2 ticks, 6 butins, 6 totaux de PV), aucune cause de fin ne bascule, et
+**la surcharge ne bouge pas : 1 257 → 1 257, 343 gardés**. Sur l'ancien
+placement, 406 champs, 6 d'issue, **1 346 → 1 346**.
+⚠ **RÉANCRAGES :** `ROSTER T2` et `T7` gardent la règle « relevé ÷ 10 » pour
+TREIZE unités et portent la seule exception (Foudre) dans **une table de
+module**, lue par les deux — une seule table fait foi par grandeur. `RENDU T5`
+35 → **43** primitives (huit badges) ; `RENDU T7` reçoit `fillText` et trois
+états de texte dans son enregistreur — c'est le MONTAGE qu'on répare ;
+`VIT T2 ter` 4 → **5** lecteurs de `visible` ; `NEUT T12` cesse d'épingler la
+ligne d'import entière et épingle les DEUX noms importés du moteur.
+⚠⚠ **ET TROIS TESTS ONT ÉTÉ RÉANCRÉS PUIS REMIS À LEUR VALEUR D'ORIGINE** quand
+le rabot des trois a été annulé : `ASSAUT T7` (B 676 → 628 → **676**),
+`DO T8` (graine 141 → 211 → **141**), `COL T18 bis` (un épinglé → deux →
+**un**). Chacun garde au commentaire ce que le rabot lui faisait, et une
+contre-assertion qui mord si le rabot annulé revenait.
+⚠ **`npm run check` : 1 638 pass · 0 fail · 1 skipped.** Falsification jouée dans
+les deux sens : Foudre remis à 450 → `JOURNAL T1`, `T1 bis`, `ROSTER T2` et `T7`
+rouges ; badge sans module → pas d'étoile, avec module → `★12` sur la seule pièce
+qui le porte.
+
+**Auparavant, après le lot ÉCRASEMENT (18/09) :**
+⚠⚠ **L'ÉCRASEMENT SE DÉRIVE DU RAPPORT DES MASSES, ET LE HEURT EST L'AFFAIRE DES
+VÉHICULES.** Point 11 d'Ethan, 17/09 : « changer calcul écrasement, bien trop
+efficace, pas assez de dégâts sur les véhicules, un pionnier roule trop
+facilement ». Deux nombres libres, tous deux ARBITRÉS PAR ETHAN, jamais choisis
+ici : `ECRASEMENT_RAPPORT_PLEIN` vaut **20**, et `MASSE_MINI_HEURT` vaut **2**.
+`ticksDEcrasement(masseÉcraseuse, masseVictime)` rend
+`max(ECRASEMENT_TICKS, ceil(ECRASEMENT_TICKS × 20 × masseVictime /
+masseÉcraseuse))`, et les dégâts par tick sont `ceil(pvMax / ticks)` — la victime
+meurt exactement au bout, rien n'est perdu.
+⚠⚠ **ET LA PREMIÈRE VERSION DU HEURT A ÉTÉ DÉFAITE, MESURE À L'APPUI.** Elle
+laissait toute pièce faire payer le contact ; or `peutEcraser` demande une masse
+STRICTEMENT supérieure et toutes les escouades pèsent 1, donc deux escouades au
+contact se broyaient l'une l'autre. Mesuré au niveau 1, un Grenadier contre une
+Meute : **8 750 de heurt contre 5 000 de tir**, la Meute rendant 22 000. Le
+seuil de masse ferme ce débordement, et **c'est `p.masse`, pas `masseEffective`** :
+l'Écraseur double la masse contre une escouade, et une Meute qui le porte reste
+de l'infanterie.
+⚠⚠ **LE HEURT PUBLIE SON IMPACT, L'ÉCRASEMENT SE TAIT.** Arbitré le 17/09, et
+c'est `JOURNAL T8` qui a trouvé la faute avant nous : la version muette laissait
+**33 écarts sur 1 470 impacts**, dont trois pièces qui perdaient des PV sans
+trace au journal. Un heurt n'est pas une mort, c'est un COUP. Il ENRICHIT
+l'impact du tick au lieu d'en pousser un second — l'étape 5 passe avant l'étape 7
+—, sans quoi l'invariant « un impact par cible et par tick » tombait.
+⚠ **BALAYAGE DE 240 COMBATS, AVANT → APRÈS :** bâtiments tombés 387 → **399**
+(+3,1 %), attaquants détruits 1 578 → 1 570, défenseurs tombés 1 596 → 1 603,
+somme des ticks 101 158 → 102 338 (+1,2 %). L'attaquant met sa puissance sur les
+murs au lieu de la gaspiller, et le raid ne s'allonge quasiment pas.
+⚠⚠ **L'ASSAUT LOURD NE PLAFONNE PLUS**, et c'est le retour exact de ce que le lot
+FREIN lui avait coûté : le raid B repasse de `duree` au tick 900 à `attaquants`
+au **tick 424**, son tick d'avant FREIN. `roster T6` portait une assertion que
+FREIN avait dû RETOURNER — « un B qui reviendrait sous la barre fait tomber le
+test, et c'est ce qu'on lui demande ». Il est revenu ; le cas particulier
+DISPARAÎT au lieu d'être inversé. Le plafond n'a pas bougé d'une seconde.
+⚠⚠ **LES MODULES SE DÉBLOQUENT PAR PIÈCE, PLUS PAR NOM.** Audit du 17/09,
+défaut n° 2, arbitré « par pièce ». `data/combat.js` déclare TREIZE seuils
+d'`apparitionModule` ; le déblocage par nom n'en lisait que CINQ — le plus bas de
+chaque module —, soit **quarante niveaux de site** où une pièce sortait de sa
+donnée : le Créneau tirait à +20 % dès le 30 quand sa donnée dit 38, les
+Fouisseurs se camouflaient DIX niveaux trop tôt. Côté joueur, six pièces portent
+`autoReparation`, de 1,2 M à 450 M : acheter la moins chère les armait toutes.
+Les listes `modulesDebloques` portent donc des IDENTIFIANTS DE PIÈCES, dans les
+deux camps et dans les deux branches, et le barème de points se corrige sur la
+même ligne. ⚠ `SAVE_VERSION` N'A PAS BOUGÉ : ces listes ne traversent pas la
+sauvegarde, elles se reconstruisent à chaque raid depuis `etat.recherche.modules`,
+qui portait déjà des identifiants.
+⚠⚠ **ET `MODULES-F T12` FIGEAIT LE DÉFAUT** au lieu de le signaler : il asseyait
+`canal(30).defense = ['camouflage', 'munitionSpeciale']`, le comportement fautif
+pris pour référence. Le relevé neuf dit ce que l'ancien cachait — au niveau 41,
+les mêmes trois noms qu'au 32, alors que CINQ pièces s'étaient armées entretemps.
+⚠ **AUDIT « RÉSERVE » DU 17/09, DÉFAUT N° 1 : le crédit AMPUTAIT au lieu de
+GELER.** `Math.min(plafond, …)` n'est pas un plafond, c'est un rabot : vendre un
+Fendeur de niveau 20 faisait tomber le plafond de 32 h à 12 h, et le tick suivant
+DÉTRUISAIT 20 h de réserve. Corrigé en `Math.min(max(plafond, avant), …)`, la
+forme d'`economie-base.js` depuis le 26/08, et `RÉSERVE T13` comble le trou —
+la propriété était écrite DEUX fois en commentaire et gardée ZÉRO fois.
+⚠⚠ **ET L'AUDIT AVAIT TORT SUR SON DÉFAUT N° 4 — C'EST UN TEST QUI L'A REPRIS.**
+Il réclamait un `Math.ceil` sur le quartz de réparation au nom de « un manque
+s'arrondit vers le HAUT » ; le passage a été fait, et `RÉSERVE-BASE T7` est tombé.
+Le `Math.round` IMPLÉMENTE la gratuité du bas d'échelle arbitrée dans
+`MODELE-REPARATION-1.md` §3, et ce test l'avait écrit des mois d'avance : « un
+`Math.ceil` n'en rendrait aucune gratuite au-dessus du niveau 1 ». La correction
+a été DÉFAITE. Ce qui reste du défaut est le vrai : la grandeur était arrondie
+QUATRE fois, dont une dans `ui/chantier.js` ; elle l'est maintenant une seule, à
+la source.
+⚠ **POINT 5 ANNULÉ PAR ETHAN APRÈS AVOIR ÉTÉ LIVRÉ.** Le quinconce a été retiré
+de la grille de préparation du raid, et les trois règles CSS rendues à
+`#ecran-offense` seul. ⚠⚠ **LES DEUX MOITIÉS SE DÉFONT ENSEMBLE OU PAS DU TOUT** :
+laisser la CSS sans l'appel JS ferait occuper deux colonnes sur neuf à chaque
+emplacement du raid.
+⚠⚠ **ET `SAVE_VERSION` A DÛ BOUGER APRÈS TOUT — 33 → 36, TROUVÉ PAR RELECTURE
+ADVERSE.** Ce lot a d'abord été livré SANS bump, sur la vérification — trop
+courte — que `modulesDebloques` n'apparaissait pas dans `sim/state.js`. Il n'y
+apparaît pas, et il y passe quand même : `pourLeRejeu` ne retire que deux champs,
+le montage part dans `rapport.rejeu`, et `serialiser` écrit `etat.rapports`. Un
+rapport d'hier se rechargeait sans une erreur et se rejouait avec **tous les
+modules éteints des deux camps** — mesuré, 12 232 000 PV pour un Merlon qui en
+avait 14 678 400, le compte exact d'une liste vide. La migration v35 → v36
+traduit, et `MODULES-PIÈCE T1` la garde de bout en bout. ⚠ 36 ET PAS 34 parce que
+des livrables sont sortis hors dépôt jusqu'à la v35.
+⚠ **ET LE BARÈME DE POINTS DE LA DÉFENSE ÉTAIT FAUX BIEN AVANT CE LOT** : son
+garde-fou `a.module !== null` lisait la branche DÉFENSE d'une pièce alors que la
+liste consultée est sa branche OFFENSE. `ligneResultat` publie `moduleDeDefense`,
+qui pour un attaquant de l'Ouvrage rend `moduleOuvrage` — inexistant sur dix
+unités sur quatorze. Retiré ; son jumeau de la défense le GARDE, parce que là-bas
+les deux portent sur la même branche.
+⚠ **ET L'ÉTOILE DU MODULE EST POSÉE — Ethan, 18/09** : « un élément visible pour
+le joueur quand il voit des unités avec modules débloqués, à côté du numéro de
+niveau ». Un `<span class="module">★</span>` au coin bas-GAUCHE de la case — le
+bas-droit est pris par `.niveau` depuis le 06/09 —, sur les DEUX écrans qui
+montrent l'armée, en `#F5B636`, la seule couleur d'accent de la palette. ⚠ LE
+DRAPEAU SE CALCULE DANS LA VUE, jamais dans le DOM : `vueDeLOffense` et
+`vaguesDeLArmee` portent `moduleAcquis`, qui exige DEUX choses — la pièce porte un
+module dans cette branche, ET le joueur l'a acquis. `FIX T7` le falsifie dans les
+deux sens : il tombe sans étoile, et il tombe aussi si l'étoile se pose partout.
+`npm test` rend **1639 pass / 0 fail** au sens de la garde de
+`documentation.test.js`. Les couches empilées : `COMBATS_DEPLACES_PAR_ECRASEMENT`
+porte **805 champs sur 179 combats et AUCUN champ neuf** (1 257 → 1 257), sa
+jumelle `_AVANT_PAQUETS` **943 champs et trois neufs** (1 343 → 1 346) — le lot
+déplace le COMBAT, pas le PLACEMENT. `DEPLACES_PAR_ECRASEMENT` de
+`temoins-bases-0.js` ne porte que **cinq champs sur deux phases** et **quinze
+graines sur vingt-cinq**.
+
+**Référence au 17/09/2026 (après le BUMP FANTÔME), à confronter :**
+⚠⚠ **UN BUMP SANS LOT, ET C'EST TOUT CE QU'IL EST.** Ethan, le 17/09 : « je ne
+peux pas mettre mon jeu à jour, main est vert ». Le dépôt était sain et le
+livrable inatteignable — pas pour une faute de code, mais parce que son numéro de
+build était derrière celui que l'appareil portait déjà. Le lot ne change donc
+**aucun comportement** : `package.json` seul, deux valeurs, `0.99.61 → 0.99.62`
+et `163 → 174`.
+⚠⚠ **DEUX VALEURS SUFFISENT PARCE QUE TOUTE LA CHAÎNE LES LIT, et il ne faut en
+saisir aucune ailleurs.** `tools/build.js` interpole `%VERSION%` et `%BUILD%`
+dans le HTML ; `android/app/build.gradle.kts` lit le même `package.json` pour
+`versionCode` et `versionName` ; le job `pages` de `ci.yml` en fabrique
+`manifest.json`. Écrire le numéro une seconde fois quelque part créerait deux
+vérités dont une seule suivrait.
+⚠⚠ **LE LIVRABLE PÈSE EXACTEMENT LE MÊME POIDS : 9 387 515 octets, ZÉRO octet
+d'écart**, mesuré avant et après. `0.99.61` et `0.99.62` ont la même longueur,
+`163` et `174` aussi, et les deux marqueurs sont les seuls endroits où ces
+chaînes entrent dans la page. **`PIC T7` n'est donc PAS réancré**, et c'est un
+choix mesuré, pas un oubli : sa `MESURE` reste celle d'ÉCHELLE-RECHERCHE, et
+l'écart réel de 859 octets accumulé depuis tient dans sa tolérance de 50 000.
+⚠ **AUCUN FICHIER DE `src/` NI DE `test/` AU DIFF** — `package.json` et
+`CLAUDE.md`, rien d'autre. `npm test` rend **1616 pass / 0 fail** au sens de la
+garde de `documentation.test.js` ; le verdict mesuré est **1615 pass · 0 fail ·
+1 skipped**, identique au commit d'avant, ce qui est la seule chose qu'on
+attende d'un bump.
+⚠ **ET LE RENDU N'A PAS ÉTÉ VU, CE QUI EST SANS OBJET ICI** : ce que le lot
+déplace est la ligne `v0.99.62 b174` de l'écran Options et l'en-tête du banc,
+c'est-à-dire l'affichage du numéro lui-même.
+⚠⚠ **ET UNE SECONDE PR TEST A SUIVI, `test-bump-175-save-36` (merge `e4b0359`) :
+0.99.62 → 0.99.63, build 174 → 175, `SAVE_VERSION` 33 → 36 par TROIS MAILLONS
+VIDES.** Elle a laissé le dépôt en contradiction avec lui-même : la §0 y
+interdisait en toutes lettres d'écrire 36 pendant que `state.js` l'écrivait. Le
+lot suivant a tranché dans le sens du code et rempli le maillon 35 → 36 — voir
+l'en-tête de ce fichier. **Les cinq épingles `assert.equal(SAVE_VERSION, 36)`
+viennent de cette PR**, pas du lot qui les a rejointes.
+
 
 **Référence au 14/09/2026 (après le lot RECHERCHE-DEFENSE), à confronter :**
 ⚠⚠ **DÉFENDRE PAIE DES POINTS DE RECHERCHE, MOITIÉ MOINS QU'ATTAQUER.** Arbitré
@@ -157,34 +375,6 @@ DÉCLARÉ, ET IL EST DANS L'AUTRE SENS QUE D'HABITUDE.** La session est épingl�
 `claude/revert-echelle-recherche-plbgnu`, déjà fusionnée ; Ethan a nommé
 `claude/echelle-recherche` en toutes lettres, et c'est cette autorisation
 explicite qui a tranché.
-
-**Référence au 17/09/2026 (après le BUMP FANTÔME), à confronter :**
-⚠⚠ **UN BUMP SANS LOT, ET C'EST TOUT CE QU'IL EST.** Ethan, le 17/09 : « je ne
-peux pas mettre mon jeu à jour, main est vert ». Le dépôt était sain et le
-livrable inatteignable — pas pour une faute de code, mais parce que son numéro de
-build était derrière celui que l'appareil portait déjà. Le lot ne change donc
-**aucun comportement** : `package.json` seul, deux valeurs, `0.99.61 → 0.99.62`
-et `163 → 174`.
-⚠⚠ **DEUX VALEURS SUFFISENT PARCE QUE TOUTE LA CHAÎNE LES LIT, et il ne faut en
-saisir aucune ailleurs.** `tools/build.js` interpole `%VERSION%` et `%BUILD%`
-dans le HTML ; `android/app/build.gradle.kts` lit le même `package.json` pour
-`versionCode` et `versionName` ; le job `pages` de `ci.yml` en fabrique
-`manifest.json`. Écrire le numéro une seconde fois quelque part créerait deux
-vérités dont une seule suivrait.
-⚠⚠ **LE LIVRABLE PÈSE EXACTEMENT LE MÊME POIDS : 9 387 515 octets, ZÉRO octet
-d'écart**, mesuré avant et après. `0.99.61` et `0.99.62` ont la même longueur,
-`163` et `174` aussi, et les deux marqueurs sont les seuls endroits où ces
-chaînes entrent dans la page. **`PIC T7` n'est donc PAS réancré**, et c'est un
-choix mesuré, pas un oubli : sa `MESURE` reste celle d'ÉCHELLE-RECHERCHE, et
-l'écart réel de 859 octets accumulé depuis tient dans sa tolérance de 50 000.
-⚠ **AUCUN FICHIER DE `src/` NI DE `test/` AU DIFF** — `package.json` et
-`CLAUDE.md`, rien d'autre. `npm test` rend **1616 pass / 0 fail** au sens de la
-garde de `documentation.test.js` ; le verdict mesuré est **1615 pass · 0 fail ·
-1 skipped**, identique au commit d'avant, ce qui est la seule chose qu'on
-attende d'un bump.
-⚠ **ET LE RENDU N'A PAS ÉTÉ VU, CE QUI EST SANS OBJET ICI** : ce que le lot
-déplace est la ligne `v0.99.62 b174` de l'écran Options et l'en-tête du banc,
-c'est-à-dire l'affichage du numéro lui-même.
 
 **Auparavant, après le REVERT du lot ÉCHELLE-RECHERCHE :**
 ⚠⚠ **LE LOT ÉCHELLE-RECHERCHE A ÉCRASÉ LE LOT FREIN, ET `main` ÉTAIT ROUGE
@@ -13114,7 +13304,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   74 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   75 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -13126,7 +13316,7 @@ test/                   74 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   son  journal  raid-ecran  arret  embleme  colonne  pictogramme  conquete-24h
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
-  bareme-et-rejeu  contact  predilection  frein
+  bareme-et-rejeu  contact  predilection  frein  silhouettes
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

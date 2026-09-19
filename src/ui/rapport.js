@@ -433,8 +433,65 @@ export const LIBELLE_CAUSE = {
  * @param {object} rapport une entrée d'`etat.rapports` de sens `defense`
  * @returns {Array<{libelle: string, avant: string, apres: null}>}
  */
+/**
+ * La ligne « Assaillants » d'un raid subi — combien sont venus, et à quel
+ * niveau. Rendue comme un TABLEAU de zéro ou une ligne, pour s'étaler dans la
+ * liste sans `if` au milieu de la construction.
+ *
+ * ⚠⚠ LES NIVEAUX SE RELÈVENT, ILS NE SE SUPPOSENT PAS ÉGAUX. `generateur.js`
+ * donne aujourd'hui le niveau de la base à toutes les unités d'une vague, si
+ * bien qu'un `vagues[0][0].niveau` suffirait — et se mettrait à mentir en
+ * silence le jour où une vague serait panachée. On rend donc l'ÉTENDUE : un seul
+ * niveau s'écrit « niv. 7 », deux niveaux « niv. 6 à 9 ».
+ *
+ * @param {object} rapport une entrée d'`etat.rapports`, sens `defense`
+ * @returns {Array<object>} zéro ou une ligne
+ */
+function ligneDesAssaillants(rapport) {
+  const vagues = rapport.rejeu?.vagues;
+  if (!Array.isArray(vagues)) return [];
+  const niveaux = [];
+  let nombre = 0;
+  for (const vague of vagues) {
+    if (!Array.isArray(vague)) continue;
+    for (const unite of vague) {
+      nombre += 1;
+      if (Number.isFinite(unite?.niveau)) niveaux.push(unite.niveau);
+    }
+  }
+  // Un montage sans une seule unité n'est pas un assaut : il n'y a rien à dire.
+  if (nombre === 0) return [];
+  const bas = Math.min(...niveaux);
+  const haut = Math.max(...niveaux);
+  const dit = niveaux.length === 0
+    ? '—'
+    : (bas === haut
+      ? `niv. ${formaterEntier(bas)}`
+      : `niv. ${formaterEntier(bas)} à ${formaterEntier(haut)}`);
+  return [{
+    libelle: 'Assaillants',
+    avant: `${formaterEntier(nombre)} unité(s) · ${dit}`,
+    apres: null,
+  }];
+}
+
 export function lignesDeLaDefense(rapport) {
   const lignes = [
+    // ⚠⚠ QUI EST VENU, ET À QUEL NIVEAU — Ethan, 17/09, point 6 : « afficher
+    // niveau des assaillants ». Le résumé du journal dit déjà le niveau de la
+    // BASE assaillante ; il ne disait rien de la troupe, c'est-à-dire de la
+    // seule chose qui explique pourquoi la défense a tenu ou pas.
+    //
+    // ⚠ LE COMPTE SE LIT DANS LE MONTAGE RANGÉ, IL NE SE RECALCULE PAS.
+    // `rapport.rejeu.vagues` est l'argument EXACT passé à `creerCombat` : le
+    // recomposer depuis le niveau de la base rejouerait `montageDeLaBaseDuJoueur`
+    // avec la graine d'aujourd'hui et donnerait une autre troupe que celle qui a
+    // attaqué. C'est la règle en tête de ce fichier — « rien n'est recalculé ».
+    //
+    // ⚠ ET LA LIGNE MANQUE PLUTÔT QUE DE MENTIR sur un rapport d'avant la v33,
+    // qui ne porte pas son montage. Même idiome et même raison que la ligne
+    // « Recherche » plus bas : l'absence du champ EST le message.
+    ...ligneDesAssaillants(rapport),
     {
       libelle: 'Fin du combat',
       avant: LIBELLE_CAUSE[rapport.cause] ?? rapport.cause ?? '—',

@@ -24,12 +24,13 @@ import {
   niveauDeCommandement, niveauDuChantier, batimentDeProductionManquant,
 } from '../src/sim/state.js';
 import { budgetDuNiveau as budgetOffense, arsenalVide, poser as poserUnite } from '../src/ui/arsenal.js';
+import { creerCombat } from '../src/sim/combat.js';
 import { budgetDuNiveau as budgetDefense } from '../src/ui/defense.js';
 import { POINTS_ARMEE, GEOGRAPHIE } from '../src/data/sites.js';
 import { gratuitesDe, ARBRE_RECHERCHE } from '../src/data/recherche.js';
 import { UNITES, DEFENSES } from '../src/data/combat.js';
 import {
-  coutDeMonteeOffense, coutDeMonteeDefense, rosterDefensif,
+  coutDeMonteeOffense, coutDeMonteeDefense, rosterDefensif, coutCumuleDEffectif,
 } from '../src/data/couts-militaires.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { niveauDeLaDefense, niveauDeLArmee } from '../src/sim/niveau-de-base.js';
@@ -1708,19 +1709,44 @@ test('forces — rester sur place est légal, se superposer ne l\'est pas', () =
   assert.throws(() => deplacerEffectif(etat, 'armee', 9, { vague: 1, colonne: 2 }), RangeError);
 });
 
-test('forces — retirer rend la pièce et ne touche pas aux ressources', () => {
+test('forces — retirer rend la pièce et rembourse 90 % de ce qui a été investi', () => {
   const etat = etatAvecCommandement();
   poserEffectif(etat, 'garnison', { id: 'merlon', rangee: 3, colonne: 1, niveau: 4 });
   poserEffectif(etat, 'garnison', { id: 'ronce', rangee: 3, colonne: 2, niveau: 1 });
   const avant = { ...baseCourante(etat).economie.ressources };
 
-  const rendue = retirerEffectif(etat, 'garnison', 0);
-  assert.equal(rendue.id, 'merlon');
-  assert.equal(rendue.niveau, 4);
+  const { piece, rendu } = retirerEffectif(etat, 'garnison', 0);
+  assert.equal(piece.id, 'merlon');
+  assert.equal(piece.niveau, 4);
   assert.equal(baseCourante(etat).garnison.length, 1);
   assert.equal(baseCourante(etat).garnison[0].id, 'ronce');
-  // ⚠ AUCUN REMBOURSEMENT — non arbitré. En inventer un serait trancher seul.
-  assert.deepEqual(baseCourante(etat).economie.ressources, avant);
+
+  // ⚠ LE MONTAGE : un Merlon de niveau 4 a payé les paliers 2, 3 et 4. Le
+  // remboursement est donc STRICTEMENT POSITIF, et strictement INFÉRIEUR à ce
+  // cumul — c'est ce que « 90 % » veut dire, et c'est ce qui interdit la boucle
+  // retirer/reposer. FALSIFICATION : un taux de 1 (ou un `Math.round` au lieu
+  // du plancher) rendrait l'égalité et ferait tomber la seconde assertion ; un
+  // taux de 0, ou un crédit oublié, ferait tomber la première.
+  const investi = coutCumuleDEffectif('garnison', 'merlon', 4);
+  assert.ok(rendu.quartz > 0, 'un Merlon de niveau 4 doit rendre du quartz');
+  assert.ok(rendu.quartz < investi.quartz, 'le remboursement doit être une PERTE');
+  // ⚠ LE RENDU EST EN UNITÉS, LE STOCK EN MILLI-UNITÉS. Un crédit sans le
+  // facteur mille passerait inaperçu à l'écran et ferait tomber ceci.
+  for (const r of ['quartz', 'scorie', 'electricite']) {
+    assert.equal(
+      baseCourante(etat).economie.ressources[r], avant[r] + rendu[r] * 1000,
+      `${r} crédité en milli-unités`,
+    );
+  }
+
+  // ⚠ LE NIVEAU 1 NE REND RIEN, et ce n'est pas un oubli : poser est gratuit,
+  // donc rien n'a été investi. FALSIFICATION : un remboursement forfaitaire,
+  // ou un cumul qui démarrerait au palier 1, rendrait ici du quartz.
+  const apresMerlon = { ...baseCourante(etat).economie.ressources };
+  const ronce = retirerEffectif(etat, 'garnison', 0);
+  assert.deepEqual(ronce.rendu, { quartz: 0, scorie: 0, electricite: 0 });
+  assert.deepEqual(baseCourante(etat).economie.ressources, apresMerlon);
+
   assert.throws(() => retirerEffectif(etat, 'garnison', 5), RangeError);
 });
 
@@ -2547,7 +2573,15 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 36, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  // ⚠⚠ ET LE LOT « MODULES PAR PIÈCE » Y PASSE, LE 18/09 — 33 → **36**, ET IL
+  // N'Y EST PAS PASSÉ DU PREMIER COUP. Il a d'abord été livré SANS bump, sur la
+  // vérification — trop courte — que `modulesDebloques` n'apparaissait pas dans
+  // `sim/state.js`. Il n'y apparaît pas, et il y passe quand même, par
+  // `rapport.rejeu`. Une relecture adverse l'a trouvé ; `MODULES-PIÈCE T1` de
+  // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
+  // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
+  // un numéro inférieur OU ÉGAL.
+  assert.equal(SAVE_VERSION, 37, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
@@ -2647,4 +2681,90 @@ test('RC T6 — la migration v30 → v31 contracte la durée la plus COURTE, jam
   const depuis29 = migrer(v29);
   assert.equal(depuis29.version, SAVE_VERSION);
   assert.equal(depuis29.bases[0].dernierDeplacementDelaiTicks, court);
+});
+
+// ---------------------------------------------------------------------------
+// MODULES-PIÈCE T1 — la migration v35 → v36 rend son rejeu à un rapport d'hier
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ CE TEST EXISTE PARCE QUE LA FAILLE A ÉTÉ MANQUÉE, PUIS TROUVÉE PAR UNE
+// RELECTURE ADVERSE. Le lot « modules par pièce » (18/09) a d'abord été livré
+// avec `SAVE_VERSION` inchangé, sur la vérification — trop courte — que
+// `modulesDebloques` n'apparaissait pas dans `sim/state.js`. Il n'y apparaît
+// pas, et il y passe quand même : `pourLeRejeu` ne retire que deux champs du
+// montage, le montage part dans `rapport.rejeu`, et `serialiser` écrit
+// `etat.rapports` en entier. Le canal est ouvert depuis la migration v32 → v33.
+//
+// ⚠⚠ ET LE DÉFAUT ÉTAIT SILENCIEUX, CE QUI LE RENDAIT GRAVE.
+// `modulesDunProprietaire` accepte n'importe quel tableau de chaînes : un
+// rapport d'hier se rechargeait sans une erreur et se rejouait avec TOUS les
+// modules éteints des deux camps. « Un rejeu faux est pire qu'aucun rejeu. »
+test('MODULES-PIÈCE T1 — la migration v35 → v36 traduit les listes d\'un rejeu', () => {
+  const montage = {
+    niveau: 20,
+    obstacles: [],
+    batiments: [{ id: 'souche', rangee: 14, colonne: 5, niveau: 20 }],
+    defenseurs: [{ id: 'merlon', rangee: 5, colonne: 5, niveau: 20 }],
+    vagues: [[{ id: 'belier', colonne: 5, rangee: 2, niveau: 20 }]],
+    proprietaireDefense: 'ouvrage',
+    // L'ANCIEN format : des NOMS de modules.
+    modulesDebloques: {
+      ouvrage: { offense: [], defense: ['pvPlusVingt'] },
+      joueur: { offense: [], defense: [] },
+    },
+  };
+  const pvDuMerlon = (listes) => creerCombat({ ...montage, modulesDebloques: listes })
+    .entites.find((e) => e.id === 'merlon').pvMaxMilli;
+
+  // ⚠ LE MONTAGE PROUVE SA PRÉMISSE : sans la migration, le rejeu doit vraiment
+  // rendre autre chose — sinon ce test passerait sur un moteur qui ignore les
+  // deux formes, et ne mesurerait rien.
+  const avecPieces = pvDuMerlon({
+    ouvrage: { offense: [], defense: ['merlon'] }, joueur: { offense: [], defense: [] },
+  });
+  const sansRien = pvDuMerlon({
+    ouvrage: { offense: [], defense: [] }, joueur: { offense: [], defense: [] },
+  });
+  assert.notEqual(avecPieces, sansRien, 'montage inerte : PV +20 % ne change rien ici');
+  assert.equal(pvDuMerlon(montage.modulesDebloques), sansRien,
+    'montage : l\'ancien format devrait être inerte AVANT la migration');
+
+  // Le geste : une sauvegarde v33 qui porte un rapport rejouable.
+  const migre = migrer({ version: 33, rapports: [{ rejeu: structuredClone(montage) }] });
+  assert.equal(migre.version, SAVE_VERSION);
+  assert.equal(SAVE_VERSION, 37, 'la version cible a bougé : ce test est à reprendre');
+  assert.deepEqual(
+    migre.rapports[0].rejeu.modulesDebloques.ouvrage,
+    { offense: [], defense: ['herse', 'merlon', 'ronce'] },
+    'la migration n\'a pas traduit le nom vers ses porteuses',
+  );
+  // ⚠⚠ ET C'EST LE REJEU QU'ON MESURE, PAS LA LISTE. Une migration qui écrirait
+  // des identifiants plausibles mais faux passerait l'assertion du dessus.
+  assert.equal(pvDuMerlon(migre.rapports[0].rejeu.modulesDebloques), avecPieces,
+    'le rapport migré ne se rejoue toujours pas avec ses modules');
+
+  // ⚠ ELLE TRADUIT COMME L'ANCIENNE RÈGLE SE COMPORTAIT, pas comme la neuve : un
+  // NOM armait TOUTES ses porteuses, sans regarder leur `apparitionModule`. Un
+  // rejeu doit reproduire le combat TEL QU'IL A ÉTÉ LIVRÉ.
+  assert.ok(migre.rapports[0].rejeu.modulesDebloques.ouvrage.defense.length > 1,
+    'la migration n\'a gardé qu\'une porteuse : elle applique la règle NEUVE');
+
+  // ⚠ ET ELLE EST IDEMPOTENTE : une sauvegarde déjà traduite ne perd rien.
+  const deuxFois = migrer({ ...structuredClone(migre), version: 35 });
+  assert.deepEqual(
+    deuxFois.rapports[0].rejeu.modulesDebloques.ouvrage,
+    migre.rapports[0].rejeu.modulesDebloques.ouvrage,
+    'la migration rejouée sur le nouveau format le détruit',
+  );
+
+  // ⚠ ET ELLE NE LÈVE PAS SUR CE QU'ELLE NE COMPREND PAS : un rapport sans
+  // rejeu, un rejeu sans listes, une entrée qui n'est pas une chaîne. Une
+  // migration qui lève laisse le joueur sans partie.
+  assert.doesNotThrow(() => migrer({ version: 35, rapports: [{}, { rejeu: {} }, null] }));
+  const bancal = migrer({
+    version: 35,
+    rapports: [{ rejeu: { modulesDebloques: { ouvrage: { offense: [7, 'zzz'], defense: null } } } }],
+  });
+  assert.deepEqual(bancal.rapports[0].rejeu.modulesDebloques.ouvrage.offense, [],
+    'une entrée qui ne nomme aucune porteuse a été gardée');
 });

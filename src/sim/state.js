@@ -24,6 +24,9 @@ import {
   sitesEntamesVides, reparerLesSites, problemesDesSitesEntames,
 } from './site-entame.js';
 import { creerRecherche } from './raid.js';
+// ⚠ POUR LA SEULE MIGRATION v35 → v36 : traduire les listes de modules d'un
+// rejeu, qui portaient des NOMS avant le 18/09 et portent des PIÈCES depuis.
+import { piecesPortant, moduleDeLaPiece } from './recherche.js';
 // ⚠ IMPORT **ET** EXPORT, JAMAIS UN `export … from` SEUL : ce fichier LIT
 // `batimentDeProductionManquant` dans `problemeDuBatimentDeProduction`, et un
 // ré-export nu ne crée aucune liaison locale — leçon du lot MURS-OUVRAGE.
@@ -58,7 +61,7 @@ import { delaiPourLaBase } from './deplacement.js';
 import { GRILLE, UNITES, DEFENSES } from '../data/combat.js';
 import { NIVEAU } from '../data/niveaux.js';
 import {
-  rosterDefensif, coutDeMonteeOffense, coutDeMonteeDefense,
+  rosterDefensif, coutDeMonteeOffense, coutDeMonteeDefense, remboursementDEffectif,
 } from '../data/couts-militaires.js';
 import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 
@@ -77,7 +80,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 36;
+export const SAVE_VERSION = 37;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -861,7 +864,8 @@ function avancerAnalytiquement(etat, nbTicks) {
   // réparent ce que mille ticks un par un auraient réparé.
   reparerLesSites(etat);
   // ⚠ MÊME FORME QUE LES TROIS AUTRES : un seul appel de n ticks, pas une
-  // boucle. La réserve se crédite par `min(plafond, reserve + n)`, en TICKS
+  // boucle. La réserve se crédite par `min(max(plafond, avant), avant + n)` —
+  // un GEL, pas un rabot, depuis l'audit du 17/09 —, en TICKS
   // ENTIERS : l'addition et le `min` étant exacts, n crédits de 1 donnent
   // exactement le même nombre que n d'un coup. Créditer en secondes flottantes
   // ferait diverger les deux chemins par accumulation d'arrondis.
@@ -1713,17 +1717,28 @@ export function poserEffectif(etat, force, piece) {
 }
 
 /**
- * Retire une pièce et la rend.
+ * Retire une pièce, la rembourse, et rend les deux.
  *
- * ⚠ AUCUN REMBOURSEMENT, faute d'arbitrage. `REMBOURSEMENT_DEMOLITION` vaut
- * pour les bâtiments de la base ; rien n'a été rendu pour les effectifs, et en
- * inventer un serait trancher seul une mécanique de jeu. Le jour où Ethan en
- * fixera un, il se crédite ici.
+ * ⚠⚠ LE REMBOURSEMENT EXISTE DEPUIS LE 17/09 — arbitrage d'Ethan, point 14 :
+ * « vendre un bâtiment/unités doit rembourser 90 % des ressources ». Le
+ * `AUCUN REMBOURSEMENT, faute d'arbitrage` qui tenait ici avait justement
+ * réservé la place ; l'arbitrage est tombé, le crédit s'écrit ici.
+ *
+ * ⚠ LE TAUX N'EST PAS ICI, ET IL NE DOIT PAS Y ÊTRE. `remboursementDEffectif`
+ * le lit dans `data/couts-militaires.js`, qui le lit lui-même dans
+ * `REMBOURSEMENT_DEMOLITION` de `data/base.js` : UN taux, UNE source, pour les
+ * bâtiments comme pour les pièces — c'est ce que « bâtiment/unités » d'un seul
+ * souffle voulait dire.
+ *
+ * ⚠⚠ LE RENDU N'EST PAS PLAFONNÉ PAR LA CAPACITÉ, exactement comme `demolir` :
+ * un stock excédentaire est GELÉ par `economie-base`, jamais amputé. Plafonner
+ * ici volerait au joueur sans le lui dire.
  *
  * @param {Etat} etat modifié en place
  * @param {string} force
  * @param {number} index
- * @returns {Effectif} la pièce retirée
+ * @returns {{piece: Effectif, rendu: {quartz: number, scorie: number,
+ *   electricite: number}}} la pièce retirée et ce qu'elle a rendu, en UNITÉS
  */
 export function retirerEffectif(etat, force, index) {
   const f = exigerForce(force);
@@ -1733,8 +1748,10 @@ export function retirerEffectif(etat, force, index) {
   if (piece === undefined) {
     throw new RangeError(`retirerEffectif : indice ${index} hors de la ${f.quoi}`);
   }
+  const rendu = remboursementDEffectif(force, piece.id, piece.niveau);
+  for (const r of RESSOURCES) base.economie.ressources[r] += rendu[r] * MILLI;
   base[f.champ].splice(index, 1);
-  return piece;
+  return { piece, rendu };
 }
 
 /**
@@ -3373,14 +3390,20 @@ const MIGRATIONS = {
   32: (s) => {
     s.version = 33;
   },
-
   /**
-   * v33 → v36 : TROIS MAILLONS VIDES, PR TEST DU 17/09/2026. Ils ne
-   * convertissent rien : les schémas 34 et 35 sont ceux des builds publiés hors
-   * dépôt, et leurs migrations ne sont nulle part ici. Ces maillons font passer
-   * une sauvegarde v35 sans la comprendre — c'est ce que `CLAUDE.md` §0 dit de
-   * ne pas faire, et c'est ce qu'Ethan a demandé de mesurer sur une PR test.
-   * @param {object} s
+   * v33 → v34 et v34 → v35 : DEUX PALIERS VIDES, ET C'EST DÉLIBÉRÉ.
+   *
+   * ⚠⚠ DES LIVRABLES ONT ÉTÉ PUBLIÉS HORS DE CE DÉPÔT, jusqu'à `SAVE_VERSION`
+   * 35 — CLAUDE.md le porte en tête. Ce dépôt ne sait pas ce qu'ils changeaient,
+   * et inventer une conversion pour une forme qu'on n'a jamais vue produirait
+   * une sauvegarde plausible et fausse. Les deux paliers ne font donc que
+   * porter le numéro, et `verifierEtat` attrape au chargement ce qui ne
+   * conviendrait pas — c'est le contrôle qui décide, pas une supposition.
+   *
+   * ⚠ ILS EXISTENT PARCE QUE LA CHAÎNE EST DENSE : `migrer` applique les
+   * migrations une par une, de `v` à `v + 1`. Sauter de 33 à 36 demanderait un
+   * second mécanisme, et une sauvegarde v34 ou v35 réellement présente sur
+   * l'appareil d'Ethan n'aurait alors aucun chemin vers la v36.
    */
   33: (s) => {
     s.version = 34;
@@ -3388,10 +3411,105 @@ const MIGRATIONS = {
   34: (s) => {
     s.version = 35;
   },
+  /**
+   * v35 → v36 : les listes de modules d'un rejeu passent des NOMS aux PIÈCES.
+   *
+   * ⚠⚠ ELLE EXISTE PARCE QUE LE REJEU TRAVERSE LA SAUVEGARDE, ET QUE PERSONNE NE
+   * L'AVAIT VU. `pourLeRejeu` ne retire que `indicesDefenseurs` et
+   * `indicesBatiments` : `modulesDebloques` reste dans le montage, le montage
+   * part dans `rapport.rejeu`, et `serialiser` écrit `etat.rapports` en entier.
+   * Le canal est ouvert depuis la migration v32 → v33 ci-dessus.
+   *
+   * ⚠⚠ ET SANS ELLE, LE DÉFAUT EST SILENCIEUX — C'EST CE QUI LE REND GRAVE.
+   * `modulesDunProprietaire` accepte n'importe quel tableau de chaînes, donc un
+   * rapport d'hier se recharge sans une erreur et se rejoue avec **tous les
+   * modules éteints des deux camps**. Mesuré sur un Merlon de niveau 20 :
+   * 12 232 000 PV au rejeu contre 14 678 400 qu'il avait — le compte exact d'une
+   * liste VIDE. « Un rejeu faux est pire qu'aucun rejeu », et celui-ci ne se
+   * voyait nulle part.
+   *
+   * ⚠⚠ ELLE TRADUIT COMME L'ANCIENNE RÈGLE SE COMPORTAIT, PAS COMME LA NEUVE :
+   * un NOM armait TOUTES ses porteuses, sans regarder leur `apparitionModule`.
+   * `piecesPortant` rend donc toutes les porteuses, et le rejeu reproduit le
+   * combat TEL QU'IL A ÉTÉ LIVRÉ — ce qui est le seul but d'un rejeu. Le
+   * déblocage par pièce, lui, ne vaut que pour les combats à venir.
+   *
+   * ⚠ UNE ENTRÉE QUI NE NOMME AUCUNE PORTEUSE EST RETIRÉE, pas conservée : un
+   * nom mal orthographié ou un module retiré de la donnée n'arme rien, et le
+   * garder ferait un identifiant que `moduleActif` comparerait pour toujours
+   * sans jamais l'égaler.
+   *
+   * ⚠ ET ELLE EST IDEMPOTENTE SUR LE NOUVEAU FORMAT : un identifiant de pièce ne
+   * porte pas de module du même nom, donc `piecesPortant` rend une liste vide
+   * dessus, et on le garde tel quel. Une sauvegarde déjà traduite ne perd rien.
+   */
   35: (s) => {
     s.version = 36;
+    traduireLesModulesDesRejeux(s);
+  },
+
+  /**
+   * v36 → v37 : LA MÊME TRADUCTION, PARCE QUE LE BUILD 175 A ESTAMPILLÉ 36 SANS
+   * LA FAIRE.
+   *
+   * ⚠⚠ ELLE RATTRAPE UN DÉFAUT DU DÉPÔT, PAS UN CHANGEMENT DE SCHÉMA. La PR test
+   * du 17/09 (`test-bump-175-save-36`, merge `e4b0359`) a porté `SAVE_VERSION` de
+   * 33 à 36 par TROIS MAILLONS VIDES. Une partie jouée sous le build 175 est donc
+   * écrite `version: 36` avec des `rapport.rejeu.modulesDebloques` encore en NOMS
+   * — et une sauvegarde déjà en 36 ne repasse JAMAIS par le maillon 35 → 36.
+   * Sans ce maillon-ci, ces parties-là gardent le défaut pour toujours : chaque
+   * rapport se rejoue tous modules éteints des deux camps, sans une erreur.
+   *
+   * ⚠⚠ ET C'EST POUR ÇA QUE `SAVE_VERSION` AVANCE, PAS POUR POUSSER UN NUMÉRO.
+   * Ce n'est pas elle qui décide qu'une mise à jour atteint l'appareil — c'est le
+   * BUILD, par `PolitiqueVersion.miseAJourAcceptable`. Avancer `SAVE_VERSION`
+   * sans migration correspondante est ce que `CLAUDE.md` §0 interdit ; ici la
+   * migration existe et fait un vrai travail.
+   *
+   * ⚠ ELLE EST IDEMPOTENTE, donc inoffensive sur une sauvegarde venue du maillon
+   * 35 → 36 : `piecesPortant` rend une liste vide sur un identifiant de pièce, et
+   * l'entrée est alors gardée telle quelle. Une partie déjà traduite ne perd rien
+   * et ne double rien.
+   * @param {object} s
+   */
+  36: (s) => {
+    s.version = 37;
+    traduireLesModulesDesRejeux(s);
   },
 };
+
+/**
+ * Traduit les listes de modules des rejeux, des NOMS vers les PIÈCES.
+ *
+ * ⚠ ELLE EST SORTIE DES MAILLONS PARCE QUE DEUX L'APPELLENT — 35 → 36 et
+ * 36 → 37. La recopier ferait deux vérités pour une conversion, et celle des
+ * deux qui dériverait serait justement celle qui rattrape le build 175.
+ * @param {object} s
+ */
+function traduireLesModulesDesRejeux(s) {
+  {
+    for (const rapport of s.rapports ?? []) {
+      const listes = rapport?.rejeu?.modulesDebloques;
+      if (listes === null || typeof listes !== 'object') continue;
+      for (const qui of ['joueur', 'ouvrage']) {
+        const parBranche = listes[qui];
+        if (parBranche === null || typeof parBranche !== 'object') continue;
+        for (const branche of ['offense', 'defense']) {
+          const liste = parBranche[branche];
+          if (!Array.isArray(liste)) continue;
+          const pieces = new Set();
+          for (const entree of liste) {
+            if (typeof entree !== 'string') continue;
+            const porteuses = piecesPortant(qui, branche, entree);
+            if (porteuses.length > 0) for (const id of porteuses) pieces.add(id);
+            else if (moduleDeLaPiece(qui, branche, entree) !== null) pieces.add(entree);
+          }
+          parBranche[branche] = [...pieces].sort();
+        }
+      }
+    }
+  }
+}
 
 /** Combien de bâtiments chaque base porte — `null` pour une base sans liste. */
 function posesParBase(sauvegarde) {

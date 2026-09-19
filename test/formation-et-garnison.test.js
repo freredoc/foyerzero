@@ -1000,7 +1000,15 @@ test('FR T3 — la chaîne de migration se rejoue en entier, et le maillon 31 �
   // sur une base neuve, donc ×9,7 sur la sauvegarde — et c'est ce qu'Ethan a
   // accepté. Le maillon v32 → v33 est dans `state.js`, et il ne calcule RIEN :
   // un rapport d'avant ne se rejoue pas, et le journal le dit.
-  assert.equal(SAVE_VERSION, 36, 'SAVE_VERSION a bougé sans que ce test suive');
+  // ⚠⚠ ET LE LOT « MODULES PAR PIÈCE » Y PASSE, LE 18/09 — 33 → **36**, ET IL
+  // N'Y EST PAS PASSÉ DU PREMIER COUP. Il a d'abord été livré SANS bump, sur la
+  // vérification — trop courte — que `modulesDebloques` n'apparaissait pas dans
+  // `sim/state.js`. Il n'y apparaît pas, et il y passe quand même, par
+  // `rapport.rejeu`. Une relecture adverse l'a trouvé ; `MODULES-PIÈCE T1` de
+  // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
+  // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
+  // un numéro inférieur OU ÉGAL.
+  assert.equal(SAVE_VERSION, 37, 'SAVE_VERSION a bougé sans que ce test suive');
   // ⚠⚠ LE MAILLON 31 → 32 A JOUÉ, ET IL N'A RIEN INVENTÉ. Une v0 ne sait ni
   // quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
   // formation vivait dans la fermeture de l'écran et ne se sérialisait pas.
