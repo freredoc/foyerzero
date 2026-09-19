@@ -9,9 +9,13 @@
 // tous deux « PNG, à peu près », dont un seul serait éprouvé — c'est exactement
 // ce que `hachageBrut` de `sim/peuplement.js` existe pour éviter côté moteur.
 //
-// ⚠ IL NE LIT QUE LE RVBA. `terrain.test.js` porte un décodeur d'INDEXÉ pour
-// l'atlas de la carte du monde ; les deux formats ne se recouvrent pas, d'où
-// deux lecteurs et non un lecteur à tout faire qui devinerait.
+// ⚠ IL LIT LE RVBA, ET LE RVB DEPUIS LE LOT ANCRES-ZÉNITH (19/09) — les
+// sources d'`art/sources/` sont en RVB sans alpha, et `ancres-zenith.test.js`
+// confronte une table à ces DESSINS-là, pas aux sprites cousus. Un pixel RVB
+// est rendu avec un alpha de 255, si bien qu'aucun lecteur n'a changé.
+// `terrain.test.js` porte un décodeur d'INDEXÉ pour l'atlas de la carte du
+// monde ; les formats ne se recouvrent pas, d'où deux lecteurs et non un
+// lecteur à tout faire qui devinerait.
 //
 // Aucune dépendance ajoutée : `node:zlib` est dans la bibliothèque standard, et
 // `esbuild` reste la seule dépendance de développement du dépôt.
@@ -21,8 +25,10 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 
 /**
- * Les pixels d'un PNG 8 bits RVBA non entrelacé — le seul format que
- * `tools/atlas.py` produise, et celui de tous les sprites conditionnés.
+ * Les pixels d'un PNG 8 bits RVBA ou RVB non entrelacé — le premier est le
+ * seul format que `tools/atlas.py` produise, et celui de tous les sprites
+ * conditionnés ; le second est celui des sources. Le résultat est TOUJOURS du
+ * RVBA, quatre octets par pixel, alpha 255 quand le fichier n'en porte pas.
  *
  * Il LÈVE sur tout ce qu'il ne sait pas faire plutôt que de rendre une image
  * approchée : un atlas mal décodé ferait tomber la garde suivante sur un défaut
@@ -36,6 +42,7 @@ export function decoderRgba(chemin) {
   let position = 8;
   let largeur = 0;
   let hauteur = 0;
+  let typeCouleur = 0;
   const morceaux = [];
   while (position < octets.length) {
     const taille = octets.readUInt32BE(position);
@@ -45,14 +52,18 @@ export function decoderRgba(chemin) {
       largeur = corps.readUInt32BE(0);
       hauteur = corps.readUInt32BE(4);
       assert.equal(corps[8], 8, `${chemin} : profondeur de bits inattendue`);
-      assert.equal(corps[9], 6, `${chemin} : ce n'est plus du RVBA`);
+      typeCouleur = corps[9];
+      assert.ok(typeCouleur === 6 || typeCouleur === 2,
+        `${chemin} : type de couleur ${typeCouleur}, ni RVBA (6) ni RVB (2)`);
       assert.equal(corps[12], 0, `${chemin} : entrelacement non géré`);
     } else if (nom === 'IDAT') morceaux.push(Buffer.from(corps));
     else if (nom === 'IEND') break;
     position += 12 + taille;
   }
   const brut = inflateSync(Buffer.concat(morceaux));
-  const bpp = 4;
+  // Le défiltrage se fait dans le format DU FICHIER — `a`, `b`, `c` sont à un
+  // pixel de distance, donc à `bpp` octets —, la conversion en RVBA vient après.
+  const bpp = typeCouleur === 6 ? 4 : 3;
   const pas = largeur * bpp;
   const pixels = Buffer.alloc(hauteur * pas);
   for (let y = 0; y < hauteur; y++) {
@@ -76,5 +87,12 @@ export function decoderRgba(chemin) {
       pixels[y * pas + x] = v & 0xff;
     }
   }
-  return { largeur, hauteur, pixels };
+  if (bpp === 4) return { largeur, hauteur, pixels };
+  const rgba = Buffer.alloc(largeur * hauteur * 4, 255);
+  for (let i = 0, j = 0; i < pixels.length; i += 3, j += 4) {
+    rgba[j] = pixels[i];
+    rgba[j + 1] = pixels[i + 1];
+    rgba[j + 2] = pixels[i + 2];
+  }
+  return { largeur, hauteur, pixels: rgba };
 }

@@ -1,34 +1,34 @@
 {
   "socles": {
     "socle_def_j_batterie": {
-      "cote_case_pct": 93.82,
-      "diametre_pct": 44.9,
-      "dx_case_pct": -0.09,
-      "dy_case_pct": -15.74,
+      "cote_case_pct": 130.2,
+      "diametre_pct": 26.9,
+      "dx_case_pct": -0.0,
+      "dy_case_pct": -1.06,
       "mesure": true,
-      "x_pct": -0.1,
-      "y_pct": -17.6
+      "x_pct": -0.0,
+      "y_pct": -1.2
     },
     "socle_def_j_casemate": {
-      "cote_case_pct": 93.36,
-      "diametre_pct": 44.9,
-      "dx_case_pct": -0.09,
-      "dy_case_pct": -15.74,
+      "cote_case_pct": 107.19,
+      "diametre_pct": 26.9,
+      "dx_case_pct": -0.0,
+      "dy_case_pct": -1.06,
       "mesure": true,
-      "x_pct": -0.1,
-      "y_pct": -17.6
+      "x_pct": -0.0,
+      "y_pct": -1.2
     },
     "socle_def_j_creneau": {
-      "cote_case_pct": 93.62,
-      "diametre_pct": 44.9,
-      "dx_case_pct": -0.09,
-      "dy_case_pct": -15.74,
+      "cote_case_pct": 95.84,
+      "diametre_pct": 26.9,
+      "dx_case_pct": -0.0,
+      "dy_case_pct": -1.06,
       "mesure": true,
-      "x_pct": -0.1,
-      "y_pct": -17.6
+      "x_pct": -0.0,
+      "y_pct": -1.2
     },
     "socle_def_j_faucheuse": {
-      "cote_case_pct": 111.95,
+      "cote_case_pct": 146.89,
       "diametre_pct": 35.4,
       "dx_case_pct": -0.0,
       "dy_case_pct": -9.37,
@@ -37,7 +37,7 @@
       "y_pct": -11.1
     },
     "socle_def_j_harpon": {
-      "cote_case_pct": 96.53,
+      "cote_case_pct": 180.01,
       "diametre_pct": 35.3,
       "dx_case_pct": -0.07,
       "dy_case_pct": -9.96,
@@ -46,7 +46,7 @@
       "y_pct": -11.8
     },
     "socle_def_j_mortier": {
-      "cote_case_pct": 104.96,
+      "cote_case_pct": 159.17,
       "diametre_pct": 31.2,
       "dx_case_pct": -0.0,
       "dy_case_pct": -9.2,
@@ -57,27 +57,27 @@
   },
   "tourelles": {
     "def_j_batterie": {
-      "cote_pct_embase": 144.1,
+      "cote_pct_embase": 333.8,
       "echelle": 1.6
     },
     "def_j_casemate": {
-      "cote_pct_embase": 143.4,
+      "cote_pct_embase": 274.8,
       "echelle": 1.6
     },
     "def_j_creneau": {
-      "cote_pct_embase": 143.8,
+      "cote_pct_embase": 245.7,
       "echelle": 1.6
     },
     "def_j_faucheuse": {
-      "cote_pct_embase": 209.2,
+      "cote_pct_embase": 274.5,
       "echelle": 2.4
     },
     "def_j_harpon": {
-      "cote_pct_embase": 163.5,
+      "cote_pct_embase": 304.9,
       "echelle": 2.4
     },
     "def_j_mortier": {
-      "cote_pct_embase": 200.0,
+      "cote_pct_embase": 303.3,
       "echelle": 2.4
     }
   }

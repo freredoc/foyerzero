@@ -23,6 +23,7 @@ import json
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage as nd
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RACINE, 'tools'))
@@ -69,20 +70,56 @@ def charger(nom):
 
 
 def pivot(m):
-    """Le centre de la face supérieure de l'embase.
+    """Le centre et le diamètre de l'embase — le plus grand disque inscrit.
 
-    Une embase est un cylindre vu de biais. Sa silhouette atteint sa largeur
-    maximale sur une BANDE de lignes : de l'horizontale de l'ellipse du haut à
-    celle de l'ellipse du bas. Le pivot est donc sur la PREMIÈRE ligne de cette
-    bande, pas au milieu de la silhouette — prendre le milieu poserait la
-    tourelle un demi-cylindre trop bas.
+    ⚠⚠ L'HYPOTHÈSE DU CYLINDRE VU DE BIAIS EST TOMBÉE AVEC LES DESSINS — lot
+    ANCRES-ZÉNITH, 19/09. Cette fonction disait : « une embase est un cylindre vu
+    de biais, sa silhouette atteint sa largeur maximale sur une bande, le pivot
+    est sur la PREMIÈRE ligne de cette bande ». Vrai des douze tourelles à 75°,
+    faux des douze tourelles zénithales : vu de dessus il n'y a plus de bande,
+    et la largeur maximale est atteinte là où le dessin est le plus large — qui
+    n'est pas l'embase. Mesuré sur `def_o_harpon` : la bande était la rangée
+    de missiles, D = 858 pour une embase de 390, soit ×2,2 ; le pivot rendu
+    tombait à 157 px au-dessus du disque. Sur les cinq autres de l'Ouvrage, la
+    première ligne de la bande d'un DISQUE est à 0,1 D au-dessus de son centre —
+    d'où les +3 à +12 % relevés par le brief.
+
+    EN ZÉNITHAL, L'EMBASE EST LE PLUS GRAND DISQUE INSCRIT DANS LA SILHOUETTE :
+    son centre est le maximum de la transformée de distance, son diamètre deux
+    fois cette distance. Les canons, rampes et ailerons sont des appendices
+    plus minces que l'embase et ne le déplacent pas. Vérifié sur les douze
+    dessins, disque tracé sur chacun (`rapports/`, planche du lot) : les six de
+    l'Ouvrage l'épousent, les six du joueur trouvent la plaque sous les canons,
+    et les deux harpons ignorent leurs rampes.
+
+    ⚠ LE MAXIMUM EST UN PLATEAU, PAS UN POINT. Sur une plaque plus large que
+    haute, ou sur une embase ovale, la distance maximale est atteinte sur un
+    SEGMENT : `def_o_mortier` la tient de y = 614 à 695 pour un anneau centré
+    vers 655, et `argmax` rendrait le premier pixel, 40 px trop haut. On prend
+    donc le centre des pixels à moins d'un centième du rayon du maximum — au
+    moins un pixel : à un demi-pixel le plateau ne fait que 14 px et penche
+    encore (640) ; à un centième il en fait 86 et tombe à 654. Coordonnées en
+    bords de pixel, comme avant.
+
+    ⚠ UNE APPROXIMATION ASSUMÉE : sur une embase polygonale ou à brides, le
+    disque inscrit est l'apothème, un peu sous la largeur du plateau — 606 pour
+    627 sur `def_o_casemate`, 3 %. Pour l'Ouvrage c'est sans effet sur le
+    rendu, `echelle` étant calée sur le carré du joueur ; pour le joueur c'est
+    la définition retenue : le plus grand disque qui tienne sous le corps.
+
+    ⚠⚠ LE 75° N'A PLUS DE LECTEUR ICI, ET IL N'EST PAS PERDU. Les douze
+    tourelles de défense sont zénithales depuis ce lot ; la règle du tambour vit
+    encore, inchangée, dans `tools/ancres-blindes.py:pivot`, pour les dix
+    tourelles de blindé qui restent à 75°. Aucun discriminant automatique
+    75°/zénithal n'a tenu la mesure — cinq ont été essayés sur les vingt-quatre
+    planches, voir le rapport —, donc deux fonctions, une par géométrie, chacune
+    avec ses lecteurs. Le montage T1 du lot rejoue cet outil sur les sources 75°
+    écartées AVEC la règle du tambour et retrouve le JSON d'avant à l'octet.
     """
-    larg = m.sum(axis=1)
-    D = int(larg.max())
-    lignes = np.where(larg >= 0.98 * D)[0]
-    y = int(lignes.min())
-    xs = np.where(m[y])[0]
-    return (xs.min() + xs.max() + 1) / 2, float(y), D
+    dist = nd.distance_transform_edt(m)
+    rayon = float(dist.max())
+    ys, xs = np.where(dist >= rayon - max(1.0, 0.01 * rayon))
+    return float(xs.mean()) + 0.5, float(ys.mean()) + 0.5, int(round(2 * rayon))
 
 
 def cote_du_carre(m, px, py):
@@ -103,6 +140,19 @@ def cote_du_carre(m, px, py):
     on ne recentre plus rien. Ce qui le remplace est plus fort et vit dans
     `test/sprite.test.js` : le sprite est carré, et aucun pixel opaque n'est plus
     loin du centre que la moitié du côté.
+
+    ⚠⚠ CE QUI PRÉCÈDE ÉTAIT VRAI DES PLANCHES À 75° ET EST FAUX DES PLANCHES
+    ZÉNITHALES — lot ANCRES-ZÉNITH, 19/09, mesuré sur les douze. Elles sont
+    carrées (1 254 ou 1 024) mais PAS centrées sur leur pivot : l'embase est de
+    21 px (`def_o_casemate`) à 225 px (`def_j_mortier`) SOUS le centre du
+    fichier, et le carré de rotation dépasse le côté du fichier sur dix d'entre
+    elles (1 430 à 1 638 pour 1 254 chez le joueur). Le mode `carre` de
+    `joueur_v2.py` — « aucun recadrage, la planche EST le sprite » — ne peut donc
+    pas leur être appliqué tel quel : le lot de conditionnement devra RECENTRER
+    chaque tourelle sur le pivot que cette fonction-ci reçoit et agrandir la
+    toile au côté qu'elle rend, sans quoi la tourelle décrira un cercle de 20 à
+    225 px autour de son embase en tournant. Ce lot-ci MESURE ; il ne
+    conditionne pas (brief §5).
     """
     ys, xs = np.where(m)
     rayon = int(np.ceil(np.sqrt(((xs - px) ** 2 + (ys - py) ** 2).max())))

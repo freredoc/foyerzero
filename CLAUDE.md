@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **19/09/2026**, version 0.99.66 · build 178.
+Dernière révision : **19/09/2026**, version 0.99.67 · build 179.
 ⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
 164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
 **175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
@@ -68,7 +68,99 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 19/09/2026 (après le lot MODE-DEV), à confronter :**
+**Référence au 19/09/2026 (après le lot ANCRES-ZÉNITH), à confronter :**
+⚠⚠ **LES DEUX DÉTECTEURS GÉOMÉTRIQUES RENDAIENT DES VALEURS FAUSSES SANS LEVER,
+ET C'EST MESURÉ AVANT D'ÊTRE RÉPARÉ.** Les socles et les tourelles de défense
+sont passés du top-down 75° au zénithal (22 sources d'Ethan entrées ici, les
+22 versions 75° gardées en `*_75_ECARTE.png`, dormantes — `art/sources/` ne
+s'ampute jamais). Sur ces dessins, `chassis.ancre` rendait **82,7 % et +7,3 %**
+sur `socle_def_o_creneau` là où ses jumeaux carrés rendent 55 % et −0,2, et
+**rejetait les trois marcheurs** à 0,22 comme à 0,40 ; `ancres-defense.pivot`
+prenait la rangée de missiles du Harpon pour son embase — **D 858 pour 390**.
+Les quatre contraintes de `ancre` ont été IMPRIMÉES pour chaque candidat sur les
+neuf socles AVANT de toucher au code (`rapports/RAPPORT-lotANCRES-ZENITH.md` §1)
+: la fausse tache du créneau est le logement PLUS le module inférieur du socle,
+enfermés par le contour de la bride sud — boîte 555 × 763, rondeur 0,58,
+largeur 0,60 W, elle passait les trois contraintes de justesse et gagnait en
+taille ; les marcheurs n'ont pas le liseré sombre (102–113) que `fill_holes`
+remplit sur les socles carrés — leur disque vaut 176–186, leur liseré 157–167,
+et les pattes tirent q30 à 172–175, si bien que le réseau de contours se ferme
+sur tout le corps (97 à 100 % de la largeur) avant que le disque ne soit sous la
+coupe.
+⚠⚠ **DEUX RÉPARATIONS DANS `ancre`, ET ZÉRO PIÈCE 75° DÉPLACÉE — AU BIT, SUR
+LES 30.** (1) Une QUATRIÈME contrainte : un logement n'est jamais plus haut que
+large (`h ≤ 1,2 w`) — rond vu de dessus, ellipse écrasée vu de biais. Mesuré
+sur les 30 pièces 75° du dépôt et TOUS leurs candidats retenus : h/w ≤ 1,076 ;
+sur les logements zénithaux justes 0,96 à 1,03 ; sur la fausse tache 1,374. (2)
+Un SECOND dernier recours, après le « trou du clair » : la TACHE sombre après
+ouverture morphologique (rayon 1 % de W), sans remplissage — il ne court que si
+rien n'a été trouvé, ce qui n'arrive sur aucune des 30. ⚠ **Trois pistes
+mesurées et écartées, écrites dans `tools/chassis.py` pour qu'on ne les
+repropose pas** : exclure l'accent saturé de la coupe (déplace trois coques de
+l'Ouvrage et ne répare rien — la tache ne contient pas l'anneau rouge), préférer
+le plus rond ou refuser une rondeur qui chute (le Pionnier 75° a un emboîté
+plus rond de +0,148, le créneau de +0,142), l'excentrement dans sa boîte (0,024
+contre 0,037).
+⚠⚠ **`pivot` CHANGE DE MODÈLE : L'EMBASE EST LE PLUS GRAND DISQUE INSCRIT.**
+Centre = plateau du maximum de la transformée de distance (à un centième du
+rayon, pas `argmax` : sur l'embase ovale du mortier Ouvrage le plateau court de
+y 614 à 695), diamètre = deux fois ce rayon. Vérifié disque tracé sur les douze
+dessins. ⚠ **AUCUN DISCRIMINANT AUTOMATIQUE 75°/ZÉNITHAL N'A TENU** — cinq
+essayés sur les 24 planches (asymétrie du mur, disque inscrit/largeur, position
+de la bande, pente du bas, paire socle–tourelle : les trois paires MIXTES
+tuent le dernier) —, donc deux fonctions, une par géométrie, chacune avec ses
+lecteurs : `ancres-blindes.pivot` garde la règle du tambour, inchangée, pour les
+dix tourelles de blindé encore à 75°. **La règle du disque, appliquée aux
+tambours, ne déplace QUE les champs qui en dérivent** — 12 `cote_pct_embase`,
+6 `echelle`, 12 `cote_case_pct` — et aucun champ de logement (T1 b).
+⚠⚠ **LA TABLE `ANCRES_DEFENSE` EST MIXTE, ET C'EST VOULU.** Neuf socles mesurés
+sur des dessins zénithaux (`y_pct` −0,2 à −1,2), trois sur des dessins à 75° —
+`socle_def_j_{faucheuse,mortier,harpon}`, non redessinés, arbitrage d'Ethan du
+19/09 : « si j'ai pas modifié, c'est qu'il n'y a pas besoin ». Leur logement ne
+bouge pas d'un bit ; leur `cote_case_pct` suit leur TOURELLE redessinée (111,95
+→ 146,89 · 104,96 → 159,17 · 96,53 → 180,01). Écrit dans le fichier et gardé par
+`AZ T2`, pour que le prochain lecteur n'« harmonise » pas.
+⚠⚠ **LE CARRÉ FAIT 96 À 180 % DE LA CASE, ET C'EST LE DESSIN, PAS LE DÉTECTEUR.**
+Les tourelles zénithales portent des canons deux à trois fois plus longs que leur
+embase — `cote_pct_embase` 246 à 336 chez le joueur contre 143 à 209 avant — et
+dix d'entre elles ne sont PAS centrées sur leur pivot dans le fichier (embase de
+21 à 225 px sous le centre, carré de rotation plus grand que la planche sur dix
+sur douze). **Le mode `carre` de `joueur_v2.py` ne peut pas leur être appliqué
+tel quel** : le lot de conditionnement (hors périmètre, brief §5) devra
+recentrer sur le pivot et agrandir la toile. Et `echelle`, choisie à l'œil sur
+les dessins à 75°, est à rejuger par Ethan sur ceux-ci — le Harpon joueur
+atteint 99,97 % de demi-case, la pointe de ses missiles touche le bord opposé de
+la case voisine.
+⚠⚠ **ÉTAT TRANSITOIRE ASSUMÉ, À CONNAÎTRE AVANT DE LE DÉCOUVRIR EN JOUANT :**
+les ancres décrivent les dessins zénithaux, les sprites 64/128 et les atlas
+sont encore les 75°. En jeu, la tourelle est posée au centre d'un socle dont le
+trou est encore en haut. `tools/verifier.py` : 178 identiques · 932 différents
+à l'octet sur cette machine — c'est l'encodeur de Pillow 12.3, déjà documenté au
+lot TERRITOIRE-ET-ÉCHELLE — ; au PIXEL, **exactement 44 sprites diffèrent, les 22
+pièces redessinées aux deux grilles, et 124 sont identiques** ; les quatre JSON
+d'ancres se reproduisent au caractère près, CRLF de Windows retirés (défaut connu
+d'`entrees.py` : « dix outils sur treize restent, et c'est un lot à part »).
+Aucun sprite régénéré ni commité pour faire taire l'outil.
+⚠ **T1 — PASS.** Les outils réparés, rejoués dans un `git worktree` à `2a19761`
+(sources 75°) avec la règle du tambour, rendent les QUATRE JSON identiques à
+l'octet. **T2 — `test/ancres-zenith.test.js`, ROUGE AVANT, VERT APRÈS** : le
+trou du logement recalculé par une AUTRE voie (seuil absolu 200, ouverture,
+fermeture, plus grande composante sombre enfermée — ni percentile, ni
+remplissage, ni rondeur) concorde avec la table à 0,05 % en x et 0,70 % en y sur
+les neuf ; contre la table du 08/09 les neuf tombaient de 15,7 à 34,7 %.
+`test/png-rgba.js` lit le RVB (type 2) depuis ce lot, alpha 255, pour lire les
+sources.
+⚠ **RÉANCRAGE : `sprite.test.js` « déborde sur les socles ».** Dix socles sur
+douze débordent au lieu de douze, le Créneau tient (48,98 · 48,18), le pire est
+le Harpon des deux côtés (99,97 · 90,56) au lieu de la Faucheuse (65,34 · 83,94)
+; une assertion neuve mesure ce que `echelle_calee` promet — joueur et Ouvrage à
+0,1 près sur les trois socles de tourelle.
+⚠ **`npm test` rend **1643 pass / 0 fail** au sens de la garde de
+`documentation.test.js`** — 1 642 pass · 0 fail · 1 skipped au relevé de
+`npm run check`. `entrees.py --declarer` : 501 consommées · 175 dormantes
+(+22 `_75_ECARTE`). `SAVE_VERSION` ne bouge pas : rien n'entre dans l'état.
+
+**Auparavant, après le lot MODE-DEV (19/09) :**
 ⚠⚠ **LE MODE DÉVELOPPEUR LÈVE LES PÉAGES, IL NE CRÉDITE RIEN, ET C'EST TOUTE LA
 DIFFÉRENCE.** Ethan, 19/09 : « j'ai foiré ma sauvegarde, elle est morte » — le
 mode existe pour remonter une partie, et son extinction doit « remettre tout
@@ -13398,7 +13490,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   76 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   77 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -13411,6 +13503,7 @@ test/                   76 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
+  ancres-zenith
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
@@ -13610,9 +13703,20 @@ tools/                  **45 fichiers**, dont UN SEUL sert au build — RECOMPT�
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sources brutes, hors chaîne de build — **653 fichiers à
-                        la racine, 501 consommées · 152 dormantes**, RECOMPTÉ le
-                        08/09 au lot SOL-OUVRAGE, qui en fait entrer QUATORZE :
+art/sources/            sources brutes, hors chaîne de build — **676 fichiers à
+                        la racine, 501 consommées · 175 dormantes**, RECOMPTÉ le
+                        19/09 au lot ANCRES-ZÉNITH par `entrees.py --declarer`,
+                        qui en fait entrer VINGT-DEUX zénithales SOUS LES NOMS
+                        que la chaîne lit déjà — six socles et six tourelles de
+                        l'Ouvrage, trois socles et six tourelles du joueur, la
+                        coque de l'Obusier — et RENOMME les vingt-deux versions
+                        à 75° en `*_75_ECARTE.png`, dormantes. Les 23 autres
+                        fichiers livrés le 19/09 (ruines de défense, barrières,
+                        blindés) n'entrent pas : hors périmètre du lot.
+                        ⚠ Le compte annoncé au lot précédent, 653 / 152, était
+                        faux de un : `LICENCE_ET_SOURCES.md` du lot son n'avait
+                        pas été compté. Auparavant, RECOMPTÉ le 08/09 au lot
+                        SOL-OUVRAGE, qui en fait entrer QUATORZE :
                         les tuiles de sol de l'Ouvrage, sept `naturel`, trois
                         `hybride`, quatre `artificiel`, toutes CONSOMMÉES.
                         ⚠⚠ ET LE COMPTE ANNONCÉ AU LOT PRÉCÉDENT ÉTAIT FAUX DE
