@@ -233,6 +233,12 @@ de même : **les ruines existantes ne sont pas carrées** — `ruine_j` fait
 la même chaîne avec le même ancrage, elles ne le seront pas non plus, et
 l'hypothèse du §3.4 tombe avec.
 
+⚠⚠ **CE PARAGRAPHE A ÉTÉ DÉPASSÉ LE JOUR MÊME, ET SA PRÉDICTION TOMBE JUSTE.**
+Les huit images sont arrivées par la conversation quelques heures après ce
+rapport : elles sont MESURÉES au §7, elles ne sont **pas carrées**, et
+l'hypothèse du §3.4 tombe pour de bon. Le paragraphe est laissé tel quel — il
+dit ce qui était vrai à l'heure où il a été écrit.
+
 ---
 
 ## 4. Les deux tests du §4 — ce qui a été mesuré, ce qui n'a pas été écrit
@@ -290,3 +296,142 @@ aux appareils pour rien.
 Les deux points de collision que le brief déclare avec le lot ANCRES-ZÉNITH — les
 compteurs de `documentation.test.js` et la ligne version/build de `CLAUDE.md` —
 **ne sont donc pas touchés**, et ce lot ne peut pas heurter l'autre.
+
+---
+
+## 7. Les huit images sont arrivées — ce qu'elles établissent, et pourquoi ces copies-là ne peuvent pas devenir des sources
+
+Ethan les a postées dans la conversation, sans un mot, quelques heures après les
+six sections qui précèdent. Elles sont **les huit du brief** : le §1 de ce
+rapport, qui arrêtait le lot faute d'art, n'a plus sa cause — il a l'autre.
+
+### 7.1 Ce qu'elles sont, mesuré et non regardé
+
+⚠⚠ **LE PARTAGE EN DEUX CAMPS EST MESURÉ À LA PALETTE, PAS DÉDUIT DE L'ORDRE
+D'ENVOI** — c'est la méthode du lot SOL-OUVRAGE, reprise telle quelle. Distance
+euclidienne médiane du sujet au ton le plus proche de chaque rampe de
+`FICHE-STYLE.md`, un pixel sur onze :
+
+| image | canevas | kaki (joueur) | ardoise (Ouvrage) | verdict |
+|---|---|---|---|---|
+| 1 | 1254 × 1254 | **26,9** | 34,4 | joueur |
+| 2 | 1254 × 1254 | **33,8** | 54,1 | joueur |
+| 3 | 1254 × 1254 | **27,7** | 40,6 | joueur |
+| 8 | 1254 × 1254 | **29,1** | 44,7 | joueur |
+| 4 | 1024 × 1024 | 38,6 | **26,3** | Ouvrage |
+| 5 | 1024 × 1024 | 40,3 | **29,5** | Ouvrage |
+| 6 | 1024 × 1024 | 39,8 | **26,6** | Ouvrage |
+| 7 | 1024 × 1024 | 38,3 | **26,2** | Ouvrage |
+
+**Quatre par camp, et la mesure ne laisse aucune ambiguïté** : l'écart au second
+candidat vaut 7 à 20 du côté joueur, 10 à 12 du côté Ouvrage. Le canevas suit le
+camp sans exception — les quatre du joueur en 1254, les quatre de l'Ouvrage en
+1024 — et les deux tailles sont des conventions établies du dossier (45 sources
+en 1254, 206 en 1024). Ce sont donc bien
+`ruine_def_j_variante_01..04` et `ruine_def_o_variante_01..04`.
+
+### 7.2 ⚠⚠ « Les quatre ruines livrées sont carrées » est FAUX — la prémisse du §3.4 tombe
+
+Boîte d'encre, seuil de clé à 80 — le `RAYON_CLE` de `tools/terrain.py` :
+
+| image | camp | boîte d'encre | L/H |
+|---|---|---|---|
+| 1 | j | 835 × 818 | **1,021** |
+| 2 | j | 1051 × 828 | 1,269 |
+| 3 | j | 975 × 791 | 1,233 |
+| 8 | j | 948 × 810 | 1,170 |
+| 4 | o | 863 × 818 | 1,055 |
+| 5 | o | 892 × 813 | 1,097 |
+| 6 | o | 901 × 661 | **1,363** |
+| 7 | o | 899 × 823 | 1,092 |
+
+**Une seule sur huit est carrée à 5 % près.** L'écart maximal vaut **36,3 %** :
+la sixième est plus large que haute d'un bon tiers. Le §3.3 l'annonçait sans
+pouvoir le prouver — « si les huit sortent de la même chaîne avec le même
+ancrage, elles ne le seront pas non plus » —, et c'est ce que la mesure rend.
+
+⚠ **ET LA QUESTION DU §3.4 NE SE POSE DONC PAS DANS LA FORME OÙ LE BRIEF LA
+POSE.** Il demande si « une ruine carrée posée sur l'emprise d'un mur tient dans
+sa case ». `recadrer` porte la plus GRANDE dimension du contenu à `emprise / 32`
+de la cellule : ce qui gouverne est `max(L, H)`, jamais le côté d'un carré. Une
+ruine au rapport 1,363 voit donc sa largeur calée sur l'emprise et sa hauteur
+tomber à 73 % de celle-ci. **La règle A7 tient par construction**, exactement
+comme le balayage des 113 sprites du §3.1 le montrait déjà — et le §3.2 s'en
+trouve renforcé : au palier 31 une ruine plus large que haute occuperait 96,9 %
+de la case en travers contre 90,6 % au merlon qu'elle remplace. **Le palier 29
+reste la recommandation, et l'arbitrage reste à Ethan.**
+
+### 7.3 ⚠⚠ Mais ces copies-là sont des transcodages AVEC PERTE, et elles ne peuvent pas entrer dans `art/sources/`
+
+Lu dans l'en-tête RIFF des huit fichiers : **`VP8 `, pas `VP8L`** — du WebP avec
+perte, plus un profil ICC de 456 octets. Le client de conversation les a
+ré-encodées en transit ; ce ne sont pas les fichiers qu'Ethan a exportés.
+
+Ce que ça coûte, mesuré contre le dossier entier plutôt que contre une
+impression :
+
+| | les huit reçues | `art/sources/` (152 planches à clé) |
+|---|---|---|
+| clé `#FF00FF` **pure** | **0,0 %** (0 à 57 pixels sur ~1,5 M) | **22,1 % au minimum**, 45 à 72 % couramment |
+| quasi-clé (à moins de 80 de la clé, sans l'être) | **55,5 % à 68,8 %** | **36,5 % au maximum**, et c'est le halo des trois planches d'explosion |
+
+**Les huit sortent de la plage observée du dossier sur les deux axes**, et
+largement : le fond ÉTAIT du magenta pur, il est devenu deux tiers de surface
+*presque* magenta, étalée sur des milliers de valeurs. Le compte de couleurs le
+redit — 35 868 à 64 987, dont 33 339 à 59 619 hors clé.
+
+⚠ **LE COMPTE DE COULEURS SEUL N'AURAIT RIEN PROUVÉ, ET IL FALLAIT LE VÉRIFIER
+AVANT DE CONCLURE.** `off_j_meute.png` en porte 24 567 et
+`01_pylone_ouvrage_rampe_a_original.png` 36 669 : les rendus d'Ethan sont
+anti-crénelés et riches, et la chaîne ne quantifie plus depuis le lot PIXELS —
+elle réduit la MATIÈRE. C'est la **clé** qui disqualifie, pas la richesse.
+
+⚠⚠ **ET LE MOTIF QUI TRANCHE N'EST MÊME PAS CELUI-LÀ.** `normaliser_la_cle` de
+`tools/terrain.py` existe précisément pour rabattre un fond impur — elle a été
+écrite pour des planches dont la clé n'était pas pure, et son `RAYON_CLE = 80`
+est mesuré. Elle sauverait le fond. Ce qu'elle ne peut pas sauver, c'est le
+STATUT du fichier : **`art/sources/` ne porte que des ORIGINAUX** — « rien ici
+n'est un produit, tout y est un original, c'est ce qui le distingue
+d'`art/sprites/`, qui est entièrement reproductible » (`CLAUDE.md` §2). Un
+transcodage avec perte fabriqué par un client de messagerie est un PRODUIT de
+l'original. L'y committer mettrait un dérivé dégradé dans le seul dossier dont
+le dépôt garantit qu'il ne l'est pas, et `tools/verifier.py` certifierait ensuite
+l'exactitude à l'octet d'une chaîne nourrie d'une entrée abîmée — pour toujours,
+et sans que rien ne le dise.
+
+⚠ Accessoirement, `art/sources/` porte **654 fichiers et pas un `.webp`** —
+382 PNG, 267 WAV, deux JSON, deux Markdown, un texte. (La §2 de `CLAUDE.md` en
+annonce 653 : un de moins que le disque, sa dérive habituelle, aucune garde ne
+comptant ce dossier.) Une source `.webp` serait une première, et elle le serait
+pour une raison qui n'en est pas une.
+
+### 7.4 Ce qu'il faut, et ce que ça débloque
+
+**Les huit PNG d'origine**, tels qu'Ethan les a exportés — clé `#FF00FF` pure,
+sans ré-encodage —, déposés dans `art/sources/` sous les noms du brief :
+`ruine_def_j_variante_01..04.png` et `ruine_def_o_variante_01..04.png`. Le plus
+sûr est de les committer directement sur une branche, ou de les joindre en
+**fichiers** plutôt qu'en images collées : c'est le collage qui déclenche le
+ré-encodage.
+
+Tout le reste du lot est instruit. À l'arrivée des PNG, il se déroule d'une
+traite et sans arbitrage neuf :
+
+1. `python3 tools/entrees.py --declarer`, puis conditionnement — **hors lot par
+   le §5 du brief**, donc à confirmer : sans lui il n'y a rien dans l'atlas, et
+   `nombreDeVariantes` lèverait. C'est le seul point de méthode qui reste à
+   trancher.
+2. Famille et poids (§3.1), bande de sel neuve **9** (§2.3 et §2.4), extension de
+   `RESTE_APRES_DESTRUCTION` par genre (§3.2 du brief), `defense: 'ruine'` et
+   retrait du commentaire périmé, palier **29** (§3.2).
+3. T1 et T2 s'écrivent alors pour de bon : T1 est déjà joué comme mesure
+   (25,86 % contre 100,00 %), T2 attend le nom de ruine de défense qu'il asserte.
+
+### 7.5 Ce que ce complément change au reste du rapport
+
+Rien n'est retiré. Le §1 garde sa mesure — les huit n'étaient pas au dépôt, et
+elles n'y sont toujours pas. Le §2 ne bouge pas d'un chiffre : le sel se mesure
+sur des coordonnées, pas sur des pixels. Le §3.1 et le §3.2 sont confirmés par
+le §7.2. Le §3.3 est **dépassé et le dit**. Le §6 tient : `dist/index.html` est
+toujours identique à l'octet, donc **ni `version`, ni `config.build`, ni
+`SAVE_VERSION` ne bougent**.
