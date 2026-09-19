@@ -347,14 +347,14 @@ const TAILLES_D_AVANT = {
   'atlas-batiment-64.webp': 190064, // 179002 avant TERRITOIRE-ET-ÉCHELLE, 185210 avant EMPRISES-ET-DÉLAI
   'atlas-carte-128.webp': 473716,
   'atlas-carte-64.webp': 180372,
-  'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
-  'atlas-chassis-64.webp': 27802, // 10690 avant OUVRAGE-CÂBLAGE
-  'atlas-defense-128.webp': 121456, // 65050 avant RUINES-DÉFENSE
-  'atlas-defense-64.webp': 46924, // 27124 avant RUINES-DÉFENSE
+  'atlas-chassis-128.webp': 73090, // 72842 avant CONDITIONNEMENT-ZÉNITH, 28850 avant OUVRAGE-CÂBLAGE
+  'atlas-chassis-64.webp': 27824, // 27802 avant CONDITIONNEMENT-ZÉNITH, 10690 avant OUVRAGE-CÂBLAGE
+  'atlas-defense-128.webp': 115110, // 59120 après CONDITIONNEMENT-ZÉNITH, 65050 avant lui
+  'atlas-defense-64.webp': 44454, // 24648 après CONDITIONNEMENT-ZÉNITH, 27124 avant lui
   'atlas-limite-128.webp': 13092,
   'atlas-limite-64.webp': 10016,
-  'atlas-socle-128.webp': 53918, // 54642 avant OUVRAGE-CÂBLAGE
-  'atlas-socle-64.webp': 21750, // 21092 avant OUVRAGE-CÂBLAGE
+  'atlas-socle-128.webp': 66600, // 53918 avant CONDITIONNEMENT-ZÉNITH, 54642 avant OUVRAGE-CÂBLAGE
+  'atlas-socle-64.webp': 26344, // 21750 avant CONDITIONNEMENT-ZÉNITH, 21092 avant OUVRAGE-CÂBLAGE
   'atlas-terrain-128.webp': 78802,
   'atlas-terrain-64.webp': 33256,
   'atlas-tourelle_unite-128.webp': 36454, // 19454 avant OUVRAGE-CÂBLAGE
@@ -419,17 +419,43 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // fois. ⚠ Et **132 des 162 PNG changent de dessin** — les trente autres sont
   // les états neufs dont l'ancrage ne déplace rien, plus la vignette mixte.
   //
-  // ⚠⚠ ET LES DEUX LIGNES `defense` SONT RÉANCRÉES AU LOT RUINES-DÉFENSE, 19/09,
-  // AVEC LE NOMBRE D'AVANT À CÔTÉ DE CELUI D'APRÈS. La famille passe de 18 à
+  // ⚠⚠ SIX LIGNES SONT RÉANCRÉES AU LOT CONDITIONNEMENT-ZÉNITH, 19/09, ET LE
+  // NOMBRE D'AVANT EST ÉCRIT À CÔTÉ DE CELUI D'APRÈS. Les 22 sources passées au
+  // zénithal au lot ANCRES-ZÉNITH sont enfin conditionnées : 44 sprites changent
+  // de dessin — les douze tourelles de défense, les neuf socles redessinés et la
+  // coque de l'Obusier, aux deux grilles —, les 124 autres sont identiques au
+  // pixel, et `--forcer defense --forcer socle --forcer chassis` nomme les
+  // trois familles recousues. `defense` MAIGRIT (65 050 → 59 120 en 128) : les
+  // tourelles zénithales, recentrées sur leur pivot dans un carré porté par le
+  // canon, ne remplissent leur cellule qu'à 11 à 43 % ; `socle` GROSSIT
+  // (53 918 → 66 600) : le logement peint remplace un trou transparent.
+  // **Aucun sprite n'entre ni ne sort** : 18 · 12 · 18 des deux côtés. Les
+  // douze autres lignes n'ont pas bougé d'un octet, et `atlas.py --verifier`
+  // rend après le lot ce qu'il rendait avant sur l'arbre pristine : 17
+  // identiques · 3 différents — `carte-64`, `carte-128`, `interface-128`, l'encodeur
+  // de la machine, laissés là où ils étaient.
+  // ⚠⚠ ET LES DEUX LIGNES `defense` SONT RÉANCRÉES UNE SECONDE FOIS LE MÊME
+  // JOUR, AU LOT RUINES-DÉFENSE, SUR L'ARBRE FUSIONNÉ. La famille passe de 18 à
   // **26** sprites : les huit ruines de pièce de défense y entrent, parce que
   // c'est la famille des pièces qu'elles remplacent. `atlas-defense-128.webp`
-  // passe de 65 050 à **121 456** (+56 406), le 64 de 27 124 à **46 924**
-  // (+19 800). ⚠ Le poids N'A PAS arbitré le choix de famille : les quatre
-  // candidats mesurés — `batiment`, `defense`, `terrain`, une famille neuve —
-  // tiennent dans **5 556 octets d'écart en base64**, soit 0,06 % du livrable.
-  // Ce qui a tranché est le CÂBLAGE : `defense` est déjà dans les trois tables
-  // d'atlas, donc zéro site à brancher, là où une famille neuve en demande six
-  // et où `executer` LÈVE sur une famille absente.
+  // passe de 59 120 à **115110** (+55 990), le 64 de 24 648 à
+  // **44454** (+19 806).
+  //
+  // ⚠⚠ ET CES DEUX NOMBRES-LÀ SONT CEUX DE LA FUSION, PAS CEUX DU LOT SEUL.
+  // Écrit sur `105d4fc`, RUINES-DÉFENSE mesurait 121 456 et 46 924 ; le lot
+  // CONDITIONNEMENT-ZÉNITH est passé entre-temps et a fait MAIGRIR la même
+  // famille — les tourelles zénithales recentrées ne remplissent leur cellule
+  // qu'à 11 à 43 %. **Les deux ancres étaient justes séparément et fausses
+  // ensemble** : l'atlas est RECOUSU sur l'arbre fusionné par
+  // `atlas.py --ecrire --forcer defense`, et c'est ce disque-là qui est écrit
+  // ici. Une somme des deux diffs aurait donné un troisième nombre, faux.
+  //
+  // ⚠ Le poids N'A PAS arbitré le choix de famille : les quatre candidats
+  // mesurés — `batiment`, `defense`, `terrain`, une famille neuve — tiennent
+  // dans **5 556 octets d'écart en base64**, soit 0,06 % du livrable. Ce qui a
+  // tranché est le CÂBLAGE : `defense` est déjà dans les trois tables d'atlas,
+  // donc zéro site à brancher, là où une famille neuve en demande six et où
+  // `executer` LÈVE sur une famille absente.
   //
   // ⚠⚠ ET LES SEIZE AUTRES LIGNES N'ONT PAS BOUGÉ D'UN OCTET, CE QUI EST LA
   // MOITIÉ QUI PROUVE. Le lot ne touche que la famille `batiment` :
@@ -458,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 485 395 octets, la marge sur la borne T10 est de 2,21 %', () => {
+test('PIC T7 — le livrable pèse 9 494 171 octets, la marge sur la borne T10 est de 2,12 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -850,10 +876,30 @@ test('PIC T7 — le livrable pèse 9 485 395 octets, la marge sur la borne T10 e
   // ⚠ LES 898 OCTETS DE JAVASCRIPT SONT LE CÂBLAGE : `FAMILLE_DE_LA_RUINE`,
   // `SEL_VARIANTE_RUINE`, la famille passée en paramètre de `nombreDeVariantes`
   // et les cinq arguments de `couchesDeLaRuine`. Pas une image ne les porte.
+  //
+  // ⚠⚠ ET `main` A BOUGÉ SOUS LE LOT : REMESURÉ CONTRE `fd1a007`, QUI EST LE
+  // MERGE DE CONDITIONNEMENT-ZÉNITH. Ethan a fusionné la PR #161 pendant que
+  // celui-ci était ouvert, et les deux lots recousent la MÊME famille —
+  // `defense`. Les deux ancres étaient donc justes séparément et fausses
+  // ensemble : l'atlas est RECOUSU sur l'arbre fusionné, et c'est ce disque-là
+  // qui est écrit ici. Livrable pristine de `main` **9 418 621**, arbre du lot
+  // **9 494 171**, coût **+75 550** — **images +74 652 · JavaScript +898 ·
+  // feuille +0 · balisage +0 · audio +0**, la partition tombant EXACTEMENT sur
+  // le total des DEUX côtés — écart **0 · 0** —, et **306 URI / 307 lignes
+  // `data:` de part et d'autre**.
+  //
+  // ⚠ ET LE COÛT EN IMAGES BAISSE DE 556 OCTETS ALORS QUE LE LOT N'A PAS
+  // CHANGÉ D'UN DESSIN : +75 208 contre `105d4fc`, +74 652 contre `fd1a007`.
+  // CONDITIONNEMENT-ZÉNITH a recentré les douze tourelles de défense dans un
+  // carré porté par leur canon ; elles ne remplissent plus leur cellule qu'à
+  // 11 à 43 %, donc l'atlas recousu se comprime autrement. **Une somme des deux
+  // diffs aurait donné un troisième nombre, faux.**
   const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_485_395;          // remesuré au lot RUINES-DÉFENSE, base `105d4fc`
-  const MARGE = BORNE - MESURE;      // 214 605 octets — 213 344 écrits par ÉCHELLE-RECHERCHE
-  assert.equal(MARGE, 214_605);
+  const MESURE = 9_494_171;          // remesuré sur l'arbre FUSIONNÉ, base `fd1a007`
+  const MARGE = BORNE - MESURE;      // 205 829 octets — 214 605 avant la fusion avec #161
+  assert.equal(MARGE, 205_829);
+  assert.notEqual(MARGE, 214_605,
+    'la marge est celle de RUINES-DÉFENSE seul : la fusion avec CONDITIONNEMENT-ZÉNITH a été défaite');
   assert.notEqual(MARGE, 213_344,
     'la marge est celle d\'avant RUINES-DÉFENSE : le réancrage a été défait');
   assert.notEqual(MARGE, 215_225,
@@ -866,7 +912,7 @@ test('PIC T7 — le livrable pèse 9 485 395 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.21);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.12);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

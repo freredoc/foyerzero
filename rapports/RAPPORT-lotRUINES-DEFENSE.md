@@ -4,14 +4,20 @@ Une pièce de défense abattue laisse sa ruine. Huit sources d'Ethan — quatre 
 camp —, conditionnées aux deux grilles, cousues dans l'atlas `defense`, et
 tirées sous un sel à elles.
 
-**`npm run check` : 1 646 déclarés · 1 645 pass · 0 fail · 1 skipped**, sortie 0.
-`npm run build` → `dist/index.html`, **9 485 395 octets**, 0 référence externe.
-Version et build passent à **0.99.68 · build 180**, les deux restant des CHAÎNES.
+**`npm run check` : 1 648 déclarés · 1 647 pass · 0 fail · 1 skipped**, sortie 0.
+`npm run build` → `dist/index.html`, **9 494 171 octets**, 0 référence externe.
+Version et build passent à **0.99.69 · build 181**, les deux restant des CHAÎNES.
+
+⚠⚠ **ET CES TROIS NOMBRES SONT CEUX DE LA FUSION AVEC LA PR #161.** Ethan a
+fusionné le lot CONDITIONNEMENT-ZÉNITH pendant que celui-ci était ouvert ; écrit
+seul sur `105d4fc`, le lot mesurait 1 646 · 9 485 395 · 0.99.68 · 180. Le §10
+raconte la fusion, ce qu'elle a coûté et pourquoi aucun de ces nombres ne
+s'obtient en additionnant deux diffs.
 
 ⚠ **CE RAPPORT A DEUX MOITIÉS, ET LA SECONDE EST DE L'HISTOIRE.** Le lot s'était
 arrêté sur son pré-check n° 5 — les huit sources n'étaient pas au dépôt — et
 avait rendu ses mesures sous cette forme-là. Le corps de ce rapport d'arrêt est
-conservé tel quel à partir du §10, sans qu'un mot en bouge, **y compris son
+conservé tel quel à partir du §11, sans qu'un mot en bouge, **y compris son
 §7.3, dont le §9 ci-dessous est la rétractation.**
 
 ---
@@ -492,7 +498,136 @@ lira la table du §7.3 lira aussi qu'elle est retirée.
 
 ---
 
-## 10. — CE QUI SUIT EST LE RAPPORT D'ARRÊT, RENDU AVANT QUE LES SOURCES N'ARRIVENT
+## 10. ⚠⚠ La fusion avec la PR #161 — sept fichiers croisés, un atlas recousu, un numéro de build sauvé
+
+Ethan a fusionné le lot **CONDITIONNEMENT-ZÉNITH** (PR #161) le 19/09 à 23 h 25,
+pendant que celui-ci était ouvert. `main` passe de **`105d4fc`** à **`fd1a007`**.
+Tous les nombres de ce rapport écrits avant cette ligne ont été **remesurés**, pas
+recalculés, et l'en-tête porte ceux de la fusion.
+
+### 10.1 Sept fichiers se croisent, et cinq n'étaient pas prévisibles
+
+| fichier | pourquoi il se croise |
+|---|---|
+| `CLAUDE.md` | le bloc §0 en tête — les deux lots parallèles s'y heurtent toujours |
+| `package.json` | le numéro de version — idem |
+| `test/pictogramme.test.js` | `PIC T6` et `PIC T7`, réancrés par les deux |
+| `test/sprite.test.js` | réancré par les deux, **auto-fusionné sans conflit** |
+| `art/sprites/atlas-defense-64.webp` | **les deux lots recousent la même famille** |
+| `art/sprites/atlas-defense-128.webp` | idem |
+| `art/sprites/atlas-empreintes.json` | idem, c'est le manifeste de la couture |
+
+Les deux premiers sont ceux que `CLAUDE.md` annonce depuis le lot ÉCRANS du
+13/09 : *« ce sont les trois que deux lots parallèles heurtent toujours »*. Les
+**cinq autres sont neufs**, et ils viennent d'un fait unique : #161 recentre les
+**douze tourelles de défense** sur leur pivot, celui-ci ajoute **huit ruines** —
+dans la **même** famille `defense`.
+
+### 10.2 ⚠⚠ Un `.webp` ne se fusionne pas : l'atlas est RECOUSU
+
+Git ne sait rien faire d'un binaire en conflit, et choisir un côté aurait perdu
+l'autre — prendre le mien effaçait les douze tourelles recentrées, prendre le
+sien effaçait les huit ruines. La règle du dépôt est écrite : *« regenerate
+generated files with the repo's tooling, never by hand »*.
+
+Les répertoires de sprites, eux, ont fusionné **proprement** : les deux lots y
+touchent des fichiers DISJOINTS — #161 réécrit `def_{j,o}_*.png`, celui-ci ajoute
+`ruine_def_{j,o}_{a,b,c,d}.png`. `art/sprites/defense/128/` porte donc **26
+fichiers** après fusion, et c'est l'ensemble juste.
+
+```
+python3 tools/atlas.py --ecrire --forcer defense
+  defense   64   26 sprites  6×5    44 454 o
+  defense  128   26 sprites  6×5   115 110 o
+  src/data/atlas.js  identique
+```
+
+⚠ **`src/data/atlas.js` est IDENTIQUE**, et c'est la moitié qui rassure : la
+grille reste 6 × 5, donc aucune cellule ne se déplace — les 26 noms sont les
+mêmes, seuls les pixels de 18 d'entre eux ont changé.
+
+⚠ **`atlas.py --verifier` rend les trois mêmes ÉCART qu'avant** — `carte-64`,
+`carte-128`, `interface-128` —, laissés là où les deux lots les ont trouvés.
+
+### 10.3 ⚠⚠ `package.json` s'est auto-fusionné EN SILENCE, et c'est le piège
+
+Les deux lots avaient bumpé au **MÊME** numéro, `0.99.68 · build 180`, parce que
+tous deux l'avaient pris comme « le suivant disponible » sur la même base. Git ne
+voit alors **aucun conflit** : il garde la valeur, `git status` ne dit rien, et
+**deux livrables différents auraient porté le même `config.build`** — que
+l'enveloppe Android lit pour décider d'une mise à jour.
+
+C'est la **cinquième** fois du dépôt, après ÉCRANS du 10/09,
+ARRIVÉE-CARTE-ET-BUILD et le lot ÉCRANS d'origine. La fusion prend donc
+**0.99.69 · build 181**, et les deux restent des **CHAÎNES**, vérifié au type —
+`android/app/build.gradle.kts` les lit `as String`, et un nombre y fait tomber le
+job Android à la configuration.
+
+### 10.4 Le livrable, remesuré contre `fd1a007`
+
+| poste | `main` `fd1a007` | arbre fusionné | écart |
+|---|---|---|---|
+| **total** | 9 418 621 | 9 494 171 | **+75 550** |
+| JavaScript | 436 118 | 437 016 | **+898** |
+| feuille | 48 043 | 48 043 | +0 |
+| balisage | 38 439 | 38 439 | +0 |
+| images | 7 692 935 | 7 767 587 | **+74 652** |
+| audio | 1 203 086 | 1 203 086 | +0 |
+
+**La partition tombe EXACTEMENT sur le total des DEUX côtés — écart 0 · 0** — et
+**306 URI / 307 lignes `data:` de part et d'autre**.
+
+⚠⚠ **ET LE COÛT EN IMAGES BAISSE DE 556 OCTETS SANS QU'UN DESSIN AIT CHANGÉ.**
++75 208 contre `105d4fc`, **+74 652** contre `fd1a007` ; l'atlas `defense` passe
+de 121 456 / 46 924 à **115 110 / 44 454**. Les tourelles zénithales recentrées
+ne remplissent plus leur cellule qu'à 11 à 43 % : l'atlas recousu se comprime
+autrement. **Une somme des deux diffs aurait donné un troisième nombre, faux** —
+c'est ce que le §6 de `CLAUDE.md` appelle « deux ancres justes séparément et
+fausses ensemble ».
+
+Marge sous la borne T10 de 9 700 000 : **205 829 octets, 2,12 %** — 214 605 et
+2,21 % avant la fusion. La borne, elle, **ne bouge pas une seconde fois** : elle
+a été relevée pour une ressource qui entre, et rien n'entre à la fusion.
+
+### 10.5 Ce que la fusion a coûté en tests : une seule chute, et c'était la garde
+
+Suite complète sur l'arbre fusionné, avant tout réancrage : **1 648 déclarés ·
+1 646 pass · 1 fail · 1 skipped**. L'unique rouge est
+`documentation — CLAUDE.md §0 annonce le vrai nombre de tests`, qui faisait
+exactement son travail — la §0 annonçait 1 646, l'arbre en déclare 1 648.
+
+⚠ **`PIC T6`, `sprite.test.js` et les trois tests du lot sont VERTS sans
+retouche.** Les tailles d'atlas `socle` et `chassis` viennent de #161 telles
+quelles ; seules les deux lignes `defense` ont été remesurées. `sprite.test.js` a
+fusionné sans conflit parce que les deux lots y touchent des régions disjointes —
+#161 change le compteur de trous et l'ancre du carré de tourelle, celui-ci ajoute
+le balayage des huit ruines et porte `noms.size` de 50 à 58.
+
+⚠ **Deux tests entrent avec la fusion** — `CZ T1` et `CZ T2`, qui sont ceux de
+#161. Le compte va donc 1 643 (ANCRES-ZÉNITH) → 1 645 (`main`) → **1 648** ici.
+
+### 10.6 Les trois réancrages de la fusion, aucun assoupli
+
+| garde | avant | après | motif |
+|---|---|---|---|
+| `PIC T6` · `atlas-defense-128.webp` | 121 456 | **115 110** | atlas recousu sur l'arbre fusionné |
+| `PIC T6` · `atlas-defense-64.webp` | 46 924 | **44 454** | idem |
+| `PIC T7` · `MESURE` / `MARGE` | 9 485 395 / 214 605 | **9 494 171 / 205 829** | livrable remesuré contre `fd1a007` |
+
+`PIC T7` gagne une **contre-assertion de plus** — `notEqual(MARGE, 214_605)` —
+qui refuse le retour de l'ancre du lot seul, c'est-à-dire un lot futur qui
+déferait la fusion.
+
+### 10.7 ⚠ Le bloc §0 de `CLAUDE.md` : l'ordre d'atterrissage tranche
+
+CONDITIONNEMENT-ZÉNITH est sur `main`, RUINES-DÉFENSE atterrit après lui : le
+bloc de celui-ci passe **en tête**, celui de #161 est **RÉTROGRADÉ** en
+« Auparavant », **sans qu'un mot de son corps ne bouge** — seul son titre change.
+En garder un seul aurait effacé un lot entier de l'historique que ce fichier EST.
+
+---
+
+## 11. — CE QUI SUIT EST LE RAPPORT D'ARRÊT, RENDU AVANT QUE LES SOURCES N'ARRIVENT
 
 ⚠ **Il est conservé sans qu'un mot en bouge**, §7.3 compris, dont le §9 ci-dessus
 est la rétractation. Ses §1 à §6 décrivent l'état du lot au moment où il s'est

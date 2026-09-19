@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **19/09/2026**, version 0.99.68 · build 180.
+Dernière révision : **19/09/2026**, version 0.99.69 · build 181.
 ⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
 164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
 **175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
@@ -176,27 +176,65 @@ la moitié manquante d'un AUTRE lot — et, pour 134 d'entre eux, d'un lot que
 personne n'a encore nommé —, changerait ce que le jeu DESSINE sans brief, et
 ferait entrer un redessin zénithal dans une PR qui parle de ruines. Ce qui est
 vérifié à la place : **`ruines.py` reproduit ses 20 fichiers à l'octet — zéro
-diff — et `atlas.py --ecrire --forcer defense` rend un atlas IDENTIQUE à celui
-que le lot avait cousu avant la fusion**, `src/data/atlas.js` et
-`atlas-empreintes.json` compris. L'atlas et les PNG du dépôt s'accordent donc, ce
-que `sprite.test.js` garde ; c'est l'accord SOURCE → PNG qui manque, et il
-manquait déjà. ⚠ `atlas.py --verifier` rend **17 identiques · 3 différents** des
+diff — et l'atlas `defense` est RECOUSU par l'outil sur l'arbre fusionné**,
+`src/data/atlas.js` et `atlas-empreintes.json` compris. L'atlas et les PNG du
+dépôt s'accordent donc, ce que `sprite.test.js` garde ; c'est l'accord
+SOURCE → PNG qui manque, et il manquait déjà.
+⚠⚠ **ET CETTE PHRASE-LÀ A ÉTÉ CORRIGÉE À LA FUSION, PAS RECOPIÉE.** Écrite sur
+`105d4fc`, elle disait que la recouture rendait « un atlas IDENTIQUE à celui que
+le lot avait cousu ». **C'est devenu FAUX** le jour où #161 a recentré les douze
+tourelles de la même famille : le disque recousu sur `fd1a007` pèse 115 110 et
+44 454 là où le lot seul rendait 121 456 et 46 924. La laisser aurait été une
+affirmation périmée sous une conclusion vivante — ce que ce fichier punit
+ailleurs quatre fois. ⚠ `atlas.py --verifier` rend **17 identiques · 3 différents** des
 deux côtés — `carte-64`, `carte-128`, `interface-128`, les trois ÉCARTs
 préexistants, laissés où le lot les a trouvés. **Ethan tranche.**
 ⚠⚠ **LA BORNE T10 PASSE DE 9 600 000 À 9 700 000, ET C'EST LE PLANCHER QUI L'A
-FORCÉ, PAS LA BORNE.** À 9 600 000 le livrable passait encore — 9 485 395 — mais
-la marge tombait à **114 605 octets, 1,19 %**, sous le plancher de 150 000
+FORCÉ, PAS LA BORNE.** À 9 600 000 le livrable passait encore — 9 494 171 — mais
+la marge tombait à **105 829 octets, 1,10 %**, sous le plancher de 150 000
 qu'asserte `PIC T7`. Une ressource entre légitimement — huit dessins neufs, pas
 de l'entropie comme à ART-90 —, donc la borne monte et le lot écrit pourquoi.
-Marge **214 605 octets, 2,21 %**. ⚠ Et `QUALITE` n'a pas été baissée : elle vaut
+Marge **205 829 octets, 2,12 %**. ⚠ Et `QUALITE` n'a pas été baissée : elle vaut
 pour les DIX-NEUF atlas.
-⚠ **COÛT +76 106 OCTETS**, mesuré poste par poste contre le livrable rebâti dans
-un `git worktree` sur l'arbre pristine de `main` = `105d4fc` (**9 409 289**) :
-**images +75 208 · JavaScript +898 · feuille +0 · balisage +0 · audio +0**, la
-partition tombant EXACTEMENT sur le total des DEUX côtés — écart **0 · 0** —, et
-**306 URI / 307 lignes `data:` de part et d'autre**. Aucune ressource ne prend un
-marqueur de plus : c'est le même atlas qui pèse plus. Version et build passent à
-**0.99.68 · build 180**, et les deux restent des CHAÎNES.
+⚠⚠ **`main` A BOUGÉ SOUS LE LOT, ET LA FUSION A ÉTÉ RÉSOLUE À LA MAIN.** Ethan a
+fusionné la PR #161, lot CONDITIONNEMENT-ZÉNITH, pendant que celui-ci était
+ouvert : `main` passe de `105d4fc` à `fd1a007`, et les deux lots se croisent sur
+**sept fichiers** — `CLAUDE.md`, `package.json`, `test/pictogramme.test.js`,
+`test/sprite.test.js`, et les TROIS générés de la famille `defense`,
+`atlas-defense-64.webp`, `atlas-defense-128.webp` et `atlas-empreintes.json`.
+Les deux premiers sont ceux que deux lots parallèles heurtent toujours ; les
+cinq autres sont neufs, et ils viennent de ce que **les deux lots recousent la
+MÊME famille** — #161 recentre les douze tourelles de défense, celui-ci ajoute
+les huit ruines.
+⚠⚠ **L'ATLAS `defense` EST DONC RECOUSU, PAS ARBITRÉ.** Un `.webp` ne se fusionne
+pas au texte, et choisir un côté aurait perdu l'autre : `python3 tools/atlas.py
+--ecrire --forcer defense` sur l'arbre fusionné rend **26 sprites** — les 18
+pièces recentrées de #161 PLUS les 8 ruines —, `src/data/atlas.js` **identique**
+(la grille reste 6 × 5), et `atlas.py --verifier` les trois mêmes ÉCART qu'avant,
+`carte-64`, `carte-128`, `interface-128`.
+⚠⚠ **ET `package.json` S'EST AUTO-FUSIONNÉ EN SILENCE, CE QUI EST LE PIÈGE.** Les
+deux lots avaient bumpé au **MÊME** numéro — `0.99.68 · build 180` — parce que
+tous deux l'avaient pris comme « le suivant disponible » sur la même base : git
+ne voit alors aucun conflit et garde la valeur, si bien que **deux livrables
+différents auraient porté le même `config.build`**, que l'enveloppe Android lit.
+`git status` n'aurait rien dit. La fusion prend donc **0.99.69 · build 181**, et
+les deux restent des CHAÎNES, vérifié au type. **CINQUIÈME fois du dépôt** —
+après ÉCRANS du 10/09, ARRIVÉE-CARTE-ET-BUILD et le lot ÉCRANS d'origine.
+⚠ **COÛT +75 550 OCTETS**, mesuré poste par poste contre le livrable rebâti dans
+un `git worktree` sur l'arbre pristine de `main` = `fd1a007`, qui EST le merge de
+CONDITIONNEMENT-ZÉNITH (**9 418 621**) : **images +74 652 · JavaScript +898 ·
+feuille +0 · balisage +0 · audio +0**, la partition tombant EXACTEMENT sur le
+total des DEUX côtés — écart **0 · 0** —, et **306 URI / 307 lignes `data:` de
+part et d'autre**. Aucune ressource ne prend un marqueur de plus : c'est le même
+atlas qui pèse plus.
+⚠⚠ **ET LES NOMBRES ONT ÉTÉ REMESURÉS, PAS ADDITIONNÉS — L'ÉCART EST RÉEL.**
+Écrit seul sur `105d4fc`, le lot mesurait **+76 106** et portait l'atlas
+`defense` à 121 456 / 46 924 ; sur l'arbre fusionné il mesure **+75 550** et
+l'atlas tombe à **115 110 / 44 454**. **556 octets d'images de moins pour le même
+dessin** : les tourelles zénithales recentrées ne remplissent plus leur cellule
+qu'à 11 à 43 %, donc l'atlas recousu se comprime autrement. Une somme des deux
+diffs aurait donné un troisième nombre, faux — c'est ce que `PIC T7` écrit à
+côté de son ancre.
 ⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 38** — vérifié au diff : pas un champ
 n'entre dans l'état. Un reste de destruction est un DESSIN, et le sel est une
 constante de rendu.
@@ -204,10 +242,13 @@ constante de rendu.
 `EFF T11`, `EFF T12`, `T5` de `rendu.test.js`, `VIT T2 bis`, plus le balayage de
 `sprite.test.js`. Chacun écrit le nombre d'avant à côté de celui d'après et porte
 une contre-assertion `notEqual` qui refuse le retour de l'ancien.
-⚠ **`npm test` rend **1646 pass / 0 fail** au sens de la garde de
+⚠ **`npm test` rend **1648 pass / 0 fail** au sens de la garde de
 `documentation.test.js`** — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
-est **1 645 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
-08/09), et `npm run check` sort en 0.
+est **1 647 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. ⚠ Le lot en ajoute **trois** — `T1`, `T2`
+et `T2 bis` de `ruines-defense.test.js` — et la fusion en apporte **deux** de
+plus, `CZ T1` et `CZ T2`, qui sont ceux de #161 : 1 643 à ANCRES-ZÉNITH, 1 645
+sur `main`, 1 648 ici.
 ⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
 se VOIT — un socle abattu qui laisse un tas de gravats au lieu de disparaître —
 et rien n'a été ouvert dans un navigateur : tout est mesuré sur la LISTE
@@ -218,6 +259,71 @@ d'un mur ne se confonde pas avec le mur intact au cran le plus large.
 demande `claude/ruines-defense-<suffixe>` ; l'environnement d'exécution épingle
 la session à `claude/new-session-fx3z9w` et interdit de pousser ailleurs sans
 autorisation explicite.
+
+**Auparavant, après le lot CONDITIONNEMENT-ZÉNITH (19/09) :**
+⚠⚠ **L'ÉTAT TRANSITOIRE D'ANCRES-ZÉNITH EST FERMÉ : LES 44 SPRITES SONT
+CONDITIONNÉS, LES TROIS ATLAS RECOUSUS, LA TABLE ET L'ART S'ACCORDENT.** Les
+22 sources zénithales — douze tourelles de défense, neuf socles, la coque de
+l'Obusier — passent par `joueur_v2` et `ouvrage_v2` ; **exactement 44 sprites
+changent de dessin, les 124 autres sont identiques au pixel** (rejoués sous
+`FZ_SPRITES`, comparés au pixel, seuls les 44 copiés — aucun fichier commité
+rafraîchi pour l'encodeur). `atlas.py --ecrire --forcer defense --forcer socle
+--forcer chassis` : six atlas réécrits, `atlas.js` identique, `atlas.py
+--verifier` rend après le lot ce qu'il rendait avant sur l'arbre pristine — 17
+identiques · 3 différents (`carte-64`, `carte-128`, `interface-128`, l'encodeur de
+la machine, laissés là où ils étaient).
+⚠⚠ **LES DOUZE TOURELLES ONT ÉTÉ RECENTRÉES SUR LEUR PIVOT, EN PLACE, AVANT
+D'ÊTRE CONDITIONNÉES.** Livrées, leur embase était de 21 à 225 px SOUS le centre
+du fichier et leur carré de rotation dépassait la planche sur dix d'entre elles
+(1 430 à 1 638 pour 1 254 chez le joueur) : le mode `carre` — « la planche EST le
+sprite » — les aurait fait tourner en cercle autour de leur embase, canon rogné
+à 45°. `tools/recentrer-tourelles-ouvrage.py` les a translatées dans une toile
+carrée remplie de la clé, côté = carré + 4 px, pair : sujet conservé au pixel et
+à la somme, pivot à ≤ 0,5 px du centre, planches de 898 à 1 642. ⚠ **LE SCRIPT
+ÉTAIT CASSÉ DEPUIS ANCRES-ZÉNITH ET NE LE DISAIT PAS** : il exécutait le SOURCE
+de `pivot` avec `np` pour seul nom, et le disque inscrit demande `nd` —
+`NameError`. Il importe maintenant les deux modules d'ancres et prend la règle
+d'embase DE LA FAMILLE : disque inscrit pour `def_*`, tambour (`ancres-blindes`)
+pour `off_*_tourelle` ; masque `est_fond_sujet` comme toute la chaîne — les
+sources du joueur ont un fond BRUITÉ à 5 000 couleurs, coins à (239, 14, 239),
+et l'ancien « > 90 de la clé » divergeait sur la frange. ⚠ Les quatre JSON
+d'ancres se reproduisent au caractère près sur les sources recentrées : pivot et
+carré sont invariants par translation, mesuré et pas supposé.
+⚠⚠ **`ECHELLE` NE BOUGE PAS, ET LE PLAFOND DE FAIT EST ÉCRIT DANS
+`INVENTAIRE-SPRITES.md` A7** — il existait depuis OUVRAGE-CÂBLAGE (83,94 %) sans
+être écrit nulle part. Mesuré sur les sprites 128 cousus : portée du carré
+jusqu'à **99,97 % du côté de la case** (`def_j_harpon`, carré de 180 %), portée
+du dessin lui-même jusqu'à **97,99 %**, remplissage du carré **10,4 à 41,4 %** de
+pixels opaques — la marge de rotation est presque vide, une tourelle du joueur
+occupe 12 à 24 % de sa cellule. Arbitrage : on achète le dépassement ; baisser
+`ECHELLE` a été rejeté à l'œil le 05/09, raccourcir les canons demanderait −74 %
+sur le mortier joueur. `sprite.test.js` le borne (101 / 92) et nomme le pire.
+⚠ **T1 — `CZ T1`, ROUGE AVANT, VERT APRÈS** : le pivot des douze sources refait
+par une transformée de distance exacte en JavaScript (quart de résolution,
+plateau du maximum) est à moins de 1 % du centre du fichier, et aucun pixel de
+sujet n'est plus loin du centre que la demi-planche. Avant : 2,07 % à 19,36 %
+d'écart, dix planches trop petites. **T2 — `CZ T2`, ROUGE AVANT, VERT APRÈS** :
+sur les neuf socles redessinés, le trou du SPRITE 128 cousu (la recette d'`AZ
+T1`, relue sur le RVBA) tombe où la table pose la tourelle, à 2 % de la case
+près ; avant, 13,7 à 16,5 px d'écart sur 64 (l'Ouvrage), 9,6 (le joueur). Les
+deux vivent dans `test/ancres-zenith.test.js`, dont la recette du trou est
+PARTAGÉE entre le dessin et le sprite — une seconde écriture aurait vieilli.
+⚠ **TROIS RÉANCRAGES, AUCUN ASSOUPLISSEMENT.** `sprite.test.js` « ne sort pas de
+son carré » : pire rayon 31,69 → **31,60** (les zénithales s'arrêtent à
+31,50–31,60, les deux blindés inchangés partagent le pire). `sprite.test.js`
+« percés de trous » : l'appât CHANGE pour la troisième fois — les socles de
+tourelle du joueur passent de 972 à **0 px** enfermés (le logement zénithal est
+un disque PEINT, plus un trou traversant), il ne reste que 219 px sur les trois
+socles d'artillerie à 75° ; l'appât devient `interface/128`, **15 777 px sur 46
+pictogrammes**, un trait sur du vide enferme par construction, et le seuil de
+500 ne bouge pas. `PIC T6` : six tailles d'atlas réancrées, l'ancien nombre à
+côté — `defense` maigrit (65 050 → 59 120 en 128, les carrés sont vides), `socle`
+grossit (53 918 → 66 600, le disque peint remplace le trou), `chassis` bouge de
+248 octets.
+⚠ **`npm test` rend **1645 pass / 0 fail** au sens de la garde de
+`documentation.test.js`** — 1 644 pass · 0 fail · 1 skipped au relevé de
+`npm run check`. `SAVE_VERSION` ne bouge pas, vérifié : rien n'entre dans l'état.
+Version 0.99.68 · build 180 — le livrable change, trois atlas inlinés.
 
 **Auparavant, après le lot ANCRES-ZÉNITH (19/09) :**
 ⚠⚠ **LES DEUX DÉTECTEURS GÉOMÉTRIQUES RENDAIENT DES VALEURS FAUSSES SANS LEVER,

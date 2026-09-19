@@ -229,7 +229,7 @@
       }
     },
     "chassis": {
-      "atlas": "c50b67db74194a3c2dc815913b7dfaf801c2346d58ee8c629c0d63f1601d1877",
+      "atlas": "df41baa7af2ec5ee1860c6c2bcdb01a77fc37d4fae98995d005c47fc0a8cfc37",
       "sprites": {
         "off_j_belier_chassis": "f03ed72f15d995f33d619204de1cb6b343c7f7bbca09ffe833efb6280ec67528",
         "off_j_belier_chassis_def": "98d2382650c0b0d63c92836c9adc0630bea0a9efebd91c16b02fba70723a977e",
@@ -237,7 +237,7 @@
         "off_j_broyeur_chassis_def": "b76cbd0864eade9a4057ee5c3200601234eb9b570a7d92278fe6a4d355ad571f",
         "off_j_fendeur_chassis": "e2c2166a2a7d8ef9ffe9e0d4ff49acaa908812c8f5ed61b545e2993897adc161",
         "off_j_fendeur_chassis_def": "300a706d23a2fb9f894917e3f8ec6dbae4e7a7ea9cfa20d0db1a8c225d6778cd",
-        "off_j_pilon_chassis": "fe92b04e41fa40edac853f5d83bd8f30606fdba81c571913f2deb21846ac7e4b",
+        "off_j_pilon_chassis": "b049221f1d188ce279a2f82e3d4c9c623c368c57b8c3ad81bb4f94a9fcb92895",
         "off_j_ratisseur_chassis": "c7b451bb84aee4f499a228af7ab4dd0bf044562f93f6d8ede9cb213b5c02c0ea",
         "off_j_ratisseur_chassis_def": "97b6c9f63894de6b015abc6431a0aea8bbacd2d7856d1677002ed3354a7b6b3e",
         "off_o_belier_chassis": "c8e2ac7126b8043bea692d84f5c33b19d6dedf2ba8c03c7ae9106b638102372f",
@@ -252,25 +252,25 @@
       }
     },
     "defense": {
-      "atlas": "01478fad5d7b546a107a8c29b623616c92b83c6a27dbf990f827c6a4877d9909",
+      "atlas": "20fa79bc7ccef198b391936de3b591a3153fd296e7a883c4ade1f1ce60b22b0e",
       "sprites": {
-        "def_j_batterie": "176504c37d9cd5ba80a8e660455203086d52adcccac03570dfb353bab2538ee2",
-        "def_j_casemate": "d519f1693dfad058da357c6a9a7979c5a2bb4458201df200fa06559b8b86778b",
-        "def_j_creneau": "64f18240eeaf59bc4a10161b0c9da801388a6fa18977fecb61d0630af1c6a182",
-        "def_j_faucheuse": "6ba26204edbf29b79942df88775592b38150b50c5f7b3b7ac02452582f2fa12d",
-        "def_j_harpon": "4d30bbf54813d10b32b82ab9d892f7486a0c6f2df50e85c110c4d4ad211df033",
+        "def_j_batterie": "d9f3d058ff4a23026a2c3b24f6e9d17242309914ea0782a66ebed4103c74df8e",
+        "def_j_casemate": "526e50d7a104cd8bbf0f297f23cf1512d1902ee0110b8a2bd6ae8c6ad9a279e8",
+        "def_j_creneau": "097514b4b2c4ffdcba5624ca8c1ef5e1f7999f74e712f3beaabb3ff8b5b69f14",
+        "def_j_faucheuse": "249d52aab549e653888f08fe5ece1252ac05e69d7874cb947393793b226fab44",
+        "def_j_harpon": "c2d05a74a1f699cc7862fdeb9dcf0a3b72692f96e7f4a5de656890a70a616dcf",
         "def_j_herse": "c803c2ac4b13f2a0a5ba6ac9e9df90db3e4f99192e588fc9b126e1d58317de1b",
         "def_j_merlon": "b3c907874346fc0ecb55d56dd8d681f31bc6bf9b6eae97b73109d01a01ebf90f",
-        "def_j_mortier": "ff3997b1c4c8dd8d0f89977f97aa4ce5153b8ff56fc3c5923d64e2c8258438ac",
+        "def_j_mortier": "96e41cbc27c131e0c3aea8783cf857b0741bcb8ce98bb4d770c24a89356f7b41",
         "def_j_ronce": "fc1ec897e0d93810596ad2710baabfc3ca6ad39c1d49e98ab8df9caee5b7d039",
-        "def_o_batterie": "fcf89d6c3a2a9cb2755c263f90c3542fec63b64b94d4cdb6dc85c0dac66ce036",
-        "def_o_casemate": "d1e91c1f219a1238ae9c6770fccbf4b871bc57994883d6e2844471dd6691d009",
-        "def_o_creneau": "878c59f0c2b4b0140575ee6b6533f5a6cda9a974f9d2602665d9b54a77b80132",
-        "def_o_faucheuse": "d8fd961989076b1902846b42f973fa8b895aa52a37c83c143ceb68f0d75eef95",
-        "def_o_harpon": "e948c2f9f7a9644d6834bc0e318586db2396b02bcfdf3681b23ea5cc982d633a",
+        "def_o_batterie": "1f8ebf93aa42daa7924586d92944055b557612f7490b7daa53e42c4bae575668",
+        "def_o_casemate": "09213bd02485a638663afc1edff12360a6d039a51e7a9fe2e2889a8934c97d89",
+        "def_o_creneau": "8f47501055fe841b318c64efd7f705cfd01c6521f4b7a1ef065c208d587dd752",
+        "def_o_faucheuse": "9920838880855e2711d58a5d95d40b85a2619560e9a7738ad8ecbec83f9819bb",
+        "def_o_harpon": "24a0ce78c38eac2b55cea711db9677676ffdfbb4e45ab27b76fd6ae86a4316f6",
         "def_o_herse": "523c668c47a53fcc16f1a82a7a69ee6a99b49792a2fcaa173addfcc9d6fabca7",
         "def_o_merlon": "6e48e231959c592bd3e5dc772fe1e25127eed53c6a2217cb369bda25f504d5bb",
-        "def_o_mortier": "9194547fb376c7c91566ac7d0298099b6270e4bcc3696793c570cc1691416c8a",
+        "def_o_mortier": "6fbdf3e01d8f513a2f04d616a537783efba999ff24d96fb69e8ecf15cfa29a12",
         "def_o_ronce": "e1c7d14793d1d33b27414b1f35c1f972bad99311446a3018465647882c731d6e",
         "ruine_def_j_a": "d9afe4043f67f943d4d11f8599538f73e4f2c51bb5ec10189b7bd21a24cc43f4",
         "ruine_def_j_b": "feed48dffb65080754c0e8a7ce31bee2c4c22bf5e480d96ab0165da8f4d92fde",
@@ -373,20 +373,20 @@
       }
     },
     "socle": {
-      "atlas": "9ebf9ff39d5aa7ac724201135b4a63cb1d7c81cea1cbb875e1c9e9d040c80918",
+      "atlas": "0f0f380b772cb941ccc6ed52fd2fd69d91b8dbeffea2902d84590d64da487101",
       "sprites": {
-        "socle_def_j_batterie": "dd5c73bb74fa2d24e9e8813233400ab86a45dc1ee22ae364d65ce5ee0239b031",
-        "socle_def_j_casemate": "8ba3edd6fbe67ee57f4babf963c29efcf0dd8dfc44e9eb372cbf1dee410cacb2",
-        "socle_def_j_creneau": "64d1a049e779edf42ca5ee15a6c0eb894308c55473e5513dc98c63f6ce4f27f6",
+        "socle_def_j_batterie": "cce561cc6b0ce78ea3d3ea7811f4177c6946ae1b76efe62a8a4bd0f11a56657c",
+        "socle_def_j_casemate": "ad3745e896a0082d2bb893a548d9adf9f323ba5196268eee35798b0ca17543f9",
+        "socle_def_j_creneau": "20906eff19177830a4c2e2630a28d90585498bfe1395842b20e3ed56c8cf5721",
         "socle_def_j_faucheuse": "a63ed49f947a90d624024829a6eb9b2d4b2f7330cc611d961e007cbec24b0f23",
         "socle_def_j_harpon": "336bf656efe1135ef569fe33252696a607007d1c29ae1510ace101b30360b7f9",
         "socle_def_j_mortier": "772e147e2ba86acf11c2ba52f1942fad3b2347bd21acf2f2227e271ea00aa136",
-        "socle_def_o_batterie": "86e2dc8e2062cca32851286c1d4db2b1e703b8ea3b2f9cc777ca02dcba4edec8",
-        "socle_def_o_casemate": "e33c336c468746c128a574bae7c08423b26c8a396de1dfa52d131bacb789ec5b",
-        "socle_def_o_creneau": "635def44a9ee4de74cb98088b0e5862909e9152ae9d03b0885c944c0502c9382",
-        "socle_def_o_faucheuse": "528a0890f784237c5001b202389d56518d3d3238c132a0828dec68e4de41d2f0",
-        "socle_def_o_harpon": "bcea46dde897e9d149c71cdccb3517687f483030e7b31ca3b18f5efc33596995",
-        "socle_def_o_mortier": "fbfd01061d6d96277e24e96e2aa225a5540f7a8970b16aadca668fd59fafafa7"
+        "socle_def_o_batterie": "6abf667df89637d9153e22a2d05b75e25cd3f6bf0562db36e7d5aebff7f2df7c",
+        "socle_def_o_casemate": "aa18bb9e24ed3e28a05a64d4cfe4612279855bd31a95cb9adb2d489fe8ab9a91",
+        "socle_def_o_creneau": "4c5adb08d66ea0ed1416cbec5634f827e5e60cdb7dc0141371d9dbf75b981809",
+        "socle_def_o_faucheuse": "f28fe08a1de85b5a836ec1c824ec1cd87947bd01b0c5cf98ede7d687eedf9fc5",
+        "socle_def_o_harpon": "aef412874c6a01feadeb06d1d259bdd57367d592c05026cd92fac271a9eed2ab",
+        "socle_def_o_mortier": "ea1a084f887b5e4432c39e5fbcf89e33b42bb61368f1c28406f51c2e277d3737"
       }
     },
     "terrain": {
