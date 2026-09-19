@@ -1204,13 +1204,13 @@ test('sprite — le carré de tourelle tient sur les coques, et déborde sur les
   // CASE : il porte l'échelle du canon et la marge de rotation à 45°, donc il
   // est bien plus grand que le logement.
   //
-  // ⚠⚠ ET IL DÉBORDE SUR LES DOUZE SOCLES — MESURÉ, PAS SUBI. Deux arbitrages se
+  // ⚠⚠ ET IL DÉBORDE SUR DIX SOCLES SUR DOUZE — MESURÉ, PAS SUBI, ET RÉANCRÉ AU
+  // LOT ANCRES-ZÉNITH (il débordait sur les douze au 08/09). Deux arbitrages se
   // croisent, et le lot n'en défait aucun : l'emprise des socles est celle
   // qu'Ethan a donnée — 90 % pour les socles de tourelle, 85 % pour les coques
   // d'artillerie — et `echelle` est ce qu'il a fallu pour que le canon SE LISE à
-  // 40 px. Les faire tenir demanderait de descendre `echelle` à ~1,35, où
-  // l'artiste a mesuré que « le canon pointe » sans se lire. Le corriger est un
-  // arbitrage, et il revient à Ethan.
+  // 40 px, sur les dessins à 75°. Le corriger est un arbitrage, et il revient à
+  // Ethan — voir plus bas ce que les dessins zénithaux y changent.
   //
   // ⚠ ET LA v1 FAISAIT PIRE, ce qui met le chiffre en perspective : elle
   // dessinait la tourelle sur la case ENTIÈRE — `sprite(famille, nom, x, y, t,
@@ -1249,25 +1249,46 @@ test('sprite — le carré de tourelle tient sur les coques, et déborde sur les
   assert.equal(pireBlinde[0], 'off_o_fendeur_chassis_def');
   assert.equal(pireBlinde[1].toFixed(2), '50.45');
 
-  // Les douze socles débordent, et de combien : la borne est SIGNÉE des deux
-  // côtés, sinon un `echelle` divisé par deux la passerait aussi.
+  // Les douze socles, et de combien leur carré déborde : la borne est SIGNÉE des
+  // deux côtés, sinon un `echelle` divisé par deux la passerait aussi.
   //
-  // ⚠⚠ ET L'OUVRAGE DÉBORDE PLUS QUE LE JOUEUR — 69,56 à 83,94 % CONTRE 58,23 À
-  // 65,34. Le motif est dans le DESSIN, pas dans le rendu : ses logements sont à
-  // 25,1 à 35,3 % au-dessus du centre de la pièce contre 10,9 à 17,6 chez le
-  // joueur, parce que le socle carré a une haute face avant et que l'artillerie
-  // est un marcheur sur pattes. Le canon est haut parce que la plate-forme est
-  // haute ; le poser plus bas le mettrait dans les pattes. **Le corriger
-  // demanderait de redessiner les socles — arbitrage d'Ethan, pas de ce lot.**
-  for (const [lettre, plancher, plafond, attenduPire, attenduValeur] of [
-    ['j', 50, 70, 'socle_def_j_faucheuse', '65.34'],
-    ['o', 50, 85, 'socle_def_o_faucheuse', '83.94'],
+  // ⚠⚠ RÉANCRÉ AU LOT ANCRES-ZÉNITH (19/09), ET LA PROPRIÉTÉ A CHANGÉ DE MOTIF.
+  // Avant : « l'Ouvrage déborde plus que le joueur — 69,56 à 83,94 contre 58,23
+  // à 65,34 —, parce que ses logements sont à 25 à 35 % au-dessus du centre de
+  // la pièce ». Les neuf socles redessinés portent leur logement AU CENTRE
+  // (|dy| < 1,1 %) : le décalage ne fait plus déborder personne. Ce qui déborde
+  // maintenant, c'est le CARRÉ lui-même — les tourelles zénithales ont des
+  // canons et des rampes deux à trois fois plus longs que leur embase
+  // (`cote_pct_embase` 245 à 336 chez le joueur, contre 143 à 209 avant), donc
+  // à `echelle` inchangée le carré fait 96 à 180 % de la case. Le Créneau, seul,
+  // TIENT dans sa case des deux côtés (48,98 et 48,18) ; le Harpon joueur atteint
+  // 99,97 % de demi-case — la pointe de ses missiles touche le bord opposé de la
+  // case voisine. **`echelle` a été choisie à l'œil sur les dessins à 75° ; la
+  // rejuger sur les zénithaux est un arbitrage d'Ethan, au lot de
+  // conditionnement, pas ici.**
+  //
+  // ⚠ ET LES DEUX CAMPS SE LISENT À LA MÊME TAILLE, À 0,1 PRÈS, sur les trois
+  // socles de tourelle : c'est ce que `echelle_calee` d'`ancres-ouvrage.py`
+  // promet, et ce test le MESURE au lieu de le croire. Les trois socles
+  // d'artillerie n'y sont pas soumis : le carré est le même (146,9 · 159,2 ·
+  // 180,0 des deux côtés) mais leur `dy` diffère — 75° chez le joueur, non
+  // redessiné, −9,2 à −10 ; zénithal à l'Ouvrage, −0,5 à −0,6 —, d'où neuf
+  // points de portée d'écart. La table est MIXTE, et `ancres-zenith.test.js`
+  // le dit de face.
+  const portees = { j: new Map(par(ANCRES_DEFENSE, 'j')), o: new Map(par(ANCRES_DEFENSE, 'o')) };
+  for (const [lettre, plancherHorsCreneau, plafond, attenduPire, attenduValeur] of [
+    ['j', 50, 101, 'socle_def_j_harpon', '99.97'],
+    ['o', 50, 92, 'socle_def_o_harpon', '90.56'],
   ]) {
-    const debords = par(ANCRES_DEFENSE, lettre);
+    const debords = [...portees[lettre]];
     assert.equal(debords.length, 6, `camp « ${lettre} » : ${debords.length} socles, 6 attendus`);
     for (const [cle, p] of debords) {
-      assert.ok(p > plancher,
-        `${cle} : le carré ne déborde plus — l'arbitrage a bougé, le dire`);
+      if (cle.endsWith('_creneau')) {
+        assert.ok(p <= 50, `${cle} : le carré déborde (${p.toFixed(2)}) — il tenait dans la case au 19/09`);
+      } else {
+        assert.ok(p > plancherHorsCreneau,
+          `${cle} : le carré ne déborde plus (${p.toFixed(2)}) — l'arbitrage a bougé, le dire`);
+      }
       assert.ok(p < plafond,
         `${cle} : le carré atteint ${p.toFixed(2)} %, au-delà du débord mesuré`);
     }
@@ -1276,6 +1297,12 @@ test('sprite — le carré de tourelle tient sur les coques, et déborde sur les
     const pire = debords.reduce((m, x) => (x[1] > m[1] ? x : m));
     assert.equal(pire[0], attenduPire);
     assert.equal(pire[1].toFixed(2), attenduValeur);
+  }
+  for (const cle of ['casemate', 'creneau', 'batterie']) {
+    const j = ANCRES_DEFENSE[`socle_def_j_${cle}`].cote_case_pct;
+    const o = ANCRES_DEFENSE[`socle_def_o_${cle}`].cote_case_pct;
+    assert.ok(Math.abs(j - o) <= 0.1,
+      `${cle} : carré joueur ${j} contre Ouvrage ${o} — l'échelle calée ne cale plus`);
   }
 
   // ⚠ FALSIFIABLE : le montage sait DISTINGUER les deux verdicts. Sans cet

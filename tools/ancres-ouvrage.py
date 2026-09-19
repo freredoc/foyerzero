@@ -27,6 +27,17 @@ Le seuil est devenu le paramètre `decal_max`, **défaut 0,22 inchangé**. Contr
 des JSON et des sorties texte IDENTIQUES au bit près. Les neuf coques de
 l'Ouvrage passent au défaut ; seules les défenses demandent 0,40.
 
+⚠ DEPUIS LE LOT ANCRES-ZÉNITH (19/09), LES SIX SOCLES DE L'OUVRAGE SONT VUS DE
+DESSUS ET LEUR LOGEMENT EST CENTRÉ (décalage 0,00 à 0,01) : 0,40 ne mord plus,
+ils passeraient à 0,22. La valeur RESTE, parce que le montage T1 de ce lot-là
+rejoue cet outil sur les sources 75° écartées (`*_75_ECARTE.png`), qui en ont
+besoin, et qu'un garde-fou qui ne mord pas ne coûte rien. ⚠ ET LES SOURCES DE
+L'OUVRAGE SONT SUR MAGENTA, PAS SUR VERT, depuis ce même lot : le passage au
+vert reste un lot de code sur `cond.py`, et `est_fond_sujet` lit la clé sur les
+coins, donc rien ici n'a eu à changer. Cet outil SUIT la réparation des deux
+détecteurs par ses imports — `ancre` de `chassis.py`, `pivot` de
+`ancres-defense.py` — sans une ligne de code modifiée ; seul ce paragraphe.
+
 ⚠⚠ UNE ÉCHELLE PAR PIÈCE, ET ELLE NE SE CHOISIT PAS À L'ŒIL. Décision d'Ethan du
 07/09. Chaque échelle est calculée pour que le carré de la tourelle de l'Ouvrage
 occupe **la même fraction de case que celui de son homologue du joueur** :
