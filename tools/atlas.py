@@ -117,7 +117,17 @@ FAMILLES = {
     # PLUS. Les seize orientations tombent — la tourelle TOURNE au rendu — et les
     # quatre liaisons du merlon aussi — les connexions sont abandonnées. Ce qui
     # reste est ce que la donnée décrit : neuf pièces de défense par propriétaire.
-    'defense': ('defense', 18, ()),
+    # ⚠⚠ 18 → 26 AU LOT RUINES-DÉFENSE, 19/09 : LES HUIT RUINES DE PIÈCE
+    # REJOIGNENT LES PIÈCES QU'ELLES REMPLACENT. Quatre variantes par camp, que
+    # `render/variante.js` tire sur la case. Elles ne sont pas dans `bâtiment`,
+    # où vivent `ruine_j` et `ruine_o` : celles-là recouvrent une base RASÉE,
+    # celles-ci une pièce de garnison TOMBÉE, et les confondre est très
+    # exactement ce que le lot existe pour éviter. **Le poids n'a pas décidé** —
+    # les quatre familles candidates ont été cousues, et les 5 556 octets de
+    # base64 qui les séparent valent 0,06 % du livrable. Ce qui décide est que
+    # `defense` est DÉJÀ dans les trois tables d'atlas du code, donc qu'elle ne
+    # demande aucun câblage, quand une famille neuve en aurait demandé six.
+    'defense': ('defense', 26, ()),
     # ⚠ 36 → 12, MÊME LOT. Un socle nu par pièce à tourelle, six par camp ; les
     # quatre états de liaison des trois socles de contact partent avec les
     # connexions, et `tools/connexions.py` avec eux.

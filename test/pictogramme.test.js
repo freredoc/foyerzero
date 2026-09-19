@@ -349,8 +349,8 @@ const TAILLES_D_AVANT = {
   'atlas-carte-64.webp': 180372,
   'atlas-chassis-128.webp': 72842, // 28850 avant OUVRAGE-CÂBLAGE
   'atlas-chassis-64.webp': 27802, // 10690 avant OUVRAGE-CÂBLAGE
-  'atlas-defense-128.webp': 65050, // 53520 avant OUVRAGE-CÂBLAGE
-  'atlas-defense-64.webp': 27124, // 21976 avant OUVRAGE-CÂBLAGE
+  'atlas-defense-128.webp': 121456, // 65050 avant RUINES-DÉFENSE
+  'atlas-defense-64.webp': 46924, // 27124 avant RUINES-DÉFENSE
   'atlas-limite-128.webp': 13092,
   'atlas-limite-64.webp': 10016,
   'atlas-socle-128.webp': 53918, // 54642 avant OUVRAGE-CÂBLAGE
@@ -418,6 +418,18 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
   // **Aucun sprite n'entre ni ne sort** : 83 des deux côtés, pour la troisième
   // fois. ⚠ Et **132 des 162 PNG changent de dessin** — les trente autres sont
   // les états neufs dont l'ancrage ne déplace rien, plus la vignette mixte.
+  //
+  // ⚠⚠ ET LES DEUX LIGNES `defense` SONT RÉANCRÉES AU LOT RUINES-DÉFENSE, 19/09,
+  // AVEC LE NOMBRE D'AVANT À CÔTÉ DE CELUI D'APRÈS. La famille passe de 18 à
+  // **26** sprites : les huit ruines de pièce de défense y entrent, parce que
+  // c'est la famille des pièces qu'elles remplacent. `atlas-defense-128.webp`
+  // passe de 65 050 à **121 456** (+56 406), le 64 de 27 124 à **46 924**
+  // (+19 800). ⚠ Le poids N'A PAS arbitré le choix de famille : les quatre
+  // candidats mesurés — `batiment`, `defense`, `terrain`, une famille neuve —
+  // tiennent dans **5 556 octets d'écart en base64**, soit 0,06 % du livrable.
+  // Ce qui a tranché est le CÂBLAGE : `defense` est déjà dans les trois tables
+  // d'atlas, donc zéro site à brancher, là où une famille neuve en demande six
+  // et où `executer` LÈVE sur une famille absente.
   //
   // ⚠⚠ ET LES SEIZE AUTRES LIGNES N'ONT PAS BOUGÉ D'UN OCTET, CE QUI EST LA
   // MOITIÉ QUI PROUVE. Le lot ne touche que la famille `batiment` :

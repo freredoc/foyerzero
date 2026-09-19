@@ -49,7 +49,7 @@
 // champ de bataille à la légende.
 
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
-import { BATIMENTS, RESTE_APRES_DESTRUCTION } from '../data/sites.js';
+import { BATIMENTS, RESTE_APRES_DESTRUCTION, FAMILLE_DE_LA_RUINE } from '../data/sites.js';
 import {
   xDeColonne, xDeColonneMilli, yDeRangeeMilli, yDeRangee,
 } from './projection.js';
@@ -63,7 +63,7 @@ import { COTE_SPRITE } from '../data/atlas.js';
 import { ANCRES_BLINDES } from '../data/ancres-blindes.js';
 import { ANCRES_DEFENSE } from '../data/ancres-defense.js';
 import { angleDeLaPiece } from '../sim/rendu-pose.js';
-import { nomDeVariante } from './variante.js';
+import { nomDeVariante, SEL_VARIANTE_RUINE } from './variante.js';
 import { caseDepuisMilli } from '../sim/grille.js';
 import { estNeutralisee, porteUnModuleAcquis } from '../sim/combat.js';
 
@@ -764,11 +764,47 @@ function couchesDuBatiment(d) {
  * PROPRIÉTAIRE qui décide, jamais le camp — « le joueur peut défendre »
  * (CLAUDE.md §4).
  *
+ * ⚠⚠ ET LE GENRE CHOISIT LE DESSIN DEPUIS LE LOT RUINES-DÉFENSE, 19/09. La
+ * famille était `'batiment'` EN DUR : juste tant qu'un seul genre laissait une
+ * ruine, faux à la seconde où la défense s'ouvre — une tourelle tombée aurait
+ * porté la ruine d'une base rasée. La table est dans `src/data/sites.js`, à
+ * côté du genre qui la demande, et **un genre sans ligne LÈVE** : une ruine
+ * demandée pour un genre qu'on a oublié de dessiner disparaîtrait en silence.
+ *
+ * ⚠⚠ ET LA VARIANTE PASSE PAR `nomDeVariante`, LA SEULE PORTE. Elle prend le
+ * sel des ruines, `SEL_VARIANTE_RUINE`, et pas celui du terrain : les ruines de
+ * défense ont QUATRE variantes comme le sol, donc sous le sel du terrain la
+ * ruine d'une case porterait toujours la lettre du sol de cette case — 100,00 %
+ * d'accord, mesuré. `RUINE-DÉF T1` le garde.
+ *
+ * ⚠ ET ELLE VEUT LA CASE. Un genre à variantes appelé sans rangée ni colonne
+ * tirerait tout sur la case (0, 0), donc la MÊME lettre partout ; la fonction
+ * LÈVE plutôt que de rendre une base entière du même gravat.
+ *
  * @param {string} proprietaire
+ * @param {string} [genre] `batiment` par défaut — la ruine d'une case rasée
+ * @param {number} [graine] graine de la partie, pour les genres à variantes
+ * @param {number} [rangee]
+ * @param {number} [colonne]
  * @returns {{famille: string, nom: string}[]}
  */
-export function couchesDeLaRuine(proprietaire) {
-  return [{ famille: 'batiment', nom: `ruine_${lettreDuProprietaire(proprietaire)}` }];
+export function couchesDeLaRuine(
+  proprietaire, genre = 'batiment', graine = null, rangee = null, colonne = null,
+) {
+  const dessin = FAMILLE_DE_LA_RUINE[genre];
+  if (dessin === undefined) {
+    throw new Error(`scene : genre « ${genre} » sans dessin de ruine`);
+  }
+  const base = `${dessin.prefixe}_${lettreDuProprietaire(proprietaire)}`;
+  if (!dessin.variantes) return [{ famille: dessin.famille, nom: base }];
+  if (graine === null || rangee === null || colonne === null) {
+    throw new Error(
+      `scene : la ruine de « ${genre} » a des variantes et demande une case`);
+  }
+  return [{
+    famille: dessin.famille,
+    nom: nomDeVariante(base, graine, rangee, colonne, dessin.famille, SEL_VARIANTE_RUINE),
+  }];
 }
 
 /**
@@ -1204,7 +1240,20 @@ export function listeAffichage(
         if (reste === 'rien') continue;
         if (reste === 'ruine') {
           dessinerEntite(liste, x, y, t, classeDe(e.genre, e.id), e.camp,
-            accentDe(e.genre, e.id), couchesDeLaRuine(e.proprietaire));
+            accentDe(e.genre, e.id),
+            // ⚠⚠ LA CASE VIENT DE `caseDepuisMilli`, JAMAIS DE `e.rangee` — CE
+            // CHAMP N'EXISTE PAS SUR UNE ENTITÉ DE COMBAT. C'est la faute que
+            // le chaînage des murs a payée pendant un lot entier, relevée vingt
+            // lignes plus haut : chaque comparaison échouait en silence.
+            //
+            // ⚠ ET C'EST LA POSITION DU MOTEUR, PAS L'INTERPOLÉE. `positionDe`
+            // rend une position d'ÉCRAN, qui bouge entre deux images : la ruine
+            // changerait de gravat sous le doigt, ce que ce module interdit en
+            // première ligne. Une pièce tombée ne bouge plus, donc les deux
+            // coïncident aujourd'hui — on prend quand même celle qui ne peut pas
+            // se mettre à bouger.
+            couchesDeLaRuine(e.proprietaire, genreVoulu, graine,
+              caseDepuisMilli(e.rangeeMilli), caseDepuisMilli(e.colonneMilli)));
           continue;
         }
         // ⚠ UN RESTE INCONNU LÈVE, comme un genre absent de la table. Une

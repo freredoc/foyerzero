@@ -119,7 +119,7 @@ export const ATLAS = {
     ],
   },
   defense: {
-    colonnes: 5, rangees: 4,
+    colonnes: 6, rangees: 5,
     noms: [
       'def_j_batterie',
       'def_j_casemate',
@@ -139,6 +139,14 @@ export const ATLAS = {
       'def_o_merlon',
       'def_o_mortier',
       'def_o_ronce',
+      'ruine_def_j_a',
+      'ruine_def_j_b',
+      'ruine_def_j_c',
+      'ruine_def_j_d',
+      'ruine_def_o_a',
+      'ruine_def_o_b',
+      'ruine_def_o_c',
+      'ruine_def_o_d',
     ],
   },
   socle: {

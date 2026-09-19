@@ -252,7 +252,7 @@
       }
     },
     "defense": {
-      "atlas": "266cb26ef3053bd9fa94b2dae72edd3ac4c5e6b8d6edda0d1d011395ffbed51a",
+      "atlas": "01478fad5d7b546a107a8c29b623616c92b83c6a27dbf990f827c6a4877d9909",
       "sprites": {
         "def_j_batterie": "176504c37d9cd5ba80a8e660455203086d52adcccac03570dfb353bab2538ee2",
         "def_j_casemate": "d519f1693dfad058da357c6a9a7979c5a2bb4458201df200fa06559b8b86778b",
@@ -271,7 +271,15 @@
         "def_o_herse": "523c668c47a53fcc16f1a82a7a69ee6a99b49792a2fcaa173addfcc9d6fabca7",
         "def_o_merlon": "6e48e231959c592bd3e5dc772fe1e25127eed53c6a2217cb369bda25f504d5bb",
         "def_o_mortier": "9194547fb376c7c91566ac7d0298099b6270e4bcc3696793c570cc1691416c8a",
-        "def_o_ronce": "e1c7d14793d1d33b27414b1f35c1f972bad99311446a3018465647882c731d6e"
+        "def_o_ronce": "e1c7d14793d1d33b27414b1f35c1f972bad99311446a3018465647882c731d6e",
+        "ruine_def_j_a": "d9afe4043f67f943d4d11f8599538f73e4f2c51bb5ec10189b7bd21a24cc43f4",
+        "ruine_def_j_b": "feed48dffb65080754c0e8a7ce31bee2c4c22bf5e480d96ab0165da8f4d92fde",
+        "ruine_def_j_c": "eb6f12d8ee2dcb31ed36aa8110efbdc51571f7cd524fa45ade4eb5e9122757c7",
+        "ruine_def_j_d": "ced9c55b7944a9bb4e2b3ff6b21fa1c1f6de7ce0fc54b2e5e22046a8da7fbb70",
+        "ruine_def_o_a": "f8648b9663d26a64161db49d630c8bc7ad308511d8e7decb57a4a948091fbb97",
+        "ruine_def_o_b": "fccb64a8599341b3a130d39be1c228554acf0d1b53d53d31b31b22428d7ac810",
+        "ruine_def_o_c": "68704ec554b5403af44d889955925799875c301b609196db8223df080dd0f7f5",
+        "ruine_def_o_d": "1b79dfd737760145abba1fa7a4614d2fc25c416e3270a7b33a5353a6c79975b0"
       }
     },
     "interface": {

@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Lot 10 — les deux ruines de mur et de tourelle.
+"""Les ruines : celle d'une case RASÉE, et celles d'une pièce de défense TOMBÉE.
+
+⚠⚠ DEUX CHOSES DIFFÉRENTES SOUS UN MOT, ET C'EST POUR ÇA QU'ELLES SONT DANS LE
+MÊME FICHIER. `ruine_j` / `ruine_o` se posent quand la CASE est rasée — une base
+entière disparaît de la carte ; `ruine_def_<c>_<v>` se pose quand UNE pièce de
+garnison tombe à l'effondrement. Ethan, 19/09 : « parce que les ruines, il y a
+déjà des ruines de bâtiments ». Les séparer en deux outils aurait mis deux
+producteurs de « ruine » dans `tools/`, dont le nom court se confond — l'accident
+du 27/08 (`CLAUDE.md` §6, homonymes).
 
 ⚠⚠ IL A PORTÉ SEIZE BÂTIMENTS DÉTRUITS JUSQU'AU LOT BÂTIMENTS-QUATRE-ÉTATS,
 08/09/2026, ET IL N'EN PORTE PLUS AUCUN. Ethan a livré quatre-vingts planches à
@@ -54,6 +62,11 @@ LES DEUX RUINES viennent de `R2_ruines_mur_tourelle_joueur_ouvrage_2x1`, dont
 les deux cellules se séparent au violet : 0,0 % à gauche, 72,0 % à droite. Le
 camp est donc mesuré, pas déduit de l'ordre du nom de fichier.
 
+LES HUIT RUINES DE DÉFENSE viennent de huit planches à un sujet chacune, quatre
+par camp, livrées par Ethan le 19/09. Leur camp est mesuré au violet comme celui
+des deux au-dessus — et le seuil n'est PAS le même, parce que la mesure dit
+autre chose : voir `SEUIL_VIOLET_DEF`.
+
     python3 tools/ruines.py
 """
 import sys, os
@@ -66,6 +79,7 @@ import numpy as np
 from cond import est_fond
 from final128 import pal, recadrer, conditionner, ecrire
 from batiments_v2 import EMPRISE_QUATRE_VINGT_DIX_HUIT
+from joueur_v2 import EMPRISE_QUATRE_VINGT_DIX
 
 SRC = os.path.join(RACINE, 'art', 'sources')
 DST = dossier_sprites('bâtiment')
@@ -73,6 +87,46 @@ GRILLES = (128, 64)   # la 32 est sortie au lot PIXELS : ni le jeu ni les tests 
 
 RUINES = ('R2_ruines_mur_tourelle_joueur_ouvrage_2x1.png',
           [('ruine_j', False), ('ruine_o', True)])
+
+# ---------------------------------------------------------------------------
+# Les huit ruines de défense — lot RUINES-DÉFENSE, 19/09/2026
+# ---------------------------------------------------------------------------
+#
+# ⚠⚠ ELLES NE VONT PAS DANS `bâtiment`, ELLES VONT DANS `defense`, ET LE POIDS
+# N'A PAS DÉCIDÉ. Les quatre familles candidates ont été cousues et mesurées en
+# base64 : `bâtiment` +69 652, famille NEUVE +74 128, `terrain` +73 228,
+# `defense` +75 208 — cinq mille cinq cents octets d'écart entre la moins chère
+# et la plus chère, soit 0,06 % du livrable. Ce qui décide est ailleurs :
+# `defense` est la famille des pièces que ces ruines REMPLACENT, elle est déjà
+# dans `ATLAS_DE_LA_PAGE`, dans `atlasDeLaScene` et dans la table du banc, donc
+# elle ne demande AUCUN câblage. Une famille neuve en aurait demandé six, et
+# `executer` LÈVE sur une famille absente : en oublier une ferait tomber
+# l'écran de raid ET le banc. Et `bâtiment` est l'endroit où vivent
+# `ruine_j` / `ruine_o`, c'est-à-dire les ruines de BÂTIMENT — la confusion
+# exacte que le brief de ce lot passe son §1.1 à écarter.
+#
+# ⚠⚠ L'EMPRISE EST CELLE DU MUR, PAS CELLE DES RUINES DE BASE. 29 gros pixels
+# sur 32, `EMPRISE_QUATRE_VINGT_DIX`, et non les 31 du bloc ci-dessus : une
+# ruine de défense remplace UNE PIÈCE, quand `ruine_j` recouvre une base rasée
+# TOUT ENTIÈRE. Mesuré sur les dix-huit sprites de `defense/128`, les trois
+# pièces les plus larges — merlon, ronce, herse — tiennent EXACTEMENT 29,0 gros
+# pixels, et ce sont celles-là que ces ruines remplacent le plus souvent.
+#
+# ⚠ ET LE NOMBRE S'IMPORTE DE `joueur_v2`, où les murs et les barrières le
+# prennent. Deux `29` dans deux fichiers seraient deux occasions de diverger, et
+# celle-là serait muette : la ruine grandirait ou rétrécirait sous le mur sans
+# qu'un test le dise. Même discipline que le 31 juste au-dessus.
+RUINES_DEFENSE_VARIANTES = 4
+
+# ⚠⚠ LE SEUIL DE VIOLET N'EST PAS CELUI DES DEUX RUINES DE BASE, ET C'EST UNE
+# MESURE QUI L'A DIT. Le bloc ci-dessus compare à 30 parce que la cellule
+# Ouvrage de `R2` est à 72 % de violet ; ces planches-ci sont des GRAVATS, très
+# largement gris et bruns, et leurs quatre cellules Ouvrage mesurent 17,5 · 23,4
+# · 27,7 · 27,8 %. Reprendre 30 aurait fait LEVER les quatre. Relevé côté
+# joueur : 0,05 · 0,12 · 0,13 · 0,16 %. Le seuil est posé à 5 — trente et une
+# fois au-dessus du plus violet des joueurs, trois fois et demie sous le moins
+# violet des Ouvrage — et il refuse toujours une planche inversée.
+SEUIL_VIOLET_DEF = 5
 
 
 def part_violette(a, m):
@@ -109,5 +163,30 @@ for k, (nom, ouv_attendu) in enumerate(attendus):
         os.makedirs(d, exist_ok=True)
         ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
         n += 1
+
+# --- les huit ruines de défense, camp mesuré au violet lui aussi ---
+DST_DEF = dossier_sprites('defense')
+for camp, ouv_attendu in (('j', False), ('o', True)):
+    P = pal(ouv_attendu)
+    for k in range(1, RUINES_DEFENSE_VARIANTES + 1):
+        fichier = f'ruine_def_{camp}_variante_{k:02d}.png'
+        im = Image.open(os.path.join(SRC, fichier))
+        a = np.array(im.convert('RGB')).astype(int)
+        violet = part_violette(a, ~est_fond(a))
+        if (violet > SEUIL_VIOLET_DEF) != ouv_attendu:
+            raise AssertionError(
+                f'{fichier} : {violet:.2f} % de violet, '
+                f'{"Ouvrage" if ouv_attendu else "joueur"} attendu — planche du mauvais camp ?')
+        # ⚠ LA LETTRE EST CELLE QUE `suffixeDeVariante` PRODUIT — `a` … `d`,
+        # `String.fromCharCode(97 + i)` dans `src/render/variante.js`. Écrire le
+        # numéro `01` … `04` ferait un nom que `nomDeVariante` ne compose pas.
+        nom = f'ruine_def_{camp}_{chr(96 + k)}'
+        for N in GRILLES:
+            g, matiere = conditionner(
+                recadrer(im, EMPRISE_QUATRE_VINGT_DIX * (N // 32), N), P, N)
+            d = os.path.join(DST_DEF, str(N))
+            os.makedirs(d, exist_ok=True)
+            ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
+            n += 1
 
 print(f'{n} fichiers écrits')

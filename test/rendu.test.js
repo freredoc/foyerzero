@@ -458,7 +458,22 @@ test('T5 — composition et ordre de dessin stables', () => {
   // Le Merlon portait : mur 1 + barre de PV 2 + badge 1 = 4 primitives.
   // ⚠ LE BADGE PART AVEC LA PIÈCE, et c'est la moitié du sens de ce test : une
   // étiquette qui survivrait à sa pièce flotterait au-dessus d'une case vide.
-  assert.equal(apres.length - sansMerlon.length, NB_PRIMITIVES.mur + 2 + 1);
+  //
+  // ⚠⚠ ET IL EN REND TROIS, PAS QUATRE, DEPUIS LE LOT RUINES-DÉFENSE — 19/09.
+  // La pièce en retire toujours quatre ; elle en LAISSE une, sa ruine.
+  // `RESTE_APRES_DESTRUCTION.defense` vaut `'ruine'` depuis ce lot, et
+  // `estUneRuine` traite une pièce morte AU COMBAT exactement comme une pièce
+  // tombée à l'effondrement : le tas de gravats se pose au tick où le Merlon
+  // tombe, pas à la fin du raid. C'est la chose la plus visible que le lot
+  // change, et c'est pour ça que ce test-ci la mesure au lieu de l'absorber.
+  const ruinesDuMerlon = sansMerlon.filter(
+    (q) => q.forme === 'sprite' && /^ruine_def_[jo]_[a-d]$/.test(q.nom));
+  assert.equal(ruinesDuMerlon.length, 1, 'le Merlon mort ne laisse pas sa ruine');
+  assert.equal(ruinesDuMerlon[0].famille, 'defense');
+  assert.equal(apres.length - sansMerlon.length,
+    NB_PRIMITIVES.mur + 2 + 1 - ruinesDuMerlon.length); // était mur + 2 + 1
+  assert.notEqual(apres.length - sansMerlon.length, NB_PRIMITIVES.mur + 2 + 1,
+    'la pièce morte ne laisse plus rien : le câblage des ruines de défense est défait');
 });
 
 // ---------------------------------------------------------------------------
