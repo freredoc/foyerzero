@@ -304,11 +304,19 @@ test('VIT T2 ter — les trois lecteurs qui refusent une ruine sont NOMMÉS dans
 test('VIT T2 bis — la règle se lit dans la TABLE, elle n\'est pas écrite pour les bâtiments', () => {
   // ⚠⚠ LA FALSIFICATION QUE `VIT T2` NE VOIT PAS. Un `=== 'batiment'` écrit dans
   // `render/scene.js` passerait `VIT T2` mot pour mot. Ce qui le distingue, c'est
-  // que la règle est lue dans `RESTE_APRES_DESTRUCTION` : ouvrir `defense` à
-  // `'ruine'` — ce que la table annonce en toutes lettres depuis le lot
-  // EFFONDREMENT — doit suffire à faire rester les structures mortes.
-  assert.equal(RESTE_APRES_DESTRUCTION.defense, 'rien',
+  // que la règle est lue dans `RESTE_APRES_DESTRUCTION` : basculer `defense`
+  // doit suffire à changer ce qu'une structure morte laisse derrière elle.
+  //
+  // ⚠⚠ ET LE TEST EST RETOURNÉ AU LOT RUINES-DÉFENSE, 19/09, PAS ASSOUPLI. Il
+  // partait de `'rien'` et OUVRAIT ; le réglage du jour est `'ruine'`, donc il
+  // part de `'ruine'` et FERME. La propriété gardée ne bouge pas d'un mot — la
+  // table décide, pas le code —, elle se mesure dans l'autre sens. La
+  // contre-assertion refuse le retour de l'ancien réglage, sans quoi un lot qui
+  // défferait le câblage rendrait ce test vert en le ramenant à sa forme d'hier.
+  assert.equal(RESTE_APRES_DESTRUCTION.defense, 'ruine', // était 'rien'
     'la table a changé : ce test mesure la bascule, pas la valeur du jour');
+  assert.notEqual(RESTE_APRES_DESTRUCTION.defense, 'rien',
+    'la defense est revenue à `rien` : les ruines de pièce ne se dessinent plus');
 
   const monter = () => creerCombat({
     niveau: 1,
@@ -331,16 +339,21 @@ test('VIT T2 bis — la règle se lit dans la TABLE, elle n\'est pas écrite pou
   while (mur.vivant && tours < 20_000) { tick(etat); tours += 1; }
   assert.equal(mur.vivant, false, `la Meute n'a pas abattu le Merlon en ${tours} ticks`);
 
-  const ferme = nbSprites(etat);
+  const ouvert = nbSprites(etat);
   const memoire = RESTE_APRES_DESTRUCTION.defense;
-  let ouvert;
+  let ferme;
   try {
-    RESTE_APRES_DESTRUCTION.defense = 'ruine';
-    ouvert = nbSprites(etat);
+    RESTE_APRES_DESTRUCTION.defense = 'rien';
+    ferme = nbSprites(etat);
   } finally {
     RESTE_APRES_DESTRUCTION.defense = memoire;
   }
   assert.ok(ouvert > ferme,
-    `la table ouverte ne change rien (${ferme} → ${ouvert}) : la règle est écrite en dur`);
-  assert.equal(nbSprites(etat), ferme, 'le montage n\'a pas rendu la table');
+    `la table fermée ne change rien (${ouvert} → ${ferme}) : la règle est écrite en dur`);
+  // ⚠ ET LA DIFFÉRENCE VAUT EXACTEMENT UN SPRITE — celui du Merlon tombé. Un
+  // écart plus grand voudrait dire qu'une autre pièce laisse une ruine sans
+  // qu'on l'ait demandé ; `ok(>)` seul ne le dirait pas.
+  assert.equal(ouvert - ferme, 1,
+    `${ouvert - ferme} sprites d'écart : une pièce de plus laisse une ruine`);
+  assert.equal(nbSprites(etat), ouvert, 'le montage n\'a pas rendu la table');
 });

@@ -7,7 +7,7 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **19/09/2026**, version 0.99.68 · build 180.
+Dernière révision : **19/09/2026**, version 0.99.69 · build 181.
 ⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
 164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
 **175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
@@ -68,7 +68,240 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 19/09/2026 (après le lot CONDITIONNEMENT-ZÉNITH), à confronter :**
+**Référence au 19/09/2026 (après le lot RUINES-DÉFENSE), à confronter :**
+⚠⚠ **UNE PIÈCE DE DÉFENSE ABATTUE LAISSE SA RUINE, ET CE N'EST PAS CELLE D'UN
+BÂTIMENT.** `RESTE_APRES_DESTRUCTION.defense` passe de `'rien'` à `'ruine'`, et
+le commentaire daté qui promettait ce jour-là part avec. ⚠ **Le geste ne suffit
+PAS** : à lui seul il aurait fait dessiner `ruine_j` / `ruine_o`, famille
+`batiment`, c'est-à-dire les ruines de BÂTIMENT. Ethan, 19/09 : les huit sources
+livrées sont des ruines de PIÈCE — socles, tourelles, murs —, « parce que les
+ruines, il y a déjà des ruines de bâtiments ». `FAMILLE_DE_LA_RUINE` de
+`src/data/sites.js` dit donc, par genre, quelle famille et quel préfixe : une
+TABLE, jamais un `if` dans `render/scene.js`.
+⚠⚠ **LE SEL DES VARIANTES DEVIENT UN ARGUMENT, ET C'EST UNE COLLISION MESURÉE À
+100,00 % QUI L'A EXIGÉ.** La bande vaut `SEL_VARIANTE * 32 + nombre` : le sol a
+QUATRE variantes, les ruines de défense en ont quatre aussi, donc **132 des deux
+côtés**. La ruine posée sur une case portait TOUJOURS la lettre du sol de cette
+case — **162 cases sur 162 de la graine témoin, accord parfait**, quatre paires
+sur seize répétées sur toute la base.
+⚠⚠ **DEUX ISSUES, ET LA MESURE A TRANCHÉ, PAS LE GOÛT.** Faire entrer la FAMILLE
+dans le mélange règle le cas génériquement — et change le hachage du SOL, donc
+**repeint 76,0 % des cases d'une partie en cours**, mesuré, pour un joueur qui
+n'a rien demandé. Un second sel laisse le sol **identique au bit** et rend
+**26,54 %** d'accord, ce qu'on attend de deux tirages indépendants sur quatre
+valeurs. C'est donc `SEL_VARIANTE_RUINE = 9`, **le premier libre** — 8 est pris
+par `sim/generateur.js` depuis PAQUETS, qui l'annonçait « le premier libre
+partout » et ne l'est plus.
+⚠ **ET IL SE PASSE EN ARGUMENT, AVEC LE DÉFAUT DU TERRAIN.** Une seconde
+fonction de tirage aurait été le second compteur que le brief interdit, une table
+`préfixe → sel` la seconde vérité que §4 interdit. **Tout appelant d'avant le lot
+rend le même nombre, au bit** : la famille qui collisionne NOMME son sel.
+⚠ **`nombreDeVariantes` PREND LA FAMILLE, ELLE NE SE DOUBLE PAS.** Elle lisait
+`ATLAS.terrain` en dur. ⚠ Et **la clé du mémo porte la famille** depuis qu'elle
+est un paramètre : deux familles qui partageraient un préfixe se seraient rendu
+le compte l'une de l'autre, et le premier appel aurait décidé pour le second.
+Aucune ne le partage aujourd'hui — c'est pour ça que la faute aurait été muette.
+⚠⚠ **LES HUIT RUINES VONT DANS `defense`, ET LE POIDS N'A PAS DÉCIDÉ.** Les
+quatre candidats ont été cousus et pesés à 128, en base64 : bâtiment **+69 652**,
+defense **+75 208**, terrain **+73 228**, famille NEUVE **+74 128**. **5 556
+octets les séparent, soit 0,06 % du livrable** : c'est le CÂBLAGE qui tranche.
+`defense` est déjà dans `ATLAS_DE_LA_PAGE`, dans `atlasDeLaScene` et dans la
+table du banc — zéro site de câblage neuf, quand une famille neuve en demande six
+et qu'`executer` LÈVE sur une famille absente. Et `batiment` est là où vivent
+`ruine_j` / `ruine_o` : c'est la confusion maximale, celle que le brief évite.
+⚠⚠ **L'EMPRISE TIENT PAR CONSTRUCTION, ET C'EST PARCE QUE LES RUINES NE SONT PAS
+CARRÉES.** Le brief les annonçait carrées ; **mesuré, leur rapport L/H va de
+1,021 à 1,362**. `recadrer` porte la plus GRANDE dimension à l'emprise, donc le
+côté long y tombe et la règle A7 — non-dépassement absolu — tient sans qu'on ait
+rien à rogner. Boîtes conditionnées sur 32 : `_j_a` 29,0 × 24,0 · `_j_b`
+29,0 × 28,0 · `_j_c` 29,0 × 22,0 · `_j_d` 28,5 × 23,0 · `_o_a` 27,5 × 26,5 ·
+`_o_b` 28,5 × 25,5 · `_o_c` 29,0 × 20,0 · `_o_d` 29,0 × 26,0 — **toutes sous
+29,0 × 28,0**, et merlon, ronce et herse mesurent exactement 29,0 à côté.
+⚠ **PALIER 29, PAS 31.** Une ruine de défense remplace UNE PIÈCE, pas une base
+rasée : `EMPRISE_QUATRE_VINGT_DIX` est celle des pièces qu'elle recouvre, et les
+ruines de bâtiment gardent le palier du Chantier.
+⚠⚠ **`SEUIL_VIOLET_DEF` ENTRE À CÔTÉ DU SEUIL EXISTANT, PARCE QUE CELUI-LÀ AURAIT
+LEVÉ SUR LES QUATRE.** Le bloc des ruines de base refuse une planche à plus de
+30 % de violet ; les quatre ruines de l'Ouvrage mesurent **17,5 · 23,4 · 27,7 ·
+27,8 %** — le garde-fou aurait arrêté la production sur des sources saines. Le
+second seuil vaut **5**, et la mesure est écrite à côté.
+⚠⚠ **LA POSITION SE PREND SUR `caseDepuisMilli`, JAMAIS SUR `positionDe(e)` —
+ET CE CHOIX N'EST GARDÉ PAR AUCUN TEST, DÉCLARÉ.** Une entité de combat n'a ni
+`e.rangee` ni `e.colonne` ; `positionDe` rend la position INTERPOLÉE, donc la
+ruine changerait de lettre pendant qu'on la regarde. À `alpha 0` et `precedentes
+null` les deux coïncident : la falsification ne mord sur aucun montage
+d'aujourd'hui, et elle mordrait dans le déroulé. **Un test qui ne peut tomber sur
+aucun état d'aujourd'hui se déclare, il ne se compte pas.**
+⚠ **`ruine_j` ET `ruine_o` REDEVIENNENT DORMANTES CÔTÉ DÉFENSE**, et elles
+restent employées par les bâtiments : `RESTE_APRES_DESTRUCTION.batiment` garde
+`'planche'`, `unite` garde `'rien'`. `EFF T11` les NOMME désormais au lieu de
+compter, et compte séparément les `ruine_def_`.
+⚠⚠ **UNE FALSIFICATION N'A PAS MORDU AU PREMIER RELEVÉ, ET C'EST LE MONTAGE
+QU'ON A RÉPARÉ.** Retirer `SEL_VARIANTE_RUINE` **au site d'appel** de
+`render/scene.js` laissait la suite du lot **entièrement verte, 3 pass / 0
+fail** : `T1` appelait `nomDeVariante` directement et n'exerçait jamais le chemin
+de PRODUCTION. Il passe par `couchesDeLaRuine` désormais, et la falsification
+mord. **Une falsification qui ne mord pas se vérifie avant d'être crue.**
+⚠ **CINQ FALSIFICATIONS, CINQ CHUTES** — sel remis à 4 (`T1`), famille ramenée à
+`batiment` (`T2` et `T2 bis`), `defense` remis à `'rien'` (SEPT tests),
+`variantes: false` (`T2`, `T2 bis`, les couches de `sprite.test.js`), et le sel
+retiré du site d'appel après réparation du montage.
+⚠⚠ **`T2` A DEMANDÉ DEUX MONTAGES, ET LE PREMIER JET TOMBAIT SUR SA PROPRE
+GÉOMÉTRIE.** « la Meute n'a pas abattu le Merlon en 20 000 ticks » : mesuré, la
+Meute attaquante vise la Meute DÉFENSIVE — sa classe de prédilection — six
+colonnes plus loin, ne l'atteint pas, tourne à vide et **se replie au tick 415**,
+cause `attaquants`. Les deux chemins de destruction sont donc montés séparément :
+l'effondrement sur trois genres, la mort au moteur sur un mur seul.
+⚠⚠ **ET LE LOT A TROUVÉ QUE `main` EST ROUGE AU VÉRIFICATEUR, AVANT LUI ET SANS
+LUI — MESURÉ SUR LA CHAÎNE ENTIÈRE, DES DEUX CÔTÉS.** `python3 tools/verifier.py`
+sur un `git worktree` pristine à `105d4fc`, qui EST le merge d'ANCRES-ZÉNITH :
+**934 identiques · 176 différents · 0 nouveau · 0 MANQUANT**, en 526,9 s. Sur
+l'arbre du lot d'alors : **950 · 176 · 0 · 0**, en 538,6 s.
+⚠⚠ **PUIS #161 A ÉTÉ FUSIONNÉ, ET LES DEUX PASSAGES ONT ÉTÉ REFAITS SUR LA BASE
+NEUVE : PAS UN FICHIER NE BOUGE.** Sur un `git worktree` pristine à `fd1a007`,
+qui EST le merge de CONDITIONNEMENT-ZÉNITH : **934 · 176 · 0 · 0**, en 555,0 s.
+Sur l'arbre du lot fusionné, `900909f` : **950 identiques · 176 différents ·
+0 nouveau · 0 MANQUANT**, en 558,6 s, second verdict VERT — « la chaîne lit
+exactement les sources déclarées », `art/sources/` à **684 fichiers, 509
+consommées · 175 dormantes**.
+⚠⚠ **ET LES QUATRE LISTES DE « DIFFÈRE » SONT IDENTIQUES LIGNE POUR LIGNE** —
+`diff` vide sur les trois comparaisons, 176 fichiers chacune : **pas un seul des
+176 n'est de ce lot, et #161 n'en a retiré AUCUN** alors qu'il en a régénéré 42.
+Ce que le lot ajoute est exactement **+16 identiques**, les huit ruines aux deux
+grilles, toutes reproduites à l'octet.
+⚠ **ET LE DERNIER PASSAGE A TOURNÉ PENDANT QUE J'ÉCRIVAIS DANS L'ARBRE — ÉCART À
+LA LETTRE DE §3, DÉCLARÉ PLUTÔT QUE PLAIDÉ.** « Ne jamais le lancer sur un arbre
+qu'on modifie » : `CLAUDE.md` et le rapport ont été édités pendant les 558,6 s.
+Mesuré : `git status` ne portait que ces DEUX fichiers Markdown, qu'aucun outil
+de la chaîne n'ouvre — `art/` n'a pas bougé d'un octet et le mouchard
+d'`entrees.py` ne voit ni l'un ni l'autre. Le verdict tient en fait ; la règle a
+quand même été enfreinte.
+⚠⚠ **ET C'EST PLUS LARGE QUE LES 44 QUE J'AVAIS D'ABORD MESURÉS — LE PREMIER
+CHIFFRE NE PORTAIT QUE SUR DEUX OUTILS.** `--outil joueur_v2` rend 64 identiques ·
+20 différents, `--outil ouvrage_v2` 60 · 24 ; la chaîne entière en rend **176**,
+répartis **132 `bâtiment/` · 24 `defense/` · 18 `socle/` · 2 `chassis/`**. Les
+**42** de `defense/` et `socle/` sont les 22 pièces zénithales d'ANCRES-ZÉNITH ;
+les **134** de `bâtiment/` et `chassis/` ne correspondent à AUCUNE source de ce
+lot-là. Ce fichier ne les attribue à personne — il les compte.
+⚠⚠⚠ **ET LA PREMIÈRE ÉCRITURE DE CE PARAGRAPHE DISAIT « SPRITES NON RÉGÉNÉRÉS »,
+C'EST-À-DIRE DE L'ART PÉRIMÉ. C'EST FAUX, ET LA MESURE LE RENVERSE : LES 176 SONT
+IDENTIQUES AU PIXEL.** Les trois producteurs rejoués dans un dossier dérouté sur
+l'arbre pristine de `main` = `fd1a007`, puis comparés au dépôt image par image :
+`joueur_v2` et `ouvrage_v2` rendent **168 comparés · 124 identiques à l'octet ·
+44 différents à l'octet · ZÉRO différent au PIXEL** ; `batiments_v2` rend
+**162 comparés · 30 · 132 · ZÉRO**. **44 + 132 = 176, et pas un pixel ne bouge sur
+aucun des 176.** Ce que la chaîne ne reproduit pas, ce sont les OCTETS d'un PNG —
+même image, autre encodage — et non le dessin.
+⚠⚠ **CONSÉQUENCE POUR L'ARBITRAGE : RÉGÉNÉRER LES 176 NE CHANGERAIT PAS UN PIXEL
+DE CE QUE LE JOUEUR VOIT.** Ce n'est donc PAS une réparation d'art en attente, et
+la phrase « la moitié manquante d'un AUTRE lot » ci-dessous est à lire dans ce
+sens-là : ce qui manque est un commit d'octets, pas un redessin. **Ethan tranche**
+toujours, mais il tranche sur du bruit d'encodeur.
+⚠⚠ **ET #161 A BIEN FAIT SON TRAVAIL SUR LES 42 — LE CONTRAIRE DE CE QUE LE
+PREMIER JET LAISSAIT CROIRE.** Il a régénéré ces 42 fichiers exactement
+(`git diff --name-only 105d4fc fd1a007 -- 'art/sprites/defense/*'
+'art/sprites/socle/*'` en rend **42**), et depuis, leurs PIXELS s'accordent. Le
+verdict du vérificateur ne bouge pourtant pas d'un fichier, ce qui est le fait
+utile : **il compte des octets, pas des dessins**.
+⚠⚠ **ET CE QUI RESTE INEXPLIQUÉ SE DÉCLARE PLUTÔT QUE D'ÊTRE COMBLÉ.** Si
+l'encodeur suffisait à tout dire, pourquoi **934 fichiers se reproduisent-ils À
+L'OCTET** sur cette machine ? L'hypothèse tenable est que les 176 ont été produits
+par une AUTRE version de Pillow — la machine d'Ethan, ou un lot plus ancien — et
+les 934 par une version qui s'accorde avec celle-ci (12.3.0). **Elle n'est pas
+établie ici, et elle est écrite comme une hypothèse.** Ce qui EST établi est le
+zéro pixel.
+⚠⚠ **CE LOT NE LES RÉPARE PAS, ET LE MOTIF EST ÉCRIT.** Régénérer les 176 ferait
+la moitié manquante d'un AUTRE lot — et, pour 134 d'entre eux, d'un lot que
+personne n'a encore nommé —, et ferait entrer un commit d'art massif dans une PR
+qui parle de ruines. ⚠ **Ce paragraphe écrivait aussi « changerait ce que le jeu
+DESSINE sans brief » : c'est FAUX, mesuré — zéro pixel — et la ligne part.** Les
+autres raisons de ne pas le faire ICI tiennent toutes. Ce qui est
+vérifié à la place : **`ruines.py` reproduit ses 20 fichiers à l'octet — zéro
+diff — et l'atlas `defense` est RECOUSU par l'outil sur l'arbre fusionné**,
+`src/data/atlas.js` et `atlas-empreintes.json` compris. L'atlas et les PNG du
+dépôt s'accordent donc, ce que `sprite.test.js` garde ; c'est l'accord
+SOURCE → PNG qui manque, et il manquait déjà.
+⚠⚠ **ET CETTE PHRASE-LÀ A ÉTÉ CORRIGÉE À LA FUSION, PAS RECOPIÉE.** Écrite sur
+`105d4fc`, elle disait que la recouture rendait « un atlas IDENTIQUE à celui que
+le lot avait cousu ». **C'est devenu FAUX** le jour où #161 a recentré les douze
+tourelles de la même famille : le disque recousu sur `fd1a007` pèse 115 110 et
+44 454 là où le lot seul rendait 121 456 et 46 924. La laisser aurait été une
+affirmation périmée sous une conclusion vivante — ce que ce fichier punit
+ailleurs quatre fois. ⚠ `atlas.py --verifier` rend **17 identiques · 3 différents** des
+deux côtés — `carte-64`, `carte-128`, `interface-128`, les trois ÉCARTs
+préexistants, laissés où le lot les a trouvés. **Ethan tranche.**
+⚠⚠ **LA BORNE T10 PASSE DE 9 600 000 À 9 700 000, ET C'EST LE PLANCHER QUI L'A
+FORCÉ, PAS LA BORNE.** À 9 600 000 le livrable passait encore — 9 494 171 — mais
+la marge tombait à **105 829 octets, 1,10 %**, sous le plancher de 150 000
+qu'asserte `PIC T7`. Une ressource entre légitimement — huit dessins neufs, pas
+de l'entropie comme à ART-90 —, donc la borne monte et le lot écrit pourquoi.
+Marge **205 829 octets, 2,12 %**. ⚠ Et `QUALITE` n'a pas été baissée : elle vaut
+pour les DIX-NEUF atlas.
+⚠⚠ **`main` A BOUGÉ SOUS LE LOT, ET LA FUSION A ÉTÉ RÉSOLUE À LA MAIN.** Ethan a
+fusionné la PR #161, lot CONDITIONNEMENT-ZÉNITH, pendant que celui-ci était
+ouvert : `main` passe de `105d4fc` à `fd1a007`, et les deux lots se croisent sur
+**sept fichiers** — `CLAUDE.md`, `package.json`, `test/pictogramme.test.js`,
+`test/sprite.test.js`, et les TROIS générés de la famille `defense`,
+`atlas-defense-64.webp`, `atlas-defense-128.webp` et `atlas-empreintes.json`.
+Les deux premiers sont ceux que deux lots parallèles heurtent toujours ; les
+cinq autres sont neufs, et ils viennent de ce que **les deux lots recousent la
+MÊME famille** — #161 recentre les douze tourelles de défense, celui-ci ajoute
+les huit ruines.
+⚠⚠ **L'ATLAS `defense` EST DONC RECOUSU, PAS ARBITRÉ.** Un `.webp` ne se fusionne
+pas au texte, et choisir un côté aurait perdu l'autre : `python3 tools/atlas.py
+--ecrire --forcer defense` sur l'arbre fusionné rend **26 sprites** — les 18
+pièces recentrées de #161 PLUS les 8 ruines —, `src/data/atlas.js` **identique**
+(la grille reste 6 × 5), et `atlas.py --verifier` les trois mêmes ÉCART qu'avant,
+`carte-64`, `carte-128`, `interface-128`.
+⚠⚠ **ET `package.json` S'EST AUTO-FUSIONNÉ EN SILENCE, CE QUI EST LE PIÈGE.** Les
+deux lots avaient bumpé au **MÊME** numéro — `0.99.68 · build 180` — parce que
+tous deux l'avaient pris comme « le suivant disponible » sur la même base : git
+ne voit alors aucun conflit et garde la valeur, si bien que **deux livrables
+différents auraient porté le même `config.build`**, que l'enveloppe Android lit.
+`git status` n'aurait rien dit. La fusion prend donc **0.99.69 · build 181**, et
+les deux restent des CHAÎNES, vérifié au type. **CINQUIÈME fois du dépôt** —
+après ÉCRANS du 10/09, ARRIVÉE-CARTE-ET-BUILD et le lot ÉCRANS d'origine.
+⚠ **COÛT +75 550 OCTETS**, mesuré poste par poste contre le livrable rebâti dans
+un `git worktree` sur l'arbre pristine de `main` = `fd1a007`, qui EST le merge de
+CONDITIONNEMENT-ZÉNITH (**9 418 621**) : **images +74 652 · JavaScript +898 ·
+feuille +0 · balisage +0 · audio +0**, la partition tombant EXACTEMENT sur le
+total des DEUX côtés — écart **0 · 0** —, et **306 URI / 307 lignes `data:` de
+part et d'autre**. Aucune ressource ne prend un marqueur de plus : c'est le même
+atlas qui pèse plus.
+⚠⚠ **ET LES NOMBRES ONT ÉTÉ REMESURÉS, PAS ADDITIONNÉS — L'ÉCART EST RÉEL.**
+Écrit seul sur `105d4fc`, le lot mesurait **+76 106** et portait l'atlas
+`defense` à 121 456 / 46 924 ; sur l'arbre fusionné il mesure **+75 550** et
+l'atlas tombe à **115 110 / 44 454**. **556 octets d'images de moins pour le même
+dessin** : les tourelles zénithales recentrées ne remplissent plus leur cellule
+qu'à 11 à 43 %, donc l'atlas recousu se comprime autrement. Une somme des deux
+diffs aurait donné un troisième nombre, faux — c'est ce que `PIC T7` écrit à
+côté de son ancre.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 38** — vérifié au diff : pas un champ
+n'entre dans l'état. Un reste de destruction est un DESSIN, et le sel est une
+constante de rendu.
+⚠ **SEPT TESTS ONT ÉTÉ RÉANCRÉS, AUCUN ASSOUPLI** — `ER T6`, `PIC T6`, `PIC T7`,
+`EFF T11`, `EFF T12`, `T5` de `rendu.test.js`, `VIT T2 bis`, plus le balayage de
+`sprite.test.js`. Chacun écrit le nombre d'avant à côté de celui d'après et porte
+une contre-assertion `notEqual` qui refuse le retour de l'ancien.
+⚠ **`npm test` rend **1648 pass / 0 fail** au sens de la garde de
+`documentation.test.js`** — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 647 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. ⚠ Le lot en ajoute **trois** — `T1`, `T2`
+et `T2 bis` de `ruines-defense.test.js` — et la fusion en apporte **deux** de
+plus, `CZ T1` et `CZ T2`, qui sont ceux de #161 : 1 643 à ANCRES-ZÉNITH, 1 645
+sur `main`, 1 648 ici.
+⚠⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change
+se VOIT — un socle abattu qui laisse un tas de gravats au lieu de disparaître —
+et rien n'a été ouvert dans un navigateur : tout est mesuré sur la LISTE
+D'AFFICHAGE et sur des fonctions PURES. **À regarder au premier essai** : que les
+quatre variantes ne se lisent pas comme quatre fois le même tas, et que la ruine
+d'un mur ne se confonde pas avec le mur intact au cran le plus large.
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/ruines-defense-<suffixe>` ; l'environnement d'exécution épingle
+la session à `claude/new-session-fx3z9w` et interdit de pousser ailleurs sans
+autorisation explicite.
+
+**Auparavant, après le lot CONDITIONNEMENT-ZÉNITH (19/09) :**
 ⚠⚠ **L'ÉTAT TRANSITOIRE D'ANCRES-ZÉNITH EST FERMÉ : LES 44 SPRITES SONT
 CONDITIONNÉS, LES TROIS ATLAS RECOUSUS, LA TABLE ET L'ART S'ACCORDENT.** Les
 22 sources zénithales — douze tourelles de défense, neuf socles, la coque de
@@ -13555,7 +13788,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   77 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   78 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -13568,7 +13801,7 @@ test/                   77 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
-  ancres-zenith
+  ancres-zenith  ruines-defense
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
@@ -13768,8 +14001,14 @@ tools/                  **45 fichiers**, dont UN SEUL sert au build — RECOMPT�
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sources brutes, hors chaîne de build — **676 fichiers à
-                        la racine, 501 consommées · 175 dormantes**, RECOMPTÉ le
+art/sources/            sources brutes, hors chaîne de build — **684 fichiers à
+                        la racine, 509 consommées · 175 dormantes**, RECOMPTÉ le
+                        19/09 au lot RUINES-DÉFENSE par `entrees.py --declarer`,
+                        qui en fait entrer HUIT — les quatre ruines de pièce de
+                        défense de chaque camp, `ruine_def_{j,o}_variante_01..04`,
+                        toutes CONSOMMÉES. Elles sont huit des vingt-trois que le
+                        lot d'avant laissait hors de son périmètre.
+                        ⚠ Auparavant, 676 fichiers · 501 consommées, RECOMPTÉ le
                         19/09 au lot ANCRES-ZÉNITH par `entrees.py --declarer`,
                         qui en fait entrer VINGT-DEUX zénithales SOUS LES NOMS
                         que la chaîne lit déjà — six socles et six tourelles de
@@ -13924,10 +14163,19 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
 art/sprites/            les sprites conditionnés — **QUATORZE dossiers de famille
-                        et 1 157 fichiers en tout**, recomptés le 08/09 au lot
-                        SOL-OUVRAGE par `git ls-files`, qui en fait entrer
-                        QUATORZE dans `sol/` : la famille passe de 8 à **22
-                        planches**, plus son manifeste.
+                        et 1 173 fichiers en tout**, recomptés le 19/09 au lot
+                        RUINES-DÉFENSE par `git ls-files`, qui en fait entrer
+                        SEIZE dans `defense/` : huit ruines de pièce aux deux
+                        grilles, produites par `tools/ruines.py`.
+                        ⚠⚠ ELLES SONT DANS `defense/` ET PAS DANS `batiment/`,
+                          où vivent `ruine_j` et `ruine_o`. Ce sont deux choses :
+                          celles-ci remplacent une PIÈCE — socle, tourelle, mur —,
+                          celles-là un BÂTIMENT. Ethan, 19/09 : « parce que les
+                          ruines, il y a déjà des ruines de bâtiments ».
+                        ⚠ Auparavant, 1 157 fichiers, recomptés le 08/09 au lot
+                        SOL-OUVRAGE, qui en faisait entrer QUATORZE dans `sol/` :
+                        la famille passait de 8 à **22 planches**, plus son
+                        manifeste.
                         ⚠⚠ ET LES DEUX COMPTES ANNONCÉS AU LOT PRÉCÉDENT ÉTAIENT
                           FAUX : il disait TREIZE dossiers et 1 045 fichiers,
                           `HEAD` en portait QUATORZE — `interface/` est entré au
@@ -14265,6 +14513,17 @@ trou. Son symétrique, « nouveau », est ce que la chaîne produit et que le d�
 n'a pas. `planches.py` n'en connaît que trois ; celle qui manquait est la plus
 utile, et c'est elle qui aurait vu les 240 tourelles de blindé de l'Ouvrage si
 elles étaient restées au dépôt après le lot PRODUCTION.
+
+⚠⚠ **ET IL COMPARE DES OCTETS, PAS DES DESSINS — C'EST SA LIMITE, ET ELLE N'ÉTAIT
+ÉCRITE NULLE PART AVANT LE 20/09.** Un fichier dont pas un PIXEL n'a bougé sort en
+« différent » si son PNG a été encodé autrement, et **rien dans sa sortie ne
+permet de faire la différence**. Mesuré au lot RUINES-DÉFENSE, sur les 176
+« différents » de `main` : **ZÉRO différent au pixel**, sur les trois producteurs,
+330 fichiers comparés en RVBA. ⚠ **Ce n'est PAS un défaut à corriger** : la
+comparaison d'octets est la seule qui attrape un outil réparé dont les sprites
+n'ont pas été régénérés, ce pour quoi le fichier existe. Mais un verdict rouge ne
+se lit pas « l'art est périmé » : **le partage demande de rejouer les producteurs
+sous `FZ_SPRITES` et de comparer image par image**, et il se fait à la main.
 
 ⚠ **DEUX MINUTES, MESURÉES.** C'est le prix de onze outils rejoués en entier.
 Un contrôle qu'on n'a pas la patience de lancer ne protège de rien : il se lance

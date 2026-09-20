@@ -27,7 +27,9 @@ import {
 import {
   variante, suffixeDeVariante, SEL_VARIANTE, nomDeVariante, nombreDeVariantes,
 } from '../src/render/variante.js';
-import { couchesDeLEntite, listeAffichage, genreDeLaGarnison } from '../src/render/scene.js';
+import {
+  couchesDeLEntite, listeAffichage, genreDeLaGarnison, couchesDeLaRuine,
+} from '../src/render/scene.js';
 import { ANCRES_BLINDES, TOURELLES_BLINDES } from '../src/data/ancres-blindes.js';
 import { ANCRES_DEFENSE, TOURELLES_DEFENSE } from '../src/data/ancres-defense.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
@@ -1882,6 +1884,37 @@ test('couches — tout nom composable est dans un atlas cousu, les deux proprié
     }
   }
 
+  // ⚠⚠ ET LES HUIT RUINES DE PIÈCE SONT BALAYÉES ICI DEPUIS LE LOT
+  // RUINES-DÉFENSE, 19/09 — ELLES ÉTAIENT LA SEULE FAÇON DE LES LAISSER
+  // DORMANTES DANS LEUR PROPRE FAMILLE. `couchesDeLaRuine` n'est pas
+  // `couchesDeLEntite` : une ruine n'a ni cible, ni angle, ni ancre, et son nom
+  // dépend d'une CASE. Les faire composer par la boucle ci-dessus aurait
+  // demandé un faux descripteur ; on les compose par leur propre porte, qui est
+  // celle que `listeAffichage` emploie.
+  //
+  // ⚠ ET LE BALAYAGE COUVRE LES QUATRE LETTRES, il ne se contente pas d'une
+  // case. `variante` mélange la graine et les deux coordonnées : quatre cases
+  // bien choisies ne suffiraient pas à le garantir, donc on balaie jusqu'à les
+  // avoir toutes et on ASSERTE le compte. Sans cette assertion, le test
+  // passerait en n'atteignant qu'une variante sur quatre.
+  for (const proprietaire of ['joueur', 'ouvrage']) {
+    for (let g = 0; g < 8; g += 1) {
+      for (let r = 3; r <= 10; r += 1) {
+        for (let c = 1; c <= 9; c += 1) {
+          for (const { famille, nom } of couchesDeLaRuine(proprietaire, 'defense', g, r, c)) {
+            assert.ok(existeDansAtlas(famille, nom),
+              `ruine de ${proprietaire} : ${famille}/${nom} absent de l'atlas cousu`);
+            assert.doesNotThrow(() => fondDuSprite(famille, nom));
+            noms.add(`${famille}/${nom}`);
+          }
+        }
+      }
+    }
+  }
+  const ruines = [...noms].filter((n) => n.startsWith('defense/ruine_def_'));
+  assert.equal(ruines.length, 8,
+    `${ruines.length} ruines de pièce atteintes : deux camps × quatre variantes attendus`);
+
   // ⚠⚠ LA CIBLE NE CHANGE PLUS LE NOM, ET C'EST CE QUE LA BASCULE ACHÈTE. Trois
   // cibles, un seul jeu de noms par pièce : une tourelle qui redeviendrait
   // seize sprites ferait tomber cette ligne avant toute autre.
@@ -1897,7 +1930,11 @@ test('couches — tout nom composable est dans un atlas cousu, les deux proprié
   // le Collecteur dédoublé et les trois artilleries. Ce sont les noms des
   // ÉTATS INTACTS — `couchesDeLEntite` n'en compose pas d'autre tant que le
   // descripteur ne porte pas d'état, et son défaut est « intact ».
-  assert.equal(noms.size, 50, `${noms.size} noms distincts composés`);
+  // ⚠ RÉANCRÉ À 58 AU LOT RUINES-DÉFENSE : 50 avant, plus les huit ruines de
+  // pièce. Aucun autre nom n'entre ni ne sort — le lot n'ajoute pas une pièce,
+  // il ajoute ce qu'une pièce laisse.
+  assert.equal(noms.size, 58, `${noms.size} noms distincts composés`); // était 50
+  assert.notEqual(noms.size, 50, 'les ruines de pièce ne sont plus composées');
 
   // ⚠⚠ ET LE COMPTE QUI FAISAIT LE LOT STRUCTURES-AU-COMBAT TIENT : les noms de
   // l'OUVRAGE sont atteints, et pas un ne dort. Ils étaient zéro avant ce
@@ -1913,6 +1950,11 @@ test('couches — tout nom composable est dans un atlas cousu, les deux proprié
   // par une conséquence du repli d'`existeDansAtlas`. Les deux causes sont
   // parties avec les liaisons : chaque sprite de défense et de socle est
   // maintenant demandé par au moins une pièce.
+  // ⚠ ET LES HUIT RUINES DE PIÈCE SONT DANS CE BALAYAGE DEPUIS LE LOT
+  // RUINES-DÉFENSE : elles vivent dans `ATLAS.defense`, donc cette ligne les
+  // aurait déclarées dormantes si la boucle ci-dessus ne les composait pas.
+  // C'est elle qui a fait tomber le test quand l'atlas a été recousu, et c'est
+  // ce qu'on lui demande.
   const dormants = [
     ...ATLAS.defense.noms.map((n) => `defense/${n}`),
     ...ATLAS.socle.noms.map((n) => `socle/${n}`),

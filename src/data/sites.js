@@ -470,8 +470,16 @@ export const ECRAN_RAID = {
  * ⚠⚠ ET `'ruine'` NE SE RETIRE PAS. Ethan a vu la ruine générique sous la
  * Souche et le Nœud et a demandé leurs planches à eux ; il n'a pas demandé de
  * jeter les deux dessins. `ruine_j` et `ruine_o` sortent de six semaines de
- * sommeil dans l'atlas, et le réglage `defense` ci-dessous — celui qu'il a parké
- * « en attente d'un coup d'œil » — est à UN MOT de les rendre au dessin.
+ * sommeil dans l'atlas.
+ *
+ * ⚠⚠ ET `'ruine'` NE DÉSIGNE PLUS LE MÊME DESSIN SELON LE GENRE — lot
+ * RUINES-DÉFENSE, 19/09. Un bâtiment rasé laisse `ruine_<c>`, famille
+ * `batiment` ; une pièce de défense tombée laisse `ruine_def_<c>_<v>`, famille
+ * `defense`, en quatre variantes tirées sur la case. Ethan : « parce que les
+ * ruines, il y a déjà des ruines de bâtiments ». C'est le GENRE qui choisit,
+ * et il choisit ICI — une table `genre → famille` écrite dans `render/scene.js`
+ * aurait mis une décision de jeu dans une ligne de dessin, ce que l'avant-
+ * dernier paragraphe de ce bloc interdit en toutes lettres.
  *
  * ⚠ `'planche'` N'A DE SENS QUE POUR UN GENRE QUI A DES ÉTATS, donc les
  * bâtiments seuls. L'écrire pour `defense` ou `unite` LÈVE dans `scene.js`
@@ -491,13 +499,43 @@ export const RESTE_APRES_DESTRUCTION = {
   // ⚠ SA PROPRE PLANCHE, PAS LE TAS DE GRAVATS COMMUN — Ethan, 08/09 : la
   // Souche et le Nœud laissaient le même `ruine_o`.
   batiment: 'planche',
-  // ⚠ EN ATTENTE D'UN COUP D'ŒIL D'ETHAN — passer à `'ruine'` suffit, et
-  // `EFF T12` mesure que le câblage répond.
-  defense: 'rien',
+  // ⚠⚠ OUVERT LE 19/09, ET SUR SON PROPRE DESSIN. Le commentaire d'ici disait
+  // « passer à `'ruine'` suffit » : c'était FAUX, et le brief du lot l'a
+  // relevé — `couchesDeLaRuine` écrivait la famille `batiment` en dur, donc ce
+  // seul mot aurait posé la ruine d'un BÂTIMENT sous une tourelle tombée. Ce
+  // qui suffit est ce mot-ci PLUS la table `FAMILLE_DE_LA_RUINE` ci-dessous.
+  defense: 'ruine',
   // ⚠ ET CELUI-CI N'A PAS DE RAISON DE CHANGER : une escouade ne laisse pas un
   // pan de mur là où six hommes sont tombés. Il est dans la table pour que la
   // règle soit LUE partout, jamais pour qu'on l'ouvre.
   unite: 'rien',
+};
+
+/**
+ * Quel DESSIN de ruine chaque genre laisse — famille d'atlas et préfixe de nom.
+ *
+ * ⚠⚠ ELLE EST ICI ET PAS DANS `render/scene.js`, ET C'EST LA MÊME RAISON QUE
+ * POUR SA VOISINE : ce qu'on VOIT quand une chose est détruite est un arbitrage
+ * de jeu (`CLAUDE.md` §4). Avant le lot RUINES-DÉFENSE, `couchesDeLaRuine`
+ * écrivait `famille: 'batiment'` en dur — juste tant qu'un seul genre laissait
+ * une ruine, faux à la seconde où un deuxième s'ouvre.
+ *
+ * ⚠ `variantes` DIT SI LE NOM PORTE UNE LETTRE, il ne dit pas COMBIEN il y en
+ * a : le compte se lit dans l'atlas, par `nombreDeVariantes`. Un nombre écrit
+ * ici serait la seconde vérité que le jour d'une cinquième planche ferait
+ * mentir — et elle serait muette, `nomDeVariante` composant un nom qui
+ * n'existe pas plutôt que de lever.
+ *
+ * ⚠ ET ELLE NE PORTE QUE LES GENRES QUI LAISSENT `'ruine'`. Un genre à
+ * `'rien'` ou à `'planche'` n'a pas de ruine à dessiner ; lui donner une ligne
+ * ici inviterait à croire qu'il en a une.
+ */
+export const FAMILLE_DE_LA_RUINE = {
+  // La base rasée — un seul dessin par camp, `ruine_j` / `ruine_o`.
+  batiment: { famille: 'batiment', prefixe: 'ruine', variantes: false },
+  // La pièce de garnison tombée — `ruine_def_j_a` … `_d`, et le camp est dans
+  // le préfixe parce que `nomDeVariante` colle la lettre de variante à la fin.
+  defense: { famille: 'defense', prefixe: 'ruine_def', variantes: true },
 };
 
 // --- points de recherche -----------------------------------------------------

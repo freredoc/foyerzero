@@ -882,9 +882,44 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // PAS l'appareil d'Ethan** — le dépôt n'a pas de Galaxy S25 FE (§3), et un
   // test appareil non exécuté se déclare non exécuté.
   //
-  // ⚠ LA MARGE EST DE 189 515 OCTETS, 1,97 %.
+  // ⚠ LA MARGE ÉTAIT ALORS DE 189 515 OCTETS, 1,97 %.
+  //
+  // ⚠⚠ ET ELLE PASSE DE 9 600 000 À 9 700 000 AU LOT RUINES-DÉFENSE, 19/09.
+  // Ethan a livré huit ruines de pièce de défense — quatre par camp — et
+  // l'amendement du 19/09 a tranché que ce lot-ci les conditionne et les coud.
+  // Elles entrent dans l'atlas `defense`, qui passe de 18 à 26 sprites et de
+  // 5 × 4 à 6 × 5 cellules.
+  //
+  // ⚠⚠ ICI UNE RESSOURCE ENTRE POUR DE BON, ET C'EST CE QUI DISTINGUE CE
+  // RELÈVEMENT DU PRÉCÉDENT. Au lot ART-90 c'était de l'ENTROPIE — le même
+  // atlas, des sprites dessinés plus grands ; ici ce sont **huit dessins
+  // neufs**. Mesuré poste par poste contre le livrable rebâti dans un
+  // `git worktree` sur l'arbre pristine de `main` = `105d4fc` (**9 409 289**) :
+  // **images +75 208 · JavaScript +898 · feuille +0 · balisage +0 · audio +0**,
+  // la partition tombant EXACTEMENT sur le total des DEUX côtés — écart
+  // **0 · 0** —, et **306 URI / 307 lignes `data:` de part et d'autre**. Aucune
+  // ressource ne prend un marqueur de plus : c'est le même atlas qui pèse plus.
+  //
+  // ⚠⚠ À 9 600 000 LA MARGE TOMBAIT À 114 605 OCTETS, 1,19 %, DONC SOUS LE
+  // PLANCHER DE 150 000 QU'ASSERTE `PIC T7`. La borne n'était pas franchie —
+  // le lot passait — mais le plancher, lui, l'était : c'est lui qui a forcé la
+  // décision, et il a fait son travail. `CLAUDE.md` §5 et le paragraphe
+  // ci-dessus disent la suite : **on ne rogne jamais pour passer dessous**, la
+  // borne monte et le lot écrit pourquoi.
+  //
+  // ⚠ ET LE PALIER DE QUALITÉ N'A PAS ÉTÉ BAISSÉ, comme au lot ART-90 et pour
+  // la même raison : `QUALITE = 85` de `tools/atlas.py` vaut pour les DIX-NEUF
+  // atlas, et la baisser pour celui-ci dégraderait les dix-huit autres.
+  //
+  // ⚠⚠ ET LE CHOIX DE FAMILLE N'A PAS ÉTÉ TRANCHÉ PAR LE POIDS — MESURÉ, LES
+  // QUATRE CANDIDATS SE TIENNENT EN 5 556 OCTETS. Cousus à 128 : bâtiment
+  // **+69 652**, defense **+75 208**, terrain **+73 228**, famille neuve
+  // **+74 128** de base64. Six centièmes de pour-cent du livrable les sépare :
+  // c'est le CÂBLAGE qui a décidé, pas la balance — voir `PIC T6`.
+  //
+  // ⚠ LA MARGE EST DE 214 605 OCTETS, 2,21 %.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 9_600_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 9_700_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

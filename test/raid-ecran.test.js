@@ -1976,14 +1976,33 @@ test('EFF T11 — un BÂTIMENT laisse SA planche, une structure et une escouade 
 
   const apres = noms(listeAffichage(etat, proj, null, 0, null, 0, tombees));
 
-  // ⚠ UNE SEULE PLANCHE DÉTRUITE : la Souche. Le Merlon est une STRUCTURE,
-  // l\'autre pièce une escouade, et `RESTE_APRES_DESTRUCTION` les met à `rien`.
+  // ⚠ UNE SEULE PLANCHE DÉTRUITE : la Souche. Le Merlon est une STRUCTURE, et
+  // il laisse sa PROPRE ruine depuis le lot RUINES-DÉFENSE ; l\'autre pièce est
+  // une escouade, que `RESTE_APRES_DESTRUCTION` met toujours à `rien`.
   assert.equal(apres.filter((n) => n === 'bat_o_souche_detruit').length, 1,
     'le compte des planches détruites ne suit pas la table');
   // ⚠⚠ ET PLUS AUCUNE RUINE GÉNÉRIQUE : c\'est très exactement le défaut
   // d\'Ethan. Sans cette ligne, poser la planche EN PLUS de la ruine passerait.
-  assert.equal(apres.filter((n) => n.startsWith('ruine_')).length, 0,
+  // ⚠ RÉANCRÉ AU LOT RUINES-DÉFENSE : la ligne comptait tout ce qui commence par
+  // `ruine_`, ce qui était la même chose tant que `ruine_j`/`ruine_o` étaient les
+  // seuls noms de ruine du dépôt. Elle nomme désormais les DEUX génériques, et
+  // la ruine de pièce est comptée à part juste en dessous — un `startsWith` qui
+  // ramasserait les deux familles cesserait de dire laquelle se dessine.
+  assert.equal(apres.filter((n) => n === 'ruine_o' || n === 'ruine_j').length, 0,
     'la ruine générique se dessine encore sous un bâtiment');
+  // ⚠⚠ ET LE MERLON LAISSE UNE RUINE DE DÉFENSE, UNE SEULE, AVEC SA LETTRE DE
+  // VARIANTE. C\'est l\'arbitrage du lot : `RESTE_APRES_DESTRUCTION.defense` vaut
+  // `'ruine'`, et la famille lue dans `FAMILLE_DE_LA_RUINE` est `defense`, pas
+  // `batiment`. Le motif exige la lettre : un nom sans variante voudrait dire
+  // que le sel n\'a pas été consulté.
+  const ruinesDeDefense = apres.filter((n) => /^ruine_def_o_[a-d]$/.test(n));
+  assert.equal(ruinesDeDefense.length, 1,
+    'le Merlon ne laisse pas sa ruine de défense, ou il en laisse plusieurs');
+  // ⚠ ET L\'ESCOUADE N\'EN LAISSE AUCUNE — `unite` reste à `rien`, et le lot ne
+  // l\'ouvre pas. Sans cette ligne, un `'ruine'` posé sur les trois genres
+  // passerait.
+  assert.equal(apres.filter((n) => n.startsWith('ruine_def_')).length, 1,
+    'une seconde ruine de défense : l\'escouade en laisse une aussi');
   // Et aucune des trois pièces d\'origine ne se dessine plus.
   assert.ok(!apres.includes('bat_o_souche'), 'la Souche se dessine encore');
   assert.ok(!apres.some((n) => n.startsWith('def_o_merlon')), 'le Merlon se dessine encore');
@@ -1993,6 +2012,22 @@ test('EFF T11 — un BÂTIMENT laisse SA planche, une structure et une escouade 
   // défendre ». Prise seule, la règle se mesure sans montage.
   assert.deepEqual(couchesDeLaRuine('ouvrage'), [{ famille: 'batiment', nom: 'ruine_o' }]);
   assert.deepEqual(couchesDeLaRuine('joueur'), [{ famille: 'batiment', nom: 'ruine_j' }]);
+  // ⚠⚠ ET LE GENRE EST LE SECOND ARGUMENT, DE DÉFAUT `batiment` : c\'est ce qui
+  // laisse les deux lignes ci-dessus inchangées. Une ruine de défense change de
+  // FAMILLE en même temps que de préfixe — c\'est le piège que le §1.1 du brief
+  // nomme, « passer `defense` à `'ruine'` ferait dessiner `ruine_j`/`ruine_o` ».
+  const deDefense = couchesDeLaRuine('ouvrage', 'defense', 7, 10, 3);
+  assert.equal(deDefense.length, 1);
+  assert.equal(deDefense[0].famille, 'defense',
+    'la ruine de pièce est allée chercher la famille des ruines de bâtiment');
+  assert.match(deDefense[0].nom, /^ruine_def_o_[a-d]$/);
+  // ⚠ ET UNE RUINE À VARIANTES SANS CASE LÈVE plutôt que de rendre un nom sans
+  // lettre, qui ne serait dans aucun atlas.
+  assert.throws(() => couchesDeLaRuine('ouvrage', 'defense'), /demande une case/);
+  // ⚠ ET UN GENRE SANS DESSIN LÈVE : `unite` n\'est pas dans la table, et il ne
+  // doit pas retomber sur le dessin du bâtiment.
+  assert.throws(() => couchesDeLaRuine('ouvrage', 'unite', 7, 10, 3),
+    /sans dessin de ruine/);
 });
 
 test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage attend', () => {
@@ -2004,26 +2039,42 @@ test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage 
 
   const dOrigine = { ...RESTE_APRES_DESTRUCTION };
   try {
-    // Le réglage d\'aujourd\'hui : la planche du bâtiment, et rien d\'autre.
+    // ⚠ RÉANCRÉ AU LOT RUINES-DÉFENSE, 19/09 : `defense` valait `'rien'`, il vaut
+    // `'ruine'`. C\'est l\'arbitrage du lot, et ce test rougissait tel qu\'il était
+    // écrit — c\'est ce qu\'on lui demande.
     assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
-      { batiment: 'planche', defense: 'rien', unite: 'rien' },
+      { batiment: 'planche', defense: 'ruine', unite: 'rien' },
       'le réglage de la table a changé sans que ce test le dise');
     const ruines = () => noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
       .filter((n) => n === 'ruine_o').length;
+    const ruinesDef = () => noms(listeAffichage(etat, proj, null, 0, null, 0, tombees))
+      .filter((n) => /^ruine_def_o_[a-d]$/.test(n)).length;
     assert.equal(ruines(), 0, 'une ruine générique au réglage du jour');
+    assert.equal(ruinesDef(), 1, 'pas de ruine de pièce au réglage du jour');
 
-    // ⚠⚠ ON OUVRE LES STRUCTURES, ET C\'EST CE QUI GARDE `ruine_j`/`ruine_o` EN
-    // VIE. Depuis que le bâtiment laisse sa propre planche, le réglage `defense`
-    // est le SEUL chemin vers les deux dessins — celui qu\'Ethan a parké « en
-    // attente d\'un coup d\'œil ». Un mot dans la table, pas une ligne de code.
-    RESTE_APRES_DESTRUCTION.defense = 'ruine';
-    assert.equal(ruines(), 1,
-      'ouvrir `defense` ne donne pas de ruine à la structure : le câblage ne répond pas');
-
-    // ⚠ ET ON LES REFERME : le câblage marche dans les DEUX sens, sinon il ne
-    // prouverait qu\'une porte qui s\'ouvre.
+    // ⚠⚠ ON REFERME LES STRUCTURES, ET LE CÂBLAGE DOIT RÉPONDRE DANS LES DEUX
+    // SENS — sinon il ne prouverait qu\'une porte qui s\'ouvre. C\'est le même
+    // va-et-vient qu\'avant le lot, pris par l\'autre bout : le réglage du jour
+    // est maintenant celui qui DESSINE, et c\'est `'rien'` qu\'on va chercher.
     RESTE_APRES_DESTRUCTION.defense = 'rien';
+    assert.equal(ruinesDef(), 0, 'fermer `defense` laisse une ruine de pièce derrière lui');
+    RESTE_APRES_DESTRUCTION.defense = 'ruine';
+    assert.equal(ruinesDef(), 1,
+      'rouvrir `defense` ne donne pas sa ruine à la structure : le câblage ne répond pas');
+
+    // ⚠⚠ ET `ruine_j`/`ruine_o` NE SONT PLUS ATTEIGNABLES QUE PAR `batiment`,
+    // CE QUI EST UN FAIT DU LOT ET NON UN OUBLI. Avant lui, `defense` était le
+    // SEUL chemin vers les deux dessins génériques — ce test l\'écrivait ainsi.
+    // La ruine de pièce a sa propre famille et son propre préfixe, donc les deux
+    // génériques redeviennent DORMANTS : dans l\'atlas `batiment`, payés en
+    // octets, et employés par personne tant que `batiment` vaut `'planche'`.
+    // La ligne ci-dessous est ce qui les garde en vie, mesurés.
+    RESTE_APRES_DESTRUCTION.batiment = 'ruine';
+    assert.equal(ruines(), 1,
+      'le seul chemin qui reste vers `ruine_o` ne répond plus');
+    RESTE_APRES_DESTRUCTION.batiment = 'planche';
     assert.equal(ruines(), 0);
+    RESTE_APRES_DESTRUCTION.defense = 'rien';
 
     // ⚠⚠ ET `planche` SE REFUSE À QUI N\'A PAS D\'ÉTATS. Une structure na pas de
     // planche `_detruit` : le réglage lÈVE plutôt que de la dessiner INTACTE au
@@ -2033,6 +2084,18 @@ test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage 
       /reste « planche » pour « defense »/,
       '`planche` sur une structure passe en silence');
     RESTE_APRES_DESTRUCTION.defense = 'rien';
+
+    // ⚠⚠ ET `'ruine'` SE REFUSE À UN GENRE QUE `FAMILLE_DE_LA_RUINE` NE PORTE
+    // PAS. L\'escouade n\'a pas de dessin de ruine ; la retomber sur celui du
+    // bâtiment lui donnerait le tas de gravats d\'une base rasée, et personne ne
+    // verrait que c\'est un défaut. Deux tables, deux questions : celle-ci dit
+    // CE QUI RESTE, l\'autre dit QUOI DESSINER, et un genre peut être dans la
+    // première sans être dans la seconde.
+    RESTE_APRES_DESTRUCTION.unite = 'ruine';
+    assert.throws(() => listeAffichage(etat, proj, null, 0, null, 0, tombees),
+      /genre « unite » sans dessin de ruine/,
+      'une escouade retombe sur le dessin du bâtiment');
+    RESTE_APRES_DESTRUCTION.unite = 'rien';
 
     // ⚠ ET UN RESTE INCONNU LÈVE AUSSI — une valeur mal orthographiée ne
     // retombe pas sur le dessin ordinaire.
@@ -2056,7 +2119,9 @@ test('EFF T12 — le câblage est POSÉ pour les trois genres, seul le réglage 
   }
   // Le nettoyage a bien remis la table d\'origine.
   assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
-    { batiment: 'planche', defense: 'rien', unite: 'rien' });
+    { batiment: 'planche', defense: 'ruine', unite: 'rien' });
+  assert.notEqual(RESTE_APRES_DESTRUCTION.defense, 'rien',
+    'la defense est revenue à `rien` : les ruines de pièce ne se dessinent plus');
 });
 
 // ---------------------------------------------------------------------------

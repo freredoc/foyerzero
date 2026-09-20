@@ -266,6 +266,13 @@ test('ER T6 — aucun suffixe d\'état en dur, et le dessin suit la table dans l
     for (const k of Object.keys(RESTE_APRES_DESTRUCTION)) delete RESTE_APRES_DESTRUCTION[k];
     Object.assign(RESTE_APRES_DESTRUCTION, dOrigine);
   }
+  // ⚠ RÉANCRÉ AU LOT RUINES-DÉFENSE, 19/09 : `defense` valait `'rien'`, il vaut
+  // `'ruine'` — c'est très exactement l'arbitrage du lot, et la ligne écrit le
+  // nombre d'avant à côté de celui d'après plutôt que de le remplacer en
+  // silence. La contre-assertion refuse le retour de l'ancien réglage : un lot
+  // qui défferait le câblage sans le dire ferait tomber ce test.
   assert.deepEqual({ ...RESTE_APRES_DESTRUCTION },
-    { batiment: 'planche', defense: 'rien', unite: 'rien' });
+    { batiment: 'planche', defense: 'ruine', unite: 'rien' });
+  assert.notEqual(RESTE_APRES_DESTRUCTION.defense, 'rien',
+    'la defense est revenue à `rien` : les ruines de pièce ne se dessinent plus');
 });
