@@ -355,3 +355,31 @@ base finale en est une. Sujet entier, non ouvert.
 
 **Le plafond de la réserve**, signalé par le cavalier RÉSERVE-RASAGE et non
 repris ici.
+
+---
+
+## 13. Amendement à l'ouverture de la PR — un bloc mort retiré
+
+Relu en lecteur adverse avant d'ouvrir la PR : `executerRaid` portait un
+**second** bloc `verrou-terminale`, copie conforme de celui de `problemesDuRaid`
+— commentaire compris —, qui poussait dans `problemes` **après** le `throw` qui
+lève sur cette liste. Personne ne lisait ce `push` : `problemes` n'a plus aucun
+lecteur dans la fonction après la levée (vérifié ligne par ligne, 665 → 834). Le
+commentaire laissait pourtant croire que la fonction revérifiait le verrou.
+
+Retiré, et remplacé par trois lignes qui disent où la porte vit. **Rien ne change
+au comportement** : `executerRaid` consulte `problemesDuRaid` en tête et lève
+dessus, `VERROU T5` et les 1 657 sont verts des deux côtés. Ce qui change est
+le livrable — `esbuild` ne peut pas élaguer un `push` — : **9 124 022 →
+9 123 813, −209 octets**, coût du lot ramené de +1 349 à **+1 140** (JavaScript
++1 868, images −728). `PIC T7` réancré, contre-assertion `notEqual 575_978`
+ajoutée, `CLAUDE.md` §0 amendé sous le bloc de ce lot.
+
+Vérifié sur cette machine avant de greffer quoi que ce soit : le patch
+s'applique par `git am` sur `31b40dc` (`--check` sortie 0), les 33 fichiers du
+zip sont identiques à l'octet à l'arbre, zéro CRLF ; `verifier.py --outil
+emblemes` rend 5 identiques · 266 différents à l'octet (Pillow 12.3 contre 12.2,
+le bruit d'encodeur déjà mesuré à SOUFFLE), rejoué sous `FZ_SPRITES` et comparé
+en RVBA : **266 identiques au pixel, 0 différent**, et **les deux
+`base_o_2x2.webp` neufs sont dans les cinq identiques à l'octet** — la 2 × 2 du
+10/09 se conditionne ici exactement comme dans le conteneur.

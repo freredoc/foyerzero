@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 est de 5,95 %', () => {
+test('PIC T7 — le livrable pèse 9 123 813 octets, la marge sur la borne T10 est de 5,94 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -944,10 +944,18 @@ test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 e
   // ⚠ LES 2 077 OCTETS DE JAVASCRIPT SONT LE CÂBLAGE : la géométrie de
   // l'hexagone, les deux types de site, les gardes d'exclusion, la porte de
   // `problemesDuRaid` et le maillon de migration. Pas une image ne les porte.
+  // ⚠ RÉANCRÉ À L'OUVERTURE DE LA PR DU LOT VERROUS, 20/09 : `executerRaid`
+  // portait un SECOND bloc « verrou-terminale », copié de `problemesDuRaid`
+  // et poussé dans une liste sur laquelle la fonction venait de LEVER — du
+  // code mort, que `esbuild` ne peut pas élaguer (un `push` a l'air d'un effet).
+  // Retiré : **−209 octets de JavaScript, 9 124 022 → 9 123 813**, le coût du
+  // lot passant de +1 349 à **+1 140**. Un lot qui sait ce qu'il déplace réancre.
   const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_124_022;          // lot VERROUS — 9 122 673 pour SOUFFLE + son cavalier
-  const MARGE = BORNE - MESURE;      // 575 978 octets — 577 327 avant les verrous
-  assert.equal(MARGE, 575_978);
+  const MESURE = 9_123_813;          // lot VERROUS sans son bloc mort — 9 124 022 avec, 9 122 673 avant
+  const MARGE = BORNE - MESURE;      // 576 187 octets — 577 327 avant les verrous
+  assert.equal(MARGE, 576_187);
+  assert.notEqual(MARGE, 575_978,
+    'la marge est celle du premier jet de VERROUS : le bloc mort de executerRaid est revenu');
   assert.notEqual(MARGE, 577_327,
     'la marge est celle d\'avant VERROUS : les sept bases du bout de carte ont disparu');
   assert.notEqual(MARGE, 577_283,

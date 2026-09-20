@@ -248,15 +248,25 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
 est **1 656 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
 08/09), et `npm run check` sort en 0. Le lot en ajoute **sept**, `VERROU T1` à
 `T7` du nouveau `test/verrous.test.js` — `test/` passe de 78 à **79** fichiers.
-`npm run build` → `dist/index.html`, **9 124 022 octets**, 0 référence externe.
-Coût **+1 349 octets**, mesuré poste par poste contre le livrable rebâti dans un
+`npm run build` → `dist/index.html`, **9 123 813 octets**, 0 référence externe
+— **9 124 022 au premier jet**, voir le ⚠ ci-dessous.
+Coût **+1 349 octets** au premier jet, mesuré poste par poste contre le livrable rebâti dans un
 `git worktree` depuis l'arbre pristine de `main` = `31b40dc`, qui est le merge de
 SOUFFLE et de son cavalier (**9 122 673**) : **JavaScript +2 077 · images −728 ·
 feuille +0 · balisage +0 · audio +0**, et les cinq postes PARTITIONNENT le
 fichier des deux côtés — chacun NET de ses `data:`, somme exacte sur le total
 avant comme après — `data:` à **307 lignes / 306 URI** des deux côtés. Borne T10
 **9 700 000, NON TOUCHÉE** ; c'est au lot de la grille longue de la relever.
-Marge **575 978 octets, 5,94 %**.
+Marge **575 978 octets, 5,94 %** au premier jet.
+⚠⚠ **UN BLOC MORT A ÉTÉ RETIRÉ À L'OUVERTURE DE LA PR, ET LE LIVRABLE PERD
+209 OCTETS.** `executerRaid` portait un SECOND bloc « verrou-terminale »,
+copié de `problemesDuRaid` avec son commentaire, poussé dans `problemes`
+APRÈS le `throw` qui lève sur cette liste — jamais lu par personne, et le
+commentaire laissait croire que la fonction revérifiait le verrou. La porte
+vit dans `problemesDuRaid` seul, que `executerRaid` consulte en tête ; rien
+ne change au comportement, `VERROU T5` et les 1 657 sont verts des deux
+côtés. Livrable **9 123 813**, coût du lot **+1 140** (JavaScript +1 868),
+marge **576 187 octets, 5,94 %**, `PIC T7` réancré avec sa contre-assertion.
 ⚠ `python3 tools/verifier.py --outil emblemes` rend **271 identiques · 0
 différents · 0 nouveaux** APRÈS le remplacement de la 2 × 2, et `atlas.py
 --verifier` **17 identiques · 3 différents** — les trois ÉCARTs préexistants,
