@@ -7562,12 +7562,24 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
       `URI ${genre}/${format} : l'en-tête n'est pas celui d'un ${format}`);
     comptes[format] = (comptes[format] ?? 0) + 1;
   }
-  // ⚠ ET LE PARTAGE EST FIGÉ : 263 sons, 41 WebP, 2 PNG. Un compte global juste
-  // masquerait une image devenue un son, ce qu'un scanner cassé peut produire.
+  // ⚠ ET LE PARTAGE EST FIGÉ : 263 sons, 43 WebP, et plus AUCUN PNG. Un compte
+  // global juste masquerait une image devenue un son, ce qu'un scanner cassé
+  // peut produire.
   // ⚠ LE TYPE MIME DES SONS EST `audio/ogg`, PAS `audio/opus` — l'Opus voyage
   // dans un conteneur Ogg, et c'est son en-tête `OggS` que la ligne ci-dessus
   // vérifie. Le mesurer plutôt que de l'écrire de mémoire a coûté un essai.
-  assert.deepEqual(comptes, { ogg: 263, webp: 41, png: 2 },
+  //
+  // ⚠⚠ LES DEUX DERNIERS PNG SORTENT AU LOT SOUFFLE, 20/09, ET CE TEST EST
+  // L'ENDROIT LE PLUS COURT OÙ LE LOT SE LIT. C'étaient les deux grosses bases
+  // de l'Ouvrage, seules de leur format au milieu de 41 WebP ; elles passent en
+  // WebP q85, donc **41 → 43 et `png` disparaît de la table**. Le total de 306
+  // URI ne bouge pas d'une unité : ce sont les mêmes images.
+  //
+  // ⚠⚠ ET L'ABSENCE DE LA CLÉ `png` EST UNE ASSERTION, PAS UN EFFET DE BORD.
+  // `deepEqual` refuse une clé en trop : le jour où un PNG rentrerait — par un
+  // marqueur oublié ou une extension remise dans `tools/build.js` —, ce test
+  // tombe. C'est ce qui remplace le « 2 » qu'il gardait.
+  assert.deepEqual(comptes, { ogg: 263, webp: 43 },
     'la répartition des ressources du livrable a changé');
 
   // ⚠⚠ ET AUCUN `data:` NE PORTE DE `/*`, CE QUI EST LA FAUTE EXACTE QU'ON

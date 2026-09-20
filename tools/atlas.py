@@ -168,13 +168,23 @@ FAMILLES = {
     # base, neuf paliers chacune. Ni les camps ni les avant-postes n'en ont — ils
     # RESPAWNENT et ne laissent rien —, et c'est pourquoi le compte monte de 18 et
     # non de 36.
-    # Les deux grosses bases de l'Ouvrage
-    # mesurent 128×128 et 192×192 à la grille 64 — elles couvrent 2×2 et 3×3
-    # cases — et `coudre` exige `COTE × COTE` : les laisser entrer ferait sortir
-    # l'outil en erreur. Elles voyagent chacune dans son propre marqueur, comme
-    # l'atlas de terrain de la carte du monde. Un atlas d'un seul sprite ne coud
-    # rien.
-    'carte': ('carte', 133, ('base_o_2x2', 'base_o_3x3')),
+    # ⚠⚠ ET L'EXCLUSION DES DEUX GROSSES BASES DISPARAÎT AU LOT SOUFFLE, 20/09,
+    # SANS QU'AUCUNE D'ELLES NE SOIT ENTRÉE DANS L'ATLAS. Elles mesurent 128×128
+    # et 192×192 à la grille 64 — elles couvrent 2×2 et 3×3 cases —, `coudre`
+    # exige toujours `COTE × COTE`, et elles voyagent toujours chacune dans son
+    # propre marqueur de `tools/build.js`. Ce qui a changé est leur FORMAT :
+    # elles sortent en `.webp` depuis que `tools/emblemes.py` dérive l'encodage
+    # de l'emprise, et `sprites_de` ne liste que les `.png`. Elles ne sont donc
+    # plus candidates à la couture du tout.
+    #
+    # ⚠⚠ ET LES GARDER EXCLUES AURAIT FAIT TOMBER L'OUTIL — c'est la moitié
+    # inverse de `sprites_de` qui le dit, et elle a fait son travail : « une
+    # exclusion qui ne désigne rien est une ligne morte : la retirer ». Le nom
+    # n'étant plus sur le disque en `.png`, l'exclusion ne désigne plus rien.
+    # L'effectif, lui, ne bouge PAS : 133 cousables des deux côtés, parce que
+    # c'est 135 fichiers moins deux non cousables — hier par exclusion, ce jour
+    # par extension.
+    'carte': ('carte', 133, ()),
     # ⚠⚠ LES LIMITES DE TERRITOIRE ENTRENT AU LOT TERRITOIRE (03/09), ET ELLES
     # SONT DANS UN ATLAS ALORS QUE LES MURS DE CONTOUR N'Y SONT PAS. La
     # différence n'est pas de nature, elle est de FORME : un mur fait 512 × 128,

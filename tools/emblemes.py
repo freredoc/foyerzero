@@ -102,6 +102,53 @@ for _p in PLANCHES:
     assert len(_p) == 7, f'{_p[0]} : emprise en cases manquante'
 
 
+# --- le format de sortie, DÉRIVÉ de l'emprise --------------------------------
+#
+# ⚠⚠ UN SPRITE QUI ENTRE DANS UN ATLAS SORT EN PNG, UN SPRITE HORS ATLAS SORT EN
+# WEBP — lot SOUFFLE, 20/09/2026. Et la frontière ne s'écrit pas : elle EST
+# `cases > 1`. `tools/atlas.py` le dit déjà dans sa table — « `coudre` exige
+# `COTE × COTE` » —, donc une planche multi-cases ne peut PAS être cousue, donc
+# elle voyage par son propre marqueur de `tools/build.js`, donc c'est elle, et
+# elle seule, que son propre encodage suit jusqu'au livrable. Écrire une liste
+# de noms ici ferait une seconde vérité à côté de celle d'`atlas.py`, et les
+# deux divergeraient à la première planche ajoutée.
+#
+# ⚠⚠ LE PNG N'A RIEN À FAIRE DANS LE LIVRABLE, ET C'EST MESURÉ, PAS SUPPOSÉ.
+# Un sprite d'atlas est réencodé par `coudre` : son PNG est un INTERMÉDIAIRE, et
+# ce qui pèse est l'atlas, déjà en WebP q85 depuis le lot PIXELS. Les deux
+# grosses bases, elles, entrent TELLES QUELLES : leurs octets de PNG sont les
+# octets du livrable. Mesuré au lot — 120 540 + 205 606 = 326 146 octets de PNG
+# contre 47 546 de WebP, soit **371 436 octets de livrable une fois en base64**,
+# pour un dessin que personne ne voit changer.
+#
+# ⚠⚠ ET LA PERTE EST PLUS PETITE QUE CELLE QUE LE DÉPÔT S'INFLIGE DÉJÀ. Mesuré
+# pixel à pixel sur les pixels OPAQUES, écart RGB entre la source et l'encodé :
+# les deux grosses bases rendent une moyenne de **7,14 et 7,35**, un maximum de
+# **102 et 89**, et **1,2 %** de pixels au-delà de 30. La même mesure sur
+# `site_base_o_n9` — un emblème de la MÊME famille, cousu dans
+# `atlas-carte-128.webp`, tel qu'il est au dépôt aujourd'hui — rend **10,38 de
+# moyenne, 113 de maximum, 2,77 %**. Passer en WebP dégrade donc MOINS que la
+# couture que ces sprites subissent déjà tous. ⚠ Et l'alpha est intact au bit —
+# écart maximum **0** sur les quatre fichiers : les bords ne bougent pas.
+#
+# ⚠ LES RÉGLAGES SONT CEUX DES ATLAS, aux trois valeurs près qu'ils portent.
+# `exact=True` préserve le RGB à zéro que `ecrire` pose sous le seuil d'alpha ;
+# sans lui, l'encodeur le remplace par sa propre extrapolation, et deux chaînes
+# du dépôt cesseraient de produire les mêmes octets pour le même dessin.
+WEBP = {'format': 'WEBP', 'quality': 85, 'method': 6, 'exact': True}
+
+
+def sortie(nom, cases, dossier):
+    """Le chemin et les options d'encodage d'un sprite, selon son emprise.
+
+    Rend `(chemin, options)` — `options` est vide pour un PNG, ce qui est
+    exactement l'appel d'avant ce lot, au bit.
+    """
+    if cases > 1:
+        return os.path.join(dossier, f'{nom}.webp'), WEBP
+    return os.path.join(dossier, f'{nom}.png'), {}
+
+
 # ⚠⚠ L'ÉTAT S'ÉCRIT EN SUFFIXE, ET LE SAIN N'EN A PAS. `site_base_j_n5` reste
 # `site_base_j_n5` : renommer les 36 sains aurait fait tomber `src/data/atlas.js`,
 # `render/embleme.js` et leurs gardes pour un lot qui n'ajoute qu'un état.
@@ -443,7 +490,11 @@ for fichier, nx, ny, ouv, prefixe, noms, cases in PLANCHES:
             g, matiere = conditionner(recadrer(cell, EMPRISE * cases * (N // 32), cote), P, cote)
             d = os.path.join(DST, str(N))
             os.makedirs(d, exist_ok=True)
-            ecrire(g, P, os.path.join(d, f'{nom}.png'), matiere)
+            # ⚠ LE FORMAT SUIT L'EMPRISE — voir `sortie` en tête de fichier. Les
+            # POI sont à `cases == 1` et restent en PNG, les deux grosses bases
+            # sortent en WebP. Aucune des deux branches n'est écrite ici.
+            chemin, options = sortie(nom, cases, d)
+            ecrire(g, P, chemin, matiere, options)
             n += 1
 import json  # noqa: E402
 MESURES['coupes'] = [dict(planche=f, colonne=c, y=y) for f, c, y in toutes_les_coupes]

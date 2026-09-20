@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 494 171 octets, la marge sur la borne T10 est de 2,12 %', () => {
+test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 est de 5,95 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -894,10 +894,47 @@ test('PIC T7 — le livrable pèse 9 494 171 octets, la marge sur la borne T10 e
   // carré porté par leur canon ; elles ne remplissent plus leur cellule qu'à
   // 11 à 43 %, donc l'atlas recousu se comprime autrement. **Une somme des deux
   // diffs aurait donné un troisième nombre, faux.**
+  // ⚠⚠ RÉANCRÉ AU LOT SOUFFLE, 20/09, ET C'EST LE PREMIER RÉANCRAGE DE CE TEST
+  // QUI FASSE BAISSER LA MESURE. Les deux grosses bases de l'Ouvrage étaient les
+  // DEUX SEULS PNG que `tools/build.js` inlinait encore ; elles passent en WebP
+  // q85, comme les dix-neuf atlas et les neuf fonds. Mesuré poste par poste
+  // contre le livrable rebâti dans un `git worktree` sur l'arbre pristine de
+  // `main` = `c8567bc` (**9 494 171**) : **images −371 454 · JavaScript +0 ·
+  // feuille +0 · balisage +0 · audio +0**, la partition tombant EXACTEMENT sur
+  // le total des DEUX côtés — écart **0 · 0** —, et **306 URI / 307 lignes
+  // `data:` de part et d'autre**. Aucun marqueur n'entre ni ne sort : ce sont
+  // les mêmes deux images, encodées autrement.
+  //
+  // ⚠⚠ ET LA BORNE NE BOUGE PAS, ALORS QUE LE LOT TOUCHE À L'ART. Les dix
+  // relèvements précédents avaient tous la même cause — une ressource entre.
+  // Ici rien n'entre, et `CLAUDE.md` §5 ne connaît qu'un sens à ce curseur :
+  // « elle se RELÈVE quand une ressource entre légitimement ». La descendre
+  // pour « recoller » à un livrable plus léger serait un resserrement que rien
+  // ne demande, et qui coûterait le prochain lot d'art. **La borne reste à
+  // 9 700 000, la marge passe de 205 829 à 577 283.**
+  //
+  // ⚠ ET LA PERTE D'IMAGE A ÉTÉ MESURÉE AVANT D'ÊTRE ACCEPTÉE, pixel à pixel
+  // sur les pixels opaques : moyenne **7,14** et **7,35**, maximum **102** et
+  // **89**, contre **10,38 / 113** pour `site_base_o_n9` tel que l'atlas du
+  // dépôt le porte déjà. Le lot dégrade donc MOINS que la couture que tous les
+  // autres emblèmes de la famille subissent. L'alpha, lui, est intact au bit —
+  // écart maximum **0** sur les quatre fichiers.
+  // ⚠ RÉANCRÉ AU CAVALIER RÉSERVE-RASAGE, 20/09, GREFFÉ SUR LA MÊME PR :
+  // **−44 octets, ENTIÈREMENT DU JAVASCRIPT** — `subirUnRaid` cesse de
+  // calculer `aPerduDesPv` et lit `rase`, déjà posé. Mesuré sur le disque
+  // contre le livrable de SOUFFLE seul (**9 122 717**) : **9 122 673**. Les
+  // 44 octets valent un millième de la tolérance de 50 000 : le laisser
+  // aurait passé au VERT en faisant mentir la mesure écrite — c'est la dérive
+  // que la dernière assertion existe pour refuser, et ÉCHELLE-RECHERCHE en a
+  // réancré 51 pour la même raison.
   const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_494_171;          // remesuré sur l'arbre FUSIONNÉ, base `fd1a007`
-  const MARGE = BORNE - MESURE;      // 205 829 octets — 214 605 avant la fusion avec #161
-  assert.equal(MARGE, 205_829);
+  const MESURE = 9_122_673;          // SOUFFLE + cavalier RÉSERVE-RASAGE — 9 122 717 avant le cavalier
+  const MARGE = BORNE - MESURE;      // 577 327 octets — 577 283 pour SOUFFLE seul, 205 829 avant le WebP
+  assert.equal(MARGE, 577_327);
+  assert.notEqual(MARGE, 577_283,
+    'la marge est celle de SOUFFLE seul : le cavalier RÉSERVE-RASAGE a été défait, ou son réancrage');
+  assert.notEqual(MARGE, 205_829,
+    'la marge est celle d\'avant SOUFFLE : les deux grosses bases sont revenues en PNG');
   assert.notEqual(MARGE, 214_605,
     'la marge est celle de RUINES-DÉFENSE seul : la fusion avec CONDITIONNEMENT-ZÉNITH a été défaite');
   assert.notEqual(MARGE, 213_344,
@@ -912,7 +949,7 @@ test('PIC T7 — le livrable pèse 9 494 171 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2.12);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 5.95);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

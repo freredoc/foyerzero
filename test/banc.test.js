@@ -620,6 +620,20 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // pour un pré-branchement que rien ne dessine encore ; c'est écrit au rapport
   // du lot, avec ce que ça achète et ce que ça coûte.
   //
+  // ⚠⚠ LES TROIS CHIFFRES CI-DESSUS SONT PÉRIMÉS DEPUIS DEUX LOTS, ET LE LOT
+  // SOUFFLE LES DATE PLUTÔT QUE DE LES EFFACER — ils disent ce que le lot
+  // CARTE-EMBLÈMES a mesuré, et un bloc d'historique doit dire ça. Ce qui a
+  // changé depuis, dans l'ordre : le lot PIXELS a porté `GRILLE_ATLAS` de 64 à
+  // 128, donc `tools/build.js` n'inline plus les 128 × 128 et 192 × 192 cités
+  // là-haut mais les **256 × 256 et 384 × 384** ; et le lot SOUFFLE, 20/09, les
+  // passe de PNG en **WebP q85**. Mesuré sur le disque à la grille inlinée :
+  // 326 146 octets de PNG contre **47 546 de WebP**, soit **−371 454 octets de
+  // livrable**, vérifié au build et ventilé dans `PIC T7`.
+  //
+  // ⚠ ET L'EXCLUSION NOMMÉE D'`atlas.py` N'EXISTE PLUS : `sprites_de` ne liste
+  // que les `.png`, donc les deux ne sont plus candidates du tout. C'est
+  // `EMB-C T4` qui porte désormais la garde « elles ne sont pas dans l'atlas ».
+  //
   // ⚠ IL NE RESTE QU'`effet`, qui attend un événement de mort que le moteur ne
   // publie pas. Elle sera la dernière hausse de cette série, et elle devra dire
   // pourquoi, comme les quatre précédentes. **On ne rogne jamais un atlas pour

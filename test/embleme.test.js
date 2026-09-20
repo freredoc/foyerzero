@@ -405,12 +405,31 @@ test('EMB-C T4 — le compte de sprites et les noms de l\'atlas sont intacts', (
   // paie bien en `data:` — **+86 036 octets**, mesurés et ventilés au rapport —
   // et c'est le prix annoncé, pas une fuite. Les camps n'en ont pas : ils
   // respawnent.
+  // ⚠⚠ ET LE COMPTE DE PNG PASSE DE 135 À 133 AU LOT SOUFFLE, 20/09, SANS QU'UN
+  // SEUL SPRITE NE SORTE DU DÉPÔT. Les deux grosses bases sont désormais des
+  // `.webp` — `tools/emblemes.py` dérive le format de l'emprise —, donc elles
+  // quittent ce filtre-ci sans quitter le disque. **Le total des deux
+  // extensions reste 135**, et c'est cette somme-là qui est asserté juste en
+  // dessous : sans elle, effacer un sprite ferait passer ce test au vert.
   for (const grille of ['128', '64']) {
     const dossier = join(RACINE, 'art', 'sprites', 'carte', grille);
-    const pngs = readdirSync(dossier).filter((f) => f.endsWith('.png'));
-    assert.equal(pngs.length, 135,
-      `carte/${grille} : ${pngs.length} sprites — 126 emblèmes et ruines, 7 POI, `
-      + '2 grosses bases');
+    const fichiers = readdirSync(dossier);
+    const pngs = fichiers.filter((f) => f.endsWith('.png'));
+    const webps = fichiers.filter((f) => f.endsWith('.webp'));
+    assert.equal(pngs.length, 133,
+      `carte/${grille} : ${pngs.length} PNG — 126 emblèmes et ruines, 7 POI`);
+    assert.deepEqual(webps.sort(), ['base_o_2x2.webp', 'base_o_3x3.webp'],
+      `carte/${grille} : les deux grosses bases doivent être les seuls WebP`);
+    assert.equal(pngs.length + webps.length, 135,
+      `carte/${grille} : le total des sprites a bougé — un dessin est entré ou sorti`);
+    // ⚠ ET AUCUN PNG DE GROSSE BASE NE SURVIT À CÔTÉ DE SON WEBP. Deux fichiers
+    // pour une image seraient deux vérités : `tools/build.js` en inlinerait une
+    // et l'autre pourrirait au dépôt sans que rien ne le dise — exactement la
+    // catégorie MANQUANTS que `tools/verifier.py` existe pour attraper.
+    for (const mort of ['base_o_2x2.png', 'base_o_3x3.png']) {
+      assert.ok(!fichiers.includes(mort),
+        `carte/${grille} : ${mort} est resté à côté de son WebP`);
+    }
   }
   assert.equal(ATLAS.carte.noms.length, 133,
     'l\'atlas de carte ne coud plus 133 cellules');
@@ -420,6 +439,12 @@ test('EMB-C T4 — le compte de sprites et les noms de l\'atlas sont intacts', (
   // ⚠ ET LES DEUX GROSSES BASES N'Y SONT PAS, ce qui n'est pas un oubli : elles
   // font 2 × 2 et 3 × 3 cases, et `coudre` n'accepte que des cellules carrées à
   // la taille de case. Elles voyagent par leur propre marqueur.
+  //
+  // ⚠ DEPUIS LE LOT SOUFFLE, ELLES N'Y SONT PLUS MÊME CANDIDATES : `sprites_de`
+  // ne liste que les `.png`, donc leur exclusion nommée d'`atlas.py` a dû être
+  // RETIRÉE — sa garde inverse punit une exclusion qui ne désigne rien. Cette
+  // assertion-ci reste, et elle garde plus qu'avant : elle est maintenant le
+  // seul endroit qui dise qu'elles n'entrent pas dans la couture.
   for (const nom of ['base_o_2x2', 'base_o_3x3']) {
     assert.ok(!ATLAS.carte.noms.includes(nom), `${nom} est entré dans l'atlas`);
   }
@@ -712,4 +737,92 @@ test('EMB T13 — le discriminant est `raseLeSite`, jamais un nom de bâtiment',
   assert.equal(sain.nom, 'site_base_o_n4');
   assert.notEqual(d.sx + d.sy * 1000, sain.sx + sain.sy * 1000,
     'les deux états pointent la même cellule d\'atlas');
+});
+
+// ---------------------------------------------------------------------------
+// Lot SOUFFLE — 20/09/2026 : les deux grosses bases passent de PNG en WebP
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ POURQUOI CES DEUX TESTS VIVENT ICI ET PAS DANS UN FICHIER À EUX. Le lot ne
+// crée aucune notion : il change l'ENCODAGE d'une famille que ce fichier garde
+// déjà, et `EMB-C T4` juste au-dessus compte ses sprites. Un `souffle.test.js`
+// aurait ajouté une ligne à la §2 de `CLAUDE.md` pour deux assertions qui
+// parlent de la famille `carte`.
+//
+// ⚠⚠ ET LE LOT PEUT CASSER EN SILENCE DE DEUX FAÇONS, UNE PAR TEST. Un `.png`
+// remis dans `tools/build.js` laisserait un marqueur non substitué — donc une
+// image VIDE, sans erreur, sur un pré-branchement que rien ne dessine encore :
+// personne ne le verrait. Et un format écrit en dur dans `tools/emblemes.py`
+// passerait tous les tests d'aujourd'hui tout en redevenant faux à la première
+// planche multi-cases ajoutée.
+
+test('SOUFFLE T1 — les deux grosses bases entrent en WebP, et par le seul chemin qui existe', () => {
+  const build = readFileSync(join(RACINE, 'tools', 'build.js'), 'utf8');
+
+  // ⚠ LE MONTAGE D'ABORD : sans ces deux marqueurs, les assertions du dessous
+  // porteraient sur des lignes qui n'existent plus et passeraient au vert.
+  for (const marqueur of ['%BASE_O_2X2%', '%BASE_O_3X3%']) {
+    assert.ok(build.includes(marqueur),
+      `tools/build.js n'inline plus ${marqueur}`);
+  }
+
+  for (const nom of ['base_o_2x2', 'base_o_3x3']) {
+    assert.ok(build.includes(`'${nom}.webp'`),
+      `tools/build.js n'inline pas ${nom}.webp`);
+    assert.ok(!build.includes(`'${nom}.png'`),
+      `tools/build.js inline encore ${nom}.png : le gain du lot SOUFFLE est défait`);
+  }
+  // ⚠ LE TYPE MIME SUIT L'EXTENSION, ET IL NE SE DÉDUIT PAS TOUT SEUL : la table
+  // de `tools/build.js` l'écrit à la main pour chaque entrée. Un `image/png`
+  // laissé sur un fichier WebP produirait un `data:` que le navigateur refuse
+  // de peindre, sans rien dire à la console.
+  const lignes = build.split('\n').filter((l) => l.includes('%BASE_O_'));
+  assert.equal(lignes.length, 2, 'les deux grosses bases ne sont plus sur deux lignes');
+  for (const l of lignes) {
+    assert.ok(l.includes("type: 'image/webp'"),
+      `une grosse base garde un type autre que image/webp : ${l.trim()}`);
+  }
+});
+
+test('SOUFFLE T2 — le format se DÉRIVE de l\'emprise, il ne s\'écrit pas', () => {
+  const outil = readFileSync(join(RACINE, 'tools', 'emblemes.py'), 'utf8');
+
+  // ⚠⚠ LA DÉRIVATION EST TOUT LE TEST. `cases > 1` veut dire « hors atlas »,
+  // parce que `coudre` n'accepte que des cellules carrées à la taille de case —
+  // c'est `tools/atlas.py` qui le dit, et c'est la seule vérité sur le sujet.
+  // Une liste de noms écrite dans `emblemes.py` en serait une seconde, et les
+  // deux divergeraient à la première planche ajoutée.
+  assert.match(outil, /def sortie\(nom, cases, dossier\)/,
+    'la fonction qui dérive le format a disparu d\'emblemes.py');
+  assert.match(outil, /if cases > 1:\s*\n\s*return os\.path\.join\(dossier, f'\{nom\}\.webp'\), WEBP/,
+    'le format ne se dérive plus de l\'emprise');
+
+  // ⚠ ET AUCUN NOM DE GROSSE BASE N'APPARAÎT DANS UNE DÉCISION DE FORMAT. Les
+  // deux sont nommées dans `PLANCHES` — c'est leur source, pas leur encodage.
+  const sansCommentaires = outil.replace(/^\s*#.*$/gm, '');
+  for (const nom of ['base_o_2x2', 'base_o_3x3']) {
+    const occurrences = [...sansCommentaires.matchAll(new RegExp(nom, 'g'))].length;
+    assert.equal(occurrences, 1,
+      `${nom} est cité ${occurrences} fois hors commentaire : le format est écrit en dur`);
+  }
+
+  // ⚠⚠ LES RÉGLAGES SONT CEUX DES ATLAS, ET C'EST MESURABLE D'ICI. Deux
+  // encodages pour une même famille d'images seraient la seconde vérité que §4
+  // interdit ; `exact` en particulier préserve le RGB à zéro que `ecrire` pose
+  // sous le seuil d'alpha.
+  const atlas = readFileSync(join(RACINE, 'tools', 'atlas.py'), 'utf8');
+  const qualiteAtlas = /^QUALITE = (\d+)$/m.exec(atlas);
+  assert.ok(qualiteAtlas, 'tools/atlas.py ne déclare plus sa qualité');
+  assert.match(outil,
+    new RegExp(`WEBP = \\{'format': 'WEBP', 'quality': ${qualiteAtlas[1]}, 'method': 6, 'exact': True\\}`),
+    'les grosses bases ne s\'encodent plus aux réglages des atlas');
+
+  // ⚠ ET `ecrire` PASSE SES OPTIONS AUX DEUX SORTIES. Il a deux `save` — la
+  // branche sans matière et celle avec — et n'en câbler qu'une laisserait la
+  // moitié des sprites aux défauts de PIL, ce qu'aucun test de nom ne verrait.
+  const final = readFileSync(join(RACINE, 'tools', 'final128.py'), 'utf8');
+  assert.match(final, /def ecrire\(g,P,path,matiere=None,options=None\)/,
+    'la signature d\'ecrire a changé');
+  assert.equal([...final.matchAll(/\.save\(path,\*\*options\)/g)].length, 2,
+    'les deux sorties d\'ecrire ne passent pas toutes les options d\'encodage');
 });

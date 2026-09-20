@@ -536,35 +536,56 @@ test('RAID-B T8 — un rasage près du bord ne sort pas de la carte', () => {
 // T9 — la réserve de réparation
 // ---------------------------------------------------------------------------
 
-test('RAID-B T9 — un raid qui passe vide la réserve de réparation', () => {
-  const etat = baseALaRangee(7, 200, { niveau: 1, garnison: false });
+test('RAID-B T9 — un raid qui abîme SANS raser ne vide pas la réserve', () => {
+  // ⚠⚠ LE MONTAGE EST CE QUI PORTE LE TEST, ET IL A ÉTÉ CHOISI PAR MESURE — lot
+  // RÉSERVE-RASAGE, 20/09. L'ancien `T9` montait `{ niveau: 1, garnison: false }`,
+  // qui RASE (c'est le montage de `T8`) : sur ce montage-là, l'ancienne règle
+  // (vider dès qu'un PV est perdu) et la nouvelle (vider au rasage seul) rendent
+  // le même état, et le test serait vert dans les deux sens. Relevé graine 7,
+  // rangée 200, contre `ATTAQUANTE` : niveau 1 sans garnison → rase, 45 % ;
+  // niveau 8 → 59 %, défaite ; niveau 10 → 81 %, défaite ; niveau 12 → 96 %,
+  // défaite ; niveau 16 → 100 %, victoire totale. Le niveau 10 est à six
+  // niveaux du rasage comme de la victoire totale : le montage ne bascule pas
+  // au premier réglage d'équilibrage.
+  const etat = baseALaRangee(7, 200, { niveau: 10 });
   // ⚠ ON MESURE D'ABORD QU'IL Y A QUELQUE CHOSE À VIDER. Une réserve déjà nulle
-  // rendrait ce test vert sur du code qui ne la touche pas.
+  // rendrait ce test vert sur du code qui la vide.
   for (const chassis of Object.keys(baseCourante(etat).reserveReparation)) {
     baseCourante(etat).reserveReparation[chassis] = 12_345;
   }
-  const base = basesAttaquantes(etat)[0];
-  const rapport = subirUnRaid(etat, base, 5);
-  assert.equal(rapport.reserveVidee, true, 'le montage ne mesure rien : le raid n\'a rien cassé');
-  assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 });
+  const rapport = subirUnRaid(etat, ATTAQUANTE, 5);
+  // Préconditions : le raid a ABÎMÉ et n'a PAS rasé — sans les deux, rien n'est
+  // mesuré, et c'est `assert.fail`, jamais un test qui passe.
+  if (rapport.rase !== false) assert.fail('le montage ne mesure rien : la base est rasée');
+  if (!(rapport.restantBatiments < 100)) assert.fail('le montage ne mesure rien : le raid n\'a rien abîmé');
+  // ⚠ FALSIFICATION JOUÉE : remettre la condition `aPerduDesPv` dans
+  // `subirUnRaid` fait tomber ce test sur les trois réservoirs à 0.
+  assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 12_345, blinde: 12_345, aeronef: 12_345 },
+    'un raid qui abîme sans raser a vidé la réserve d\'armée');
+  assert.equal(rapport.reserveVidee, false);
 });
 
-test('RAID-B T9 bis — un raid ENTIÈREMENT repoussé ne vide rien', () => {
-  // ⚠ « UN RAID QUI PASSE » VEUT DIRE « QUI A FAIT DES DÉGÂTS ». Punir une
-  // défense qui a fait son travail serait le contraire de ce que la phrase de
-  // `MODELE-ECONOMIQUE.md` §7 décrit.
-  const etat = baseALaRangee(7, 200, { niveau: 50 });
+test('RAID-B T9 bis — le rasage vide les trois réservoirs d\'armée, et PAS celui des bâtiments', () => {
+  // ⚠ LE MONTAGE EST CELUI DE L'ANCIEN `T9`, QUI RASE — c'est aussi celui de
+  // `T8`. La précondition `rase === true` est assertée d'abord.
+  const etat = baseALaRangee(7, 200, { niveau: 1, garnison: false });
   for (const chassis of Object.keys(baseCourante(etat).reserveReparation)) {
     baseCourante(etat).reserveReparation[chassis] = 12_345;
   }
-  const rapport = subirUnRaid(etat, { ...ATTAQUANTE, niveau: 10 }, 5);
-  if (rapport.reserveVidee === false) {
-    assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 12_345, blinde: 12_345, aeronef: 12_345 });
-    assert.equal(rapport.verdict, 'victoire-totale');
-    assert.equal(rapport.restantBatiments, 100);
-  } else {
-    assert.fail('le montage ne mesure rien : la base niveau 50 a encaissé des dégâts');
-  }
+  // ⚠⚠ LA RÉSERVE DES BÂTIMENTS PORTE UNE VALEUR NON NULLE ET DISTINCTE — c'est
+  // la SECONDE MOITIÉ de l'arbitrage du 20/09 (« en cas de rasage, la réserve
+  // de bâtiment n'est pas vidée non plus »), et rien ne la gardait : le jour où
+  // quelqu'un « harmonise » les quatre réserves, c'est cette assertion qui crie.
+  baseCourante(etat).reserveReparationBatiments = 54_321;
+  const rapport = subirUnRaid(etat, ATTAQUANTE, 5);
+  if (rapport.rase !== true) assert.fail('le montage ne mesure rien : la base n\'est pas rasée');
+  // ⚠ FALSIFICATION JOUÉE : retirer le bloc `if (rase) { … }` entier laisse les
+  // trois réservoirs à 12 345, et ce test tombe.
+  assert.deepEqual(baseCourante(etat).reserveReparation, { escouade: 0, blinde: 0, aeronef: 0 },
+    'le rasage n\'a pas vidé la réserve d\'armée');
+  assert.equal(rapport.reserveVidee, true);
+  assert.equal(baseCourante(etat).reserveReparationBatiments, 54_321,
+    'le rasage a vidé la réserve des BÂTIMENTS, que rien ne vide');
 });
 
 // ---------------------------------------------------------------------------

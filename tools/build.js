@@ -428,8 +428,18 @@ const FICHIERS_INLINE = [
   // `.picto` de `src/index.src.html` pointe la variable une fois, et chaque
   // élément ne porte que son cadrage.
   atlas('interface'),
-  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.png'], type: 'image/png' },
-  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.png'], type: 'image/png' },
+  // ⚠⚠ LES DEUX GROSSES BASES PASSENT EN WEBP AU LOT SOUFFLE, 20/09, ET C'EST
+  // ICI QUE LE GAIN SE PAIE. Elles étaient les DEUX SEULS PNG que ce fichier
+  // inlinait encore, au milieu de dix-neuf atlas et de neuf fonds déjà en WebP ;
+  // et à la différence d'un sprite d'atlas, dont le PNG n'est qu'un
+  // intermédiaire que `coudre` réencode, leurs octets de PNG étaient les octets
+  // du livrable. Mesuré : 326 146 o de PNG contre 47 546 de WebP, soit
+  // **371 436 octets de livrable une fois en base64**, sans qu'un dessin
+  // change. Voir `tools/emblemes.py`, qui dérive le format de l'emprise et
+  // porte la mesure de perte — plus petite que celle que la couture inflige
+  // déjà à tous les emblèmes de la même famille.
+  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.webp'], type: 'image/webp' },
+  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.webp'], type: 'image/webp' },
   // ⚠ LE FOND DU BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour
   // combler le menu offense ». Ce n'est pas une cellule d'atlas — 1149 × 1368 —
   // donc il voyage dans son propre marqueur, comme les murs de contour. Il pèse
