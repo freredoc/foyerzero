@@ -549,9 +549,11 @@ export function lignesDeLaDefense(rapport) {
       avant: `${formaterEntier(rapport.batimentsAuPlancher ?? 0)} pièce(s)`,
       apres: null,
     },
-    // ⚠ LA RÉSERVE SE VIDE DÈS QU'UN BÂTIMENT A PERDU DES PV, et c'est le
-    // troisième effet du §4.4 dans l'ordre du moteur. Un joueur qui retrouve sa
-    // réserve à zéro sans savoir pourquoi croit à un bogue.
+    // ⚠ LA RÉSERVE SE VIDE AU RASAGE, ET SEULEMENT LÀ — Ethan, 20/09/2026 ;
+    // c'est le troisième effet du §4.4 dans l'ordre du moteur, et il ne vide que
+    // les trois réservoirs d'armée. Un joueur qui retrouve sa réserve à zéro
+    // sans savoir pourquoi croit à un bogue ; celui qui la retrouve INTACTE
+    // après une défaite doit pouvoir le lire aussi.
     {
       libelle: 'Réserve de réparation',
       avant: rapport.reserveVidee === true ? 'vidée' : 'intacte',

@@ -129,6 +129,7 @@ import {
   DEPLACES_PAR_SILHOUETTES, EMPREINTES_PAR_GRAINE_SILHOUETTES,
   DEPLACES_PAR_ECRASEMENT, EMPREINTES_PAR_GRAINE_ECRASEMENT,
   RAPPORTS_PROCHE_SILHOUETTES, RAPPORTS_OUVRAGE_SILHOUETTES,
+  DEPLACES_PAR_RESERVE_RASAGE, EMPREINTES_PAR_GRAINE_RESERVE_RASAGE,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -351,7 +352,15 @@ function empreinteAttendue(phase, champ) {
   // contact entre véhicules, donc il ne mord que là où un raid se déroule. Les
   // douze autres phases ne bougent d'aucun octet, et c'est cette absence-là qui
   // attribue. On EMPILE, on ne recapture pas.
-  return DEPLACES_PAR_ECRASEMENT[phase]?.[champ]
+  // ⚠⚠ TRENTE-DEUXIÈME COUCHE — lot RÉSERVE-RASAGE, 20/09, arbitrage d'Ethan :
+  // seul le rasage vide la réserve d'armée. **TROIS champs sur deux phases**,
+  // `p13_apresLeRaid` et `p14_sousLeFeu` — `rapports` aux deux,
+  // `reserveReparation` à la 13 seule : à la phase 14 les vingt-cinq parties
+  // subissent un rasage, qui vide sous les deux règles. Le lot change la
+  // CONDITION d'un vidage, pas le combat : il ne peut mordre que sur une
+  // défaite SANS rasage, et le témoin le mesure sur quatre graines.
+  return DEPLACES_PAR_RESERVE_RASAGE[phase]?.[champ]
+    ?? DEPLACES_PAR_ECRASEMENT[phase]?.[champ]
     ?? DEPLACES_PAR_SILHOUETTES[phase]?.[champ]
     ?? DEPLACES_PAR_RECHERCHE_DEFENSE[phase]?.[champ]
     ?? DEPLACES_PAR_ECHELLE_RECHERCHE[phase]?.[champ]
@@ -821,7 +830,14 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // lots MUR, VITESSE et BARÈME-ET-REJEU : un lot qui touche au DÉROULÉ ne
     // mord que là où sa règle a de quoi mordre — ici, il faut un contact entre
     // VÉHICULES. Le `??` reste donc NÉCESSAIRE, et pas par précaution.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_ECRASEMENT[g]
+    // ⚠⚠ RÉSERVE-RASAGE (20/09) N'EN DÉPLACE QUE **QUATRE SUR VINGT-CINQ** —
+    // 10, 15, 17 et 22 —, et les vingt et une autres tombent à l'octet sur
+    // `ECRASEMENT`. C'est la table la plus creuse depuis CONTACT-2 : la règle
+    // ne mord que sur une DÉFAITE SANS RASAGE, et sur vingt et une parties tous
+    // les assauts subis rasent. Le `??` reste donc NÉCESSAIRE, et pas par
+    // précaution.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_RESERVE_RASAGE[g]
+      ?? EMPREINTES_PAR_GRAINE_ECRASEMENT[g]
       ?? EMPREINTES_PAR_GRAINE_SILHOUETTES[g]
       ?? EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE[g]
       ?? EMPREINTES_PAR_GRAINE_ECHELLE_RECHERCHE[g]

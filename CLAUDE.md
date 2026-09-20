@@ -172,6 +172,33 @@ d'outillage à part entière. **Ethan tranche.**
 `test/banc.test.js`, `package.json`, ce fichier et `RAPPORT-lotSOUFFLE.md` ;
 côté art il fait ENTRER quatre `.webp` et SORTIR quatre `.png`.
 
+**Cavalier RÉSERVE-RASAGE, greffé sur la même PR (20/09) :**
+⚠⚠ **SEUL LE RASAGE VIDE LA RÉSERVE D'ARMÉE, ET RIEN NE VIDE CELLE DES
+BÂTIMENTS — ETHAN, 20/09.** La condition de l'étape 3 de `subirUnRaid` passe
+d'`aPerduDesPv` à `rase`, et `reserveVidee` du rapport suit. Motif mesuré sur
+sa sauvegarde réelle (7,4 h hors ligne) : dix raids rejoués, deux défaites sans
+rasage, **11 452 ticks de réserve au réveil pour un plafond de 885 600** —
+la spirale que `MODELE-ECONOMIQUE.md` §7 dit vouloir éviter, rouverte par
+l'autre bout. `T9` et `T9 bis` de `raid-ouvrage.test.js` sont RÉÉCRITS sur
+place — le compte de tests ne bouge pas —, et **le montage de `T9` a dû
+changer** : l'ancien rasait, donc il restait vert sous les deux règles.
+Relevé graine 7, rangée 200 : niveau 10 → `rase false`, 81 % de bâtiments,
+`defaite`. Trois falsifications, trois chutes, une par test.
+⚠⚠ **LE BRIEF ANNONÇAIT « AUCUN AUTRE FICHIER », ET LE TÉMOIN DE BASES-0 EST
+TOMBÉ — trois champs, quatre graines.** `p13.rapports`,
+`p13.reserveReparation`, `p14.rapports` ; graines 10, 15, 17, 22 — celles où
+un assaut subi rend `defaite` SANS raser. Trente-deuxième couche,
+`DEPLACES_PAR_RESERVE_RASAGE`, empilée et non recapturée. Sur 17 et 22 la
+réserve retrouvée après le raid vaut **666 100 et 651 100 ticks** là où
+l'ancienne règle la mettait à zéro.
+⚠ **LE LIVRABLE PERD 44 OCTETS DE JAVASCRIPT — 9 122 717 → 9 122 673**,
+marge **577 327**, 5,95 % ; `PIC T7` est réancré avec sa contre-assertion.
+`SAVE_VERSION` reste à 38 : aucun champ n'entre ni ne sort. Le cavalier
+touche `src/sim/raid-ouvrage.js`, `src/ui/rapport.js` (un commentaire),
+`MODELE-ECONOMIQUE.md` §7, quatre fichiers de `test/`, et fait entrer
+`rapports/RAPPORT-lotRESERVE-RASAGE.md`. Le plafond de 24,6 h inatteignable
+sous un raid toutes les 45 minutes reste OUVERT, non arbitré.
+
 **Auparavant, après le lot RUINES-DÉFENSE (19/09) :**
 ⚠⚠ **UNE PIÈCE DE DÉFENSE ABATTUE LAISSE SA RUINE, ET CE N'EST PAS CELLE D'UN
 BÂTIMENT.** `RESTE_APRES_DESTRUCTION.defense` passe de `'rien'` à `'ruine'`, et

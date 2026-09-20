@@ -5589,3 +5589,61 @@ export const EMPREINTES_PAR_GRAINE_ECRASEMENT = {
   24: "4b01b272eb5a0c1b",
   25: "465244fc3927f2e2",
 };
+
+// ---------------------------------------------------------------------------
+// Lot RÉSERVE-RASAGE — 20/09, arbitrage d'Ethan : seul le rasage vide la
+// réserve d'armée, et rien ne vide celle des bâtiments
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ TRENTE-DEUXIÈME COUCHE, ET LA DOCTRINE NE CHANGE PAS : **on EMPILE, on ne
+// recapture pas.** Le `??` de `bases.test.js` lit de la plus RÉCENTE à la plus
+// ancienne, donc celle-ci l'emporte là où elle nomme un champ, et se tait
+// partout ailleurs.
+//
+// ⚠⚠ ELLE NE DÉPLACE QUE **TROIS CHAMPS, SUR DEUX PHASES** — `p13_apresLeRaid`
+// et `p14_sousLeFeu`, les deux seules où le joueur SUBIT un assaut. Le lot ne
+// touche ni au combat, ni au butin, ni à la pose : il change la CONDITION sous
+// laquelle `subirUnRaid` vide les trois réservoirs d'armée — `rase` au lieu de
+// « un bâtiment a perdu des PV ». Il ne peut donc mordre que là où un raid est
+// subi, et parmi ceux-là seulement sur les DÉFAITES SANS RASAGE. Les douze
+// autres phases ne bougent d'aucun octet.
+//
+// ⚠ `reserveReparation` NE BOUGE QU'À LA PHASE 13, `rapports` AUX DEUX — et
+// c'est mesuré sur les verdicts rangés, graine par graine : **à la phase 14, les
+// vingt-cinq parties subissent au moins un rasage**, qui vide les trois
+// réservoirs sous l'une comme sous l'autre règle, donc la réserve y est
+// identique des deux côtés. Ce qui y change est le champ `reserveVidee` des
+// rapports de DÉFAITE rangés entre-temps, qui suit désormais `rase`.
+export const DEPLACES_PAR_RESERVE_RASAGE = {
+  p13_apresLeRaid: {
+    rapports: "270e1f330ceefe41",
+    reserveReparation: "2979a3b246b59b40",
+  },
+  p14_sousLeFeu: {
+    rapports: "e23de6622168b561",
+  },
+};
+
+// ⚠⚠ QUATRE GRAINES SUR VINGT-CINQ, ET LES VINGT ET UNE AUTRES TOMBENT À L'OCTET
+// SUR LA COUCHE D'AVANT. C'est la table la plus creuse depuis CONTACT-2 (six),
+// et c'est la mesure qui attribue : sur vingt et une parties, TOUS les assauts
+// subis dans la fenêtre sont des `defaite-totale` — un Chantier de niveau 1
+// devant une base de l'Ouvrage de niveau 20 —, et l'une comme l'autre règle
+// vident alors les trois réservoirs. Les quatre qui divergent sont celles où un
+// raid rend `defaite` SANS raser : sur les graines **17 et 22**, c'est le seul
+// assaut de la phase 13, et la réserve retrouvée après lui vaut **666 100 et
+// 651 100 ticks** (18,5 h et 18,1 h) là où l'ancienne règle la mettait à zéro ;
+// sur la graine **15**, une défaite précède un rasage dans la même phase 13 —
+// la réserve est re-vidée, seul le rapport bouge ; sur la graine **10**, la
+// défaite sans rasage est à la phase 14, entre deux rasages — seul le rapport
+// bouge aussi.
+//
+// ⚠ LE `??` DE `bases.test.js` RESTE DONC NÉCESSAIRE, et ce n'est pas une
+// précaution : sans lui, vingt et une graines seraient comparées à `undefined`
+// et le test dirait qu'elles divergent alors qu'elles sont IDENTIQUES.
+export const EMPREINTES_PAR_GRAINE_RESERVE_RASAGE = {
+  10: "c514062441cc5df5",
+  15: "0b1f3208bbb4cb83",
+  17: "6b370f7c6331335c",
+  22: "d663d07f4f0328f5",
+};

@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 494 171 octets, la marge sur la borne T10 est de 2,12 %', () => {
+test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 est de 5,95 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -919,10 +919,20 @@ test('PIC T7 — le livrable pèse 9 494 171 octets, la marge sur la borne T10 e
   // dépôt le porte déjà. Le lot dégrade donc MOINS que la couture que tous les
   // autres emblèmes de la famille subissent. L'alpha, lui, est intact au bit —
   // écart maximum **0** sur les quatre fichiers.
+  // ⚠ RÉANCRÉ AU CAVALIER RÉSERVE-RASAGE, 20/09, GREFFÉ SUR LA MÊME PR :
+  // **−44 octets, ENTIÈREMENT DU JAVASCRIPT** — `subirUnRaid` cesse de
+  // calculer `aPerduDesPv` et lit `rase`, déjà posé. Mesuré sur le disque
+  // contre le livrable de SOUFFLE seul (**9 122 717**) : **9 122 673**. Les
+  // 44 octets valent un millième de la tolérance de 50 000 : le laisser
+  // aurait passé au VERT en faisant mentir la mesure écrite — c'est la dérive
+  // que la dernière assertion existe pour refuser, et ÉCHELLE-RECHERCHE en a
+  // réancré 51 pour la même raison.
   const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_122_717;          // lot SOUFFLE — les deux grosses bases en WebP
-  const MARGE = BORNE - MESURE;      // 577 283 octets — 205 829 avant le passage en WebP
-  assert.equal(MARGE, 577_283);
+  const MESURE = 9_122_673;          // SOUFFLE + cavalier RÉSERVE-RASAGE — 9 122 717 avant le cavalier
+  const MARGE = BORNE - MESURE;      // 577 327 octets — 577 283 pour SOUFFLE seul, 205 829 avant le WebP
+  assert.equal(MARGE, 577_327);
+  assert.notEqual(MARGE, 577_283,
+    'la marge est celle de SOUFFLE seul : le cavalier RÉSERVE-RASAGE a été défait, ou son réancrage');
   assert.notEqual(MARGE, 205_829,
     'la marge est celle d\'avant SOUFFLE : les deux grosses bases sont revenues en PNG');
   assert.notEqual(MARGE, 214_605,

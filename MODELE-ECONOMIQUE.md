@@ -264,8 +264,14 @@ Réserve **saturante**, collecte manuelle, plafond ≈ **le gain d'une attaque m
 Le joueur absent 6 h et celui absent 3 jours trouvent la même réserve pleine.
 
 **Sanction d'une défense insuffisante : par les PV, pas par une taxe.** La production est
-proportionnelle aux PV du bâtiment ; un raid qui passe fait tomber la production et vide le
-réservoir de réparation. Aucun prélèvement forfaitaire — payer un loyer pour avoir dormi est
+proportionnelle aux PV du bâtiment ; un raid qui passe fait tomber la production. **Il ne
+vide aucun réservoir de réparation** — arbitré par Ethan le 20/09/2026, contre la lecture du
+24/08 qui les vidait au premier PV perdu : c'est le joueur qui vide la réserve, au moment où
+il choisit de réparer. Seul le **rasage** vide, et il ne vide que les trois réservoirs
+d'armée ; celui des bâtiments n'est vidé par rien. La raison est celle du plancher de PV
+ci-dessous, prise par l'autre bout : une réserve remise à zéro par dix raids d'une nuit
+rouvrait la spirale mortelle — les PV étaient protégés, le temps de les rendre ne l'était pas.
+Aucun prélèvement forfaitaire — payer un loyer pour avoir dormi est
 la sensation exacte qu'on veut éviter.
 
 **Plancher de PV.** Les dégâts hors ligne ne descendent jamais sous un plancher (départ :

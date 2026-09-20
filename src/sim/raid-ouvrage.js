@@ -696,7 +696,7 @@ function raserLaBase(etat, laBase) {
  * Les cinq conséquences du §4.4, dans l'ordre, et l'ordre compte :
  *   1. les dégâts s'écrivent sur `disposition` et `garnison` ;
  *   2. le rasage, si le Chantier est tombé ;
- *   3. la réserve de réparation se vide ;
+ *   3. la réserve de réparation se vide, SI LA BASE EST RASÉE ;
  *   4. `reparerLaGarnison` — l'auto-réparation, enfin atteignable ;
  *   5. le rapport rejoint la liste des dix.
  *
@@ -707,16 +707,28 @@ function raserLaBase(etat, laBase) {
  * la même grandeur — ils n'y touchent pas, mais l'ordre du brief est celui-là et
  * il ne coûte rien de le tenir.
  *
- * ⚠⚠ LA RÉSERVE VIDÉE EST UNE LECTURE, PAS UN ARBITRAGE — et elle est signalée
- * comme telle au rapport du lot. `MODELE-ECONOMIQUE.md` §7 écrit « un raid qui
- * passe fait tomber la production et vide le réservoir de réparation » ; le
- * mécanisme n'existait pas quand la phrase a été écrite, il existe depuis le lot
- * RÉSERVE. Si Ethan n'en veut pas, c'est CETTE ligne-ci qui part, et rien
- * d'autre.
+ * ⚠⚠ SEUL LE RASAGE VIDE, ET IL NE VIDE QUE L'ARMÉE — ETHAN, 20/09/2026 : « un
+ * raid subi ne vide pas de réserve du tout. C'est le joueur qui choisit de
+ * réparer, et c'est au moment de réparer qu'il vide la réserve. À aucun moment
+ * un raid subi ne met la réserve d'armée à zéro. C'est seulement en cas de
+ * rasage. » Et sur la quatrième réserve : « en cas de rasage, la réserve de
+ * bâtiment n'est pas vidée non plus. » Ceci REMPLACE la lecture du 05/09, qui
+ * vidait les trois réservoirs d'armée dès qu'un bâtiment perdait un PV — et ce
+ * que le lot RÉSERVE annonçait comme « la ligne qui part » est resté : c'est sa
+ * CONDITION qui a changé, pas la ligne.
+ *
+ * ⚠ CE QUI A MOTIVÉ LE RETOUR, MESURÉ SUR LA SAUVEGARDE RÉELLE D'ETHAN (20/09,
+ * 7,4 h hors ligne) : le rattrapage a rejoué dix raids, dont deux défaites sans
+ * rasage ; la dernière a remis les trois réservoirs à zéro. Réserve retrouvée au
+ * réveil : 11 452 ticks — 19 minutes — contre un plafond de 885 600 (24,6 h), et
+ * 555 746 (15,4 h) au moment de la sauvegarde. Deux Ratisseurs et une Meute
+ * restaient irréparables, la scorie étant disponible à cinq fois le besoin.
+ * C'est la spirale que `MODELE-ECONOMIQUE.md` §7 dit vouloir éviter : le
+ * plancher de PV protégeait les PV, pas le temps de les rendre.
  *
  * ⚠ « UN RAID QUI PASSE » VEUT DIRE « QUI A FAIT DES DÉGÂTS », pas « qui a eu
- * lieu ». Une attaque entièrement repoussée ne vide rien : la punir reviendrait
- * à punir une défense qui a fait son travail.
+ * lieu » — cette phrase décrit le VERDICT, pas la réserve, et elle reste vraie.
+ * Une attaque entièrement repoussée n'est pas une défaite.
  *
  * ⚠ LE VERDICT EST VU DU CÔTÉ DU JOUEUR QUI SE DÉFEND, et c'est le miroir exact
  * de `verdictDuRaid` : base rasée → défaite totale, des bâtiments entamés →
@@ -785,26 +797,26 @@ export function subirUnRaid(etat, base, minute, options = {}) {
   // le même besoin, et l'oublier de son côté aurait été invisible.
   const sanction = rase ? raserLaBase(etat, laBase) : null;
 
-  // --- 3. la réserve de réparation se vide ---------------------------------
+  // --- 3. la réserve de réparation se vide, si la base est rasée -----------
   //
-  // ⚠⚠ LES TROIS RÉSERVOIRS D'ARMÉE SEULEMENT, ET C'EST ARBITRÉ — ETHAN,
-  // 05/09/2026 : « un raid subi ne vide pas la réserve des bâtiments ». Le lot
-  // RÉSERVE-BASE avait laissé ici une omission déclarée délibérée mais NON
-  // tranchée ; elle l'est, et ce commentaire porte la décision au lieu de
-  // l'hésitation.
+  // ⚠⚠ SEUL LE RASAGE VIDE, ET IL NE VIDE QUE LES TROIS RÉSERVOIRS D'ARMÉE —
+  // ETHAN, 20/09/2026, voir l'en-tête. La condition était `aPerduDesPv` depuis
+  // le lot RÉSERVE : un raid qui abîmait un seul bâtiment remettait les trois à
+  // zéro, et dix raids d'une nuit ont laissé 19 minutes de réserve pour un
+  // plafond de 24,6 h. `rase` est calculé plus haut, à l'étape 1, et le rasage
+  // lui-même est consommé à l'étape 2 : cette étape LIT une valeur déjà posée.
   //
-  // ⚠ LE MOTIF N'A PAS CHANGÉ, ET IL EST CE QUI FAIT TENIR LE CLIQUET. Vider
-  // aussi `reserveReparationBatiments` le rendrait INCASSABLE : le raid qui
-  // abîme les bâtiments emporterait du même geste le temps qu'il faut pour les
-  // relever, et le joueur repartirait de zéro à chaque passe.
+  // ⚠⚠ `reserveReparationBatiments` N'EST VIDÉE NULLE PART, RASAGE COMPRIS —
+  // c'est la seconde moitié de l'arbitrage, et elle se tient par une ABSENCE :
+  // rien à écrire pour l'obtenir, seulement quelque chose à ne pas ajouter. Le
+  // motif du 05/09 tient toujours : la vider rendrait le cliquet INCASSABLE, le
+  // raid qui abîme les bâtiments emportant du même geste le temps qu'il faut
+  // pour les relever. `RAID-B T9 bis` garde cette absence sous un rasage.
   //
-  // ⚠ ET `MODELE-ECONOMIQUE.md` §7 NE DIT PAS LE CONTRAIRE. Sa phrase — « un
-  // raid qui passe vide le réservoir de réparation » — est du 24/08 et ne
-  // connaît qu'UN réservoir : c'est celui de l'armée, et il se vide bien.
-  // Si Ethan revient dessus, c'est la clé de boucle ci-dessous qui change, et
-  // rien d'autre.
-  const aPerduDesPv = resultat.batiments.some((b) => b.pvPerdusIciMilli > 0);
-  if (aPerduDesPv) {
+  // ⚠ ET `MODELE-ECONOMIQUE.md` §7 A ÉTÉ AMENDÉ LE MÊME JOUR : sa phrase de
+  // 24/08 — « un raid qui passe vide le réservoir de réparation » — est devenue
+  // fausse, et elle est réécrite là-bas, pas contredite ici.
+  if (rase) {
     for (const chassis of Object.keys(laBase.reserveReparation)) {
       laBase.reserveReparation[chassis] = 0;
     }
@@ -891,7 +903,12 @@ export function subirUnRaid(etat, base, minute, options = {}) {
     ticks: resultat.tick,
     rase,
     sanction,
-    reserveVidee: aPerduDesPv,
+    // ⚠ `reserveVidee` DOUBLE `rase` DANS LE MÊME RAPPORT, ET C'EST VOULU :
+    // `rase` dit ce que le raid a fait à la BASE, `reserveVidee` ce qu'il a
+    // fait à la RÉSERVE, et c'est cette seconde ligne que l'écran affiche. Le
+    // jour où l'arbitrage bouge encore, un seul des deux changera ; les
+    // fusionner obligerait l'UI à connaître la règle au lieu de lire le fait.
+    reserveVidee: rase,
     autoReparationMilli,
     garnisonAuPlancher,
     batimentsAuPlancher,
