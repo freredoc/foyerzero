@@ -32,13 +32,19 @@
 // bout de la bande, et la confusion a coûté un lot le 26/08. On dit « la
 // rangée 18 », « le fond », ou « la première ligne d'écran » — trois choses non
 // ambiguës.
+//
+// ⚠⚠ ET LA GRILLE EST UN PARAMÈTRE DEPUIS LE LOT GRILLE-PORTÉE, 20/09/2026,
+// `GRILLE` EN DÉFAUT. Les trois exports prennent la grille en DERNIER, et sans
+// elle rendent au caractère près ce qu'ils rendaient : `GRILLE` reste l'objet
+// 9 × 18, une autre grille est un second objet, jamais une mutation. C'est ce
+// qui laisse `ui/chantier.js` — la base du JOUEUR — sans une ligne à changer.
 
 import { GRILLE } from '../data/combat.js';
 
 /** Une rangée doit exister dans la grille avant qu'on lui cherche une place. */
-function exigerRangee(rangee) {
-  if (!Number.isInteger(rangee) || rangee < 1 || rangee > GRILLE.longueur) {
-    throw new RangeError(`orientation : rangée ${rangee} hors de 1…${GRILLE.longueur}`);
+function exigerRangee(rangee, grille) {
+  if (!Number.isInteger(rangee) || rangee < 1 || rangee > grille.longueur) {
+    throw new RangeError(`orientation : rangée ${rangee} hors de 1…${grille.longueur}`);
   }
   return rangee;
 }
@@ -50,11 +56,12 @@ function exigerRangee(rangee) {
  * ligne. La rangée `GRILLE.longueur` y tombe donc en 1, et la rangée 1 en
  * dernier.
  *
- * @param {number} rangee 1…GRILLE.longueur
- * @returns {number} 1…GRILLE.longueur
+ * @param {number} rangee 1…grille.longueur
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
+ * @returns {number} 1…grille.longueur
  */
-export function ligneEcranDeLaRangee(rangee) {
-  return GRILLE.longueur + 1 - exigerRangee(rangee);
+export function ligneEcranDeLaRangee(rangee, grille = GRILLE) {
+  return grille.longueur + 1 - exigerRangee(rangee, grille);
 }
 
 /**
@@ -65,14 +72,15 @@ export function ligneEcranDeLaRangee(rangee) {
  * VÉRIFIABLE : une involution se teste en aller-retour, ce qu'une formule écrite
  * deux fois dans deux fichiers ne permet pas.
  *
- * @param {number} ligne 1…GRILLE.longueur
- * @returns {number} 1…GRILLE.longueur
+ * @param {number} ligne 1…grille.longueur
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
+ * @returns {number} 1…grille.longueur
  */
-export function rangeeDeLaLigneEcran(ligne) {
-  if (!Number.isInteger(ligne) || ligne < 1 || ligne > GRILLE.longueur) {
-    throw new RangeError(`orientation : ligne d'écran ${ligne} hors de 1…${GRILLE.longueur}`);
+export function rangeeDeLaLigneEcran(ligne, grille = GRILLE) {
+  if (!Number.isInteger(ligne) || ligne < 1 || ligne > grille.longueur) {
+    throw new RangeError(`orientation : ligne d'écran ${ligne} hors de 1…${grille.longueur}`);
   }
-  return GRILLE.longueur + 1 - ligne;
+  return grille.longueur + 1 - ligne;
 }
 
 /**
@@ -85,9 +93,10 @@ export function rangeeDeLaLigneEcran(ligne) {
  * bâtiments, et le rail désignerait la mauvaise bande sans que rien ne casse.
  *
  * @param {{premiere: number, derniere: number}} bande
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{premiereLigne: number, nbLignes: number}}
  */
-export function ligneEcranDeLaBande(bande) {
+export function ligneEcranDeLaBande(bande, grille = GRILLE) {
   if (!bande || !Number.isInteger(bande.premiere) || !Number.isInteger(bande.derniere)) {
     throw new TypeError('orientation : bande absente ou malformée');
   }
@@ -97,7 +106,7 @@ export function ligneEcranDeLaBande(bande) {
     );
   }
   return {
-    premiereLigne: ligneEcranDeLaRangee(bande.derniere),
+    premiereLigne: ligneEcranDeLaRangee(bande.derniere, grille),
     nbLignes: bande.derniere - bande.premiere + 1,
   };
 }

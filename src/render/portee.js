@@ -22,7 +22,7 @@
 import {
   distanceCarreeMilli, milliDepuisCase, estDansLaGrille, enEntier, MILLI_PAR_CASE,
 } from '../sim/grille.js';
-import { COLONNES_DEGATS } from '../data/combat.js';
+import { COLONNES_DEGATS, GRILLE } from '../data/combat.js';
 
 /**
  * Ce qu'une ligne de roster dit de sa portée — `null` si la pièce ne tire pas.
@@ -72,11 +72,17 @@ export function porteeQuiTire(ligne) {
  * silence, quand `enEntier` LÈVE en nommant la table fautive. Le dessin aurait
  * donc pu montrer un rayon qu'aucun tir n'atteint, sans que rien ne le dise.
  *
+ * ⚠ ET LA GRILLE EST UN PARAMÈTRE, `GRILLE` EN DÉFAUT — lot GRILLE-PORTÉE,
+ * 20/09/2026. C'est le seul endroit où ce module lit la grille : le bord où
+ * le balayage s'arrête. Sans argument il rend exactement ce qu'il rendait, et
+ * `ui/chantier.js` — la base du JOUEUR — n'en passe aucun.
+ *
  * @param {{rangee: number, colonne: number}} depuis
  * @param {{portee: number, porteeMini: number}} portees
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{rangee: number, colonne: number}[]}
  */
-export function casesAPortee(depuis, portees) {
+export function casesAPortee(depuis, portees, grille = GRILLE) {
   const porteeMilli = enEntier(portees.portee, MILLI_PAR_CASE, 'portee.portee');
   const miniMilli = enEntier(portees.porteeMini ?? 0, MILLI_PAR_CASE, 'portee.porteeMini');
   const porteeCarree = porteeMilli * porteeMilli;
@@ -85,7 +91,7 @@ export function casesAPortee(depuis, portees) {
   const cases = [];
   for (let r = depuis.rangee - rayon; r <= depuis.rangee + rayon; r += 1) {
     for (let c = depuis.colonne - rayon; c <= depuis.colonne + rayon; c += 1) {
-      if (!estDansLaGrille(r, c)) continue;
+      if (!estDansLaGrille(r, c, grille)) continue;
       const d2 = distanceCarreeMilli(
         milliDepuisCase(depuis.rangee), milliDepuisCase(depuis.colonne),
         milliDepuisCase(r), milliDepuisCase(c),

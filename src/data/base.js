@@ -550,6 +550,16 @@ export function emplacementsDuNiveau(niveau) {
 // dimensions vivent dans GRILLE de data/combat.js, et elles y vivent seules.
 // CLAUDE.md §4 — une table fait foi par grandeur.
 //
+// ⚠⚠ ET LA GRILLE PORTÉE DU LOT GRILLE-PORTÉE (20/09/2026) N'EST PAS UNE
+// GRILLE DU JOUEUR — l'arbitrage tient. Ce lot rend la géométrie du combat
+// PORTABLE : ce qui lit `GRILLE` accepte une grille en argument, et le joueur
+// en prend le DÉFAUT, qui est `GRILLE`, toujours 9 × 18. Une grille longue
+// est un SECOND objet, passé à un montage de site de l'Ouvrage, jamais une
+// mutation de `GRILLE` et jamais une géométrie propre au joueur. Le lot
+// GRILLE LONGUE la posera sur `TYPES_SITE[type]` ; il ne doit lire ce
+// paragraphe ni comme une interdiction de le faire, ni comme une permission
+// d'écrire une grille ici.
+//
 //   grille complète    9 colonnes × 18 rangées
 //   déploiement        rangées  1–2    les vagues y apparaissent
 //   défense            rangées  3–10   8 rangées

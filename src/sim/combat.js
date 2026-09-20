@@ -46,12 +46,18 @@ import { NIVEAU } from '../data/niveaux.js';
 // que le raid sur la base du joueur comblera ». Le jour est venu. L'import ne
 // crée aucun cycle : `data/base.js` ne lit que `data/`.
 import { BASE_BATIMENTS } from '../data/base.js';
+// ⚠⚠ NI `DERNIERE_RANGEE` NI `DERNIERE_COLONNE` NE SONT IMPORTÉES ICI DEPUIS LE
+// LOT GRILLE-PORTÉE, 20/09/2026, ET C'EST VOULU. Ces deux constantes sont
+// figées à l'import sur `GRILLE` ; ce moteur lit la grille que l'ÉTAT porte —
+// `grilleDuCombat(etat)` — par `derniereRangee` et `derniereColonne`. Un import
+// qui reviendrait ici serait le premier à lire 18 sur une grille de 27.
 import {
   PREMIERE_RANGEE,
-  DERNIERE_RANGEE,
   PREMIERE_COLONNE,
-  DERNIERE_COLONNE,
   RANGEE_APPROCHE,
+  derniereRangee,
+  derniereColonne,
+  verifierGrille,
   estEnApproche,
   enEntier,
   milliDepuisCase,
@@ -127,8 +133,48 @@ export const RANGEE_APPARITION = RANGEE_APPROCHE;
  * traversé la défense = les huit rangées de défense franchies » — et la première
  * rangée des bâtiments est ce qui est au-delà. Un `11` en dur serait faux le
  * jour où une bande change d'un cran, et rien ne le dirait.
+ *
+ * ⚠⚠ ET LA CONSTANTE EST FIGÉE À L'IMPORT — lot GRILLE-PORTÉE, 20/09/2026.
+ * Elle décrit `GRILLE`, et elle reste pour ce qu'elle est ; son seul lecteur de
+ * production, `debarquements`, a `etat` en main et demande
+ * `rangeeDefenseFranchie(grilleDuCombat(etat))`. Une seconde grille aurait sa
+ * première rangée de bâtiments ailleurs, et le passager aurait débarqué au
+ * milieu de la défense sans qu'un message le dise.
  */
 export const RANGEE_DEFENSE_FRANCHIE = GRILLE.bandes.batiments.premiere;
+
+/**
+ * La première rangée au-delà de la défense d'une grille donnée —
+ * `RANGEE_DEFENSE_FRANCHIE` sans argument.
+ * @param {object} [grille]
+ * @returns {number}
+ */
+export function rangeeDefenseFranchie(grille = GRILLE) {
+  return grille.bandes.batiments.premiere;
+}
+
+/**
+ * La grille d'un combat : celle que le montage a portée, sinon `GRILLE`.
+ *
+ * ⚠⚠ `etat.grille` N'EST POSÉ QUE SI LE MONTAGE EN PORTE UNE — le motif
+ * d'`embarquee` au lot FORMATION-ET-GARNISON. `serialiserEtat` sérialise l'état
+ * ENTIER, et c'est l'empreinte des deux cents témoins de
+ * `test/temoins-combat.js` : un champ posé inconditionnellement ferait bouger
+ * les deux cents lignes, c'est-à-dire détruirait la seule preuve que le moteur
+ * n'a pas bougé. Une clé absente ne produit rien ; les deux cents montages ne
+ * portent aucune grille.
+ *
+ * ⚠ LE RISQUE DE CE MOTIF EST UN CHAMP QU'ON OUBLIE DE POSER : `creerCombat`
+ * est le SEUL endroit du dépôt qui écrit `etat.grille`, et `PORTÉE T2` le
+ * mesure sur la source. Tout lecteur passe par ici — jamais par `etat.grille`
+ * nu, dont l'absence se lirait `undefined.longueur`.
+ *
+ * @param {object} etat
+ * @returns {object} une grille au format de `GRILLE`
+ */
+function grilleDuCombat(etat) {
+  return etat.grille ?? GRILLE;
+}
 
 /**
  * Facteur commun des trois échelles internes : milli-case, milli-PV, millième.
@@ -654,12 +700,12 @@ function verifierEntierPositif(valeur, contexte) {
  * ferait désigner au doigt une case qui n'est pas à l'écran. Ce prédicat-ci
  * répond d'un DROIT DE SÉJOUR, il vit dans le moteur, et il compose l'autre.
  */
-function posePermise(camp, rangee, colonne) {
+function posePermise(camp, rangee, colonne, grille) {
   if (camp === 'attaque' && rangee === RANGEE_APPROCHE) {
     return Number.isInteger(colonne)
-      && colonne >= PREMIERE_COLONNE && colonne <= DERNIERE_COLONNE;
+      && colonne >= PREMIERE_COLONNE && colonne <= derniereColonne(grille);
   }
-  return estDansLaGrille(rangee, colonne);
+  return estDansLaGrille(rangee, colonne, grille);
 }
 
 /**
@@ -668,10 +714,16 @@ function posePermise(camp, rangee, colonne) {
  * ⚠ UN MESSAGE QUI MENT COÛTE UNE DEMI-SESSION À QUELQU'UN DANS SIX MOIS.
  * Celui-ci énumérait « rangées 1–18 » pour tout le monde ; il est devenu faux
  * pour un attaquant le jour où la voie d'approche s'est ouverte.
+ *
+ * ⚠ ET LA GRILLE EST UN PARAMÈTRE SANS DÉFAUT, ICI COMME DANS `posePermise` :
+ * ces deux fonctions n'ont pas de porteur — elles ne reçoivent pas `etat` — et
+ * un défaut `GRILLE` y serait exactement le trou que le brief nomme, la lecture
+ * qui reste sur la grille par défaut sans rien pour le dire. L'appelant, lui,
+ * a l'état, et c'est lui qui descend la grille.
  */
-function bornesDePose(camp) {
+function bornesDePose(camp, grille) {
   const premiere = camp === 'attaque' ? RANGEE_APPROCHE : PREMIERE_RANGEE;
-  return `rangées ${premiere}–${DERNIERE_RANGEE}`;
+  return `rangées ${premiere}–${derniereRangee(grille)}`;
 }
 
 function ajouterEntite(
@@ -681,11 +733,12 @@ function ajouterEntite(
 ) {
   const p = TABLES_PROFIL[genre][id];
   const ou = `${contexte} « ${id} » en (${rangee}, ${colonne})`;
+  const grille = grilleDuCombat(etat);
 
-  if (!posePermise(camp, rangee, colonne)) {
+  if (!posePermise(camp, rangee, colonne, grille)) {
     throw new Error(
       `combat : ${ou} est hors de la grille `
-      + `(${bornesDePose(camp)}, colonnes 1–${GRILLE.largeur})`,
+      + `(${bornesDePose(camp, grille)}, colonnes 1–${derniereColonne(grille)})`,
     );
   }
   if (typeObstacleSur(obstaclesIndex, rangee, colonne) !== undefined) {
@@ -930,12 +983,23 @@ export function creerCombat(montage) {
     throw new Error(`combat : saveur inconnue « ${saveur} »`);
   }
 
+  // ⚠⚠ LA GRILLE VIENT DU MONTAGE, OU C'EST `GRILLE` — lot GRILLE-PORTÉE,
+  // 20/09/2026. Une grille PRÉSENTE et malformée LÈVE ici, en nommant le champ,
+  // comme `modulesDebloques` et `majorationsPoi` lèvent sur une forme fausse :
+  // une grille sans `longueur` ferait refuser chaque pose « hors de la grille »
+  // sans dire que la grille est en cause. ⚠ AUCUN MONTAGE DU DÉPÔT N'EN PORTE
+  // AUJOURD'HUI — `genererSite` n'en écrit pas, aucun type de site n'en a — et
+  // c'est le lot GRILLE LONGUE qui en fera porter une à sept types de site.
+  const grille = montage.grille === undefined
+    ? GRILLE
+    : verifierGrille(montage.grille, 'combat : montage.grille');
+
   const obstaclesMontage = montage.obstacles ?? [];
   const obstacles = [];
   const clesObstacles = new Set();
   for (const o of obstaclesMontage) {
     const ou = `obstacle « ${o.type} » en (${o.rangee}, ${o.colonne})`;
-    if (!estDansLaGrille(o.rangee, o.colonne)) {
+    if (!estDansLaGrille(o.rangee, o.colonne, grille)) {
       throw new Error(`combat : ${ou} est hors de la grille`);
     }
     if (!TYPES_OBSTACLE.includes(o.type)) {
@@ -1019,12 +1083,17 @@ export function creerCombat(montage) {
       joueur: majorationsDunProprietaire(montage.majorationsPoi?.joueur, 'joueur'),
     },
   };
+  // ⚠⚠ POSÉE SEULEMENT SI LE MONTAGE EN PORTE UNE, ET AVANT LA MOINDRE ENTITÉ :
+  // `ajouterEntite` la lit par `grilleDuCombat`. Voir cette fonction pour le
+  // motif — l'empreinte des deux cents témoins — et `PORTÉE T2` pour la garde :
+  // `creerCombat` doit être le seul endroit du dépôt qui écrit `etat.grille`.
+  if (montage.grille !== undefined) etat.grille = grille;
 
   // Ordre d'insertion, stable et consigné ici : défenseurs, bâtiments, puis
   // les unités de chaque vague dans l'ordre où elles apparaissent.
   const casesPrises = new Map();
 
-  const bandeDefense = bornesBande('defense');
+  const bandeDefense = bornesBande('defense', grille);
   for (const d of montage.defenseurs ?? []) {
     const genre = genreDeDefenseur(d.id);
     if (genre === null) {
@@ -1033,13 +1102,13 @@ export function creerCombat(montage) {
     if (genre === 'unite' && !PROFILS_UNITE[d.id].presentEnDefense) {
       throw new Error(`combat : défenseur « ${d.id} » n'a pas de rôle en défense`);
     }
-    if (!estDansLaGrille(d.rangee, d.colonne)) {
+    if (!estDansLaGrille(d.rangee, d.colonne, grille)) {
       throw new Error(
         `combat : défenseur « ${d.id} » en (${d.rangee}, ${d.colonne}) est hors de la grille `
-        + `(rangées 1–${DERNIERE_RANGEE}, colonnes 1–${GRILLE.largeur})`,
+        + `(rangées 1–${derniereRangee(grille)}, colonnes 1–${derniereColonne(grille)})`,
       );
     }
-    if (!estDansLaBande(d.rangee, 'defense')) {
+    if (!estDansLaBande(d.rangee, 'defense', grille)) {
       throw new Error(
         `combat : défenseur « ${d.id} » en (${d.rangee}, ${d.colonne}) hors de la bande `
         + `de défense (${bandeDefense.premiere}–${bandeDefense.derniere})`,
@@ -1049,18 +1118,18 @@ export function creerCombat(montage) {
       casesPrises, obstaclesIndex);
   }
 
-  const bandeBatiments = bornesBande('batiments');
+  const bandeBatiments = bornesBande('batiments', grille);
   for (const b of montage.batiments ?? []) {
     if (!Object.prototype.hasOwnProperty.call(PROFILS_BATIMENT, b.id)) {
       throw new Error(`combat : bâtiment « ${b.id} » — identifiant inconnu`);
     }
-    if (!estDansLaGrille(b.rangee, b.colonne)) {
+    if (!estDansLaGrille(b.rangee, b.colonne, grille)) {
       throw new Error(
         `combat : bâtiment « ${b.id} » en (${b.rangee}, ${b.colonne}) est hors de la grille `
-        + `(rangées 1–${DERNIERE_RANGEE}, colonnes 1–${GRILLE.largeur})`,
+        + `(rangées 1–${derniereRangee(grille)}, colonnes 1–${derniereColonne(grille)})`,
       );
     }
-    if (!estDansLaBande(b.rangee, 'batiments')) {
+    if (!estDansLaBande(b.rangee, 'batiments', grille)) {
       throw new Error(
         `combat : bâtiment « ${b.id} » en (${b.rangee}, ${b.colonne}) hors de la bande `
         + `des bâtiments (${bandeBatiments.premiere}–${bandeBatiments.derniere})`,
@@ -1087,10 +1156,10 @@ export function creerCombat(montage) {
       // les vagues 2 à 4 que `creerCombat` ne pose pas encore, `ajouterEntite`
       // juge ce qui entre pour de bon. Une seule des deux ouverte laisserait la
       // vague 1 passer et les suivantes lever au tick de leur apparition.
-      if (!posePermise('attaque', rangee, u.colonne)) {
+      if (!posePermise('attaque', rangee, u.colonne, grille)) {
         throw new Error(
           `combat : ${ou} est hors de la grille `
-          + `(${bornesDePose('attaque')}, colonnes 1–${GRILLE.largeur})`,
+          + `(${bornesDePose('attaque', grille)}, colonnes 1–${derniereColonne(grille)})`,
         );
       }
       if (typeObstacleSur(obstaclesIndex, rangee, u.colonne) !== undefined) {
@@ -3111,7 +3180,7 @@ function allieeDevant(etat, e, p, occupation, rangee, colonne) {
  * `estSortiParLeCote` de `grille.js`, et sa propre étape de déplacement.
  */
 function peutAvancer(etat, e, p, occupation, rangee, caseDestination) {
-  if (rangee >= DERNIERE_RANGEE) return p.comportementAerien === 'traversant';
+  if (rangee >= derniereRangee(grilleDuCombat(etat))) return p.comportementAerien === 'traversant';
   if (caseDestination === rangee) return true;
   if (!p.bloquant) return true; // l'aviation ignore l'occupation
   const indiceOccupante = occupantDe(occupation, caseDestination, caseColonne(e));
@@ -3560,7 +3629,7 @@ function seDecaler(etat, e, p, occupation, obstacles) {
   const ecart = Math.abs(colonneVisee - e.colonneMilli);
   const pas = Math.min(vitesseLaterale(etat, e, p, obstacles, rangee, frein), ecart, marge);
   const destinationMilli = e.colonneMilli + sens * pas;
-  if (estSortiParLeCote(destinationMilli)) return;
+  if (estSortiParLeCote(destinationMilli, grilleDuCombat(etat))) return;
 
   const caseDestination = caseDepuisMilli(destinationMilli);
   if (caseDestination === colonne) {
@@ -3824,12 +3893,13 @@ function avancer(etat, e, p, occupation, obstacles) {
     e.rangeeMilli = destinationMilli;
     return;
   }
-  if (caseDestination > DERNIERE_RANGEE) {
+  const grille = grilleDuCombat(etat);
+  if (caseDestination > derniereRangee(grille)) {
     // Seule l'aviation traversante franchit le fond : elle sort du combat et
     // n'y revient pas. Le sol et l'aviation stoppeuse s'arrêtent au fond.
     if (p.comportementAerien === 'traversant') {
       e.rangeeMilli = destinationMilli;
-      e.sorti = estSortiParLeHaut(destinationMilli);
+      e.sorti = estSortiParLeHaut(destinationMilli, grille);
     }
     return;
   }
@@ -3887,8 +3957,8 @@ function avancer(etat, e, p, occupation, obstacles) {
  * hors grille ou sur un obstacle par une exception, ce qui serait la fin du
  * combat au lieu d'une sortie retardée d'un tick.
  */
-function caseAccueille(occupation, obstacles, p, rangee, colonne) {
-  if (!estDansLaGrille(rangee, colonne)) return false;
+function caseAccueille(occupation, obstacles, p, rangee, colonne, grille) {
+  if (!estDansLaGrille(rangee, colonne, grille)) return false;
   if (typeObstacleSur(obstacles, rangee, colonne) !== undefined) return false;
   return !p.bloquant || occupantDe(occupation, rangee, colonne) === undefined;
 }
@@ -3923,6 +3993,8 @@ function caseAccueille(occupation, obstacles, p, rangee, colonne) {
 function debarquements(etat) {
   let occupation = null;
   let obstacles = null;
+  const grille = grilleDuCombat(etat);
+  const seuil = rangeeDefenseFranchie(grille);
   for (const e of etat.entites) {
     if (e.embarquee !== true) continue;
     const porteur = etat.entites[e.porteurIndice];
@@ -3933,7 +4005,7 @@ function debarquements(etat) {
       continue;
     }
     const rangeePorteur = caseDepuisMilli(porteur.rangeeMilli);
-    if (porteur.vivant && rangeePorteur < RANGEE_DEFENSE_FRANCHIE) continue;
+    if (porteur.vivant && rangeePorteur < seuil) continue;
 
     // ⚠ L'OCCUPATION SE CONSTRUIT AU PREMIER DÉBARQUEMENT, PAS À CHAQUE TICK.
     // Elle est dérivée, donc chère ; la plupart des ticks n'en ont aucun besoin.
@@ -3952,7 +4024,7 @@ function debarquements(etat) {
       ? [rangeePorteur - 1]
       : [rangeePorteur, rangeePorteur - 1];
     for (const rangee of essais) {
-      if (!caseAccueille(occupation, obstacles, p, rangee, colonne)) continue;
+      if (!caseAccueille(occupation, obstacles, p, rangee, colonne, grille)) continue;
       e.rangeeMilli = milliDepuisCase(rangee);
       e.colonneMilli = milliDepuisCase(colonne);
       e.embarquee = false;

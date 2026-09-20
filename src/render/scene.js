@@ -48,10 +48,10 @@
 // résoudre. Le code n'est donc pas mort ; c'est sa portée qui a rétréci, du
 // champ de bataille à la légende.
 
-import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
+import { UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import { BATIMENTS, RESTE_APRES_DESTRUCTION, FAMILLE_DE_LA_RUINE } from '../data/sites.js';
 import {
-  xDeColonne, xDeColonneMilli, yDeRangeeMilli, yDeRangee,
+  xDeColonne, xDeColonneMilli, yDeRangeeMilli, yDeRangee, grilleDeLaProjection,
 } from './projection.js';
 import { rectangleDuFond } from './fond.js';
 import { positionInterpolee } from './interpolation.js';
@@ -1645,6 +1645,10 @@ export function listeLegende(projection) {
  */
 export function listeArsenal(grille, projection, colonnesEnFile = []) {
   const t = projection.tailleCase;
+  // ⚠ `grille` EST L'ÉTAT DE L'ÉDITEUR ; la GÉOMÉTRIE se lit sur la projection
+  // — lot GRILLE-PORTÉE, 20/09/2026. Ce module ne lit plus `GRILLE` : la
+  // projection porte la grille pour laquelle elle a été calculée.
+  const { largeur } = grilleDeLaProjection(projection);
   const nbVagues = grille.cases.length;
   const liste = [rect(0, 0, projection.largeurPx, projection.hauteurPx, FOND)];
   const taillePolice = Math.max(9, Math.min(14, Math.floor(t * 0.4)));
@@ -1652,7 +1656,7 @@ export function listeArsenal(grille, projection, colonnesEnFile = []) {
   // Numéros de colonne, juste au-dessus du bloc : ils disent au joueur que la
   // colonne 5 de l'Arsenal est la colonne 5 du champ.
   const yEntete = yDeRangee(projection, nbVagues + 1) + t - Math.floor(t / 4);
-  for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+  for (let colonne = 1; colonne <= largeur; colonne += 1) {
     liste.push(texte(
       xDeColonne(projection, colonne) + Math.floor(t / 2) - Math.floor(taillePolice / 3),
       yEntete, String(colonne), PALETTE.metalClair, taillePolice,
@@ -1713,14 +1717,17 @@ export function listeArsenal(grille, projection, colonnesEnFile = []) {
  */
 export function listeDefense(grille, projection, casesMarquees = []) {
   const t = projection.tailleCase;
-  const premiereRangee = GRILLE.bandes.defense.premiere;
+  // Même partage que `listeArsenal` : l'état de l'éditeur d'un côté, la
+  // géométrie de la projection de l'autre.
+  const { largeur, bandes } = grilleDeLaProjection(projection);
+  const premiereRangee = bandes.defense.premiere;
   const nbRangees = grille.cases.length;
   const liste = [rect(0, 0, projection.largeurPx, projection.hauteurPx, FOND)];
   const taillePolice = Math.max(9, Math.min(14, Math.floor(t * 0.4)));
 
   // Numéros de colonne, juste au-dessus de la bande — même repère que l'Arsenal.
   const yEntete = yDeRangee(projection, premiereRangee + nbRangees) - Math.floor(t / 4);
-  for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+  for (let colonne = 1; colonne <= largeur; colonne += 1) {
     liste.push(texte(
       xDeColonne(projection, colonne) + Math.floor(t / 2) - Math.floor(taillePolice / 3),
       yEntete, String(colonne), PALETTE.metalClair, taillePolice,

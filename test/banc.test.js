@@ -931,7 +931,10 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // **+74 128** de base64. Six centièmes de pour-cent du livrable les sépare :
   // c'est le CÂBLAGE qui a décidé, pas la balance — voir `PIC T6`.
   //
-  // ⚠ LA MARGE EST DE 214 605 OCTETS, 2,21 %.
+  // ⚠ LA MARGE EST DE 324 443 OCTETS, 3,34 % — au lot AVARIES ; la ligne disait
+  // encore « 214 605, 2,21 % », le chiffre du lot ÉCHELLE-RECHERCHE, et
+  // personne ne l'avait relue depuis. Le nombre qui fait foi est celui de
+  // `PIC T7`, qui est mesuré ; celui-ci n'est qu'un repère de lecture.
   const octets = statSync(chemin).size;
   assert.ok(octets > 20_000 && octets < 9_700_000, `taille inattendue : ${octets} octets`);
 });
