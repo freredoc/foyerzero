@@ -55,7 +55,7 @@ n'est pas touché. Le témoin de `BASES-0 T1` (« empreinte par champ : le
 dépliage n'a bougé aucune valeur », « empreinte par graine : aucune graine ne
 diverge ») est vert aussi.
 
-Pourquoi c'est vrai par construction, et pas par chance : les cinq types
+Pourquoi c'est vrai par construction, et pas par chance : les trois types
 autres que `baseVerrou` et `baseTerminale` n'ont **pas de champ `grille`** ;
 `genererSite` lit `TYPES_SITE[type].grille` (`src/sim/generateur.js`,
 L. 1124–1127), passe `GRILLE` quand il est absent, et le montage porte la clé

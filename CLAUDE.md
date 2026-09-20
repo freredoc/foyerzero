@@ -13,7 +13,7 @@ TÉMOINS NE BOUGENT PAS D'UN BIT.** Lot GRILLE LONGUE. `GRILLE_LONGUE` entre dan
 `data/combat.js` — déploiement 1–2, défense **3–18**, bâtiments **19–27**,
 `casesBatiments` 81 —, et `TYPES_SITE.baseVerrou.grille` comme
 `TYPES_SITE.baseTerminale.grille` la NOMMENT, sur le précédent de
-`densiteComme`. Les cinq autres types n'ont pas le champ et prennent `GRILLE` :
+`densiteComme`. Les trois autres types n'ont pas le champ et prennent `GRILLE` :
 **`JOURNAL T1` rend les deux cents combats identiques au bit, 0 couche ajoutée**,
 et le témoin de BASES-0 aussi. `genererSite` lit `TYPES_SITE[type].grille` et
 la passe par `verifierGrille` — c'est sa seule ligne de plomberie —, et le
