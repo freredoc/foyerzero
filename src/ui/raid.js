@@ -853,11 +853,26 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // largeur**. Ethan : « de sorte que le fond remplisse toute la largeur ».
     // Huit rangées et demie font passer la limite du côté de la largeur, sans
     // condition.
-    const lignesVisibles = casesDeLaBande(bandeDeLaVue(), MUR_CASES);
+    //
+    // ⚠⚠ LA GRILLE EST CELLE DU COMBAT, ET L'ÉCRAN NE LA NOMME JAMAIS — lot
+    // GRILLE LONGUE, 20/09/2026. `creerCombat` pose `etat.grille` quand le
+    // montage en porte une — les sept bases du bout de carte, 9 × 27 — et ne
+    // pose rien sinon : `undefined` ici rend à `casesDeLaBande`, aux deux
+    // bornes et à `calculerProjection` leur défaut, qui est la grille
+    // ordinaire. Un montage ordinaire projette donc EXACTEMENT ce qu'il
+    // projetait — c'est ce que `FOND T5` et `RAID-E T2` tiennent —, et un
+    // montage long fait passer la bande de défense à seize rangées et la vue
+    // d'ensemble à vingt-sept et demie, sans qu'une ligne d'ici le sache.
+    // ⚠ Pas de repli `?? GRILLE` ici : ce fichier n'importe pas la grille par
+    // défaut et n'a pas à le faire — la seule écriture du repli est
+    // `grilleDeLaProjection`, dans `render/projection.js`, et `RAID-E T5`
+    // garde par ailleurs que l'écran ne relit pas `GRILLE.bandes` de son côté.
+    const grille = combat?.grille;
+    const lignesVisibles = casesDeLaBande(bandeDeLaVue(), MUR_CASES, grille);
     // ⚠ LE PLANCHER SE DÉRIVE, IL NE S'ÉCRIT PAS : c'est la taille que la MÊME
     // formule rend quand on ne lui impose rien, donc celle qui fait tenir la
     // bande entière. L'écrire à la main donnerait un second letterboxing.
-    const plancher = calculerProjection(largeur, hauteur, MUR_CASES, { lignesVisibles })
+    const plancher = calculerProjection(largeur, hauteur, MUR_CASES, { lignesVisibles, grille })
       .tailleCase;
     const plafond = plafondDuZoom(dpr);
     // ⚠ LE PLANCHER L'EMPORTE SUR LE PLAFOND, et l'ordre des bornes le dit : sur
@@ -865,12 +880,12 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // plafond de netteté. Montrer la bande entière est la contrainte forte ; du
     // pixel art légèrement interpolé est le prix, et il ne se paie que là.
     const cote = Math.max(plancher, Math.min(plafond, coteVoulu ?? plancher));
-    const bornesY = bornesDuDecalage(bandeDeLaVue(), cote, hauteur, MUR_CASES);
-    const bornesX = bornesDuDecalageX(cote, largeur, MUR_CASES);
+    const bornesY = bornesDuDecalage(bandeDeLaVue(), cote, hauteur, MUR_CASES, grille);
+    const bornesX = bornesDuDecalageX(cote, largeur, MUR_CASES, grille);
     decalageY = Math.min(bornesY.max, Math.max(bornesY.min, decalageY));
     decalageX = Math.min(bornesX.max, Math.max(bornesX.min, decalageX));
     projection = calculerProjection(largeur, hauteur, MUR_CASES, {
-      lignesVisibles, coteCase: cote, decalageX, decalageY,
+      lignesVisibles, coteCase: cote, decalageX, decalageY, grille,
     });
     return true;
   }

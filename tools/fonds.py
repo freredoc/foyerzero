@@ -41,6 +41,28 @@ fond y tombe au 1:1. Les réduire aurait rendu 5 828 763 octets pour un flou
 permanent sur l'appareil d'Ethan — moins de marge que q75, pour plus cher à
 l'œil. Confronté à 1:1 sur la zone la plus texturée des huit, q75 ne se
 distingue pas de la source.
+
+⚠⚠ LES TROIS DÉCORS LONGS ENTRENT À **q70**, ET C'EST UN ARBITRAGE DE BUDGET
+MESURÉ — lot GRILLE LONGUE, 20/09/2026. Ils font 1080 × 3240, une fois et
+demie la surface d'un court, pour les sept bases du bout de carte (grille
+9 × 27). Pesés sur cette machine, sans redimensionnement, `method=6` : **q85 →
+1 540 524 octets · q80 → 1 226 204 · q75 → 980 878 (1 307 840 en base64) ·
+q70 → 918 518 (1 224 696) · q65 → 853 102**. À q75, les 1 307 840 octets de
+base64 portaient le livrable à 10 687 089, soit **132 911 sous la borne
+de 10 820 000 — SOUS le plancher de 150 000** que `PIC T7` exige ; à q70
+le livrable pèse 10 603 945 et la marge vaut 216 055, et c'est le brief du
+lot qui fixe q70.
+⚠ Et q70 sur un long coûte ce que q75 coûte sur un court, PAR PIXEL : 306 k
+octets en moyenne pour 1,5 fois la surface d'un court à 206 k — le prix
+d'un décor suit sa surface, la qualité ne l'a pas rogné. Les HUIT courts
+restent à q75 : les baisser réécrirait huit fichiers que ce lot ne touche
+pas, et que `tools/verifier.py` compare à l'octet.
+
+⚠ ET ILS NE SONT NI RECADRÉS NI REDIMENSIONNÉS, comme les huit : la
+géométrie de `render/fond.js` est calée sur leurs 1080 × 3240 — dix cases de
+large, trente de haut, `COTE_CASE_SOURCE = 108` vérifié sur les trois par
+une grille de 108 px décalée de 54, qui longe la face intérieure des flancs
+sur x = 54 et x = 1026 comme sur les courts.
 """
 import hashlib
 import json
@@ -60,10 +82,13 @@ METHODE = 6
 
 # Un décor, sa source, le nom qu'il porte dans le livrable, et sa qualité.
 #
-# ⚠ LES HUIT FONDS DE BASE PORTENT LE MUR PEINT DANS L'IMAGE. C'est tout le lot
+# ⚠ LES ONZE FONDS DE BASE PORTENT LE MUR PEINT DANS L'IMAGE. C'est tout le lot
 # MUR-PEINT : l'anneau de `render/contour.js` a disparu des deux écrans, et ce
 # que le joueur voit du mur, il le voit ici. Ne pas les recadrer, ne pas les
-# redimensionner — la géométrie de l'écran est calée sur leurs 1080 × 2160.
+# redimensionner — la géométrie de l'écran est calée sur leurs 1080 × 2160,
+# et sur les 1080 × 3240 des trois longs (lot GRILLE LONGUE, 20/09/2026).
+# ⚠ LES TROIS LONGS SONT À q70, LES HUIT COURTS À q75 — voir l'en-tête : le
+# format se lit dans `FORMAT_DU_FOND` de `src/render/fond.js`, la qualité ici.
 FONDS = [
     ('fond_offense_bassin.png', 'fond_offense', 85),
     ('base_fond_joueur_01.png', 'fond_j_01', 75),
@@ -74,6 +99,9 @@ FONDS = [
     ('base_fond_ouvrage_hostile.png', 'fond_o_hostile', 75),
     ('base_fond_ouvrage_menacante.png', 'fond_o_menacante', 75),
     ('base_fond_ouvrage_oppressante.png', 'fond_o_oppressante', 75),
+    ('base_fond_ouvrage_verrou_a.png', 'fond_o_verrou_a', 70),
+    ('base_fond_ouvrage_verrou_b.png', 'fond_o_verrou_b', 70),
+    ('base_fond_ouvrage_finale.png', 'fond_o_finale', 70),
 ]
 
 

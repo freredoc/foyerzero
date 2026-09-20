@@ -522,8 +522,8 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39.
-  assert.equal(SAVE_VERSION, 39);
+  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
+  assert.equal(SAVE_VERSION, 40);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

@@ -75,26 +75,113 @@ export const LARGEUR_EN_CASES = largeurEnCases(GRILLE);
 export const HAUTEUR_EN_CASES = hauteurEnCases(GRILLE);
 
 /**
- * La hauteur de l'IMAGE, en cases — plus grande que la boîte, et à dessein.
+ * Le côté d'une case DANS l'image source, en pixels.
  *
- * ⚠⚠ LE DÉBORD EST UN ARBITRAGE, PAS UN DÉFAUT. Les planches font 2160 px pour
+ * ⚠⚠ IL SE MESURE SUR LES PLANCHES, ET UN TEST LE CONFRONTE AU MANIFESTE.
+ * `render/` est pur : il ne lit aucun fichier, et `naturalWidth` n'existe qu'une
+ * fois l'image décodée par un navigateur — c'est la règle que le lot
+ * MURS-OUVRAGE avait déjà écrite pour la taille source des murs. Les dimensions
+ * vivent donc ici en constantes, et `art/sprites/fond/fond-empreintes.json` les
+ * dément au dépôt si elles dérivent, pas chez le joueur.
+ *
+ * ⚠ ET CE N'EST PAS `COTE_SPRITE`. Les sprites de case sont conditionnés à 128 ;
+ * les décors sont des photographies de 1080 de large pour dix cases, donc
+ * 108. Les confondre poserait le fond au mauvais facteur sans qu'une erreur le
+ * dise.
+ *
+ * ⚠⚠ IL VAUT POUR LES DEUX FORMATS, ET C'EST VÉRIFIÉ, PAS CRU — lot GRILLE
+ * LONGUE, 20/09/2026. `1080 / 10 = 108` ; `3240 / 108 = 30`, entier. Et sur
+ * l'art : la grille de 108 px décalée de 54 longe la face intérieure des
+ * flancs sur les trois décors longs comme sur les huit courts — regardé
+ * planche par planche. Si le nombre ne tombait pas, c'est la géométrie du
+ * décor qu'il faudrait reprendre, pas cette constante.
+ */
+export const COTE_CASE_SOURCE = 108;
+
+/**
+ * Les deux FORMATS d'image du dépôt, en pixels source.
+ *
+ * ⚠⚠ LE FACTEUR D'IMAGE EST UNE PROPRIÉTÉ DU DÉCOR, PAS DE LA GRILLE — lot
+ * GRILLE LONGUE, 20/09/2026, et c'est le point à ne pas rater. Un décor long et
+ * une grille longue vont ensemble aujourd'hui, mais ce sont deux grandeurs :
+ * c'est l'IMAGE qui fait 3240 px, pas la grille qui fait 27 rangées. Les
+ * confondre reviendrait à écrire « × 3 quand longueur === 27 », un nombre
+ * magique déguisé. Le `× 2` qui vivait ici depuis MUR-PEINT était déjà le
+ * rapport des HUIT décors d'alors — `2160 / 1080` —, pas une propriété de la
+ * boîte : il devient le format `court`, et les trois décors du bout de carte
+ * entrent au format `long`.
+ *
+ * ⚠ LES DIMENSIONS SONT ÉCRITES ICI ET CONFRONTÉES AU MANIFESTE PAR
+ * `test/sprite.test.js`, fond par fond : `render/` ne lit aucun fichier.
+ */
+export const FORMATS = {
+  court: { largeur: 1080, hauteur: 2160 }, // les huit décors du lot MUR-PEINT
+  long: { largeur: 1080, hauteur: 3240 }, // les trois décors du bout de carte
+};
+
+/**
+ * Le format de chaque décor de base — la table que `formatDuFond` lit.
+ *
+ * ⚠ ELLE EST ÉCRITE, PAS DÉRIVÉE DU NOM : `fond_o_verrou_a` ne dit pas « long »,
+ * et un décor long qu'on renommerait ne changerait pas de hauteur. Un test
+ * exige qu'elle couvre EXACTEMENT `tousLesFonds()`, et que chaque décor fasse
+ * au moins la boîte de la grille qu'il habille.
+ */
+export const FORMAT_DU_FOND = {
+  fond_j_01: 'court',
+  fond_j_02: 'court',
+  fond_j_03: 'court',
+  fond_j_04: 'court',
+  fond_o_austere: 'court',
+  fond_o_hostile: 'court',
+  fond_o_menacante: 'court',
+  fond_o_oppressante: 'court',
+  fond_o_verrou_a: 'long',
+  fond_o_verrou_b: 'long',
+  fond_o_finale: 'long',
+};
+
+/**
+ * Les dimensions source d'un décor, en pixels. Un décor inconnu LÈVE : poser
+ * une image au format d'un autre l'étirerait sans qu'une erreur le dise.
+ * @param {string} nom un décor de `tousLesFonds()`
+ * @returns {{largeur: number, hauteur: number}}
+ */
+export function formatDuFond(nom) {
+  const format = FORMATS[FORMAT_DU_FOND[nom]];
+  if (format === undefined) throw new RangeError(`fond : « ${nom} » n'a pas de format`);
+  return format;
+}
+
+/**
+ * La hauteur de l'IMAGE d'un décor, en cases — plus grande que la boîte, et à
+ * dessein.
+ *
+ * ⚠⚠ LE DÉBORD EST UN ARBITRAGE, PAS UN DÉFAUT. Un décor court fait 2160 px pour
  * 1080 de large, donc `20` cases de haut quand la boîte n'en fait que 18,5 :
  * `54 + 18 × 108 = 1998` px sur 2160, il reste **162 px, soit 1,5 case** sous la
- * dernière rangée. Ethan : « le débord du bas se laisse déborder sous l'UI […]
- * ni rognage, ni étirement, ni recentrage ». Le terrain en trop passe sous les
- * contrôles, et c'est tout.
+ * dernière rangée ; un décor long fait `30` cases pour une boîte de 27,5, soit
+ * 2,5 cases de débord. Ethan : « le débord du bas se laisse déborder sous l'UI
+ * […] ni rognage, ni étirement, ni recentrage ». Le terrain en trop passe sous
+ * les contrôles, et c'est tout.
  *
- * ⚠ ELLE SE DÉRIVE DU RAPPORT DE L'IMAGE, elle n'est pas un nombre de plus :
- * 2160 / 1080 = 2, donc la hauteur vaut deux fois la largeur en cases. Un test
- * la confronte aux fichiers de `art/sprites/fond/` plutôt que de la croire.
- *
- * ⚠⚠ ET LE `× 2` N'EST PAS TOUCHÉ PAR LE LOT GRILLE-PORTÉE, DÉLIBÉRÉMENT. C'est
- * le rapport des HUIT décors d'aujourd'hui, pas une propriété de la grille :
- * un décor de 1080 × 3240 a un rapport de 3, et le facteur devra se DÉRIVER
- * du manifeste `fond-empreintes.json`, fond par fond — c'est le lot GRILLE
- * LONGUE, et c'est lui qui prend `COTE_CASE_SOURCE = 108` avec.
+ * @param {string} nom un décor de `tousLesFonds()`
+ * @returns {number} en cases
  */
-export const HAUTEUR_IMAGE_EN_CASES = LARGEUR_EN_CASES * 2;
+export function hauteurImageEnCases(nom) {
+  return formatDuFond(nom).hauteur / COTE_CASE_SOURCE;
+}
+
+/**
+ * La hauteur d'image du format COURT, en cases — vingt, soit `LARGEUR_EN_CASES
+ * × 2`, la valeur que cette constante a toujours eue.
+ *
+ * ⚠ ELLE RESTE POUR L'ÉCRAN DE LA BASE, ET POUR LUI SEUL : `ui/chantier.js` met
+ * le décor du JOUEUR à l'échelle du zoom, et les décors du joueur sont tous
+ * courts — un test l'exige, sans quoi cette constante mentirait. Un décor
+ * quelconque se demande par `hauteurImageEnCases(nom)`, jamais par elle.
+ */
+export const HAUTEUR_IMAGE_EN_CASES = FORMATS.court.hauteur / COTE_CASE_SOURCE;
 
 /**
  * La bande dont le HAUT porte le mur peint — la base elle-même.
@@ -110,27 +197,6 @@ export const HAUTEUR_IMAGE_EN_CASES = LARGEUR_EN_CASES * 2;
  * raison pour laquelle elle survit à l'anneau.
  */
 export const BANDE_SOUS_LE_MUR = 'batiments';
-
-/**
- * Le côté d'une case DANS l'image source, en pixels.
- *
- * ⚠⚠ IL SE MESURE SUR LES PLANCHES, ET UN TEST LE CONFRONTE AU MANIFESTE.
- * `render/` est pur : il ne lit aucun fichier, et `naturalWidth` n'existe qu'une
- * fois l'image décodée par un navigateur — c'est la règle que le lot
- * MURS-OUVRAGE avait déjà écrite pour la taille source des murs. Les dimensions
- * vivent donc ici en constantes, et `art/sprites/fond/fond-empreintes.json` les
- * dément au dépôt si elles dérivent, pas chez le joueur.
- *
- * ⚠ ET CE N'EST PAS `COTE_SPRITE`. Les sprites de case sont conditionnés à 128 ;
- * les huit décors sont des photographies de 1080 de large pour dix cases, donc
- * 108. Les confondre poserait le fond au mauvais facteur sans qu'une erreur le
- * dise.
- */
-export const COTE_CASE_SOURCE = 108;
-
-/** La taille de l'image source, en pixels — dix cases sur vingt. */
-export const SOURCE_LARGEUR = LARGEUR_EN_CASES * COTE_CASE_SOURCE;
-export const SOURCE_HAUTEUR = HAUTEUR_IMAGE_EN_CASES * COTE_CASE_SOURCE;
 
 /**
  * Quel fond porte quelle base — la règle d'Ethan, du 03/09.
@@ -157,32 +223,15 @@ export const FONDS = {
     camp: ['fond_o_austere'],
     avantPoste: ['fond_o_austere'],
     base: ['fond_o_hostile', 'fond_o_menacante', 'fond_o_oppressante'],
-    // ⚠⚠ LES DEUX TYPES DU BOUT DE CARTE PARTAGENT LES DÉCORS DE `base` — lot
-    // VERROUS, 20/09/2026, ET C'EST PROVISOIRE, DÉCLARÉ. Ethan a livré le
-    // 10/09 quatre décors de 1080 × 3240 — **50 % plus longs** que les huit
-    // d'aujourd'hui — et arbitré le 11/09 : deux pour les verrous, un pour la
-    // base finale. Ils n'entrent PAS dans ce lot : ils supposent une grille de
-    // combat de 9 × 27, ce qui rendait `GRILLE` variable — **trente-deux**
-    // lectures de `GRILLE.longueur` dans huit fichiers, mesuré au lot
-    // GRILLE-PORTÉE (la première écriture disait trente et une) —, et c'est
-    // un lot à soi.
-    //
-    // ⚠⚠ ET CE QUI MANQUE A CHANGÉ DE NATURE LE 20/09/2026, LOT GRILLE-PORTÉE.
-    // La grille est PORTABLE : ce qui lit `GRILLE` accepte une grille en
-    // argument — `sim/grille.js`, `sim/combat.js` par `montage.grille`,
-    // `sim/generateur.js`, et tout `render/` par `vue.grille` de la projection.
-    // `GRILLE` reste l'objet 9 × 18, une seconde grille est un second objet.
-    // Ce qui reste au lot GRILLE LONGUE tient en trois choses : la seconde
-    // grille elle-même sur `TYPES_SITE[type]` — `genererSite` la lit là et
-    // c'est sa seule ligne à changer —, le facteur d'image (`× 2` ci-dessus,
-    // à dériver du manifeste) et les trois décors longs.
-    //
-    // ⚠ SANS CETTE LIGNE, `fondDeLaBase` LÈVE, et une levée à l'entrée de
-    // l'écran de raid laisserait le joueur devant un écran vide. Le lot doit
-    // donc poser un décor pour les sept bases ; celui d'une base de l'Ouvrage
-    // est le seul qui soit juste en attendant — c'est ce qu'elles sont.
-    baseVerrou: ['fond_o_hostile', 'fond_o_menacante', 'fond_o_oppressante'],
-    baseTerminale: ['fond_o_oppressante'],
+    // ⚠⚠ LES DEUX TYPES DU BOUT DE CARTE ONT LEURS DÉCORS — lot GRILLE LONGUE,
+    // 20/09/2026, arbitrage Q4 d'Ethan du 11/09 : deux pour les six verrous, qui
+    // se les partagent par le tirage de `fondDeLaBase`, un pour la base finale
+    // en propre. Ils font 1080 × 3240 — format `long`, trente cases de haut —
+    // pour une grille de 9 × 27 ; ils remplacent les décors de `base` posés
+    // « en attendant » au lot VERROUS. Le quatrième décor livré, le basalte
+    // organique, est ÉCARTÉ par le même arbitrage et n'entre pas au dépôt.
+    baseVerrou: ['fond_o_verrou_a', 'fond_o_verrou_b'],
+    baseTerminale: ['fond_o_finale'],
   },
 };
 
@@ -307,25 +356,38 @@ export function fondDeLaBase(proprietaire, type, rangee, colonne) {
  * qu'avec les quatre du bas. Les séparer aurait laissé un appelant poser une
  * destination juste sur une source fausse.
  *
+ * ⚠⚠ ELLE PREND LE DÉCOR DEPUIS LE LOT GRILLE LONGUE, 20/09/2026, ET C'EST LUI
+ * QUI DONNE LA HAUTEUR. La largeur de la boîte est celle de la grille projetée
+ * — lot GRILLE-PORTÉE —, la hauteur de l'image est celle de son FORMAT :
+ * vingt cases pour un décor court, trente pour un long. Un décor dont la
+ * largeur en cases n'est pas celle de la boîte LÈVE : `l` et `sl` cesseraient
+ * de décrire la même chose, et l'image s'étirerait sans qu'une erreur le dise.
+ * C'est un fait de PROGRAMME — la table des décors et celle des grilles sont
+ * confrontées au dépôt —, pas un cas que le joueur puisse rencontrer.
+ *
  * @param {{tailleCase: number, margeX: number, margeY: number}} projection
+ * @param {string} nom le décor, de `fondDeLaBase`
  * @returns {{x: number, y: number, l: number, h: number,
  *   sx: number, sy: number, sl: number, sh: number}} en pixels
  */
-export function rectangleDuFond(projection) {
+export function rectangleDuFond(projection, nom) {
   const { tailleCase, margeX, margeY } = projection;
-  // ⚠ LA LARGEUR DE LA BOÎTE EST CELLE DE LA GRILLE PROJETÉE — lot
-  // GRILLE-PORTÉE — ; la HAUTEUR reste celle de l'image par défaut, `× 2`,
-  // parce que le facteur est une propriété du DÉCOR, à dériver du manifeste
-  // au lot GRILLE LONGUE. Sur la grille par défaut les deux coïncident au
-  // pixel avec ce que la fonction rendait.
+  const format = formatDuFond(nom);
+  const boite = largeurEnCases(grilleDeLaProjection(projection));
+  if (format.largeur !== boite * COTE_CASE_SOURCE) {
+    throw new RangeError(
+      `fond : « ${nom} » fait ${format.largeur / COTE_CASE_SOURCE} cases de large, `
+      + `la boîte projetée en fait ${boite}`,
+    );
+  }
   return {
     x: margeX - MUR_CASES * tailleCase,
     y: margeY - MUR_CASES * tailleCase,
-    l: largeurEnCases(grilleDeLaProjection(projection)) * tailleCase,
-    h: HAUTEUR_IMAGE_EN_CASES * tailleCase,
+    l: boite * tailleCase,
+    h: hauteurImageEnCases(nom) * tailleCase,
     sx: 0,
     sy: 0,
-    sl: SOURCE_LARGEUR,
-    sh: SOURCE_HAUTEUR,
+    sl: format.largeur,
+    sh: format.hauteur,
   };
 }

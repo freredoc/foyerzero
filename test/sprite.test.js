@@ -37,10 +37,11 @@ import { BASE_BATIMENTS } from '../src/data/base.js';
 import { creerEtat, poserEffectif, problemesDeLaPoseDEffectif } from '../src/sim/state.js';
 import { TERRAINS } from '../src/ui/chantier.js';
 import {
-  tousLesFonds, SOURCE_LARGEUR, SOURCE_HAUTEUR, COTE_CASE_SOURCE,
-  LARGEUR_EN_CASES, HAUTEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES,
+  tousLesFonds, COTE_CASE_SOURCE, FORMATS, FORMAT_DU_FOND, formatDuFond, FONDS,
+  LARGEUR_EN_CASES, HAUTEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES, hauteurImageEnCases,
+  hauteurEnCases,
 } from '../src/render/fond.js';
-import { BATIMENTS } from '../src/data/sites.js';
+import { BATIMENTS, TYPES_SITE } from '../src/data/sites.js';
 import { ANGLE_PAR_DEFAUT } from '../src/sim/rendu-pose.js';
 import { creerCombat } from '../src/sim/combat.js';
 import { calculerProjection } from '../src/render/projection.js';
@@ -549,7 +550,7 @@ test('sprite — une cellule se pose aussi dans un QUARTIER, et la formule tient
   assert.equal(degenere.position, '0% 0%');
 });
 
-test('fond — les huit décors, la table et les fichiers ne peuvent pas diverger', () => {
+test('fond — les onze décors, la table, les formats et les fichiers ne peuvent pas diverger', () => {
   // ⚠⚠ CE TEST REMPLACE CELUI DES MURS DE CONTOUR, IL NE L'AJUSTE PAS — lot
   // MUR-PEINT, 03/09. Celui d'avant gardait `art/sprites/bord/` : dix-sept
   // fichiers, un manifeste, la taille d'un bloc et d'un mur en cases. Le mur est
@@ -582,10 +583,13 @@ test('fond — les huit décors, la table et les fichiers ne peuvent pas diverge
   const dits = manifeste.fonds;
 
   // ⚠⚠ LA TABLE ET LE DOSSIER NE PEUVENT PAS DIVERGER, ET ÇA SE VÉRIFIE DANS LES
-  // DEUX SENS. Un neuvième fichier déposé dans `art/sprites/fond/` sans que la
+  // DEUX SENS. Un douzième fichier déposé dans `art/sprites/fond/` sans que la
   // table l'emploie fait tomber ce test, et un nom ajouté à la table sans son
   // fichier aussi. C'est la garde qui manquait aux murs : `nomsDuContour` était
   // confrontée aux fichiers, mais rien n'interdisait un fichier de trop.
+  // ⚠ ONZE DÉCORS DE BASE DEPUIS LE LOT GRILLE LONGUE (20/09/2026) : les huit
+  // courts de MUR-PEINT, plus `fond_o_verrou_a`, `fond_o_verrou_b` et
+  // `fond_o_finale`, longs, pour les sept bases du bout de carte.
   const surLeDisque = readdirSync(dossier)
     .filter((f) => f.endsWith('.webp'))
     .map((f) => f.replace(/\.webp$/, ''))
@@ -608,38 +612,93 @@ test('fond — les huit décors, la table et les fichiers ne peuvent pas diverge
     assert.equal(statSync(fichier).size, dits[nom].octets, `${nom} : taille`);
   }
 
-  // ⚠⚠ LE RECTANGLE SOURCE DE `render/fond.js` SE CONFRONTE AUX FICHIERS. Le
-  // module est PUR : il ne lit rien, et `naturalWidth` n'existe qu'une fois
-  // l'image décodée par un navigateur. Ses constantes seraient donc invérifiables
-  // sans ce manifeste — et une source fausse poserait le décor au mauvais
-  // facteur sans qu'aucune erreur ne le dise. C'est la règle que le lot
-  // MURS-OUVRAGE avait déjà écrite pour la taille source des murs.
+  // ⚠⚠ LE FORMAT DE CHAQUE DÉCOR SE CONFRONTE AU MANIFESTE, FOND PAR FOND — lot
+  // GRILLE LONGUE, 20/09/2026. `render/fond.js` est PUR : il ne lit rien, et
+  // `naturalWidth` n'existe qu'une fois l'image décodée par un navigateur. Ses
+  // deux tables — `FORMATS` et `FORMAT_DU_FOND` — sont ÉCRITES, et c'est ici
+  // que le dépôt les dément si elles dérivent : un décor de 3240 déclaré
+  // `court` s'étirerait au tiers sans qu'aucune erreur ne le dise. C'est la
+  // règle que le lot MURS-OUVRAGE avait déjà écrite pour la taille source des
+  // murs, fond par fond au lieu d'une constante pour tous.
+  assert.deepEqual(Object.keys(FORMAT_DU_FOND).sort(), tousLesFonds(),
+    'FORMAT_DU_FOND ne couvre pas exactement tousLesFonds()');
+  const parFormat = { court: [], long: [] };
   for (const nom of tousLesFonds()) {
-    assert.equal(dits[nom].largeur, SOURCE_LARGEUR, `${nom} ne fait plus ${SOURCE_LARGEUR} de large`);
-    assert.equal(dits[nom].hauteur, SOURCE_HAUTEUR, `${nom} ne fait plus ${SOURCE_HAUTEUR} de haut`);
+    const format = formatDuFond(nom);
+    assert.equal(dits[nom].largeur, format.largeur, `${nom} ne fait plus ${format.largeur} de large`);
+    assert.equal(dits[nom].hauteur, format.hauteur, `${nom} ne fait plus ${format.hauteur} de haut`);
+    // ⚠ ET LA CASE SOURCE DIVISE LES DEUX DIMENSIONS — 1080 = 10 × 108,
+    // 2160 = 20 × 108, 3240 = 30 × 108. Un décor qui ne tomberait pas juste
+    // poserait une case fractionnaire dans l'image.
+    assert.equal(dits[nom].largeur % COTE_CASE_SOURCE, 0, `${nom} : largeur non multiple de la case source`);
+    assert.equal(dits[nom].hauteur % COTE_CASE_SOURCE, 0, `${nom} : hauteur non multiple de la case source`);
+    assert.equal(dits[nom].largeur, LARGEUR_EN_CASES * COTE_CASE_SOURCE, `${nom} n'est pas large de dix cases`);
+    parFormat[FORMAT_DU_FOND[nom]].push(nom);
   }
+  // Les deux formats sont au dépôt, et ils se distinguent — huit courts, trois
+  // longs, nommés : un décor long qui passerait `court` par une faute de table
+  // tomberait déjà plus haut sur sa hauteur, celui-ci nomme QUI est long.
+  assert.equal(FORMATS.court.hauteur, 2160);
+  assert.equal(FORMATS.long.hauteur, 3240);
+  assert.equal(parFormat.court.length, 8, 'les huit décors courts du lot MUR-PEINT');
+  assert.deepEqual(parFormat.long, ['fond_o_finale', 'fond_o_verrou_a', 'fond_o_verrou_b'],
+    'les trois décors longs du lot GRILLE LONGUE');
 
-  // ⚠⚠ ET LA GÉOMÉTRIE DE L'ÉCRAN SE DÉDUIT DE CES PIXELS-LÀ, pas l'inverse. Une
-  // case vaut `COTE_CASE_SOURCE` pixels dans l'image, la boîte en fait
-  // `LARGEUR_EN_CASES` de large et l'image `HAUTEUR_IMAGE_EN_CASES` de haut :
-  // les trois doivent retomber sur les dimensions réelles, sinon le mur peint se
-  // décolle des colonnes.
-  assert.equal(LARGEUR_EN_CASES * COTE_CASE_SOURCE, SOURCE_LARGEUR);
-  assert.equal(HAUTEUR_IMAGE_EN_CASES * COTE_CASE_SOURCE, SOURCE_HAUTEUR);
+  // ⚠⚠ UN DÉCOR COUVRE AU MOINS LA BOÎTE DE LA GRILLE QU'IL HABILLE, ET C'EST
+  // ICI QUE LE COUPLE SE JUGE. `rectangleDuFond` ne connaît que la LARGEUR ;
+  // un décor court (vingt cases) sur la grille longue (vingt-sept et demie)
+  // laisserait sept cases et demie de noir sous le mur sans qu'il lève. Le
+  // couple type → décors de `FONDS` se confronte donc à la grille que
+  // `TYPES_SITE[type]` emprunte — `GRILLE` quand il n'en nomme aucune.
+  for (const [proprietaire, parType] of Object.entries(FONDS)) {
+    for (const [type, noms] of Object.entries(parType)) {
+      const grille = TYPES_SITE[type]?.grille ?? GRILLE;
+      for (const nom of noms) {
+        assert.ok(hauteurImageEnCases(nom) >= hauteurEnCases(grille),
+          `${nom} (${hauteurImageEnCases(nom)} cases) ne couvre pas la boîte de ${proprietaire}/${type} (${hauteurEnCases(grille)})`);
+      }
+    }
+  }
+  // Et la garde MORD : les deux types du bout de carte ont une grille longue,
+  // donc un décor court y est refusé — c'est la falsification du couple.
+  assert.ok(hauteurImageEnCases('fond_o_hostile') < hauteurEnCases(TYPES_SITE.baseVerrou.grille),
+    'la garde du couple ne peut plus mordre : un décor court couvre la grille longue');
+  // ⚠ LES DÉCORS DU JOUEUR SONT TOUS COURTS, ET `HAUTEUR_IMAGE_EN_CASES` EST LA
+  // HAUTEUR DU FORMAT COURT : c'est elle que `ui/chantier.js` met à l'échelle
+  // pour la base du joueur, et elle mentirait le jour où un décor long y
+  // entrerait sans que cette ligne tombe.
+  for (const noms of Object.values(FONDS.joueur)) {
+    for (const nom of noms) assert.equal(FORMAT_DU_FOND[nom], 'court', `${nom} : la base du joueur n'a pas de décor long`);
+  }
+  assert.equal(HAUTEUR_IMAGE_EN_CASES, FORMATS.court.hauteur / COTE_CASE_SOURCE);
+  assert.equal(HAUTEUR_IMAGE_EN_CASES, hauteurImageEnCases('fond_j_01'));
+  assert.equal(hauteurImageEnCases('fond_o_finale'), 30);
 
-  // ⚠ LE DÉBORD SE MESURE ICI, ET C'EST L'ARBITRAGE D'ETHAN. L'image fait vingt
-  // cases quand la boîte en fait dix-huit et demie : il reste 1,5 case sous la
-  // dernière rangée, soit 162 px à la définition source. « Le débord du bas se
-  // laisse déborder sous l'UI — ni rognage, ni étirement, ni recentrage. »
+  // ⚠ LE DÉBORD SE MESURE ICI, PAR FORMAT, ET C'EST L'ARBITRAGE D'ETHAN. Un
+  // décor court fait vingt cases quand la boîte en fait dix-huit et demie : il
+  // reste 1,5 case sous la dernière rangée, soit 162 px à la définition
+  // source ; un décor long en fait trente pour vingt-sept et demie, 2,5 cases
+  // et 270 px. « Le débord du bas se laisse déborder sous l'UI — ni rognage,
+  // ni étirement, ni recentrage. »
   assert.equal(HAUTEUR_IMAGE_EN_CASES - HAUTEUR_EN_CASES, 1.5);
   assert.equal((HAUTEUR_IMAGE_EN_CASES - HAUTEUR_EN_CASES) * COTE_CASE_SOURCE, 162);
+  const longue = TYPES_SITE.baseTerminale.grille;
+  assert.equal(hauteurImageEnCases('fond_o_finale') - hauteurEnCases(longue), 2.5);
+  assert.equal((hauteurImageEnCases('fond_o_finale') - hauteurEnCases(longue)) * COTE_CASE_SOURCE, 270);
 
-  // ⚠ LES HUIT SONT EN q75, ET `fond_offense` EN q85. La qualité est PAR ENTRÉE
-  // dans `tools/fonds.py` : une constante globale aurait réécrit le décor du
-  // bassin, que `tools/verifier.py` compare à l'octet et que ce lot ne touche
-  // pas. Le q75 est l'arbitrage de budget d'Ethan — à q85 le livrable doublait.
+  // ⚠ LES HUIT COURTS SONT EN q75, LES TROIS LONGS EN q70, ET `fond_offense`
+  // EN q85. La qualité est PAR ENTRÉE dans `tools/fonds.py` : une constante
+  // globale aurait réécrit le décor du bassin, que `tools/verifier.py` compare
+  // à l'octet et que ce lot ne touche pas. Le q75 est l'arbitrage de budget
+  // d'Ethan du lot MUR-PEINT — à q85 le livrable doublait. Le q70 des trois
+  // longs est celui du lot GRILLE LONGUE, et il est mesuré : à q75 ils pèsent
+  // 980 878 octets (1 307 840 en base64) et la marge sur la borne T10 tombait
+  // sous le plancher de 150 000 de `PIC T7` ; à q70, 918 518 octets
+  // (1 224 696) — la raison est écrite dans `tools/fonds.py`.
+  const QUALITE_DU_FORMAT = { court: 75, long: 70 };
   for (const nom of tousLesFonds()) {
-    assert.equal(dits[nom].qualite, 75, `${nom} n'est plus encodé en q75`);
+    assert.equal(dits[nom].qualite, QUALITE_DU_FORMAT[FORMAT_DU_FOND[nom]],
+      `${nom} n'est plus encodé en q${QUALITE_DU_FORMAT[FORMAT_DU_FOND[nom]]}`);
   }
   assert.equal(dits.fond_offense.qualite, 85,
     'le décor du bassin a changé de qualité : il n\'est pas de ce lot');

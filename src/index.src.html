@@ -669,6 +669,15 @@
     --fond-o-hostile: url('%FOND_O_HOSTILE%');
     --fond-o-menacante: url('%FOND_O_MENACANTE%');
     --fond-o-oppressante: url('%FOND_O_OPPRESSANTE%');
+    /* ⚠ LES TROIS DÉCORS LONGS — lot GRILLE LONGUE, 20/09/2026. 1080 × 3240,
+       pour les sept bases du bout de carte. L'écran de la base ne les lit
+       jamais — la base du JOUEUR n'a que des décors courts, un test
+       l'exige — ; ils sont déclarés ici pour la même raison que les huit :
+       une seule déclaration, et `garnirLesAtlas` en donne l'adresse aux
+       balises du canevas de raid. */
+    --fond-o-verrou-a: url('%FOND_O_VERROU_A%');
+    --fond-o-verrou-b: url('%FOND_O_VERROU_B%');
+    --fond-o-finale: url('%FOND_O_FINALE%');
   }
 
   /* ⚠⚠ QUATRE ATLAS QUI SERVENT DES DEUX CÔTÉS — EN FOND CSS ET EN `drawImage`.
@@ -3430,6 +3439,10 @@
       <img id="fond-o-hostile" alt="" hidden>
       <img id="fond-o-menacante" alt="" hidden>
       <img id="fond-o-oppressante" alt="" hidden>
+      <!-- Les trois décors longs du bout de carte — lot GRILLE LONGUE. -->
+      <img id="fond-o-verrou-a" alt="" hidden>
+      <img id="fond-o-verrou-b" alt="" hidden>
+      <img id="fond-o-finale" alt="" hidden>
       <div id="monde-champ">
         <canvas id="monde-canvas"></canvas>
         <!-- ⚠⚠ LES DEUX BOUTONS DE ZOOM SONT PARTIS LE 30/08. Ethan : « zoom

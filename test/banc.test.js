@@ -935,8 +935,27 @@ test('T10 — npm run build passe et le HTML produit ne référence rien d\'ext�
   // encore « 214 605, 2,21 % », le chiffre du lot ÉCHELLE-RECHERCHE, et
   // personne ne l'avait relue depuis. Le nombre qui fait foi est celui de
   // `PIC T7`, qui est mesuré ; celui-ci n'est qu'un repère de lecture.
+  //
+  // ⚠⚠ ET ELLE PASSE DE 9 700 000 À 10 820 000 AU LOT GRILLE LONGUE, 20/09/2026
+  // — LE LOT QUE TROIS RELÈVEMENTS ANNONÇAIENT. Trois décors de 1080 × 3240
+  // entrent, pour les sept bases du bout de carte : **918 518 octets de WebP
+  // q70, soit 1 224 696 en base64**. Mesuré contre le livrable rebâti dans un
+  // `git worktree` pristine de `main` = `7e68258`, qui EST le merge de
+  // GRILLE-PORTÉE (**9 377 613**) : le livrable pèse **10 603 945**. Ici une
+  // ressource entre pour de bon — trois dessins d'Ethan, pas de l'entropie —,
+  // et à 9 700 000 la borne n'était plus seulement serrée, elle était
+  // FRANCHIE de 903 945 octets : c'est le sens que §5 donne à ce curseur.
+  // ⚠ Et le franchissement des DIX MÉGAOCTETS est un SIGNAL, pas une décision
+  // de ce lot — c'est le rapport qui le porte à Ethan.
+  //
+  // ⚠ LA BORNE EST POSÉE À 10 820 000 ET NON À « ça passe » : la marge vaut
+  // **216 055 octets, 2,00 %**, au-dessus du plancher de 150 000 qu'asserte
+  // `PIC T7`. À q75 sur les trois longs — 1 307 840 en base64 —, elle serait
+  // tombée à 132 911, SOUS le plancher : c'est ce qui a fixé q70, et c'est
+  // écrit dans `tools/fonds.py`. Les huit courts restent à q75, le bassin à
+  // q85, et `QUALITE = 85` des dix-neuf atlas ne bouge pas non plus.
   const octets = statSync(chemin).size;
-  assert.ok(octets > 20_000 && octets < 9_700_000, `taille inattendue : ${octets} octets`);
+  assert.ok(octets > 20_000 && octets < 10_820_000, `taille inattendue : ${octets} octets`);
 });
 
 // ---------------------------------------------------------------------------

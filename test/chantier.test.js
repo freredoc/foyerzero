@@ -7547,8 +7547,13 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   // budget, c'est un TÉMOIN — il dit qu'aucun `data:` n'a été cassé par le
   // retrait des commentaires, et qu'aucun n'est entré par accident. Un lot qui
   // le fait bouger doit dire lequel, et combien.
-  assert.equal(uris.length, 312,
-    `le livrable porte ${uris.length} URI au lieu des 312 attendus`);
+  // ⚠⚠ 315 DEPUIS LE LOT GRILLE LONGUE, 20/09/2026 : 312 → 315, les trois
+  // décors longs du bout de carte, un marqueur chacun — `fond_o_verrou_a`,
+  // `fond_o_verrou_b`, `fond_o_finale`.
+  assert.equal(uris.length, 315,
+    `le livrable porte ${uris.length} URI au lieu des 315 attendus`);
+  assert.notEqual(uris.length, 312,
+    'le livrable est revenu à 312 URI : les trois décors longs n\'y sont plus');
   assert.notEqual(uris.length, 306,
     'le livrable est revenu à 306 URI : les six états des grosses bases ont disparu');
 
@@ -7589,7 +7594,8 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   // ⚠ 49 WEBP DEPUIS LE LOT AVARIES : les 43 d'avant plus les six états des deux
   // grosses bases. La clé `png` reste ABSENTE, et son absence est toujours une
   // assertion — `deepEqual` refuse une clé en trop.
-  assert.deepEqual(comptes, { ogg: 263, webp: 49 },
+  // ⚠ 52 WEBP DEPUIS LE LOT GRILLE LONGUE : 49 → 52, les trois décors longs.
+  assert.deepEqual(comptes, { ogg: 263, webp: 52 },
     'la répartition des ressources du livrable a changé');
 
   // ⚠⚠ ET AUCUN `data:` NE PORTE DE `/*`, CE QUI EST LA FAUTE EXACTE QU'ON
@@ -7634,8 +7640,9 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   // ⚠ 313 DEPUIS LE LOT AVARIES : 312 URI plus la ligne de la feuille qui en
   // porte plusieurs. L'écart d'UNE entre les deux comptes est constant depuis
   // toujours, et c'est ce qu'il dit qui compte — voir le paragraphe ci-dessus.
-  assert.equal(lignesData, 313,
-    `le livrable porte ${lignesData} lignes « data: » au lieu de 313`);
+  // ⚠ 316 DEPUIS LE LOT GRILLE LONGUE : 313 → 316, l'écart d'une tient.
+  assert.equal(lignesData, 316,
+    `le livrable porte ${lignesData} lignes « data: » au lieu de 316`);
 });
 
 test('PE T2 — refusé faute de ressources, le bouton dit QUAND et ne compte plus le manque', () => {

@@ -396,6 +396,15 @@ const FICHIERS_INLINE = [
   { marqueur: '%FOND_O_HOSTILE%', chemin: ['art', 'sprites', 'fond', 'fond_o_hostile.webp'], type: 'image/webp' },
   { marqueur: '%FOND_O_MENACANTE%', chemin: ['art', 'sprites', 'fond', 'fond_o_menacante.webp'], type: 'image/webp' },
   { marqueur: '%FOND_O_OPPRESSANTE%', chemin: ['art', 'sprites', 'fond', 'fond_o_oppressante.webp'], type: 'image/webp' },
+  // ⚠⚠ LES TROIS DÉCORS LONGS — lot GRILLE LONGUE, 20/09/2026. 1080 × 3240, pour
+  // les sept bases du bout de carte (grille 9 × 27) : deux pour les six
+  // verrous, un pour la base finale, en WebP **q70** — 918 518 octets, soit
+  // 1 224 696 en base64. Le q70 est mesuré et écrit dans `tools/fonds.py` :
+  // à q75 la marge sur la borne T10 tombait sous le plancher de `PIC T7`.
+  // C'est le lot qui fait franchir dix mégaoctets au livrable.
+  { marqueur: '%FOND_O_VERROU_A%', chemin: ['art', 'sprites', 'fond', 'fond_o_verrou_a.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_O_VERROU_B%', chemin: ['art', 'sprites', 'fond', 'fond_o_verrou_b.webp'], type: 'image/webp' },
+  { marqueur: '%FOND_O_FINALE%', chemin: ['art', 'sprites', 'fond', 'fond_o_finale.webp'], type: 'image/webp' },
   atlas('unite'),
   atlas('chassis'),
   // ⚠ LE FICHIER PORTE LE SLUG À SOULIGNÉ — `atlas-tourelle_unite-64.png` —

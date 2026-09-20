@@ -36,6 +36,13 @@
    "qualite": 75,
    "sha256": "8bf72fa1888035a96cc43367b48a3495a28d60b1628ea4828af3e76140b5d242"
   },
+  "fond_o_finale": {
+   "hauteur": 3240,
+   "largeur": 1080,
+   "octets": 297178,
+   "qualite": 70,
+   "sha256": "f62a49d837179d2b071a1bcdab27290aed94f5db3168d3b8649c0d65c62ddbd3"
+  },
   "fond_o_hostile": {
    "hauteur": 2160,
    "largeur": 1080,
@@ -56,6 +63,20 @@
    "octets": 217124,
    "qualite": 75,
    "sha256": "006648e4522fbefade6028d16d7be8ea1a4f6d1456570d2ff0a75f64107a9353"
+  },
+  "fond_o_verrou_a": {
+   "hauteur": 3240,
+   "largeur": 1080,
+   "octets": 313328,
+   "qualite": 70,
+   "sha256": "bc4ed117804e3d71b4de42e466f1c4eab082aeb4852764106ddd298e887c7a56"
+  },
+  "fond_o_verrou_b": {
+   "hauteur": 3240,
+   "largeur": 1080,
+   "octets": 308012,
+   "qualite": 70,
+   "sha256": "1532b0dce7daeef2bdddd21a26b5f96b91ae88c09047e8d123e0f78f3d9554b6"
   },
   "fond_offense": {
    "hauteur": 1368,

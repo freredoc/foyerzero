@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 375 557 octets, la marge sur la borne T10 est de 3,34 %', () => {
+test('PIC T7 — le livrable pèse 10 603 945 octets, la marge sur la borne T10 est de 2,00 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -987,10 +987,24 @@ test('PIC T7 — le livrable pèse 9 375 557 octets, la marge sur la borne T10 e
   // ressource entre légitimement ; elle ne l'IMPOSE pas, et relever sans
   // nécessité dépenserait d'avance la marge du lot de la grille longue, qui en
   // aura besoin pour de bon.
-  const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_375_557;          // lot AVARIES sur `main` = f1271af (SON 2)
-  const MARGE = BORNE - MESURE;      // 324 443 octets — 537 619 avant les six états
-  assert.equal(MARGE, 324_443);
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT GRILLE LONGUE, 20/09/2026 — LE LOT DE LA GRILLE LONGUE, QUI
+  // EN AVAIT BESOIN POUR DE BON. Trois décors de 1080 × 3240 entrent en WebP
+  // q70 : 918 518 octets, 1 224 696 en base64. Mesuré poste par poste contre le
+  // livrable rebâti dans un `git worktree` pristine de `main` = `7e68258`, qui
+  // EST le merge de GRILLE-PORTÉE (**9 377 613**, retrouvé à l'octet) : le
+  // livrable pèse **10 603 945**, et il franchit dix mégaoctets — un SIGNAL au
+  // rapport, pas une décision d'ici. La borne passe à **10 820 000**, marge
+  // **216 055, 2,00 %** ; à q75 elle serait tombée à 132 911, sous le
+  // plancher, et c'est ce qui a fixé q70 — voir `tools/fonds.py`.
+  const BORNE = 10_820_000;          // T10 de `banc.test.js`, relevée au lot GRILLE LONGUE
+  const MESURE = 10_603_945;         // lot GRILLE LONGUE sur `main` = 7e68258 (GRILLE-PORTÉE)
+  const MARGE = BORNE - MESURE;      // 216 055 octets — 322 387 avant les trois décors longs
+  assert.equal(MARGE, 216_055);
+  assert.notEqual(MARGE, 322_387,
+    'la marge est celle de GRILLE-PORTÉE : les trois décors longs ne sont plus dans le livrable');
+  assert.notEqual(MARGE, 324_443,
+    'la marge est celle d\'AVARIES : le réancrage de GRILLE LONGUE a été défait');
   assert.notEqual(MARGE, 537_619,
     'la marge est celle d\'avant AVARIES : les six états ne sont plus dans le livrable');
   assert.notEqual(MARGE, 363_011,
@@ -1019,7 +1033,7 @@ test('PIC T7 — le livrable pèse 9 375 557 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 3.34);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2);  // 2,00 %
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
