@@ -7,7 +7,93 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **20/09/2026**, version 0.99.71 · build 183.
+Dernière révision : **20/09/2026**, version 0.99.72 · build 184.
+⚠⚠ **LES DEUX GROSSES BASES GAGNENT LEURS TROIS ÉTATS, CINQ SEMAINES APRÈS LES
+SITES D'UNE CASE.** Lot AVARIES. `base_o_2x2` et `base_o_3x3` n'avaient qu'un
+dessin ; les sites d'une case en portent quatre depuis EMBLÈMES-ABÎMÉS et
+CONQUÊTE-24H. Sur les **sept bases que le joueur doit casser pour finir la
+partie**, il n'avait aucun moyen de voir ce qu'il avait déjà entamé. Huit
+sprites désormais — deux emprises × quatre états.
+⚠⚠ **LE PROBLÈME D'ÉCHELLE ÉTAIT DÉJÀ RÉSOLU DANS LE DÉPÔT, AU CHIFFRE PRÈS.**
+Les planches saines font **1 254** pixels, les six neuves **1 024** — exactement
+l'écart qu'EMBLÈMES-ABÎMÉS avait traité pour les quatre familles d'emblème. Les
+deux grosses bases sortent donc de `PLANCHES` pour leur propre boucle à
+`cote_ref`, et la référence est prise sur **les quatre états à la fois**.
+⚠⚠ **SANS ÇA, LA BASE AURAIT GROSSI EN BRÛLANT.** `recadrer` porte la plus
+grande dimension de chaque cellule à l'emprise : une ruine effondrée, plus
+petite que la base intacte, aurait été AGRANDIE pour remplir la case. C'est ce
+que l'arbitrage Q3 d'Ethan — « les ruines/abîmé suivent l'original » — demande
+d'éviter, et la référence commune est ce qui l'obtient. ⚠ Mesuré : les états de
+la 2 × 2 font **212 à 214 px** contre **238** au sain, et ils sont bien plus
+petits.
+⚠ **LA 2 × 2 SAINE NE BOUGE PAS D'UN PIXEL** — 238 × 232 des deux côtés. La
+3 × 3, elle, **rétrécit de 5 × 4 px sur 358 × 322, soit 1,4 %** : le panache de
+son état en feu monte plus haut que le bâti et devient la borne de la famille.
+C'est le même effet que le commentaire d'EMBLÈMES-ABÎMÉS décrit — « le panache
+fait monter la hauteur jusqu'à 1,08 cellule ».
+⚠⚠ **ET LE DOSSIER SE TROMPAIT SUR LE CHROMA — MESURÉ, PAS SUPPOSÉ.** Il
+annonçait que les six planches devaient passer au vert `#00FF00` avant toute
+déclaration, « sinon le détourage mangera de l'ardoise ». Faux : `cle_de_fond`
+DÉTECTE la clé sur les quatre coins, elle ne se paramètre pas, et les six
+planches se comportent **exactement comme les deux saines déjà au dépôt** —
+distance minimale du sujet au magenta **140,1 à 144,4** contre **143,0** pour
+les saines, seuil à 140. Les pixels à risque sont **4 au maximum sur 640 000**,
+six par million. Aucune conversion n'a été faite.
+⚠⚠ **ET LE LOT CORRIGE UN TROU DU LOT VERROUS QU'AUCUN TEST NE DISAIT.**
+`sitesDeLaFenetre` ne poussait que la base finale : **les six verrous existaient
+dans le modèle et n'étaient dessinés NULLE PART**. `siteDeLaCase` les rendait,
+`problemesDuRaid` les gardait, le peuplement les excluait — et le joueur ne
+pouvait ni les voir, ni les viser, ni donc ouvrir la base finale. La carte
+s'affichait, la suite était verte. `EMB-AV T3` le garde désormais.
+⚠ **LE NIVEAU DE LA FINALE À L'ÉCRAN ÉTAIT FAUX POUR LA MÊME RAISON** : l'écran
+demandait `niveauDeLaRangee`, donc **50**. Il demande `niveauDeLaGrosseBase`,
+donc **60**. Un test l'épinglait à `niveauPlafond` et a été retourné.
+⚠⚠ **SIX MARQUEURS DE PLUS DANS `tools/build.js`, ET C'EST LE PRIX DE LA
+FORME.** Un site d'une case porte ses quatre états dans `atlas-carte`, qui les
+coud ; une grosse base couvre 2 × 2 ou 3 × 3 cases, `coudre` la refuse, donc
+chaque état voyage dans son propre marqueur. La table se DÉRIVE des deux axes —
+deux emprises × quatre états — plutôt que de s'écrire huit fois.
+⚠ **COÛT +213 176 OCTETS**, mesuré poste par poste contre le livrable de `main`
+= `f1271af`, qui EST le merge du lot SON 2 (**9 162 381**) : **images +212 174 · JavaScript +645 · balisage
++357 · feuille +0 · audio +0**, partition exacte des deux côtés — écart
+**0 · 0** — et `data:` de **306 à 312 URI**, soit exactement six de plus. Les
+357 octets de balisage sont les six balises `<img>`.
+⚠⚠ **`main` A BOUGÉ DEUX FOIS SOUS LE LOT, ET IL A ÉTÉ REMESURÉ TROIS FOIS,
+JAMAIS RECOPIÉ.** Écrit d'abord sur l'arbre de VERROUS avant sa relecture
+(9 124 022), puis rebasé après elle (9 123 813), puis après le merge du lot
+SON 2 (**9 162 381**). **Le coût est identique au bit sur les trois bases —
++213 176** : aucun des trois lots ne touche aux mêmes fichiers. La MARGE, elle,
+change à chaque fois, et c'est pourquoi on remesure.
+⚠⚠ **ET L'ANCRE DE `PIC T7` ÉTAIT PÉRIMÉE DE 38 568 OCTETS SUR `main`.** Le lot
+SON 2 (#164) fait entrer **70 masters** — l'audio passe de 1 203 086 à
+1 241 654 — **sans réancrer ce test ni bumper `config.build`**, qui reste à 183.
+La tolérance de 50 000 l'a laissé passer au VERT : c'est la dérive muette que
+ÉCHELLE-RECHERCHE a réancrée pour 51 octets. **Ce lot-ci la referme.**
+⚠⚠ **LA BORNE T10 NE BOUGE TOUJOURS PAS, ALORS QU'UNE RESSOURCE ENTRE.** Marge
+**324 443, 3,34 %** — au-dessus du plancher de 150 000, et de loin.
+§5 AUTORISE le relèvement quand une ressource entre légitimement ; elle ne
+l'impose pas, et relever sans nécessité dépenserait d'avance la marge du lot de
+la grille longue, qui en aura besoin pour de bon.
+⚠ **TROIS FALSIFICATIONS QUI MORDENT, UNE DÉCLARÉE QUI NE PEUT PAS** — l'état
+retiré du dessin, la carte revenue à la seule finale, une balise retirée du
+HTML ; et celle qui ne mord pas : retirer les six états de la table de
+`tools/build.js` laisse le test VERT, **parce que le build lève d'abord**
+(« ressource référencée au lieu d'être inlinée ») et que `dist/` garde le
+livrable d'avant. La garde offline est la vraie protection ; l'assertion du test
+est une seconde ligne, et elle se déclare au lieu de se compter.
+⚠ **SIX TESTS RÉANCRÉS, AUCUN ASSOUPLI** — `AC T8` (trois compteurs : 306 → 312
+URI, 307 → 313 lignes, `webp` 43 → 49), `PIC T7`, `EMB-C T4` (135 → 141
+sprites, 2 → 8 WebP), `EMB-C T5` (un appel `ancrage='centre'` → deux),
+`SOUFFLE T1` (son montage cherchait des marqueurs littéraux dans un outil qui
+les DÉRIVE désormais — un montage faux fait tomber un test sain, ce qui est la
+pire des deux fautes), et « sites — la base du joueur et la base terminale se
+dessinent en dernier ».
+⚠ **LES SIX SOURCES SONT DÉCLARÉES CONSOMMÉES** — `art/sources/` passe de 684 à
+**690 fichiers, 515 consommées · 175 dormantes**, par `tools/entrees.py
+--declarer`. Leurs noms restent ceux d'Ethan : le mapping degré → état vit dans
+la table de `tools/emblemes.py`, qui est l'endroit prévu pour ça.
+
+**Auparavant, après le lot VERROUS (20/09) :**
 ⚠⚠ **LA BASE FINALE DEVIENT ATTAQUABLE, ET ELLE NE L'EST QU'APRÈS SIX.** Lot
 VERROUS. Elle existait comme DÉCOR depuis le 30/08 — `ui/monde.js` la dessinait,
 `sim/poi.js` l'esquivait, et `siteDeLaCase` rendait `null` dessus. Elle a
@@ -242,7 +328,29 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 20/09/2026 (après le lot VERROUS), à confronter :**
+**Référence au 20/09/2026 (après le lot AVARIES), à confronter :**
+`npm test` rend **1660 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 659 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **trois**, `EMB-AV T1` à
+`T3` du nouveau `test/avaries-grosses-bases.test.js` — `test/` passe de 79 à
+**80** fichiers.
+`npm run build` → `dist/index.html`, **9 375 557 octets**, 0 référence externe.
+Coût **+213 176 octets**, mesuré poste par poste contre le livrable de `main` =
+`f1271af` (**9 162 381**) : **images +212 174 · JavaScript +645 · balisage +357
+· feuille +0 · audio +0**, et les cinq postes PARTITIONNENT le fichier des deux
+côtés — écart **0 · 0**. `data:` à **313 lignes / 312 URI**, contre 307 / 306.
+Borne T10 **9 700 000, NON TOUCHÉE**, marge **324 443 octets, 3,34 %**.
+⚠ `python3 tools/verifier.py --outil emblemes` rend **283 identiques · 0
+différents · 0 nouveaux**, et `tools/entrees.py --verifier` **690 fichiers,
+515 consommées · 175 dormantes**.
+⚠ Le lot touche `tools/{emblemes.py,build.js}`, `src/render/embleme.js`,
+`src/ui/monde.js`, `src/index.src.html`, `art/sources-declarees.json`, cinq
+fichiers de `test/`, `package.json`, ce fichier et `RAPPORT-lotAVARIES.md` ; il
+FAIT ENTRER six sources, six sprites par grille et
+`test/avaries-grosses-bases.test.js`.
+
+**Auparavant, après le lot VERROUS (20/09) :**
 `npm test` rend **1657 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 656 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
@@ -14059,7 +14167,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   79 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   80 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -14072,7 +14180,7 @@ test/                   79 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
-  ancres-zenith  ruines-defense  verrous
+  ancres-zenith  ruines-defense  verrous  avaries-grosses-bases
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

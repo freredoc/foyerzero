@@ -90,9 +90,49 @@ PLANCHES = [
      ['ressource_a', 'ressource_b', 'reacteur'], 1),
     ('P10.4_poi_bonus_64-256.png',              2, 2, False, 'poi_bonus',
      ['a', 'b', 'c', 'd'], 1),
-    ('S10_base_ouvrage_2x2.png',                 1, 1, True, 'base_o_2x2', [''], 2),
-    ('S10_base_ouvrage_3x3_finale.png',          1, 1, True, 'base_o_3x3', [''], 3),
 ]
+
+# ⚠⚠ LES DEUX GROSSES BASES SORTENT DE `PLANCHES` AU LOT AVARIES, 20/09/2026,
+# ET C'EST LA RÉFÉRENCE D'ÉCHELLE QUI L'A EXIGÉ — exactement comme les quatre
+# familles d'emblème avant elles. Elles gagnent trois états, et les trois
+# partagent UNE échelle : elles ne peuvent donc plus se traiter planche par
+# planche. `PLANCHES` ne garde que ce qui n'a pas de famille — les POI, dont il
+# n'existe qu'un dessin par type.
+#
+# ⚠⚠ ET LE PROBLÈME EST LE MÊME QU'AU LOT EMBLÈMES-ABÎMÉS, AU CHIFFRE PRÈS : les
+# planches saines font **1 254** pixels de côté, les six neuves **1 024**.
+# Comparer des pixels bruts rétrécirait tout l'état abîmé de 18 %. La référence
+# est donc RELATIVE à la cellule de planche, et `recadrer` reçoit `cote_ref`.
+#
+# ⚠⚠ C'EST AUSSI CE QUI TIENT L'ARBITRAGE Q3 D'ETHAN — « les ruines/abîmé
+# suivent l'original ». Sans `cote_ref`, `recadrer` porterait la plus grande
+# dimension de CHAQUE état à l'emprise : une ruine effondrée, plus petite que la
+# base saine, serait AGRANDIE pour remplir la case, et le joueur verrait sa base
+# GROSSIR en brûlant. La référence commune est ce qui rend les trois états
+# comparables à l'œil.
+#
+# préfixe, cases occupées, (planche saine, abîmée, très abîmée), planche de ruine
+FAMILLES_GROSSE_BASE = [
+    ('base_o_2x2', 2, (
+        'S10_base_ouvrage_2x2.png',
+        'base_ouvrage_2x2_abimee.png',
+        'base_ouvrage_2x2_tres_abimee.png'),
+     'base_ouvrage_2x2_ruine.png'),
+    ('base_o_3x3', 3, (
+        'S10_base_ouvrage_3x3_finale.png',
+        'base_ouvrage_3x3_abimee.png',
+        'base_ouvrage_3x3_tres_abimee.png'),
+     'base_ouvrage_3x3_ruine.png'),
+]
+
+# ⚠ LE MAPPING NOM-SOURCE → SUFFIXE EST DANS LA TABLE, PAS DANS LES FICHIERS.
+# Ethan nomme ses planches par le DEGRÉ — « abimee », « tres_abimee » — et le
+# dépôt nomme ses états par ce qu'on VOIT — `_fumee`, `_feu`. Les deux sont
+# justes ; renommer les sources aurait été une migration pour rien, et les
+# renommer À MOITIÉ aurait été pire. `ETATS` fait la traduction, une fois.
+for _f in FAMILLES_GROSSE_BASE:
+    assert len(_f) == 4, f'{_f[0]} : planche de ruine manquante — écrire `None`'
+    assert len(_f[2]) == 3, f'{_f[0]} : une planche par état attendue'
 
 # ⚠ L'EMPRISE S'ÉCRIT, ELLE NE SE DÉDUIT PAS. Un septième champ absent pourrait
 # se compléter à 1 en silence ; il lèverait alors une base multi-cases ramenée à
@@ -493,6 +533,48 @@ for fichier, nx, ny, ouv, prefixe, noms, cases in PLANCHES:
             # ⚠ LE FORMAT SUIT L'EMPRISE — voir `sortie` en tête de fichier. Les
             # POI sont à `cases == 1` et restent en PNG, les deux grosses bases
             # sortent en WebP. Aucune des deux branches n'est écrite ici.
+            chemin, options = sortie(nom, cases, d)
+            ecrire(g, P, chemin, matiere, options)
+            n += 1
+
+# --- les quatre états des deux grosses bases — lot AVARIES, 20/09/2026 --------
+#
+# ⚠⚠ MÊME BOUCLE QUE LES QUATRE FAMILLES D'EMBLÈME, À DEUX DIFFÉRENCES PRÈS, ET
+# LES DEUX VIENNENT DE L'EMPRISE. Une grosse base n'a qu'UNE cellule par planche
+# — pas neuf paliers —, et elle sort en `cases × N` pixels au lieu de `N`. Tout
+# le reste — la référence d'échelle commune, `ancrage='centre'`, le quatrième
+# état hors d'`ETATS` — est repris tel quel, parce que le problème est le même.
+for prefixe, cases, planches_saines, planche_ruine in FAMILLES_GROSSE_BASE:
+    P = pal(True)   # les deux sont de l'Ouvrage
+    etats = list(ETATS) + ([ETAT_RUINE] if planche_ruine else [])
+    fichiers = list(planches_saines) + ([planche_ruine] if planche_ruine else [])
+    lots = []
+    for fichier in fichiers:
+        chemin = os.path.join(SRC, fichier)
+        cells = cellules(chemin, 1, 1)
+        assert len(cells) == 1, f'{fichier} : {len(cells)} cellules pour une grosse base'
+        # ⚠ LA CELLULE DE RÉFÉRENCE EST LA PLANCHE ENTIÈRE, pas divisée par 3 :
+        # une grosse base occupe sa planche seule, là où les familles d'emblème
+        # en logent neuf sur une grille de 3 × 3.
+        lots.append((cells[0], Image.open(chemin).size[0], fichier))
+
+    # ⚠⚠ LA RÉFÉRENCE EST PRISE SUR LES QUATRE ÉTATS À LA FOIS, ET C'EST TOUT
+    # L'INTÉRÊT. La prendre état par état rendrait chacun à la taille de
+    # l'emprise, donc une ruine effondrée paraîtrait AUSSI GROSSE qu'une base
+    # intacte — et le joueur ne verrait pas qu'elle est tombée.
+    reference = max(max(mesure(c)) / cote for c, cote, _f in lots)
+    MESURES[prefixe] = dict(reference=reference, cellules={})
+    for etat, (cell, cote_planche, fichier) in zip(etats, lots):
+        nom = f'{prefixe}{etat}'
+        MESURES[prefixe]['cellules'][nom] = dict(planche=fichier, cotePlanche=cote_planche)
+        for N in GRILLES:
+            cote = cases * N
+            g, matiere = conditionner(
+                recadrer(cell, EMPRISE * cases * (N // 32), cote,
+                         cote_ref=reference * cote_planche, ancrage='centre'),
+                P, cote)
+            d = os.path.join(DST, str(N))
+            os.makedirs(d, exist_ok=True)
             chemin, options = sortie(nom, cases, d)
             ecrire(g, P, chemin, matiere, options)
             n += 1

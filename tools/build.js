@@ -438,8 +438,23 @@ const FICHIERS_INLINE = [
   // change. Voir `tools/emblemes.py`, qui dérive le format de l'emprise et
   // porte la mesure de perte — plus petite que celle que la couture inflige
   // déjà à tous les emblèmes de la même famille.
-  { marqueur: '%BASE_O_2X2%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_2x2.webp'], type: 'image/webp' },
-  { marqueur: '%BASE_O_3X3%', chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), 'base_o_3x3.webp'], type: 'image/webp' },
+  //
+  // ⚠⚠ ET LEURS TROIS ÉTATS ENTRENT AU LOT AVARIES, 20/09/2026 — SIX MARQUEURS
+  // DE PLUS, ET C'EST LE PRIX DE NE PAS ÊTRE UNE CELLULE D'ATLAS. Les sites
+  // d'une case portent leurs quatre états dans `atlas-carte`, qui les coud ;
+  // une grosse base couvre 2 × 2 ou 3 × 3 cases, `coudre` la refuse, donc
+  // chaque état voyage dans son propre marqueur. Les huit pèsent **206 030
+  // octets** de WebP ensemble.
+  //
+  // ⚠ LA TABLE SE DÉRIVE DES DEUX AXES, elle ne s'écrit pas huit fois : deux
+  // emprises × quatre états. Une liste à la main aurait oublié un état le jour
+  // où un cinquième entrerait, et le marqueur resté en clair dans la page est
+  // une image VIDE, sans erreur — c'est ce que `CÂB T1` raconte déjà.
+  ...[2, 3].flatMap((cotes) => ['', '_fumee', '_feu', '_ruine'].map((etat) => ({
+    marqueur: `%BASE_O_${cotes}X${cotes}${etat.toUpperCase()}%`,
+    chemin: ['art', 'sprites', 'carte', String(GRILLE_ATLAS), `base_o_${cotes}x${cotes}${etat}.webp`],
+    type: 'image/webp',
+  }))),
   // ⚠ LE FOND DU BASSIN — 03/09. Ethan : « je t'ai envoyé un sprite pour
   // combler le menu offense ». Ce n'est pas une cellule d'atlas — 1149 × 1368 —
   // donc il voyage dans son propre marqueur, comme les murs de contour. Il pèse

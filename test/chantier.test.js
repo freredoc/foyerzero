@@ -7542,8 +7542,15 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   // travail d'un travail raté, et elle se mesure sur les URI eux-mêmes.
   const URI = /data:(image|audio)\/([A-Za-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)/g;
   const uris = [...produit.matchAll(URI)];
-  assert.equal(uris.length, 306,
-    `le livrable porte ${uris.length} URI au lieu des 306 d'avant le lot`);
+  // ⚠⚠ 312 DEPUIS LE LOT AVARIES, 20/09/2026, ET LES SIX DE PLUS SONT NOMMÉS :
+  // les trois états de chacune des deux grosses bases. Ce compte n'est pas un
+  // budget, c'est un TÉMOIN — il dit qu'aucun `data:` n'a été cassé par le
+  // retrait des commentaires, et qu'aucun n'est entré par accident. Un lot qui
+  // le fait bouger doit dire lequel, et combien.
+  assert.equal(uris.length, 312,
+    `le livrable porte ${uris.length} URI au lieu des 312 attendus`);
+  assert.notEqual(uris.length, 306,
+    'le livrable est revenu à 306 URI : les six états des grosses bases ont disparu');
 
   // ⚠ CHACUN SE DÉCODE : longueur base64 valide, et en-tête du format annoncé.
   const ENTETES = {
@@ -7579,7 +7586,10 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   // `deepEqual` refuse une clé en trop : le jour où un PNG rentrerait — par un
   // marqueur oublié ou une extension remise dans `tools/build.js` —, ce test
   // tombe. C'est ce qui remplace le « 2 » qu'il gardait.
-  assert.deepEqual(comptes, { ogg: 263, webp: 43 },
+  // ⚠ 49 WEBP DEPUIS LE LOT AVARIES : les 43 d'avant plus les six états des deux
+  // grosses bases. La clé `png` reste ABSENTE, et son absence est toujours une
+  // assertion — `deepEqual` refuse une clé en trop.
+  assert.deepEqual(comptes, { ogg: 263, webp: 49 },
     'la répartition des ressources du livrable a changé');
 
   // ⚠⚠ ET AUCUN `data:` NE PORTE DE `/*`, CE QUI EST LA FAUTE EXACTE QU'ON
@@ -7621,8 +7631,11 @@ test('AC T8 — les commentaires de la feuille sortent au build, et rien d\'autr
   // porter un. Le compte d'URI est le seul qui dise quelque chose sur les
   // ressources ; celui des lignes dit aussi quelque chose sur la prose.
   const lignesData = produit.split('\n').filter((l) => l.includes('data:')).length;
-  assert.equal(lignesData, 307,
-    `le livrable porte ${lignesData} lignes « data: » au lieu de 307`);
+  // ⚠ 313 DEPUIS LE LOT AVARIES : 312 URI plus la ligne de la feuille qui en
+  // porte plusieurs. L'écart d'UNE entre les deux comptes est constant depuis
+  // toujours, et c'est ce qu'il dit qui compte — voir le paragraphe ci-dessus.
+  assert.equal(lignesData, 313,
+    `le livrable porte ${lignesData} lignes « data: » au lieu de 313`);
 });
 
 test('PE T2 — refusé faute de ressources, le bouton dit QUAND et ne compte plus le manque', () => {

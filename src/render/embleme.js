@@ -69,6 +69,55 @@ export const SPRITES_GROSSE_BASE = {
 };
 
 /**
+ * Le sprite d'une grosse base dans un état d'avarie — lot AVARIES, 20/09/2026.
+ *
+ * ⚠⚠ UN VERROU ENTAMÉ SE DESSINAIT COMME UN VERROU INTACT, ET C'ÉTAIT LE SEUL
+ * ENDROIT DU JEU OÙ ÇA MANQUAIT. Les sites d'une case portent leurs quatre
+ * états depuis les lots EMBLÈMES-ABÎMÉS et CONQUÊTE-24H ; les deux grosses
+ * bases n'en avaient qu'un. Sur les sept bases que le joueur doit casser pour
+ * finir la partie, il n'avait aucun moyen de voir ce qu'il avait déjà entamé.
+ *
+ * ⚠ LE SUFFIXE EST CELUI DES SITES D'UNE CASE, `SUFFIXE_AVARIE`, et ce n'est
+ * pas une coïncidence qu'on entretient : c'est la MÊME table. Deux jeux de
+ * suffixes pour la même notion divergeraient au premier état ajouté.
+ *
+ * @param {number} cotes une clé de `SPRITES_GROSSE_BASE`
+ * @param {string} avarie une valeur d'`AVARIE` de `sim/site-entame.js`
+ * @returns {string} un nom de la famille `carte`
+ */
+export function spriteDeLaGrosseBase(cotes, avarie = 'aucune') {
+  const base = SPRITES_GROSSE_BASE[cotes];
+  if (base === undefined) {
+    throw new RangeError(`emblème : pas de grosse base de ${cotes} cases de côté`);
+  }
+  const abime = SUFFIXE_AVARIE[avarie];
+  if (abime === undefined) {
+    throw new RangeError(`emblème : avarie inconnue « ${avarie} »`);
+  }
+  return `${base}${abime}`;
+}
+
+/**
+ * Le sprite de la RUINE d'une grosse base.
+ *
+ * ⚠ ELLE NE PASSE PAS PAR `spriteDeLaGrosseBase`, POUR LA RAISON QUE
+ * `spriteDeLaRuine` DONNE DÉJÀ : une ruine n'est PAS un état d'avarie. `AVARIE`
+ * décrit ce qui reste DEBOUT d'un site vivant ; une ruine n'a plus d'entrée de
+ * site du tout. Les réunir sous un même paramètre inviterait à demander
+ * l'avarie d'une ruine.
+ *
+ * @param {number} cotes une clé de `SPRITES_GROSSE_BASE`
+ * @returns {string} un nom de la famille `carte`
+ */
+export function spriteDeLaGrosseRuine(cotes) {
+  const base = SPRITES_GROSSE_BASE[cotes];
+  if (base === undefined) {
+    throw new RangeError(`emblème : pas de grosse base de ${cotes} cases de côté`);
+  }
+  return `${base}${SUFFIXE_RUINE}`;
+}
+
+/**
  * Le sprite d'un site de la carte.
  *
  * ⚠ `camp` ET `avantPoste` SE DISTINGUENT PAR LEUR SAVEUR, PAS PAR LEUR TYPE.
@@ -248,7 +297,7 @@ export { empriseDeLaGrosseBase } from '../sim/carte.js';
  * @param {{x: number, y: number}} origine coin haut-gauche de la vue, en pixels
  * @returns {{nom: string, x: number, y: number, cote: number}}
  */
-export function dessinerGrosseBase(cotes, site, cran, origine) {
+export function dessinerGrosseBase(cotes, site, cran, origine, avarie = 'aucune') {
   // ⚠⚠ LA GARDE A CHANGÉ DE CIBLE AU LOT ZOOM-CONTINU, ELLE N'A PAS ÉTÉ
   // RETIRÉE. Elle exigeait un cran DE LA TABLE `ZOOM_CARTE.crans`, ce qui était
   // juste tant que la carte zoomait par crans ; depuis le 04/09 l'échelle est
@@ -269,7 +318,11 @@ export function dessinerGrosseBase(cotes, site, cran, origine) {
   }
   const emprise = empriseDeLaGrosseBase(cotes, site);
   return {
-    nom: SPRITES_GROSSE_BASE[cotes],
+    // ⚠ LE NOM PORTE L'ÉTAT DEPUIS LE LOT AVARIES. Le défaut est « aucune »,
+    // donc tout appelant d'avant le lot rend exactement le nom d'avant.
+    nom: avarie === 'ruine'
+      ? spriteDeLaGrosseRuine(cotes)
+      : spriteDeLaGrosseBase(cotes, avarie),
     // ⚠ ENTIERS. Un `drawImage` à une position fractionnaire rééchantillonne et
     // rend le pixel art flou — c'est déjà la règle du fond de carte.
     x: Math.round((emprise.colonne - 1) * cran - origine.x),

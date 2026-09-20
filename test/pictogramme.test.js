@@ -950,12 +950,55 @@ test('PIC T7 — le livrable pèse 9 123 813 octets, la marge sur la borne T10 e
   // code mort, que `esbuild` ne peut pas élaguer (un `push` a l'air d'un effet).
   // Retiré : **−209 octets de JavaScript, 9 124 022 → 9 123 813**, le coût du
   // lot passant de +1 349 à **+1 140**. Un lot qui sait ce qu'il déplace réancre.
+  //
+  // ⚠⚠ RÉANCRÉ À NOUVEAU AU LOT AVARIES, 20/09/2026 : **+213 176 octets**, et
+  // c'est la première entrée de ressource depuis RUINES-DÉFENSE. Six dessins
+  // neufs — les trois états de chacune des deux grosses bases — mesurés poste
+  // par poste contre le livrable de `main` = `f1271af`, qui EST le merge du lot
+  // SON 2 (**9 162 381**) : **images +212 174 · JavaScript +645 · balisage
+  // +357 · feuille +0 · audio +0**, la partition tombant EXACTEMENT sur le
+  // total des DEUX côtés — écart **0 · 0** — et `data:` de **306 à 312 URI**,
+  // soit exactement six de plus : un par état.
+  //
+  // ⚠⚠ ET L'ANCRE DE `main` ÉTAIT PÉRIMÉE DE 38 568 OCTETS À L'ARRIVÉE DE CE
+  // LOT. Le lot SON 2 (#164) a fait entrer **70 masters** — l'audio passe de
+  // 1 203 086 à 1 241 654 — **sans réancrer ce test ni bumper `config.build`**.
+  // La tolérance de 50 000 du bas de ce test l'a laissé passer au VERT : c'est
+  // exactement la dérive muette que le lot ÉCHELLE-RECHERCHE a réancrée pour
+  // 51 octets, et FREIN avant lui. **Ce lot-ci la referme**, en mesurant contre
+  // l'arbre réel plutôt que contre l'ancre écrite.
+  //
+  // ⚠ LE COÛT D'AVARIES EST IDENTIQUE AU BIT SUR LES TROIS BASES SUCCESSIVES —
+  // **+213 176** contre l'arbre de VERROUS avant sa relecture, après sa
+  // relecture, et après le lot SON 2. C'est ce qui dit que les trois lots ne se
+  // recouvrent pas : aucun ne touche aux mêmes fichiers. **Remesuré quand même,
+  // trois fois**, parce qu'une somme de diffs donne un troisième nombre faux
+  // aussi souvent qu'elle tombe juste.
+  //
+  // ⚠ LES 357 OCTETS DE BALISAGE SONT LES SIX BALISES `<img>`. Une grosse base
+  // n'est PAS une cellule d'atlas — elle couvre 2 × 2 ou 3 × 3 cases, et
+  // `coudre` n'accepte que des cellules carrées à la taille de case —, donc
+  // chaque état voyage dans son propre marqueur. C'est le prix de la forme,
+  // pas un défaut de câblage.
+  //
+  // ⚠⚠ ET LA BORNE T10 NE BOUGE TOUJOURS PAS, ALORS QU'UNE RESSOURCE ENTRE. La
+  // marge tombe à **324 443, soit 3,34 %** — au-dessus du plancher de 150 000
+  // qu'asserte ce test, et de loin. §5 AUTORISE le relèvement quand une
+  // ressource entre légitimement ; elle ne l'IMPOSE pas, et relever sans
+  // nécessité dépenserait d'avance la marge du lot de la grille longue, qui en
+  // aura besoin pour de bon.
   const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_123_813;          // lot VERROUS sans son bloc mort — 9 124 022 avec, 9 122 673 avant
-  const MARGE = BORNE - MESURE;      // 576 187 octets — 577 327 avant les verrous
-  assert.equal(MARGE, 576_187);
+  const MESURE = 9_375_557;          // lot AVARIES sur `main` = f1271af (SON 2)
+  const MARGE = BORNE - MESURE;      // 324 443 octets — 537 619 avant les six états
+  assert.equal(MARGE, 324_443);
+  assert.notEqual(MARGE, 537_619,
+    'la marge est celle d\'avant AVARIES : les six états ne sont plus dans le livrable');
+  assert.notEqual(MARGE, 363_011,
+    'la marge est celle d\'AVARIES mesuré avant le lot SON 2 : ses 70 masters ont disparu');
+  assert.notEqual(MARGE, 362_802,
+    'la marge est celle d\'AVARIES mesuré avant la relecture de VERROUS : le bloc mort est revenu');
   assert.notEqual(MARGE, 575_978,
-    'la marge est celle du premier jet de VERROUS : le bloc mort de executerRaid est revenu');
+    'la marge est celle d\'avant AVARIES : les six états ne sont plus dans le livrable');
   assert.notEqual(MARGE, 577_327,
     'la marge est celle d\'avant VERROUS : les sept bases du bout de carte ont disparu');
   assert.notEqual(MARGE, 577_283,
@@ -976,7 +1019,7 @@ test('PIC T7 — le livrable pèse 9 123 813 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 5.94);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 3.34);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
