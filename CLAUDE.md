@@ -156,25 +156,66 @@ l'effondrement sur trois genres, la mort au moteur sur un mur seul.
 LUI — MESURÉ SUR LA CHAÎNE ENTIÈRE, DES DEUX CÔTÉS.** `python3 tools/verifier.py`
 sur un `git worktree` pristine à `105d4fc`, qui EST le merge d'ANCRES-ZÉNITH :
 **934 identiques · 176 différents · 0 nouveau · 0 MANQUANT**, en 526,9 s. Sur
-l'arbre du lot : **950 identiques · 176 différents · 0 nouveau · 0 MANQUANT**, en
-538,6 s. ⚠⚠ **ET LES DEUX LISTES DE « DIFFÈRE » SONT IDENTIQUES LIGNE POUR
-LIGNE** — `diff` vide : **pas un seul des 176 n'est de ce lot**. Ce que le lot
-ajoute est exactement **+16 identiques**, les huit ruines aux deux grilles, toutes
-reproduites à l'octet.
+l'arbre du lot d'alors : **950 · 176 · 0 · 0**, en 538,6 s.
+⚠⚠ **PUIS #161 A ÉTÉ FUSIONNÉ, ET LES DEUX PASSAGES ONT ÉTÉ REFAITS SUR LA BASE
+NEUVE : PAS UN FICHIER NE BOUGE.** Sur un `git worktree` pristine à `fd1a007`,
+qui EST le merge de CONDITIONNEMENT-ZÉNITH : **934 · 176 · 0 · 0**, en 555,0 s.
+Sur l'arbre du lot fusionné, `900909f` : **950 identiques · 176 différents ·
+0 nouveau · 0 MANQUANT**, en 558,6 s, second verdict VERT — « la chaîne lit
+exactement les sources déclarées », `art/sources/` à **684 fichiers, 509
+consommées · 175 dormantes**.
+⚠⚠ **ET LES QUATRE LISTES DE « DIFFÈRE » SONT IDENTIQUES LIGNE POUR LIGNE** —
+`diff` vide sur les trois comparaisons, 176 fichiers chacune : **pas un seul des
+176 n'est de ce lot, et #161 n'en a retiré AUCUN** alors qu'il en a régénéré 42.
+Ce que le lot ajoute est exactement **+16 identiques**, les huit ruines aux deux
+grilles, toutes reproduites à l'octet.
+⚠ **ET LE DERNIER PASSAGE A TOURNÉ PENDANT QUE J'ÉCRIVAIS DANS L'ARBRE — ÉCART À
+LA LETTRE DE §3, DÉCLARÉ PLUTÔT QUE PLAIDÉ.** « Ne jamais le lancer sur un arbre
+qu'on modifie » : `CLAUDE.md` et le rapport ont été édités pendant les 558,6 s.
+Mesuré : `git status` ne portait que ces DEUX fichiers Markdown, qu'aucun outil
+de la chaîne n'ouvre — `art/` n'a pas bougé d'un octet et le mouchard
+d'`entrees.py` ne voit ni l'un ni l'autre. Le verdict tient en fait ; la règle a
+quand même été enfreinte.
 ⚠⚠ **ET C'EST PLUS LARGE QUE LES 44 QUE J'AVAIS D'ABORD MESURÉS — LE PREMIER
 CHIFFRE NE PORTAIT QUE SUR DEUX OUTILS.** `--outil joueur_v2` rend 64 identiques ·
 20 différents, `--outil ouvrage_v2` 60 · 24 ; la chaîne entière en rend **176**,
 répartis **132 `bâtiment/` · 24 `defense/` · 18 `socle/` · 2 `chassis/`**. Les
-**42** de `defense/` et `socle/` correspondent aux 22 sources zénithales
-d'ANCRES-ZÉNITH — sources et détecteurs remplacés, sprites non régénérés, le
-défaut que l'en-tête de `tools/verifier.py` décrit mot pour mot. Les **134** de
-`bâtiment/` et `chassis/` ne correspondent à AUCUNE source de ce lot-là : ils sont
-**plus anciens encore**, et personne ne les avait comptés. Ce fichier ne les
-attribue à personne — il les compte.
+**42** de `defense/` et `socle/` sont les 22 pièces zénithales d'ANCRES-ZÉNITH ;
+les **134** de `bâtiment/` et `chassis/` ne correspondent à AUCUNE source de ce
+lot-là. Ce fichier ne les attribue à personne — il les compte.
+⚠⚠⚠ **ET LA PREMIÈRE ÉCRITURE DE CE PARAGRAPHE DISAIT « SPRITES NON RÉGÉNÉRÉS »,
+C'EST-À-DIRE DE L'ART PÉRIMÉ. C'EST FAUX, ET LA MESURE LE RENVERSE : LES 176 SONT
+IDENTIQUES AU PIXEL.** Les trois producteurs rejoués dans un dossier dérouté sur
+l'arbre pristine de `main` = `fd1a007`, puis comparés au dépôt image par image :
+`joueur_v2` et `ouvrage_v2` rendent **168 comparés · 124 identiques à l'octet ·
+44 différents à l'octet · ZÉRO différent au PIXEL** ; `batiments_v2` rend
+**162 comparés · 30 · 132 · ZÉRO**. **44 + 132 = 176, et pas un pixel ne bouge sur
+aucun des 176.** Ce que la chaîne ne reproduit pas, ce sont les OCTETS d'un PNG —
+même image, autre encodage — et non le dessin.
+⚠⚠ **CONSÉQUENCE POUR L'ARBITRAGE : RÉGÉNÉRER LES 176 NE CHANGERAIT PAS UN PIXEL
+DE CE QUE LE JOUEUR VOIT.** Ce n'est donc PAS une réparation d'art en attente, et
+la phrase « la moitié manquante d'un AUTRE lot » ci-dessous est à lire dans ce
+sens-là : ce qui manque est un commit d'octets, pas un redessin. **Ethan tranche**
+toujours, mais il tranche sur du bruit d'encodeur.
+⚠⚠ **ET #161 A BIEN FAIT SON TRAVAIL SUR LES 42 — LE CONTRAIRE DE CE QUE LE
+PREMIER JET LAISSAIT CROIRE.** Il a régénéré ces 42 fichiers exactement
+(`git diff --name-only 105d4fc fd1a007 -- 'art/sprites/defense/*'
+'art/sprites/socle/*'` en rend **42**), et depuis, leurs PIXELS s'accordent. Le
+verdict du vérificateur ne bouge pourtant pas d'un fichier, ce qui est le fait
+utile : **il compte des octets, pas des dessins**.
+⚠⚠ **ET CE QUI RESTE INEXPLIQUÉ SE DÉCLARE PLUTÔT QUE D'ÊTRE COMBLÉ.** Si
+l'encodeur suffisait à tout dire, pourquoi **934 fichiers se reproduisent-ils À
+L'OCTET** sur cette machine ? L'hypothèse tenable est que les 176 ont été produits
+par une AUTRE version de Pillow — la machine d'Ethan, ou un lot plus ancien — et
+les 934 par une version qui s'accorde avec celle-ci (12.3.0). **Elle n'est pas
+établie ici, et elle est écrite comme une hypothèse.** Ce qui EST établi est le
+zéro pixel.
 ⚠⚠ **CE LOT NE LES RÉPARE PAS, ET LE MOTIF EST ÉCRIT.** Régénérer les 176 ferait
 la moitié manquante d'un AUTRE lot — et, pour 134 d'entre eux, d'un lot que
-personne n'a encore nommé —, changerait ce que le jeu DESSINE sans brief, et
-ferait entrer un redessin zénithal dans une PR qui parle de ruines. Ce qui est
+personne n'a encore nommé —, et ferait entrer un commit d'art massif dans une PR
+qui parle de ruines. ⚠ **Ce paragraphe écrivait aussi « changerait ce que le jeu
+DESSINE sans brief » : c'est FAUX, mesuré — zéro pixel — et la ligne part.** Les
+autres raisons de ne pas le faire ICI tiennent toutes. Ce qui est
 vérifié à la place : **`ruines.py` reproduit ses 20 fichiers à l'octet — zéro
 diff — et l'atlas `defense` est RECOUSU par l'outil sur l'arbre fusionné**,
 `src/data/atlas.js` et `atlas-empreintes.json` compris. L'atlas et les PNG du
@@ -14472,6 +14513,17 @@ trou. Son symétrique, « nouveau », est ce que la chaîne produit et que le d�
 n'a pas. `planches.py` n'en connaît que trois ; celle qui manquait est la plus
 utile, et c'est elle qui aurait vu les 240 tourelles de blindé de l'Ouvrage si
 elles étaient restées au dépôt après le lot PRODUCTION.
+
+⚠⚠ **ET IL COMPARE DES OCTETS, PAS DES DESSINS — C'EST SA LIMITE, ET ELLE N'ÉTAIT
+ÉCRITE NULLE PART AVANT LE 20/09.** Un fichier dont pas un PIXEL n'a bougé sort en
+« différent » si son PNG a été encodé autrement, et **rien dans sa sortie ne
+permet de faire la différence**. Mesuré au lot RUINES-DÉFENSE, sur les 176
+« différents » de `main` : **ZÉRO différent au pixel**, sur les trois producteurs,
+330 fichiers comparés en RVBA. ⚠ **Ce n'est PAS un défaut à corriger** : la
+comparaison d'octets est la seule qui attrape un outil réparé dont les sprites
+n'ont pas été régénérés, ce pour quoi le fichier existe. Mais un verdict rouge ne
+se lit pas « l'art est périmé » : **le partage demande de rejouer les producteurs
+sous `FZ_SPRITES` et de comparer image par image**, et il se fait à la main.
 
 ⚠ **DEUX MINUTES, MESURÉES.** C'est le prix de onze outils rejoués en entier.
 Un contrôle qu'on n'a pas la patience de lancer ne protège de rien : il se lance
