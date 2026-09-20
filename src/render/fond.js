@@ -129,6 +129,20 @@ export const FONDS = {
     camp: ['fond_o_austere'],
     avantPoste: ['fond_o_austere'],
     base: ['fond_o_hostile', 'fond_o_menacante', 'fond_o_oppressante'],
+    // ⚠⚠ LES DEUX TYPES DU BOUT DE CARTE PARTAGENT LES DÉCORS DE `base` — lot
+    // VERROUS, 20/09/2026, ET C'EST PROVISOIRE, DÉCLARÉ. Ethan a livré le
+    // 10/09 quatre décors de 1080 × 3240 — **50 % plus longs** que les huit
+    // d'aujourd'hui — et arbitré le 11/09 : deux pour les verrous, un pour la
+    // base finale. Ils n'entrent PAS dans ce lot : ils supposent une grille de
+    // combat de 9 × 27, ce qui rend `GRILLE` variable — trente et une lectures
+    // de `GRILLE.longueur` dans huit fichiers —, et c'est un lot à soi.
+    //
+    // ⚠ SANS CETTE LIGNE, `fondDeLaBase` LÈVE, et une levée à l'entrée de
+    // l'écran de raid laisserait le joueur devant un écran vide. Le lot doit
+    // donc poser un décor pour les sept bases ; celui d'une base de l'Ouvrage
+    // est le seul qui soit juste en attendant — c'est ce qu'elles sont.
+    baseVerrou: ['fond_o_hostile', 'fond_o_menacante', 'fond_o_oppressante'],
+    baseTerminale: ['fond_o_oppressante'],
   },
 };
 

@@ -96,6 +96,15 @@ export const DENSITE = {
 };
 
 // --- types de site -----------------------------------------------------------
+//
+// ⚠⚠ `densiteComme` EST NEUF AU LOT VERROUS, ET IL REMPLACE DEUX `=== 'base'`
+// ÉCRITS EN DUR DANS `sim/generateur.js`. Ils étaient tenables tant qu'il n'y
+// avait qu'une sorte de base ; il y en a trois. Le champ nomme la table de
+// `DENSITE.parNiveau` que le type emprunte, et sa présence vaut aussi
+// « majoré de `DENSITE.facteurBase` » — c'est la même phrase de la §8 de la
+// spec, « base = avant-poste de même niveau + 10 % », et elle s'applique aux
+// trois. Un camp et un avant-poste n'ont pas le champ : ils lisent leur propre
+// colonne, sans majoration.
 export const TYPES_SITE = {
   camp: {
     multiplicateurButin: 1, attaqueLeJoueur: false, indexeSur: 'niveauDuJoueur',
@@ -109,9 +118,51 @@ export const TYPES_SITE = {
   base: {
     multiplicateurButin: null, attaqueLeJoueur: true, indexeSur: 'rayon',
     destructionDefinitive: false, reparationHeures: 1, respawn: false,
-    role: 'conquête + recherche',
+    role: 'conquête + recherche', densiteComme: 'avantPoste',
+  },
+  // ⚠⚠ LES DEUX TYPES DU BOUT DE LA CARTE — lot VERROUS, 20/09/2026. Ils
+  // n'existaient nulle part : la terminale était un DÉCOR que `siteDeLaCase`
+  // ne connaissait pas, et les verrous n'existaient pas du tout.
+  //
+  // ⚠⚠ `attaqueLeJoueur: false` SUR LES DEUX — Ethan, 11/09, Q9 : « pas
+  // d'attaque ». Les sept sont PASSIVES : elles attendent qu'on vienne les
+  // chercher. Et le câblage est GRATUIT, ce qui est le signe que la table est
+  // au bon endroit — `sim/raid-ouvrage.js` filtre déjà sur
+  // `TYPES_SITE[x].attaqueLeJoueur !== true`, il n'y a pas une ligne à y
+  // ajouter.
+  //
+  // ⚠⚠ ELLES TIENNENT QUAND MÊME DU TERRITOIRE, ET CE N'EST PAS UNE
+  // CONTRADICTION. `raisonDeLaForce` vaut 2 et la force d'une base sur une case
+  // vaut `raison ^ (niveau − distance)` : une base de niveau 60 en vaut 1 024 de
+  // niveau 50. Sept bases passives au bout de la carte projettent donc un
+  // territoire considérable. « Passif » qualifie le RAID, pas l'influence.
+  //
+  // ⚠ `destructionDefinitive: false` ET `reparationHeures: 1` COMME UNE BASE
+  // ORDINAIRE : un verrou entamé se répare. Ce qui ne revient pas, c'est un
+  // verrou RASÉ — `respawn: false`, et c'est `etat.basesRasees` qui porte le
+  // fait, exactement comme pour une base de l'Ouvrage.
+  baseVerrou: {
+    multiplicateurButin: null, attaqueLeJoueur: false, indexeSur: 'rayon',
+    destructionDefinitive: false, reparationHeures: 1, respawn: false,
+    role: 'verrou de la base finale', densiteComme: 'avantPoste',
+  },
+  baseTerminale: {
+    multiplicateurButin: null, attaqueLeJoueur: false, indexeSur: 'rayon',
+    destructionDefinitive: false, reparationHeures: 1, respawn: false,
+    role: 'base finale', densiteComme: 'avantPoste',
   },
 };
+
+/**
+ * Les types de site qui sont des BASES au sens de la densité et du dessin.
+ *
+ * ⚠ DÉRIVÉ, JAMAIS ÉCRIT. Trois listes de noms de types vivaient déjà dans le
+ * dépôt sous forme de `=== 'base'` dispersés ; celle-ci est la seule, et elle se
+ * recalcule depuis `densiteComme`. Ajouter un quatrième type de base le fait
+ * entrer ici sans qu'on y touche.
+ */
+export const TYPES_DE_BASE = Object.keys(TYPES_SITE)
+  .filter((t) => TYPES_SITE[t].densiteComme !== undefined);
 
 /**
  * Ce que `indexeSur` veut dire, en français, pour le joueur.
@@ -677,6 +728,60 @@ export const GEOGRAPHIE = {
   // LÈVE quand le carré déborde la carte, et une levée dans la boucle de dessin
   // viderait tout l'écran Monde. La rangée 15 tient largement.
   baseTerminale: { casesDepuisBordHaut: 14, colonne: 'centre' },
+  // ⚠⚠ LE NIVEAU DE LA BASE FINALE NE VIENT PAS DE SA RANGÉE — ETHAN, 11/09,
+  // point Q8 : « niveau 60 finale », et, sur la façon de l'obtenir, « B ». Le
+  // plafond de la CARTE reste 50 ; ce nombre-ci est celui d'un SITE, et il
+  // dépasse volontairement le plafond de sa propre carte.
+  //
+  // ⚠⚠ DEUX GRANDEURS, DEUX TABLES, ET C'EST TOUT L'ARBITRAGE. L'option écartée
+  // était de porter `niveauPlafond` à 60. Elle coûtait la carte entière :
+  // `niveauDeLaRangee` plafonne à `niveauParCase × cases`, donc déplacer le
+  // plafond déplace le niveau de TOUTES les rangées hautes, donc celui de toutes
+  // les bases procédurales déjà posées sur les cartes des sauvegardes. Un
+  // plafond de carte et un niveau de site sont deux choses ; les confondre est
+  // ce que §4 interdit.
+  //
+  // ⚠ QUATRE BORNES S'OUVRENT POUR LUI, NOMMÉMENT, ET AUCUNE « AU CAS OÙ » :
+  // `sim/combat.js` (le barème et `verifierArithmetique`), `sim/disposition.js`,
+  // `sim/ruines.js` et `palierDeNiveau` de ce fichier. Chacune cite cette
+  // constante plutôt que d'élargir sa borne à un nombre écrit.
+  niveauDeLaBaseFinale: 60,
+  // ⚠⚠ LES SIX VERROUS — ETHAN, 10/09 : « les bases intermédiaires deux fois
+  // deux en hexagone autour de la base finale, six du coup, entre dix et quinze
+  // cases », et « pour attaquer la base finale, il faut d'abord avoir rasé les
+  // six ».
+  //
+  // ⚠⚠ LE RAYON EST 12, PAS « 10 à 15 », ET LES DEUX BOUTS DE LA FOURCHETTE
+  // SONT MORTS À LA MESURE. À 15, le sommet du haut tombe **rangée 0** — hors
+  // carte —, et `empriseDeLaGrosseBase` LÈVE quand un carré déborde : une levée
+  // dans la boucle de dessin vide tout l'écran Monde.
+  //
+  // ⚠⚠ ET À 10, ON PEUT FRAPPER LA FINALE DEPUIS L'EXTÉRIEUR DE L'HEXAGONE —
+  // c'est la borne basse, et elle se lit dans le CERCLE INSCRIT. Le rayon
+  // d'attaque vaut 10 ; le cercle inscrit d'un hexagone de rayon `R` vaut
+  // `R × cos(30°)`, soit **8,66 à R = 10** et **10,392 à R = 12**. Tant qu'il
+  // est sous 10, il existe des cases hors de la ligne des verrous d'où le
+  // centre est à portée — **mesuré : 76 cases sur les 317 d'où la finale est
+  // atteignable**. À 12 il n'y en a **aucune** : toute case d'où l'on peut
+  // frapper le centre est DANS l'hexagone, donc le joueur doit franchir la
+  // ligne qu'il vient d'ouvrir. Un test mesure les deux.
+  //
+  // ⚠ CE QUI N'EST PAS VRAI, ET QUI A FAILLI ÊTRE ÉCRIT ICI : « aucune case ne
+  // porte un verrou ET la finale à la fois ». Il y en a **308**, et il ne peut
+  // pas en être autrement — deux disques de rayon 10 dont les centres sont à 12
+  // se recoupent largement. Il aurait fallu écarter les verrous de plus de
+  // vingt cases, ce que la carte ne permet pas. La propriété qui tient est
+  // celle du cercle inscrit, pas celle-là.
+  //
+  // ⚠ L'ORIENTATION EST « POINTE EN HAUT », ET C'EST CE QUI MET UN VERROU SUR
+  // L'AXE D'ARRIVÉE. Le joueur monte depuis le bord bas, au centre : la pointe
+  // basse lui fait face, et les deux flancs s'ouvrent de part et d'autre. En
+  // « pointe de côté », il arriverait entre deux sommets, sur une arête.
+  //
+  // ⚠ DEUX CASES DE CÔTÉ, ET C'EST L'EMPLOI QUE LA 2 × 2 ATTENDAIT. `SPRITES_-
+  // GROSSE_BASE` la porte depuis le 30/08, pré-branchée et sans usage — Ethan :
+  // « la base 2 × 2 sera pour autre chose ». C'est ici.
+  verrous: { rayon: 12, orientation: 'pointe-haut', cotes: 2, nombre: 6 },
   rayonInfluenceJoueur: 2, // fixe
   rayonInfluenceEnnemie: 3, // fixe
   // ⚠⚠ LA RAISON DE LA PROGRESSION DE FORCE — ETHAN, 07/09, POINT 13. « Deux
@@ -1369,7 +1474,7 @@ export const ETIQUETTE_CARTE = {
   // même titre que le seuil au-dessus, et `monde.test.js` refuse déjà qu'un
   // écran nomme une constante de zoom en dur.
   ordreDePriorite: [
-    'baseJoueur', 'baseTerminale', 'base',
+    'baseJoueur', 'baseTerminale', 'baseVerrou', 'base',
     'poiQuartz', 'poiScorie', 'poiEnergie', 'poiCantonnement',
     'poiParcRoulant', 'poiPlotAerien', 'poiRedoute',
     'avantPoste', 'camp',
@@ -1598,19 +1703,43 @@ export const PALIERS_EMBLEME = {
 };
 
 /**
+ * Le niveau le plus haut qu'un SITE puisse porter, plafond de carte compris.
+ *
+ * ⚠⚠ CE N'EST PAS `niveauPlafond`, ET LA DIFFÉRENCE EST TOUT L'ARBITRAGE Q8.
+ * `niveauPlafond` borne ce que la RANGÉE peut donner ; celui-ci borne ce qu'un
+ * site peut VALOIR, et la base finale le dépasse d'exactement dix. Les quatre
+ * bornes du dépôt qui refusaient un niveau au-delà de 50 citent celle-ci
+ * désormais — chacune nommément, aucune « au cas où ».
+ *
+ * ⚠ ELLE SE DÉRIVE DES DEUX, elle n'écrit pas 60 : le jour où l'un des deux
+ * nombres bouge, le maximum suit sans qu'on y touche.
+ */
+export const NIVEAU_MAXIMAL_DUN_SITE = Math.max(
+  GEOGRAPHIE.niveauPlafond, GEOGRAPHIE.niveauDeLaBaseFinale,
+);
+
+/**
  * Le palier d'emblème d'un niveau de site — de 1 à 9.
  *
- * ⚠ ELLE LÈVE HORS DE 1…50 plutôt que de rendre un palier par défaut. Un niveau
+ * ⚠ ELLE LÈVE HORS BORNES plutôt que de rendre un palier par défaut. Un niveau
  * hors bornes est une faute de programme, pas un fait de jeu : le masquer
  * dessinerait le mauvais emblème sans que rien ne le dise.
  *
- * @param {number} niveau 1…`GEOGRAPHIE.niveauPlafond`
+ * ⚠⚠ LA BORNE HAUTE EST `NIVEAU_MAXIMAL_DUN_SITE` DEPUIS LE LOT VERROUS, ET
+ * NON PLUS `niveauPlafond`. La base finale vaut 60 : avec l'ancienne borne,
+ * demander son palier LEVAIT, et une levée dans la boucle de dessin vide tout
+ * l'écran Monde. ⚠ Le palier rendu reste **9** — il y sature depuis le niveau
+ * 49 —, donc la finale porte le même emblème qu'une base de l'Ouvrage au
+ * dernier palier, ce qui est exact : elle n'est pas dessinée par cet emblème-là
+ * mais par son hexagone de 3 × 3.
+ *
+ * @param {number} niveau 1…`NIVEAU_MAXIMAL_DUN_SITE`
  * @returns {number} 1…9
  */
 export function palierDeNiveau(niveau) {
-  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
     throw new RangeError(
-      `emblème : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`,
+      `emblème : niveau ${niveau} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`,
     );
   }
   const { premierPalierJusqua, largeurDeBande, nombre } = PALIERS_EMBLEME;
@@ -1641,7 +1770,18 @@ export const EMBLEMES_CARTE = {
   camp: { fond: '#231D2E', bord: '#F5B636', lettre: 'C', nom: 'Camp' },
   avantPoste: { fond: '#231D2E', bord: '#F5B636', lettre: 'A', nom: 'Avant-poste' },
   baseJoueur: { fond: '#4E5742', bord: '#F5F3E8', lettre: 'J', nom: 'Votre base' },
-  baseTerminale: { fond: '#382E47', bord: '#F5F3E8', lettre: 'T', nom: 'Base terminale' },
+  baseTerminale: { fond: '#382E47', bord: '#F5F3E8', lettre: 'T', nom: 'Base finale' },
+  // ⚠⚠ LE VERROU N'A PAS LE BORD ROUGE, ET UN TEST A CORRIGÉ LE PREMIER JET DU
+  // LOT. Le rouge `#E43E32` désigne EXACTEMENT ce qui attaque le joueur — c'est
+  // une information de jeu, pas un choix de style, et `monde.test.js` asserte
+  // l'égalité des deux ensembles. Un verrou est `attaqueLeJoueur: false` : le
+  // peindre en rouge aurait annoncé une menace qu'il n'exerce pas.
+  //
+  // ⚠ IL PORTE DONC LE FOND ET LE BORD DE LA BASE FINALE, dont il est
+  // l'avant-poste : même famille à l'œil, et c'est juste — les sept ne se
+  // distinguent que par leur taille et leur lettre, ce qui est exactement ce
+  // qu'elles sont.
+  baseVerrou: { fond: '#382E47', bord: '#F5F3E8', lettre: 'V', nom: 'Verrou' },
   poiQuartz: { ...GABARIT_POI, lettre: 'Q', nom: POI.poiQuartz.nom },
   poiScorie: { ...GABARIT_POI, lettre: 'S', nom: POI.poiScorie.nom },
   poiEnergie: { ...GABARIT_POI, lettre: 'E', nom: POI.poiEnergie.nom },

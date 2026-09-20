@@ -36,6 +36,7 @@
 
 import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
 import { GEOGRAPHIE, POI } from '../data/sites.js';
+import { empriseDeLaGrosseBase } from '../sim/carte.js';
 import { existeDansAtlas, celluleDuSprite } from './sprite.js';
 
 /** La famille d'atlas où vivent les emblèmes. */
@@ -136,10 +137,17 @@ export function spriteDuSite(type, palier, saveur, avarie = 'aucune') {
   if (POI[type] !== undefined) return POI[type].sprite;
   if (type === 'base') return `site_base_o_n${palier}${abime}`;
   if (type === 'baseJoueur') return `site_base_j_n${palier}${abime}`;
-  if (type === 'baseTerminale') {
+  // ⚠⚠ LES DEUX TYPES QUI COUVRENT PLUSIEURS CASES LÈVENT, ET LA CONDITION SE
+  // DÉRIVE — lot VERROUS, 20/09/2026. Seule la finale levait ; un verrou couvre
+  // 2 × 2 cases depuis ce lot, et le laisser retomber sur `site_base_o_n9`
+  // l'aurait dessiné DEUX FOIS, en petit sous son propre carré, sans que rien ne
+  // le dise. La question « ce type couvre-t-il plusieurs cases » a déjà sa
+  // réponse dans `cotesDuSite` : la reposer par un `===` écrit ici serait la
+  // seconde vérité que §4 interdit, et c'est elle qui aurait été oubliée.
+  if (cotesDuSite(type) !== null) {
     throw new RangeError(
-      'emblème : la base terminale se dessine en hexagone 3 × 3 par '
-      + '`dessinerGrosseBase`, elle n\'a pas de sprite d\'une case',
+      `emblème : « ${type} » se dessine sur ${cotesDuSite(type)} × ${cotesDuSite(type)} `
+      + 'cases par `dessinerGrosseBase`, il n\'a pas de sprite d\'une case',
     );
   }
   if (type === 'camp' || type === 'avantPoste') {
@@ -195,54 +203,35 @@ export function spriteDeLaRuine(type, palier) {
  * le dépôt refuse déjà cette forme ailleurs — un test de `chantier.test.js`
  * interdit un `=== 'deplacer'` dans son écran pour la même raison.
  *
- * ⚠ LA 2 × 2 N'EST DÉLIBÉRÉMENT ASSOCIÉE À AUCUN TYPE. Ethan, 30/08 : « la base
- * 2 × 2 sera pour autre chose. » Elle reste pré-branchée — nommée, vérifiée
- * contre l'art — et sans emploi. Lui en inventer un serait trancher à sa place.
+ * ⚠⚠ ET LA 2 × 2 A TROUVÉ SON EMPLOI AU LOT VERROUS, 20/09/2026. Ce commentaire
+ * disait, depuis le 30/08 : « elle reste pré-branchée — nommée, vérifiée contre
+ * l'art — et sans emploi. Lui en inventer un serait trancher à sa place. »
+ * Ethan a tranché le 10/09 : les six verrous de la base finale, en 2 × 2. Le
+ * nombre de côtés se lit dans `GEOGRAPHIE.verrous.cotes`, il ne se réécrit pas
+ * ici — c'est la même table qui place les six sommets.
  *
  * @param {string} type clé d'`EMBLEMES_CARTE`
  * @returns {number|null}
  */
 export function cotesDuSite(type) {
-  return type === 'baseTerminale' ? 3 : null;
+  if (type === 'baseTerminale') return 3;
+  if (type === 'baseVerrou') return GEOGRAPHIE.verrous.cotes;
+  return null;
 }
 
-/**
- * Où se pose une grosse base, en CASES, autour de la case du site.
- *
- * ⚠⚠ UNE 3 × 3 SE CENTRE, UNE 2 × 2 NE PEUT PAS. `data/sites.js` a déjà buté sur
- * cette parité — « une largeur paire n'a pas de centre », et la carte est passée
- * de 30 à 31 colonnes pour cette raison. **Retenu : la case du site est le coin
- * HAUT-GAUCHE du carré pair.** C'est un choix réversible d'une ligne, et il est
- * dit au rapport comme tel : le coin bas-droit, ou un décalage d'un demi-pixel,
- * seraient aussi défendables.
- *
- * @param {number} cotes 2 ou 3
- * @param {{rangee: number, colonne: number}} site
- * @returns {{rangee: number, colonne: number, cotes: number}} le coin haut-gauche
- */
-export function empriseDeLaGrosseBase(cotes, site) {
-  if (SPRITES_GROSSE_BASE[cotes] === undefined) {
-    throw new RangeError(`emblème : pas de grosse base de ${cotes} cases de côté`);
-  }
-  // Impair : le carré se centre, donc il déborde de (cotes − 1) / 2 de chaque
-  // côté. Pair : la case EST le coin, donc aucun débordement vers le haut.
-  const recul = (cotes - 1) % 2 === 0 ? (cotes - 1) / 2 : 0;
-  const rangee = site.rangee - recul;
-  const colonne = site.colonne - recul;
-  // ⚠⚠ UN CARRÉ QUI DÉBORDE LA CARTE LÈVE, IL NE SE ROGNE PAS. La base terminale
-  // tient largement — rangées 25 à 27, colonnes 15 à 17 sur une carte de
-  // 300 × 31, mesuré —, mais c'est une propriété de sa POSITION, pas de la
-  // fonction. Le jour où une grosse base se poserait au bord, un carré rogné en
-  // silence dessinerait une base tronquée que personne ne saurait expliquer.
-  if (rangee < 1 || rangee + cotes - 1 > GEOGRAPHIE.carte.hauteur
-    || colonne < 1 || colonne + cotes - 1 > GEOGRAPHIE.carte.largeur) {
-    throw new RangeError(
-      `emblème : une base de ${cotes} cases en (${site.rangee}, ${site.colonne}) `
-      + `déborde la carte de ${GEOGRAPHIE.carte.hauteur} × ${GEOGRAPHIE.carte.largeur}`,
-    );
-  }
-  return { rangee, colonne, cotes };
-}
+// ⚠⚠ `empriseDeLaGrosseBase` A DÉMÉNAGÉ DANS `sim/carte.js` AU LOT VERROUS,
+// 20/09/2026, ET ELLE EST RÉEXPORTÉE ICI POUR QUE RIEN NE CASSE. `sim/poi.js`
+// annonçait ce déménagement depuis le 31/08 : « le jour où [render/embleme.js]
+// lirait [de sim/], c'est CETTE ligne qu'il faudra défaire, en montant la
+// géométrie dans `sim/` plutôt qu'en recopiant le décalage. » Trois modules de
+// `sim/` en ont besoin désormais — le peuplement, les POI et `siteDeLaCase` —
+// et quelles CASES une base couvre est une question de carte, pas de dessin.
+//
+// ⚠ LA RÉEXPORTATION N'EST PAS UNE COMMODITÉ, C'EST CE QUI GARDE UNE SEULE
+// VÉRITÉ. Les tests et `sim/poi.js` l'importent d'ici depuis le 31/08 ;
+// la réexporter évite d'avoir à choisir, module par module, laquelle des deux
+// adresses est la bonne — il n'y en a qu'une, l'autre y mène.
+export { empriseDeLaGrosseBase } from '../sim/carte.js';
 
 /**
  * La primitive de dessin d'une grosse base — position et taille, en pixels.

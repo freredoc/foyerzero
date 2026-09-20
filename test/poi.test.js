@@ -17,7 +17,9 @@ import {
   NOMBRE_DE_BANDES, TYPES_POI, ESSAIS_MAX, SEL_RANGEE, SEL_COLONNE,
 } from '../src/sim/poi.js';
 import { estBaseOuvrage, horsDeLaGarde } from '../src/sim/peuplement.js';
-import { niveauDeLaRangee, positionBaseTerminale, positionDepartJoueur } from '../src/sim/carte.js';
+import {
+  niveauDeLaRangee, positionBaseTerminale, positionDepartJoueur, grosseBaseDeLaCase,
+} from '../src/sim/carte.js';
 import { empriseDeLaGrosseBase } from '../src/render/embleme.js';
 import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION, poser,
@@ -180,8 +182,29 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
   // ⚠ CE QUE LES SIX COMPTES DISENT, DONC : **+59,7 % sur le dépôt d'avant le
   // 03/09**, et −6,6 % sur la carte à contact diagonal qui a existé quelques
   // heures. C'est le réglage qu'Ethan a retenu sur capture, entre 23,5 et 27,7.
-  const REFERENCE = [[1, 1590], [7, 1588], [42, 1581], [777, 1569], [2026, 1571], [4242, 1572]];
-  for (const [graine, attendu] of REFERENCE) {
+  // ⚠⚠⚠ LE TEST EST RETOURNÉ AU LOT VERROUS, 20/09/2026, ET C'EST LA PREMIÈRE
+  // FOIS QUE LE DÉPÔT DÉPLACE DES BASES SUR DES CARTES EXISTANTES. Ce test
+  // gardait une propriété d'ABSTINENCE — « ajouter les POI ne déplace AUCUNE
+  // base sur AUCUNE carte existante » —, et le lot VERROUS ne peut pas la
+  // tenir : la base finale et ses six verrous sont des sites FIXES, et la
+  // graine posait des bases sous leurs 33 cases. Les laisser aurait fait rendre
+  // DEUX sites à `siteDeLaCase` pour une même case.
+  //
+  // ⚠⚠ LA PROPRIÉTÉ NE DISPARAÎT PAS, ELLE SE RESSERRE : « seules les cases des
+  // sept grosses bases bougent ». C'est ASSERTÉ juste en dessous, case par case
+  // et sur toute la carte, et c'est une garde plus forte que six comptes —
+  // elle dirait qu'une base a bougé à l'autre bout du couloir, ce qu'un total
+  // identique pourrait cacher.
+  //
+  // ⚠ LES SIX COMPTES SONT REMESURÉS, PAS RECALCULÉS À LA MAIN : 1590 → 1586,
+  // 1588 → 1584, 1581 → 1576, 1569 → 1568, 1571 → 1566, 1572 → 1569. Soit
+  // **−3,2 bases par carte en moyenne** quand les emprises couvrent 33 cases :
+  // la règle de non-contact libère de la place autour, et le tirage en reprend
+  // une partie ailleurs. Un lot qui les ferait bouger à nouveau doit dire
+  // pourquoi, comme celui-ci le fait.
+  const REFERENCE = [[1, 1586], [7, 1584], [42, 1576], [777, 1568], [2026, 1566], [4242, 1569]];
+  const AVANT_VERROUS = [1590, 1588, 1581, 1569, 1571, 1572];
+  for (const [i, [graine, attendu]] of REFERENCE.entries()) {
     let n = 0;
     for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) {
       for (let c = 1; c <= GEOGRAPHIE.carte.largeur; c += 1) {
@@ -189,7 +212,36 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
       }
     }
     assert.equal(n, attendu, `graine ${graine} : ${n} bases de l'Ouvrage au lieu de ${attendu}`);
+    assert.notEqual(n, AVANT_VERROUS[i],
+      `graine ${graine} : le compte est celui d'avant les verrous — l'exclusion a été défaite`);
   }
+
+  // ⚠⚠ ET VOICI LA PROPRIÉTÉ RESSERRÉE, MESURÉE SUR LA CARTE ENTIÈRE : aucune
+  // base ne subsiste sous les sept emprises, et le tirage reste intact PARTOUT
+  // ailleurs — c'est-à-dire qu'aucune case hors emprise ne doit son sort à
+  // l'exclusion. La seconde moitié se vérifie en rejouant le tirage NU : une
+  // case hors emprise est une base si et seulement si elle l'était avant.
+  for (const graine of [1, 7, 4242]) {
+    let sousEmprise = 0;
+    for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) {
+      for (let c = 1; c <= GEOGRAPHIE.carte.largeur; c += 1) {
+        if (grosseBaseDeLaCase(r, c) !== null && estBaseOuvrage(graine, r, c)) sousEmprise += 1;
+      }
+    }
+    assert.equal(sousEmprise, 0,
+      `graine ${graine} : ${sousEmprise} base(s) de l'Ouvrage sous une grosse base`);
+  }
+  // ⚠ FALSIFIABLE : le montage doit mesurer quelque chose. Les sept emprises
+  // couvrent bien 33 cases — 9 pour la finale, 4 par verrou —, sans quoi la
+  // boucle ci-dessus balaierait le vide et passerait toujours.
+  let couvertes = 0;
+  for (let r = 1; r <= GEOGRAPHIE.carte.hauteur; r += 1) {
+    for (let c = 1; c <= GEOGRAPHIE.carte.largeur; c += 1) {
+      if (grosseBaseDeLaCase(r, c) !== null) couvertes += 1;
+    }
+  }
+  assert.equal(couvertes, 9 + GEOGRAPHIE.verrous.nombre * GEOGRAPHIE.verrous.cotes ** 2,
+    `${couvertes} cases couvertes : les sept emprises ont changé de taille`);
 
   // ⚠ ET LE SENS SE LIT AUSSI DANS LA SOURCE. Un compte identique pourrait
   // survivre à un filtre qui ne mord sur aucune de ces six graines ; le module du
@@ -199,6 +251,13 @@ test('POI T5 — non-régression du peuplement : `estBaseOuvrage` rend ce qu\'el
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
   assert.doesNotMatch(decommente, /poi/i, '`sim/peuplement.js` a appris à connaître les POI');
+  // ⚠ ET LE SENS RESTE À UN SEUL SENS MALGRÉ LE LOT VERROUS : le peuplement
+  // connaît désormais les GROSSES BASES — il les exclut —, mais toujours pas les
+  // POI. Les deux exclusions ne se ressemblent que de loin : une grosse base est
+  // un site FIXE de la géographie, un POI est tiré de la même graine que les
+  // bases et doit donc les esquiver, jamais l'inverse.
+  assert.match(decommente, /grosseBaseDeLaCase/,
+    '`sim/peuplement.js` n\'exclut plus les sept grosses bases');
   // Falsifiable : le motif doit attraper un appât.
   assert.match('import { poiDeLaCase } from "./poi.js";', /poi/i);
 });

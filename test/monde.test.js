@@ -42,6 +42,7 @@ import { direLaDuree } from '../src/sim/reparation.js';
 import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, TYPES_SITE, ETIQUETTE_CARTE,
   palierDeNiveau, PALIERS_EMBLEME, ORIGINE_DU_NIVEAU, POI, DEPLACEMENT,
+  NIVEAU_MAXIMAL_DUN_SITE,
 } from '../src/data/sites.js';
 import { echelleDuCran, geometrieDuCran, NOMS_DU_SOL } from '../src/render/terrain.js';
 import {
@@ -73,7 +74,9 @@ import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 import { estBaseOuvrage, basesDeLaFenetre } from '../src/sim/peuplement.js';
 import { ATLAS_DE_LA_PAGE, urlDeLaValeurCss, creerAvaleurDeClic } from '../src/ui/session.js';
 import { tousLesFonds } from '../src/render/fond.js';
-import { niveauDeLaRangee, positionBaseTerminale } from '../src/sim/carte.js';
+import {
+  niveauDeLaRangee, positionBaseTerminale, positionsDesVerrous,
+} from '../src/sim/carte.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { TICKS_APPARITION } from '../src/sim/satellites.js';
 
@@ -762,14 +765,33 @@ test('paliers — les huit bornes de la règle, et neuf paliers distincts sur ci
   for (const n of niveauxReels) assert.doesNotThrow(() => palierDeNiveau(n), `niveau ${n}`);
 });
 
-test('paliers — hors de 1…50, ça lève', () => {
-  for (const mauvais of [0, -1, GEOGRAPHIE.niveauPlafond + 1, 3.5, NaN, null, undefined]) {
+test('paliers — hors des bornes d\'un SITE, ça lève', () => {
+  // ⚠⚠ LA BORNE HAUTE N'EST PLUS CELLE DE LA CARTE — lot VERROUS, 20/09/2026.
+  // Elle était `GEOGRAPHIE.niveauPlafond`, 50 ; la base finale vaut 60, et
+  // demander son palier LEVAIT. `NIVEAU_MAXIMAL_DUN_SITE` est le maximum d'un
+  // SITE, `niveauPlafond` celui d'une RANGÉE : deux grandeurs, deux tables.
+  //
+  // ⚠ ET LE TEST GARDE L'ÉCART, PAS SEULEMENT LA BORNE. Sans l'assertion
+  // ci-dessous, ramener les deux à la même valeur passerait en silence — et
+  // c'est précisément l'option (A) qu'Ethan a écartée, celle qui déplacerait le
+  // niveau de toutes les rangées hautes.
+  assert.ok(NIVEAU_MAXIMAL_DUN_SITE > GEOGRAPHIE.niveauPlafond,
+    'le maximum d\'un site ne dépasse plus le plafond de la carte : Q8 a été défaite');
+  assert.equal(NIVEAU_MAXIMAL_DUN_SITE, GEOGRAPHIE.niveauDeLaBaseFinale);
+
+  for (const mauvais of [0, -1, NIVEAU_MAXIMAL_DUN_SITE + 1, 3.5, NaN, null, undefined]) {
     assert.throws(() => palierDeNiveau(mauvais), /hors de/, `« ${mauvais} » passe`);
   }
   // Témoin : les bornes valides ne lèvent pas, sinon une fonction qui lève
   // toujours passerait la boucle ci-dessus.
   assert.doesNotThrow(() => palierDeNiveau(1));
   assert.doesNotThrow(() => palierDeNiveau(GEOGRAPHIE.niveauPlafond));
+  assert.doesNotThrow(() => palierDeNiveau(NIVEAU_MAXIMAL_DUN_SITE));
+  // ⚠ ET LE PALIER SATURE : la finale porte le même palier 9 qu'une base de
+  // l'Ouvrage au dernier échelon. C'est exact — elle n'est pas dessinée par cet
+  // emblème-là mais par son hexagone de 3 × 3 — et le dire ici évite qu'un lot
+  // futur croie avoir besoin d'un palier 10.
+  assert.equal(palierDeNiveau(NIVEAU_MAXIMAL_DUN_SITE), PALIERS_EMBLEME.nombre);
 });
 
 test('emblèmes — le palier de la base du joueur vient de ses BÂTIMENTS, pas de sa rangée', () => {
@@ -851,9 +873,17 @@ test('emblèmes — chaque site de la fenêtre résout un sprite qui est dans l\
   for (const nom of SPRITES_POI) {
     assert.ok(noms.has(nom), `le sprite « ${nom} » n'est demandé par aucun type de site`);
   }
-  assert.equal(new Set(Object.keys(EMBLEMES_CARTE)).size - 1,
+  // ⚠⚠ DEUX TYPES SONT HORS DU BALAYAGE DEPUIS LE LOT VERROUS, PLUS UN SEUL.
+  // La base finale en était sortie le 30/08 ; le verrou l'y rejoint, avec une
+  // emprise de 2 × 2. Le nombre se COMPTE plutôt qu'il ne s'écrit : c'est ce qui
+  // fait qu'un troisième format entrerait sans réécrire cette ligne, et qu'un
+  // type qui cesserait d'être multi-cases la ferait tomber.
+  const multiCases = Object.keys(EMBLEMES_CARTE).filter((t) => cotesDuSite(t) !== null);
+  assert.deepEqual(multiCases.slice().sort(), ['baseTerminale', 'baseVerrou'],
+    'les types de site qui couvrent plusieurs cases ont changé — recompter le balayage');
+  assert.equal(new Set(Object.keys(EMBLEMES_CARTE)).size - multiCases.length,
     Object.keys(EMBLEMES_CARTE).filter((t) => cotesDuSite(t) === null).length,
-    'un second type de site couvre plusieurs cases — recompter le balayage');
+    'le balayage et les types multi-cases ne partitionnent plus EMBLEMES_CARTE');
 
   // Et par la VRAIE liste de sites, celle que l'écran dessine.
   const etat = creerEtat(4242);
@@ -1074,6 +1104,12 @@ test('terminale — elle se dessine sur neuf cases, une base ordinaire sur une',
   assert.equal(cotesDuSite('avantPoste'), null);
   assert.equal(cotesDuSite('baseJoueur'), null);
   assert.equal(cotesDuSite('baseTerminale'), 3, 'la terminale n\'est plus une 3 × 3');
+  // ⚠⚠ ET LE VERROU EN OCCUPE QUATRE DEPUIS LE LOT VERROUS, 20/09/2026. Le
+  // nombre se LIT dans `GEOGRAPHIE.verrous.cotes` des deux côtés : l'écrire « 2 »
+  // ici figerait une valeur que la table peut changer, et le test annoncerait
+  // un défaut là où il n'y aurait qu'un réglage.
+  assert.equal(cotesDuSite('baseVerrou'), GEOGRAPHIE.verrous.cotes,
+    'un verrou ne couvre plus l\'emprise que sa table annonce');
 
   // La primitive rendue couvre bien neuf cases et porte le bon nom.
   const site = positionBaseTerminale();
@@ -1083,19 +1119,44 @@ test('terminale — elle se dessine sur neuf cases, une base ordinaire sur une',
     assert.equal(d.cote, cran * 3, `cran ${cran} : ${d.cote} px de côté au lieu de ${cran * 3}`);
   }
 
-  // ⚠ ET LA 2 × 2 RESTE SANS EMPLOI. Ethan : « la base 2 × 2 sera pour autre
-  // chose. » Aucun type de site ne la demande.
+  // ⚠⚠ ET LA 2 × 2 A TROUVÉ SON EMPLOI. Ce bloc assertait l'inverse — « aucun
+  // type de site ne la demande », sur la phrase d'Ethan du 30/08 : « la base
+  // 2 × 2 sera pour autre chose. » Elle a tranché le 10/09 : les six verrous.
+  // L'assertion n'est pas supprimée, elle est RETOURNÉE — les deux formats sont
+  // employés, et chacun par exactement un type.
   const cotesDemandes = Object.keys(EMBLEMES_CARTE).map(cotesDuSite).filter((c) => c !== null);
-  assert.deepEqual(cotesDemandes, [3], 'un type de site demande une grosse base autre que la 3 × 3');
+  assert.deepEqual(cotesDemandes.slice().sort(), [GEOGRAPHIE.verrous.cotes, 3].sort(),
+    'les deux grosses bases ne sont plus demandées par exactement un type chacune');
+  assert.notDeepEqual(cotesDemandes, [3],
+    'la 2 × 2 est redevenue sans emploi : les verrous ont perdu leur emprise');
+
+  // Et la primitive du verrou rend le second sprite, pas le premier.
+  for (const cran of ZOOM_CARTE.crans) {
+    const d = dessinerGrosseBase(GEOGRAPHIE.verrous.cotes, positionsDesVerrous()[0], cran,
+      { x: 0, y: 0 });
+    assert.equal(d.nom, SPRITES_GROSSE_BASE[GEOGRAPHIE.verrous.cotes],
+      `cran ${cran} : le verrou ne prend pas le sprite de son emprise`);
+    assert.notEqual(d.nom, SPRITES_GROSSE_BASE[3],
+      `cran ${cran} : le verrou prend le sprite de la base finale`);
+  }
 });
 
 test('terminale — `spriteDuSite` LÈVE pour elle, elle ne retombe pas sur l\'ancien nom', () => {
   // ⚠ ELLE PRENAIT `site_base_o_n9` ET SE CONFONDAIT EXACTEMENT avec une base de
   // l'Ouvrage au dernier palier. Rendre l'ancien nom par compatibilité la
   // dessinerait deux fois — en petit sous son hexagone — et rien ne le dirait.
-  for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
-    assert.throws(() => spriteDuSite('baseTerminale', palier, null), /hexagone/,
-      `palier ${palier} : la terminale rend encore un nom d'emblème`);
+  // ⚠⚠ LES DEUX TYPES MULTI-CASES LÈVENT DEPUIS LE LOT VERROUS, et le message
+  // ne dit plus « hexagone » mais l'emprise du type — un verrou n'est pas un
+  // hexagone. La liste se DÉRIVE de `cotesDuSite` : ajouter un troisième format
+  // le ferait entrer ici sans qu'on y touche.
+  const multiCases = Object.keys(EMBLEMES_CARTE).filter((t) => cotesDuSite(t) !== null);
+  assert.deepEqual(multiCases.slice().sort(), ['baseTerminale', 'baseVerrou'],
+    'les types qui couvrent plusieurs cases ont changé');
+  for (const type of multiCases) {
+    for (let palier = 1; palier <= PALIERS_EMBLEME.nombre; palier += 1) {
+      assert.throws(() => spriteDuSite(type, palier, null), /pas de sprite d'une case/,
+        `palier ${palier} : « ${type} » rend encore un nom d'emblème`);
+    }
   }
   // Témoin : les autres types en rendent toujours un.
   assert.doesNotThrow(() => spriteDuSite('base', 9, null));

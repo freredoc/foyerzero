@@ -28,7 +28,7 @@ import {
   ticksDEcrasement,
 } from '../src/sim/combat.js';
 import { caseDepuisMilli, MILLI_PAR_CASE } from '../src/sim/grille.js';
-import { BUTIN } from '../src/data/sites.js';
+import { BUTIN, GEOGRAPHIE, NIVEAU_MAXIMAL_DUN_SITE } from '../src/data/sites.js';
 import { GRILLE, UNITES } from '../src/data/combat.js';
 import { portants } from './portants.js';
 
@@ -1145,9 +1145,23 @@ test('T15 — chacun des cas de refus lève, en nommant l\'entité fautive', () 
       motif: /5 vagues déclarées, 4 au plus/,
     },
     {
+      // ⚠⚠ LA BORNE EST CELLE D'UN SITE, PAS CELLE DE LA CARTE — lot VERROUS,
+      // 20/09/2026. Elle valait 50 ; la base finale vaut 60, donc 51 est
+      // désormais un niveau LÉGITIME et ce cas-ci ne levait plus. Le montage
+      // suit la constante au lieu d'écrire un nombre : le jour où le niveau de
+      // la finale bouge, le cas reste un vrai hors-bornes.
       quoi: 'niveau hors bornes',
-      montage: { ...valide, niveau: 51 },
-      motif: /niveau 51 hors de 1…50/,
+      montage: { ...valide, niveau: NIVEAU_MAXIMAL_DUN_SITE + 1 },
+      motif: new RegExp(`niveau ${NIVEAU_MAXIMAL_DUN_SITE + 1} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`),
+    },
+    {
+      // ⚠ ET LE TÉMOIN INVERSE : le niveau de la base finale, lui, NE lève pas.
+      // Sans lui, remettre la borne à 50 passerait ce test au vert — le cas
+      // ci-dessus lèverait toujours — et la finale redeviendrait injouable en
+      // silence.
+      quoi: 'le niveau de la base finale passe',
+      montage: { ...valide, niveau: GEOGRAPHIE.niveauDeLaBaseFinale },
+      motif: null,
     },
     {
       quoi: 'saveur inconnue',
@@ -1157,6 +1171,14 @@ test('T15 — chacun des cas de refus lève, en nommant l\'entité fautive', () 
   ];
 
   for (const { quoi, montage, motif } of cas) {
+    // ⚠ `motif: null` MARQUE UN TÉMOIN INVERSE — un montage qui doit PASSER.
+    // Une liste de cas qui ne contiendrait que des levées passerait aussi sur
+    // une fonction qui lève toujours ; c'est ce que le témoin empêche, et le
+    // lot VERROUS en a eu besoin pour le niveau de la base finale.
+    if (motif === null) {
+      assert.doesNotThrow(() => creerCombat(montage), `le cas « ${quoi} » ne doit pas lever`);
+      continue;
+    }
     assert.throws(() => creerCombat(montage), motif, `le cas « ${quoi} » doit lever`);
   }
 });

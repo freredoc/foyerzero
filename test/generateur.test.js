@@ -24,6 +24,7 @@ import {
 import { GRILLE, OBSTACLES, UNITES, DEFENSES } from '../src/data/combat.js';
 import {
   BATIMENTS, BUTIN, DENSITE, GARNISON, RAID_OUVRAGE, DISPOSITION_DEFENSES, GEOGRAPHIE,
+  NIVEAU_MAXIMAL_DUN_SITE,
 } from '../src/data/sites.js';
 import { NIVEAU } from '../src/data/niveaux.js';
 import { cleCase } from '../src/sim/grille.js';
@@ -1356,9 +1357,17 @@ test('§7 — le générateur refuse des paramètres incohérents plutôt que de
 
   const cas = [
     ['type inconnu', { ...valide, type: 'forteresse' }, /type de site inconnu/],
-    ['niveau nul', { ...valide, niveau: 0 }, /niveau 0 hors de 1…50/],
-    ['niveau au-delà du plafond', { ...valide, niveau: 51 }, /niveau 51 hors de 1…50/],
-    ['niveau non entier', { ...valide, niveau: 7.5 }, /hors de 1…50/],
+    // ⚠⚠ LES TROIS BORNES SUIVENT `NIVEAU_MAXIMAL_DUN_SITE` DEPUIS LE LOT
+    // VERROUS, 20/09/2026, ET NON PLUS LE PLAFOND DE LA CARTE. La base finale
+    // vaut 60 : `genererSite` doit savoir la composer, donc 51 a cessé d'être
+    // un hors-bornes. Les motifs se construisent depuis la constante — un « 50 »
+    // recopié ici redeviendrait faux au prochain arbitrage sans rien dire.
+    ['niveau nul', { ...valide, niveau: 0 },
+      new RegExp(`niveau 0 hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`)],
+    ['niveau au-delà du plafond', { ...valide, niveau: NIVEAU_MAXIMAL_DUN_SITE + 1 },
+      new RegExp(`niveau ${NIVEAU_MAXIMAL_DUN_SITE + 1} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`)],
+    ['niveau non entier', { ...valide, niveau: 7.5 },
+      new RegExp(`hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`)],
     ['saveur inconnue', { ...valide, saveur: 'richeRien' }, /saveur inconnue/],
     // La saveur est transmise, pas calculée — mais une base n'en porte pas.
     ['saveur sur une base', { ...valide, type: 'base' }, /une base ne porte pas de saveur/],

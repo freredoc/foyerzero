@@ -309,10 +309,13 @@ niveaux de progression pour un échelon d'arbre. Voir `FOYER-ZERO-RECHERCHE.xlsx
 
 | Fait | Valeur |
 |---|---|
-| Carte | couloir **30 × 300**, format téléphone : 30 de large, 300 de haut |
-| Départ du joueur | strate 5, à 25 cases du bord bas |
+| Carte | couloir **31 × 300**, format téléphone : 31 de large, 300 de haut |
+| Départ du joueur | strate 1, à **5 cases** du bord bas |
 | Progression du niveau | **0,2 par case** vers le haut, plafond 50 |
-| Base terminale | à 25 cases du bord haut, au centre |
+| Base finale | à **14 cases** du bord haut, au centre — rangée 15 |
+| **Verrous de la base finale** | **six**, en hexagone pointe en haut, **rayon 12** autour d'elle |
+| Niveau de la base finale | **60** — au-delà du plafond de la carte, par son TYPE |
+| Niveau d'un verrou | 50, celui que sa rangée donne |
 | Zone d'influence joueur | rayon 2, **fixe** |
 | Zone d'influence ennemie | rayon 3, **fixe** |
 | Rayon d'attaque | **10, fixe** |
@@ -321,6 +324,28 @@ niveaux de progression pour un échelon d'arbre. Voir `FOYER-ZERO-RECHERCHE.xlsx
 | Délai entre deux sauts | **1 h** au départ → **24 h** au niveau 50 |
 | Blocage après avoir subi une attaque | 1 h |
 | Blocage après avoir été rasé | 24 h |
+
+### Le bout de la carte — la base finale et ses six verrous
+
+**Arbitré par Ethan les 10 et 11/09/2026, implanté au lot VERROUS du 20/09.**
+
+La base finale est **verrouillée** : pour l'attaquer, il faut avoir rasé **les
+six** verrous, pas cinq. C'est une porte, pas une jauge — `problemesDuRaid` rend
+le refus `verrou-terminale` tant qu'il en reste un debout.
+
+Les sept sont **passives** : `attaqueLeJoueur: false`. Elles n'envoient aucun
+raid et attendent qu'on vienne les chercher. ⚠ Elles tiennent en revanche du
+TERRITOIRE comme n'importe quelle base — `raisonDeLaForce` vaut 2, donc une
+base de niveau 60 en vaut 1 024 de niveau 50.
+
+Les sept sont des sites **fixes**, posés par la géographie et non par la graine :
+le peuplement exclut leurs 33 cases, et les POI aussi. La finale couvre
+**3 × 3** cases, chaque verrou **2 × 2**.
+
+⚠ **La carte que la base finale et ses verrous imposent au combat — 9 × 27
+rangées, deux fois plus de défense — n'est PAS encore implantée.** Elle rend
+`GRILLE` variable et fait l'objet d'un lot à part. En attendant, les sept se
+combattent sur la grille ordinaire de 9 × 18, avec la densité d'une base.
 
 ### Les trois types de site
 

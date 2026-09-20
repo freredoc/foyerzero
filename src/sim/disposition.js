@@ -29,7 +29,7 @@ import {
   posablesSurUnChamp,
 } from '../data/base.js';
 import { ressourceDeLaCase } from './champs.js';
-import { GEOGRAPHIE } from '../data/sites.js';
+import { GEOGRAPHIE, NIVEAU_MAXIMAL_DUN_SITE } from '../data/sites.js';
 
 /** Clé d'une case. */
 function cle(rangee, colonne) {
@@ -96,8 +96,13 @@ export function problemesDeDisposition(disposition, champs) {
     }
     comptes.set(b.id, (comptes.get(b.id) ?? 0) + 1);
 
-    if (!Number.isInteger(b.niveau) || b.niveau < 1 || b.niveau > GEOGRAPHIE.niveauPlafond) {
-      ajouter('niveau', `${def.nom.joueur} : niveau ${b.niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`, index);
+    // ⚠⚠ LA BORNE HAUTE EST CELLE D'UN SITE, PAS CELLE DE LA CARTE — lot
+    // VERROUS. Cette fonction valide AUSSI les dispositions que `genererSite`
+    // compose pour l'Ouvrage, et les bâtiments de la base finale sont au
+    // niveau 60. ⚠ Celle du CHANTIER du joueur, plus bas, reste sur
+    // `niveauPlafond` : le joueur, lui, ne dépasse pas 50.
+    if (!Number.isInteger(b.niveau) || b.niveau < 1 || b.niveau > NIVEAU_MAXIMAL_DUN_SITE) {
+      ajouter('niveau', `${def.nom.joueur} : niveau ${b.niveau} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`, index);
     }
 
     if (!estDansLaBase(b.rangee, b.colonne)) {

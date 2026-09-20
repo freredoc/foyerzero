@@ -20,23 +20,23 @@
 // dépendance est à sens unique, et un test la mesure en comparant `estBaseOuvrage`
 // à ce qu'elle rendait avant le lot.
 //
-// ⚠ IL IMPORTE `render/embleme.js`, ET C'EST LE PREMIER MODULE DE `sim/` À LE
-// FAIRE. La direction habituelle est l'inverse — `render/terrain.js` et
-// `render/variante.js` lisent `sim/`. L'emprise de la base terminale n'existe
-// qu'à un seul endroit, `empriseDeLaGrosseBase`, et la réécrire en « ±1 » ici
-// serait la seconde vérité que tout ce fichier refuse par ailleurs. Il n'y a pas
-// de cycle aujourd'hui — `render/embleme.js` ne lit rien de `sim/` —, mais le
-// jour où il en lirait, c'est CETTE ligne qu'il faudra défaire, en montant la
-// géométrie dans `sim/` plutôt qu'en recopiant le décalage.
+// ⚠⚠ IL N'IMPORTE PLUS `render/embleme.js`, ET CE FICHIER AVAIT ÉCRIT LUI-MÊME
+// LA CONDITION DE SA PROPRE CORRECTION. Le commentaire disait : « il n'y a pas
+// de cycle aujourd'hui, mais le jour où il en aurait un, c'est CETTE ligne
+// qu'il faudra défaire, en montant la géométrie dans `sim/` plutôt qu'en
+// recopiant le décalage. » Le lot VERROUS, 20/09/2026, est ce jour-là :
+// `peuplement.js` et `site-de-la-case.js` ont besoin des mêmes emprises, et
+// trois modules de `sim/` lisant `render/` pour une question de géométrie,
+// c'est la direction à l'envers. `empriseDeLaGrosseBase` vit désormais dans
+// `sim/carte.js`, que `render/embleme.js` réexporte.
 
 import {
   GEOGRAPHIE, POI, NIVEAUX_PAR_BANDE, ECART_MINIMAL_POI,
 } from '../data/sites.js';
-import { niveauDeLaRangee, estSurLaCarte, positionBaseTerminale } from './carte.js';
+import { niveauDeLaRangee, estSurLaCarte, grosseBaseDeLaCase } from './carte.js';
 import { hachageBrut, horsDeLaGarde, estBaseOuvrage } from './peuplement.js';
 import { forcesDuJoueur, campDeLaCase, RAYONS, JOUEUR } from './territoire.js';
 import { dansLOctogoneDInfluence } from './points-attaque.js';
-import { empriseDeLaGrosseBase } from '../render/embleme.js';
 
 /**
  * Les deux sels du tirage.
@@ -109,27 +109,21 @@ export function rangeesDeLaBande(bande) {
 }
 
 /**
- * L'emprise de la base terminale, en cases — calculée une fois.
+ * La case est-elle sous l'une des sept grosses bases du bout de la carte ?
  *
- * ⚠ ELLE SE DEMANDE À `empriseDeLaGrosseBase`, jamais à un « ±1 » écrit ici. La
- * terminale se dessine en hexagone sur 3 × 3 cases, et cette fonction est la
- * seule qui sache où le carré tombe — un POI posé dessous serait recouvert par
- * l'hexagone sans que rien ne le dise.
+ * ⚠⚠ SEPT, ET NON PLUS UNE — lot VERROUS, 20/09/2026. Cette garde s'appelait
+ * `sousLaTerminale` et ne couvrait que les neuf cases de la base finale. Les
+ * six verrous en couvrent quatre chacun : un POI tiré dessous serait recouvert
+ * par le dessin sans que rien ne le dise, et le joueur perdrait un bonus de
+ * 10 % sans qu'aucune ligne ne l'explique.
+ *
+ * ⚠ ELLE DEMANDE À `sim/carte.js`, qui est la SEULE à savoir quelles cases une
+ * grosse base couvre — la même réponse que lit le peuplement. Deux lectures de
+ * la même géométrie divergeraient, et la divergence se lirait comme un POI mal
+ * placé plutôt que comme une table périmée.
  */
-const EMPRISE_TERMINALE = (() => {
-  const e = empriseDeLaGrosseBase(3, positionBaseTerminale());
-  return {
-    premiereRangee: e.rangee,
-    derniereRangee: e.rangee + e.cotes - 1,
-    premiereColonne: e.colonne,
-    derniereColonne: e.colonne + e.cotes - 1,
-  };
-})();
-
-function sousLaTerminale(rangee, colonne) {
-  return rangee >= EMPRISE_TERMINALE.premiereRangee && rangee <= EMPRISE_TERMINALE.derniereRangee
-    && colonne >= EMPRISE_TERMINALE.premiereColonne
-    && colonne <= EMPRISE_TERMINALE.derniereColonne;
+function sousUneGrosseBase(rangee, colonne) {
+  return grosseBaseDeLaCase(rangee, colonne) !== null;
 }
 
 /**
@@ -146,7 +140,7 @@ function caseLibrePourUnPoi(graine, rangee, colonne) {
   // première retouche du rayon.
   if (!horsDeLaGarde(rangee, colonne)) return false;
   if (estBaseOuvrage(graine, rangee, colonne)) return false;
-  if (sousLaTerminale(rangee, colonne)) return false;
+  if (sousUneGrosseBase(rangee, colonne)) return false;
   return true;
 }
 

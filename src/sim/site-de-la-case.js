@@ -30,7 +30,9 @@
 
 import { SAVEURS, GEOGRAPHIE } from '../data/sites.js';
 import { UNITES, DEFENSES } from '../data/combat.js';
-import { estSurLaCarte, niveauDeLaRangee } from './carte.js';
+import {
+  estSurLaCarte, niveauDeLaRangee, grosseBaseDeLaCase, niveauDeLaGrosseBase,
+} from './carte.js';
 import { estBaseOuvrage, hachageBrut } from './peuplement.js';
 import { genererSite } from './generateur.js';
 import { butin, creerCombat, construireResultat } from './combat.js';
@@ -154,6 +156,35 @@ export function siteDeLaCase(etat, rangee, colonne) {
   // rasées la veille. `casesRasees` porte ce choix et le dit ; `ruinesActives`
   // porte l'autre.
   if (casesRasees(etat).has(cleDeLaCase(rangee, colonne))) return null;
+
+  // ⚠⚠ LES SEPT GROSSES BASES DU BOUT DE CARTE — lot VERROUS, 20/09/2026. La
+  // base finale était un DÉCOR jusqu'ici : `ui/monde.js` la dessinait,
+  // `sim/poi.js` l'évitait, et cette fonction-ci rendait `null` dessus. Elle
+  // n'était donc pas attaquable, et les verrous n'existaient pas du tout.
+  //
+  // ⚠⚠ ELLES SE TESTENT AVANT `estBaseOuvrage`, ET L'ORDRE EST GRATUIT
+  // AUJOURD'HUI MAIS PAS DEMAIN. `estCandidate` du peuplement exclut déjà leurs
+  // 33 cases, donc les deux branches s'excluent par construction. C'est une
+  // propriété du PEUPLEMENT, pas de la case : si elle cessait d'être vraie, le
+  // site FIXE doit gagner sur le site dérivé — l'un est écrit dans la
+  // géographie, l'autre se recalcule.
+  //
+  // ⚠ LA CASE RENDUE EST CELLE DU SITE, PAS CELLE QU'ON A CLIQUÉE. Une grosse
+  // base couvre quatre ou neuf cases ; les neuf doivent rendre LE MÊME site,
+  // sans quoi le joueur pourrait raser le même verrou par chacun de ses coins,
+  // et `basesRasees` porterait quatre entrées pour une base.
+  const grosse = grosseBaseDeLaCase(rangee, colonne);
+  if (grosse !== null) {
+    if (casesRasees(etat).has(cleDeLaCase(grosse.rangee, grosse.colonne))) return null;
+    return {
+      type: grosse.type,
+      niveau: niveauDeLaGrosseBase(grosse.type, grosse.rangee),
+      saveur: null,
+      instance: INSTANCE_DUNE_BASE,
+      rangee: grosse.rangee,
+      colonne: grosse.colonne,
+    };
+  }
 
   if (estBaseOuvrage(etat.graine, rangee, colonne)) {
     return {

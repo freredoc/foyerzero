@@ -226,9 +226,22 @@ test('MODE-DEV T1 — la franchise lève les huit péages, n\'écrit rien, et ne
   const allume = partieFauchee(true);
   const relu = charger(serialiser(allume, INSTANT), INSTANT);
   assert.equal(relu.modeDeveloppeur, true, 'le drapeau ne survit pas au tour de sauvegarde');
+  // ⚠⚠ LA VERSION DE DÉPART EST 37, PAS `SAVE_VERSION - 1` — corrigé au lot
+  // VERROUS, 20/09/2026. Le raccourci disait « la version d'avant », et il était
+  // juste tant que MODE-DEV était le dernier lot à migrer ; `SAVE_VERSION` est
+  // passé à 39, donc il désignait 38 et le maillon mesuré ici — 37 → 38 — n'était
+  // plus traversé du tout. Le test tombait en annonçant que la migration
+  // n'éteint pas le mode, alors qu'elle n'était jamais appelée.
+  //
+  // ⚠ UN TEST ÉPINGLE LE MAILLON QU'IL MESURE, jamais « le dernier ». Écrit
+  // ainsi, il traverse aussi tous les maillons postérieurs, ce qui est une
+  // garde de plus : une migration future qui casserait le drapeau le dirait.
+  const VERSION_AVANT_MODE_DEV = 37;
   const ancienne = JSON.parse(serialiser(creerEtat(9), INSTANT));
   delete ancienne.modeDeveloppeur;
-  ancienne.version = SAVE_VERSION - 1;
+  ancienne.version = VERSION_AVANT_MODE_DEV;
+  assert.ok(VERSION_AVANT_MODE_DEV < SAVE_VERSION,
+    'le montage ne mesure rien : la version de départ n\'est pas antérieure');
   assert.equal(migrer(ancienne).modeDeveloppeur, false,
     'la migration v37 → v38 n\'éteint pas le mode');
 });
