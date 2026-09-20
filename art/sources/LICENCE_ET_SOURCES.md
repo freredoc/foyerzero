@@ -1,4 +1,4 @@
-# Licences et sources — les 38 sons du lot GAMEPLAY-DISCRET-V1
+# Licences et sources — les sons remplacés depuis le 19/09/2026
 
 Ce fichier ne couvre QUE les 38 masters remplacés ou ajoutés le 19/09/2026. Les 225 autres
 entrées d'`sfx_manifest.json` restent la création originale du pack Foyer Zéro v1.0.0.
@@ -281,3 +281,44 @@ fondu croisé de 200 ms, niveau calé 3 dB sous le roulement du même poids.
 - Licence : CC0 1.0 / domaine public
 - Page source : https://freesound.org/people/qubodup/sounds/854476/
 
+
+---
+
+## Lot 2 — les tirs et les mises en place (20/09/2026)
+
+**70 masters, création originale.** Synthèse physique et stochastique : souffles filtrés,
+impulsions, frictions, mécanique, queues diffuses courtes. **Aucun échantillon tiers, aucune
+source externe** — rien à attribuer, et rien qui engage une licence de tiers.
+
+Traitement appliqué au dépôt : rééchantillonnage de 48 000 à 44 100 Hz et passage en WAV PCM
+16 bits mono, sans autre retouche.
+
+⚠ **Deux fichiers ont été réduits en gain.** `weapon_player_cannon_light_03` et `_04`
+ressortaient à −2,98 et −2,66 dBFS après rééchantillonnage, au-dessus du plafond de −3 dBFS que
+le pack tient partout ailleurs. Le débordement vient de l’interpolation, pas de la source : les
+masters d’origine sont sous le plafond à 48 kHz. Gain appliqué −0,02 et −0,34 dB.
+
+### Les groupes livrés
+
+| Groupe | Variantes |
+| --- | --- |
+| `movement_ouvrage_deploy` | 2 |
+| `movement_player_deploy` | 2 |
+| `weapon_ouvrage_aa` | 4 |
+| `weapon_ouvrage_aa_burst` | 3 |
+| `weapon_ouvrage_artillery` | 4 |
+| `weapon_ouvrage_cannon_heavy` | 4 |
+| `weapon_ouvrage_cannon_light` | 4 |
+| `weapon_ouvrage_cannon_medium` | 4 |
+| `weapon_ouvrage_grenade` | 3 |
+| `weapon_ouvrage_machinegun` | 4 |
+| `weapon_ouvrage_machinegun_burst` | 3 |
+| `weapon_player_aa` | 4 |
+| `weapon_player_aa_burst` | 3 |
+| `weapon_player_artillery` | 4 |
+| `weapon_player_cannon_heavy` | 4 |
+| `weapon_player_cannon_light` | 4 |
+| `weapon_player_cannon_medium` | 4 |
+| `weapon_player_grenade` | 3 |
+| `weapon_player_machinegun` | 4 |
+| `weapon_player_machinegun_burst` | 3 |
