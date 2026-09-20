@@ -878,17 +878,17 @@
   },
   "movement_ouvrage_deploy_01": {
    "debit_kbps": 20,
-   "duree_ms": 1371,
-   "octets": 3025,
+   "duree_ms": 1386,
+   "octets": 3521,
    "serie": 2993064550,
-   "sha256": "4b25bb104c337062e11093e32d7bacb7a12f377e9babf95a8fa0f3f4068fcd04"
+   "sha256": "11661bfefb3a68461e34ebbc51e20d93cd86033c51aa365741ba3c737d60df8a"
   },
   "movement_ouvrage_deploy_02": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 3086,
+   "duree_ms": 1387,
+   "octets": 3500,
    "serie": 728751068,
-   "sha256": "fd40d92e3e36d992e5c81318c850017d5563ed00b9cfd274fd4219e1d7c7f3eb"
+   "sha256": "c74529e002f425df5b507d6c4014af92d188c90390e2e925d63d048826c142a3"
   },
   "movement_ouvrage_flyby_01": {
    "debit_kbps": 20,
@@ -913,17 +913,17 @@
   },
   "movement_player_deploy_01": {
    "debit_kbps": 20,
-   "duree_ms": 1371,
-   "octets": 3054,
+   "duree_ms": 1369,
+   "octets": 3548,
    "serie": 1941612293,
-   "sha256": "948a6649904ad557efcd1e147d97b2eb04e6be1a7830c407f0968c67e906eab2"
+   "sha256": "50fcfdc9d5372ab9af1e32e8113cb56c2d29d7d434447277aa70dae5a6bae083"
   },
   "movement_player_deploy_02": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 3053,
+   "duree_ms": 1376,
+   "octets": 3602,
    "serie": 3937662655,
-   "sha256": "01ab31ed297a7ab90bb82100000562bfef3862d4603e7111aaf3a75cdcf457ec"
+   "sha256": "3a45f85c7b88892f13b30eb76ea01ea30a856ce5d001f9a2125dae6e85cad64c"
   },
   "movement_player_flyby_01": {
    "debit_kbps": 20,
@@ -1249,80 +1249,80 @@
   },
   "weapon_ouvrage_aa_01": {
    "debit_kbps": 20,
-   "duree_ms": 351,
-   "octets": 979,
+   "duree_ms": 354,
+   "octets": 1137,
    "serie": 2073053506,
-   "sha256": "010f0072082a25cfcf4c98055e9fa6ee8232620c5bf332350f2243beccad86b1"
+   "sha256": "b13b7c9dbfa5b3659946ee77ed9f9573d963694e44caabc3a1ad34a69f9f1fb7"
   },
   "weapon_ouvrage_aa_02": {
    "debit_kbps": 20,
-   "duree_ms": 351,
-   "octets": 926,
+   "duree_ms": 347,
+   "octets": 1073,
    "serie": 3801684216,
-   "sha256": "7b90cf1c54e61ceba5de757c7d5a6d3b605b59146a92057eb72cc14fec4d61c2"
+   "sha256": "0219a92414c078ab6d8283c960e6a80c43bc73c637693fb6c3172f4296a1fee1"
   },
   "weapon_ouvrage_aa_03": {
    "debit_kbps": 20,
-   "duree_ms": 351,
-   "octets": 907,
+   "duree_ms": 347,
+   "octets": 1101,
    "serie": 2510170222,
-   "sha256": "8cc32cf0cda5062ba6fd67a9a39c623d17f91fda074643971dfed5e429f0f3cd"
+   "sha256": "6ab12216ad4d56936597faf656dd96374a61d2e49ae01b6ba8f1e0811fcb4814"
   },
   "weapon_ouvrage_aa_04": {
    "debit_kbps": 20,
-   "duree_ms": 351,
-   "octets": 982,
+   "duree_ms": 355,
+   "octets": 1132,
    "serie": 200981965,
-   "sha256": "6de66cde3015e2c919780769af0bedc5dc79121b7700c4e17aacb7fb47a311d7"
+   "sha256": "d44f041f7b46f2a45d14a5686bb6e31033c85f9f85e3fd5c8d4198b653e10488"
   },
   "weapon_ouvrage_aa_burst_01": {
    "debit_kbps": 20,
-   "duree_ms": 541,
-   "octets": 1453,
+   "duree_ms": 544,
+   "octets": 1517,
    "serie": 296725858,
-   "sha256": "d05d8600b60f648ba18e954e315c7aeec808baf820395fbec405871a283c3d96"
+   "sha256": "31035090982275624232ccbfec6b7537fc08677f8b75fecefe08660b553d6c8f"
   },
   "weapon_ouvrage_aa_burst_02": {
    "debit_kbps": 20,
-   "duree_ms": 547,
-   "octets": 1929,
+   "duree_ms": 540,
+   "octets": 1542,
    "serie": 2292645080,
-   "sha256": "720616728904b3b8f165d8613c7c1ed4fc7d98cf3880cf2d89e0552841df1e55"
+   "sha256": "078f47fc9b3f1f082bb1dae9b63bda1ffcd6f2e8d0d9bae2aeb0868d2d27324c"
   },
   "weapon_ouvrage_aa_burst_03": {
    "debit_kbps": 20,
-   "duree_ms": 553,
-   "octets": 1447,
+   "duree_ms": 544,
+   "octets": 1553,
    "serie": 4288793678,
-   "sha256": "8e48010cef7ded59f954a006d39681f1fc7828f52a867f6a2b7d8162ffce8878"
+   "sha256": "d28de7ca2eea1f68ef72960ba87251101e931405bee3af370337eff2a08bfa22"
   },
   "weapon_ouvrage_artillery_01": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 2935,
+   "duree_ms": 1715,
+   "octets": 4201,
    "serie": 4087222357,
-   "sha256": "3375ede7d8a179fce639cba53246117a95276974afc786852c7b24b9756ba2c2"
+   "sha256": "a0bf593a9e8687993410dab2048f8fbb8fc3cb5d3f7892bddaa24e9ed78034e7"
   },
   "weapon_ouvrage_artillery_02": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 2924,
+   "duree_ms": 1722,
+   "octets": 4259,
    "serie": 1788297711,
-   "sha256": "108c1d8147e29e2dd5648c7e11d7ffe3bac91a88b02eaa3a4786e3e7262b7de3"
+   "sha256": "1a0c5756ad1d898448bb2adaac464f5e3fc78b04ff1dc3531f796508cfe8f62b"
   },
   "weapon_ouvrage_artillery_03": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 2912,
+   "duree_ms": 1698,
+   "octets": 4213,
    "serie": 496005497,
-   "sha256": "758cae93aa9e9beca1fd07227bb3ee4dc9d6c01bfb62fd93aab086e73e5fd6c1"
+   "sha256": "262e8dfb4f6583903fb22f36be2bf8dc58f2107d52c3e94b25e72360ae8b7d71"
   },
   "weapon_ouvrage_artillery_04": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 2950,
+   "duree_ms": 1716,
+   "octets": 4268,
    "serie": 2213864666,
-   "sha256": "d4838e0c08fc7a2c3c3330d9897470eb85595dacf9c1b326b28d5d022b972432"
+   "sha256": "b5f9e671678a39807cd1a32fb356a1dee3e37654ad45c4c1f60cb6b601b74e34"
   },
   "weapon_ouvrage_beam_end": {
    "debit_kbps": 20,
@@ -1347,157 +1347,157 @@
   },
   "weapon_ouvrage_cannon_heavy_01": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2439,
+   "duree_ms": 1403,
+   "octets": 3540,
    "serie": 3049315190,
-   "sha256": "816509142e93f4b827abf802d65aead0d2c9a626a2e7b7f4f850a3514dcbf0cf"
+   "sha256": "a0c29effb6f5f203aec6e3020097abee9e2a38e735a97669eef46a871944eb03"
   },
   "weapon_ouvrage_cannon_heavy_02": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2455,
+   "duree_ms": 1404,
+   "octets": 3520,
    "serie": 751405772,
-   "sha256": "74d85daebc2e79116c707c7b0fc79edd5e3338bdb49b5d064cf19b315768a5de"
+   "sha256": "f7417fc05504b8da8110ab7be0633681434a812565bc03aab388ec1896e4882e"
   },
   "weapon_ouvrage_cannon_heavy_03": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2385,
+   "duree_ms": 1401,
+   "octets": 3516,
    "serie": 1540274778,
-   "sha256": "3f7e0079990df199229f497149ffd875a220d1adfba548cc2bb9420e0b4c2864"
+   "sha256": "f4806bf0c54b09d10efe9c7aff32ac91e70accba3812a0e1e91c931b773af83b"
   },
   "weapon_ouvrage_cannon_heavy_04": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2421,
+   "duree_ms": 1381,
+   "octets": 3461,
    "serie": 3316264953,
-   "sha256": "620c7d5c193722f0851aceecaef13a8a68e0abc9143b6fd7530268d66efae16a"
+   "sha256": "e19df99a1dfb9629d6526d49c3fbdc2e26bcf990e5c3115896feaec3d2824a99"
   },
   "weapon_ouvrage_cannon_light_01": {
    "debit_kbps": 20,
-   "duree_ms": 691,
-   "octets": 1432,
+   "duree_ms": 700,
+   "octets": 1900,
    "serie": 231321051,
-   "sha256": "6d9f7ad2eb469c125925bc40e9d786a4fda979dd8c32d9749d4b6573a7b44c98"
+   "sha256": "9c38ac8777a3a221ab5fe501937b6caa72113c96299886e161a7db569b015366"
   },
   "weapon_ouvrage_cannon_light_02": {
    "debit_kbps": 20,
-   "duree_ms": 691,
-   "octets": 1479,
+   "duree_ms": 687,
+   "octets": 1840,
    "serie": 2495675489,
-   "sha256": "cfba2abd415e92193d6c19ab7404ecb0f745e75e3d7aff54fa239263cff87359"
+   "sha256": "e8ebbccd11858ec4c85c70f47fcbd665317e1bc0ed9f2ca0aa2835a07d97590c"
   },
   "weapon_ouvrage_cannon_light_03": {
    "debit_kbps": 20,
-   "duree_ms": 691,
-   "octets": 1501,
+   "duree_ms": 690,
+   "octets": 1863,
    "serie": 3821522167,
-   "sha256": "f273592bb7ab4bf6f634843e6763d8cd473430efd7649e1af6782fb93694bd03"
+   "sha256": "0fa198fadebbc495203c0f2ce9375104489ed507a94cabe2c2d0e434b9f76860"
   },
   "weapon_ouvrage_cannon_light_04": {
    "debit_kbps": 20,
-   "duree_ms": 691,
-   "octets": 1463,
+   "duree_ms": 698,
+   "octets": 1872,
    "serie": 2107857236,
-   "sha256": "af18677f6467abdd766d405edf171d59713258d19077bd7a291e04138d1c7356"
+   "sha256": "84ec496e16a56209e785ffa121d8462297084282819e62b2b3fb3edcf37d29a3"
   },
   "weapon_ouvrage_cannon_medium_01": {
    "debit_kbps": 20,
-   "duree_ms": 891,
-   "octets": 1713,
+   "duree_ms": 893,
+   "octets": 2281,
    "serie": 358760884,
-   "sha256": "fe91f954bef14477e2c8fe14ba38a9db3e460bb0ab490eaf6b296c73e184f8a1"
+   "sha256": "e3a1486f49369ce89071538b9dcef2dd40b9fec2c9d158637dd1e500540d65fa"
   },
   "weapon_ouvrage_cannon_medium_02": {
    "debit_kbps": 20,
-   "duree_ms": 891,
-   "octets": 1745,
+   "duree_ms": 901,
+   "octets": 2371,
    "serie": 2355826702,
-   "sha256": "834868dc483bd73e7ec54d8f0ee847b3f259ac5b85e31fdec3e38b43e20b2534"
+   "sha256": "0fe42a01739ff7188c71b38d97ad7304e6ebd1a98b8f11072b52f570316f6186"
   },
   "weapon_ouvrage_cannon_medium_03": {
    "debit_kbps": 20,
-   "duree_ms": 891,
-   "octets": 1729,
+   "duree_ms": 886,
+   "octets": 2297,
    "serie": 4218167448,
-   "sha256": "ce3ac36e717d5ea3319beed93162a6c24bd8049fc75758f7bbdc4d0dbd227812"
+   "sha256": "67e15a47426003e72a72b98fa9e8c73f32d1d73c3e770715f470df474dadc948"
   },
   "weapon_ouvrage_cannon_medium_04": {
    "debit_kbps": 20,
-   "duree_ms": 891,
-   "octets": 1734,
+   "duree_ms": 893,
+   "octets": 2319,
    "serie": 1695069499,
-   "sha256": "d1f26a7431754ec19ab72362662b200a78418d6d559870e0e57307bc4009c126"
+   "sha256": "0b94e905107f38928fc36ad3ab635d21b69577848944e450ff8af528420dda89"
   },
   "weapon_ouvrage_grenade_01": {
    "debit_kbps": 20,
-   "duree_ms": 571,
-   "octets": 1268,
+   "duree_ms": 575,
+   "octets": 1612,
    "serie": 1239261677,
-   "sha256": "e13d8ca513fe7d71121ee833b56a5d23d32c74a44e9e2ee3233ca59e8e3ef10b"
+   "sha256": "2d988b2bd180c88fae2f7a68c1e187f9ac3557640517bef77e2f59a2dbebdc36"
   },
   "weapon_ouvrage_grenade_02": {
    "debit_kbps": 20,
-   "duree_ms": 571,
-   "octets": 1279,
+   "duree_ms": 578,
+   "octets": 1634,
    "serie": 3503616087,
-   "sha256": "20ed301ed340d1bf57c8e74fa6219a63ae8953785f7aa6c48003e7ce26216b27"
+   "sha256": "847be93373094907ea612c46545730fa0ca3de5d1711a5f9ab8e40221693793f"
   },
   "weapon_ouvrage_grenade_03": {
    "debit_kbps": 20,
-   "duree_ms": 571,
-   "octets": 1315,
+   "duree_ms": 565,
+   "octets": 1597,
    "serie": 2815672513,
-   "sha256": "458c32d4e9d151bae12d4f304ecbce1bddfd4b8a1b6aa36306d18fc74915fdc9"
+   "sha256": "f786cb796fd54d092d45cadb9f34005ecaebfbfcb170b36fa6a9c69a45c275ea"
   },
   "weapon_ouvrage_machinegun_01": {
    "debit_kbps": 20,
    "duree_ms": 249,
-   "octets": 796,
+   "octets": 884,
    "serie": 2638477022,
-   "sha256": "6ca5afb8b24de2f8731249302e673bcb0b54a2d93bda322e52d08ecd7f4c5c1d"
+   "sha256": "d6bbe7ac300c00586785d2439a9149afa480f5cb37bc95d3d7b39f72aeb04039"
   },
   "weapon_ouvrage_machinegun_02": {
    "debit_kbps": 20,
-   "duree_ms": 249,
-   "octets": 805,
+   "duree_ms": 252,
+   "octets": 880,
    "serie": 72001380,
-   "sha256": "12118213fe992f990bbec6eeff821efdd5cc664f39d468ee60788ceb11ced045"
+   "sha256": "f5d903ea1b6bf3b2aef2705a0a8a6e039200333d546f7bf6d625a040563213e6"
   },
   "weapon_ouvrage_machinegun_03": {
    "debit_kbps": 20,
-   "duree_ms": 249,
-   "octets": 799,
+   "duree_ms": 248,
+   "octets": 887,
    "serie": 1934465010,
-   "sha256": "8fa132acaf486257dd51d9f8ce3f61f75dabc2c9463c2410d742efaa88183923"
+   "sha256": "71477200167f7e7b787e153b9b87fdae19ecccbd812a18a69708aa23dfc9790f"
   },
   "weapon_ouvrage_machinegun_04": {
    "debit_kbps": 20,
-   "duree_ms": 249,
-   "octets": 816,
+   "duree_ms": 250,
+   "octets": 866,
    "serie": 3978887761,
-   "sha256": "d1d6bda8ea8453660ad8850f034e62bef8f3adbcd138fb6a029b4f2b2a2f2686"
+   "sha256": "eb512f36660db6d5849b7ddbbd01eb688317c0c916842bafe75d12f4aaf9e2d7"
   },
   "weapon_ouvrage_machinegun_burst_01": {
    "debit_kbps": 20,
-   "duree_ms": 474,
-   "octets": 1441,
+   "duree_ms": 476,
+   "octets": 1402,
    "serie": 1880252154,
-   "sha256": "3e61afa5aafe36b62f69b6c337f33a88b9387cf1215745d43c7807395b7fdcfe"
+   "sha256": "87771b6be1ff5742a78bc61c97b8dae3657bad3890c50288f6eeeb596cf08165"
   },
   "weapon_ouvrage_machinegun_burst_02": {
    "debit_kbps": 20,
-   "duree_ms": 483,
-   "octets": 1439,
+   "duree_ms": 473,
+   "octets": 1347,
    "serie": 3910864704,
-   "sha256": "5c5313aacf45a056140859c86d85407c9fd44cda751f74cd1a701a763c5dccd9"
+   "sha256": "86539306680b4cca7cee42691b484c9c018c72cac46e27776dbfd10ab73458c2"
   },
   "weapon_ouvrage_machinegun_burst_03": {
    "debit_kbps": 20,
-   "duree_ms": 492,
-   "octets": 1455,
+   "duree_ms": 469,
+   "octets": 1282,
    "serie": 2652651478,
-   "sha256": "15fa2ad41abb31bcff03b4eaf5dda312a9f2b035568f38d60560fc23e5d03661"
+   "sha256": "966130db01cbb5912b2878bd1232d2a7f4174480c71d7f999c6749151a11f240"
   },
   "weapon_ouvrage_missile_launch_01": {
    "debit_kbps": 20,
@@ -1557,234 +1557,234 @@
   },
   "weapon_player_aa_01": {
    "debit_kbps": 20,
-   "duree_ms": 280,
-   "octets": 846,
+   "duree_ms": 282,
+   "octets": 953,
    "serie": 1943208073,
-   "sha256": "2dc56a71a17b1102f6a6fbcc719853699d5205560826d8e19d257c225f0c68c4"
+   "sha256": "520ac11e09773b6b9f7fe49210242b54209785b91d11bbec774af874bac29bb0"
   },
   "weapon_player_aa_02": {
    "debit_kbps": 20,
-   "duree_ms": 280,
-   "octets": 846,
+   "duree_ms": 283,
+   "octets": 971,
    "serie": 3940176179,
-   "sha256": "5d3e16f10ccb8fd3b0fd3c10fdb8e3a213ad314c977d85fa81b4f930768a6acc"
+   "sha256": "bc73409655021bf27ee84b7c0fd28c7614bdca57ec87e29ccb2e04c7ddf8b092"
   },
   "weapon_player_aa_03": {
    "debit_kbps": 20,
-   "duree_ms": 280,
-   "octets": 837,
+   "duree_ms": 282,
+   "octets": 961,
    "serie": 2648531365,
-   "sha256": "b85148b4be7acf9f98ff991aad062af88546431206c7b69d42d88cf96096da60"
+   "sha256": "704eed1696b54dd8b9b5590dcbd7885fa86c7db4a1873445ba3d68ce206f6923"
   },
   "weapon_player_aa_04": {
    "debit_kbps": 20,
-   "duree_ms": 280,
-   "octets": 825,
+   "duree_ms": 277,
+   "octets": 944,
    "serie": 62518278,
-   "sha256": "f8d948f87fd78c6a239f7f0efa8fd74fca7473b04d629f2d8f8bcdd2e6cf1d3f"
+   "sha256": "b45d970073ff53d1e0666900adaf2c21c45153f9b549b142b03dbca4707d0268"
   },
   "weapon_player_aa_burst_01": {
    "debit_kbps": 20,
-   "duree_ms": 470,
-   "octets": 1341,
+   "duree_ms": 466,
+   "octets": 1343,
    "serie": 3100761926,
-   "sha256": "f8a468fd744da0c6958206a76ad91527de89d9ecdd8ebeb038431c9619a41387"
+   "sha256": "ff314bb853fe496de6643936996573c0d9936bbf689bb20658009b21a24ad03f"
   },
   "weapon_player_aa_burst_02": {
    "debit_kbps": 20,
-   "duree_ms": 476,
-   "octets": 1333,
+   "duree_ms": 467,
+   "octets": 1357,
    "serie": 567840508,
-   "sha256": "46361f3a4192693622b68e96ef461f297b59e61abad237fb4ca7007dfd4e6cc0"
+   "sha256": "d244ebeeb1bac7cdef505efbfc74af4d902e6b142173e2256b9f88a3c74cb4c2"
   },
   "weapon_player_aa_burst_03": {
    "debit_kbps": 20,
-   "duree_ms": 482,
-   "octets": 1664,
+   "duree_ms": 467,
+   "octets": 1346,
    "serie": 1457503850,
-   "sha256": "c98e3367c67a0221f0a4651432a44aec113623062bb0770e29c9b79fc42a1fbc"
+   "sha256": "93daa7c163f8a660ec449d86c90c36609e6497cfba44473ae891d83dfa05ee76"
   },
   "weapon_player_artillery_01": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 3058,
+   "duree_ms": 1698,
+   "octets": 4041,
    "serie": 3476327158,
-   "sha256": "c1e643fdca0f579aa8b5a05fc82c695d4a89fbf8e9e301a0d6b465f972bbcadc"
+   "sha256": "4ebe831105e0c11219059d5fb0c60e254e2646dda55224379e249fbfc2175cdd"
   },
   "weapon_player_artillery_02": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 3054,
+   "duree_ms": 1711,
+   "octets": 4091,
    "serie": 1446894412,
-   "sha256": "bfd641dabcc9a4e8d630973bd4c77c322fdf729681f636393cb2bebb80ddff4b"
+   "sha256": "11ca9b30cbbea461655f0a563b928d810553c80058ee2d8b5dfcbe15701d3ae6"
   },
   "weapon_player_artillery_03": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 3036,
+   "duree_ms": 1734,
+   "octets": 4176,
    "serie": 557509594,
-   "sha256": "5d65ae7855da4ec03a209147b81c41f68aedd0af1970966bd85ab07362512746"
+   "sha256": "49c1daf2ee0fc795caf7818e85fb8de8b3685fb8f498f630c07661d26cfb7074"
   },
   "weapon_player_artillery_04": {
    "debit_kbps": 20,
-   "duree_ms": 1719,
-   "octets": 2945,
+   "duree_ms": 1695,
+   "octets": 4057,
    "serie": 3210641017,
-   "sha256": "4833672acd4c3db11af5e0d8cb8237ecf8a709f20f320f865486fc444972e255"
+   "sha256": "ac87ed33cc98564746ec381c07a91b2c5fd090f3c9f7f99a6559833137bbe489"
   },
   "weapon_player_cannon_heavy_01": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2403,
+   "duree_ms": 1381,
+   "octets": 3386,
    "serie": 3545436181,
-   "sha256": "801599998bd9da21d7f298804c1a5d1190275641d2cf06b3a94f3d6e006bf12c"
+   "sha256": "908312efe559833a679f5784c0a61484400d58a3450d2a78ef699f73533c4792"
   },
   "weapon_player_cannon_heavy_02": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2458,
+   "duree_ms": 1403,
+   "octets": 3449,
    "serie": 1247429039,
-   "sha256": "1fef79b511e3bb1b92aac9a6af05210d2a7b055ea2aa298600a35360507d5b9c"
+   "sha256": "b53b9b3340c695cfa0e61f19d8146ecc893e366b2aadd276e741e6fe9cd60b20"
   },
   "weapon_player_cannon_heavy_03": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2468,
+   "duree_ms": 1378,
+   "octets": 3400,
    "serie": 1029534009,
-   "sha256": "0cc87dbf90d89ded1ab14a50a95a74a1b846a1fdcb88162a9ce956e279b3762a"
+   "sha256": "d6de7837557cb347a5f5843ccdf962e741df76a35eafff5656db602744e7e24c"
   },
   "weapon_player_cannon_heavy_04": {
    "debit_kbps": 20,
-   "duree_ms": 1389,
-   "octets": 2545,
+   "duree_ms": 1396,
+   "octets": 3420,
    "serie": 2738480282,
-   "sha256": "4710ce8fa39acf70d1fc5148fd0194097e5806fdb7898f67dd5c5c4125333374"
+   "sha256": "0d0e32fa32a47aa4b2670fb688f16ba5b17c6118155520ea8dcc60d78c8c29de"
   },
   "weapon_player_cannon_light_01": {
    "debit_kbps": 20,
-   "duree_ms": 620,
-   "octets": 1319,
+   "duree_ms": 621,
+   "octets": 1660,
    "serie": 1801086648,
-   "sha256": "fcbe3e0a0591e55b54061c45eaa5f11eb0b40353ce8d7257c8f681ade751f576"
+   "sha256": "29603acbf9c6c46c2f18d4bb6f0940542eb1091a53953625a7d14b18de7630a5"
   },
   "weapon_player_cannon_light_02": {
    "debit_kbps": 20,
-   "duree_ms": 620,
-   "octets": 1303,
+   "duree_ms": 625,
+   "octets": 1689,
    "serie": 4065539842,
-   "sha256": "fbefc2683cb20e86e566430b2405a7de30d42a7f7217e2c8e5806d5a1a678dfe"
+   "sha256": "bd813b4a3bb271ac92f716737dd06d8a80ef215726cb6e2987af2045c6156baa"
   },
   "weapon_player_cannon_light_03": {
    "debit_kbps": 20,
-   "duree_ms": 620,
-   "octets": 1280,
+   "duree_ms": 618,
+   "octets": 1672,
    "serie": 2236876692,
-   "sha256": "d05162abbb5c6147b3276ca5b8b6c7d3f2958155ea22bdc75205dc681e0100b1"
+   "sha256": "0b578ebcdc220bee86dec309b1b3da9ebdc2952247a510b83738de5005d15d21"
   },
   "weapon_player_cannon_light_04": {
    "debit_kbps": 20,
-   "duree_ms": 620,
-   "octets": 1328,
+   "duree_ms": 624,
+   "octets": 1683,
    "serie": 456167991,
-   "sha256": "1bd9c11ff6cf3feea458313deb9e0c139791645f8c32136a2b6df3d043e9f217"
+   "sha256": "52a20c9ce0be870184c120292d53d218f9bedf35b555df232b3ca2b3bf3feba3"
   },
   "weapon_player_cannon_medium_01": {
    "debit_kbps": 20,
-   "duree_ms": 820,
-   "octets": 1570,
+   "duree_ms": 809,
+   "octets": 2105,
    "serie": 3250578077,
-   "sha256": "474dd4bf38ce8e1d9beb41281428b14d5e79472564c23f4bba3e45372a2601c9"
+   "sha256": "4929b78b42a9bc96d2a472c68c1d4d1cbf4be6f5307c95211f136ed633d14835"
   },
   "weapon_player_cannon_medium_02": {
    "debit_kbps": 20,
-   "duree_ms": 820,
-   "octets": 1612,
+   "duree_ms": 809,
+   "octets": 2075,
    "serie": 1488368423,
-   "sha256": "641df045b9e19e82ade9518a2fb645730d825d22a695d345b71492986bec3170"
+   "sha256": "445905facae241bf04f84629ead7b6c9d9147c4b2490b10096b3a91eecfa82bf"
   },
   "weapon_player_cannon_medium_03": {
    "debit_kbps": 20,
-   "duree_ms": 820,
-   "octets": 1649,
+   "duree_ms": 824,
+   "octets": 2125,
    "serie": 800162737,
-   "sha256": "4567260a6e104bceb7e1988372c656d9eebf3368ccd0565f79a376501cf39abc"
+   "sha256": "ffca396f6be526b11c72c0cc3f3874808c4577c7b4949e67eb686994615d9bba"
   },
   "weapon_player_cannon_medium_04": {
    "debit_kbps": 20,
-   "duree_ms": 820,
-   "octets": 1600,
+   "duree_ms": 827,
+   "octets": 2129,
    "serie": 2983532050,
-   "sha256": "d50cf45071e538786a46e42945b6e144849c0ec1dad87b8ba818c0713e6f6853"
+   "sha256": "b262d2afd6115c29d6a481b7a469ffd2338654e968472f2ed0550cc526162175"
   },
   "weapon_player_grenade_01": {
    "debit_kbps": 20,
-   "duree_ms": 500,
-   "octets": 1179,
+   "duree_ms": 504,
+   "octets": 1437,
    "serie": 2332153345,
-   "sha256": "3b26b23ffb7cf936a96af7aab9c8023758e98b3134eeeb2e4fc64930274c708e"
+   "sha256": "bcb1c1f7df396d17dd2b9245a0c972c3325eab95888ee42bd76f349120ca0a0f"
   },
   "weapon_player_grenade_02": {
    "debit_kbps": 20,
-   "duree_ms": 500,
-   "octets": 1182,
+   "duree_ms": 501,
+   "octets": 1413,
    "serie": 302548923,
-   "sha256": "5e5169bda14f24ad5c99d99bf333fa66a48d94c3f4fa834f8021644f035a7486"
+   "sha256": "93c1273f886591621c0374827d821bc2ce2a3bf6d6351860c624c1f48c111fa4"
   },
   "weapon_player_grenade_03": {
    "debit_kbps": 20,
-   "duree_ms": 500,
-   "octets": 1133,
+   "duree_ms": 503,
+   "octets": 1410,
    "serie": 1695528749,
-   "sha256": "f11ed336d4ae02a849a359ba1819859729d7b7e445f2b156bc7713c52b5ee9f5"
+   "sha256": "679f8dfe49d23823158572018a8e625a0e88b68bfba6b6952351f05f3b82529b"
   },
   "weapon_player_machinegun_01": {
    "debit_kbps": 20,
-   "duree_ms": 178,
-   "octets": 647,
+   "duree_ms": 177,
+   "octets": 731,
    "serie": 3533745686,
-   "sha256": "063208a998e3f3d56e73571c814cb118b608617000eaa4b7161c496aefb86d86"
+   "sha256": "0ba40decc230eae89726dd1fb553c9cf8e995a628f06ea532611f332349d3cfb"
   },
   "weapon_player_machinegun_02": {
    "debit_kbps": 20,
-   "duree_ms": 178,
-   "octets": 670,
+   "duree_ms": 177,
+   "octets": 722,
    "serie": 1269432236,
-   "sha256": "10812aa664629a81ecb71dbe6a2682984a4d085f5ba19ff69051e90dfdca3a14"
+   "sha256": "bec579941a37794d6d741782c9f4d169f5e612fbbd5b219a79018f264f965a36"
   },
   "weapon_player_machinegun_03": {
    "debit_kbps": 20,
-   "duree_ms": 178,
-   "octets": 663,
+   "duree_ms": 180,
+   "octets": 724,
    "serie": 1018089274,
-   "sha256": "88b88d4fb896ac6c6f7ea8913519f0f6a756e4e7e4f48585f20d9b6c18703737"
+   "sha256": "13938683c3933c60cfe69d40afd837c7aa2adf92ec93619ad5a49be5a956d04b"
   },
   "weapon_player_machinegun_04": {
    "debit_kbps": 20,
-   "duree_ms": 178,
-   "octets": 665,
+   "duree_ms": 176,
+   "octets": 715,
    "serie": 2731170457,
-   "sha256": "dc1050d5d729bf438f7fffba57990429570a8c23b65a82bac0ec197a4c3b3063"
+   "sha256": "13f3ed37ac4292275fd9c7b95a7bc7dbea202f7333793cd88204ab2be0351200"
   },
   "weapon_player_machinegun_burst_01": {
    "debit_kbps": 20,
-   "duree_ms": 403,
-   "octets": 1234,
+   "duree_ms": 405,
+   "octets": 1219,
    "serie": 986079746,
-   "sha256": "7c6a908829a9b86d254da9ad6c2f2536afe63e7248da595ae43ce366d7860f9d"
+   "sha256": "97543dbd276c3075079adfe0e0169c123e127f1bdec449f774add3d008e8704b"
   },
   "weapon_player_machinegun_burst_02": {
    "debit_kbps": 20,
-   "duree_ms": 412,
-   "octets": 1850,
+   "duree_ms": 397,
+   "octets": 1227,
    "serie": 2748265400,
-   "sha256": "97c35332dcb9273659e89fb28e97465fd24d3e86ac9b3961f1e28c26cca652ab"
+   "sha256": "5c02e90b312ff01e3d2229e30596409fd7d4aed2754ed90e243c8b1ffd7d1fe0"
   },
   "weapon_player_machinegun_burst_03": {
    "debit_kbps": 20,
-   "duree_ms": 421,
-   "octets": 1263,
+   "duree_ms": 407,
+   "octets": 1236,
    "serie": 3569877806,
-   "sha256": "094a1d162c3b8e04dcfe0a4d97dd46d6a72a40d064fbe88f57eb3b1bc1790494"
+   "sha256": "c5e00072a62cbf309ccf93b3aa86cfa74b0ec7637f429b8d71111c0ab9612b43"
   },
   "weapon_player_missile_launch_01": {
    "debit_kbps": 20,
