@@ -8,13 +8,22 @@
 // recopié en dur). La rangée 1 est en BAS, la rangée 18 en HAUT : l'attaquant
 // monte, conformément à FICHE-STYLE.md §1 — « tout pointe vers le haut ».
 //
+// ⚠⚠ ET C'EST LA GRILLE PAR DÉFAUT, PLUS LA SEULE — lot GRILLE-PORTÉE,
+// 20/09/2026. `calculerProjection` accepte `vue.grille`, et la projection
+// rendue PORTE la grille pour laquelle elle a été calculée : `margeY` dépend
+// de `longueur`, `margeX` de `largeur`, donc les lecteurs — `yDeRangee`,
+// `yDeRangeeMilli`, `xDeColonneMilli`, `caseDepuisPixels` — la reprennent SUR
+// LA PROJECTION, jamais en argument séparé : une projection calculée pour une
+// grille ne se lit pas avec une autre. Sans `vue.grille`, tout rend au
+// caractère près ce que cela rendait.
+//
 // La case est CARRÉE, toujours. Le reste du viewport devient des marges égales
 // (letterboxing) : ne jamais déformer la case, ne jamais appliquer de zoom ni
 // de transform sur le conteneur — le buffer et la géométrie doivent rester
 // d'accord.
 
 import { GRILLE } from '../data/combat.js';
-import { MILLI_PAR_CASE, estDansLaGrille } from '../sim/grille.js';
+import { MILLI_PAR_CASE, estDansLaGrille, verifierGrille } from '../sim/grille.js';
 
 /**
  * Calcule la projection pour un viewport donné, en pixels CSS entiers.
@@ -64,6 +73,14 @@ import { MILLI_PAR_CASE, estDansLaGrille } from '../sim/grille.js';
  * aurait mis DEUX letterboxing dans le dépôt, dont un seul serait corrigé le
  * jour d'une correction. C'est la même formule, avec une vue.
  *
+ * ⚠⚠ ET `vue.grille` EST LE CINQUIÈME DÉFAUT — lot GRILLE-PORTÉE, 20/09/2026.
+ * Le lot rend la géométrie PORTABLE sans changer une valeur : `GRILLE` reste
+ * l'objet 9 × 18, et une autre grille est un SECOND objet, passé ici, jamais
+ * une mutation. Elle passe par `verifierGrille` — une grille malformée
+ * rendrait un `NaN` de marge, et `drawImage` sur un `NaN` ne dessine rien ET
+ * ne lève pas. Et elle est RENDUE avec la projection (`projection.grille`) :
+ * c'est là que les lecteurs la prennent, par `grilleDeLaProjection`.
+ *
  * ⚠⚠ ET LE CENTRAGE NE DESCEND JAMAIS SOUS ZÉRO. Tant que la taille est DÉRIVÉE,
  * le contenu tient par construction et la parenthèse est positive : le plancher
  * est donc inerte aujourd'hui, et un test l'asserte de face. Il mord dès qu'un
@@ -85,8 +102,9 @@ import { MILLI_PAR_CASE, estDansLaGrille } from '../sim/grille.js';
  * @param {number|null} [vue.coteCase] Côté imposé ; `null` = dérivé du cadre.
  * @param {number} [vue.decalageX] Décalage de la vue vers la droite, en pixels.
  * @param {number} [vue.decalageY] Décalage de la vue vers le bas, en pixels.
+ * @param {object} [vue.grille] La grille de combat projetée ; `GRILLE` sinon.
  * @returns {{ tailleCase: number, margeX: number, margeY: number,
- *   largeurPx: number, hauteurPx: number, murCases: number }}
+ *   largeurPx: number, hauteurPx: number, murCases: number, grille: object }}
  */
 export function calculerProjection(largeurPx, hauteurPx, murCases = 0, vue = {}) {
   if (!Number.isFinite(largeurPx) || !Number.isFinite(hauteurPx)
@@ -102,8 +120,13 @@ export function calculerProjection(largeurPx, hauteurPx, murCases = 0, vue = {})
   // Le mur peint prend une demi-case À GAUCHE, une À DROITE et une EN HAUT.
   // Jamais en bas : le U s'ouvre sur les deux rangées de déploiement, par
   // lesquelles l'assaut arrive. D'où `2 ×` en largeur et une seule en hauteur.
+  // ⚠ LA GRILLE SE VÉRIFIE AVANT D'ÊTRE LUE, et seulement si on en passe une :
+  // `GRILLE` est la référence de `verifierGrille`, elle n'a rien à prouver.
+  const grille = vue.grille === undefined
+    ? GRILLE
+    : verifierGrille(vue.grille, 'projection : vue.grille');
   const {
-    lignesVisibles = GRILLE.longueur + murCases,
+    lignesVisibles = grille.longueur + murCases,
     coteCase = null,
     decalageX = 0,
     decalageY = 0,
@@ -117,7 +140,7 @@ export function calculerProjection(largeurPx, hauteurPx, murCases = 0, vue = {})
   if (!Number.isFinite(decalageX) || !Number.isFinite(decalageY)) {
     throw new RangeError(`projection : décalage « ${decalageX} ; ${decalageY} » invalide`);
   }
-  const colonnes = GRILLE.largeur + 2 * murCases;
+  const colonnes = grille.largeur + 2 * murCases;
   const lignes = lignesVisibles;
   const tailleCase = coteCase === null
     ? Math.floor(Math.min(largeurPx / colonnes, hauteurPx / lignes))
@@ -127,7 +150,7 @@ export function calculerProjection(largeurPx, hauteurPx, murCases = 0, vue = {})
   }
   // Le contenu ENTIER, mur compris : c'est lui qu'on centre quand il tient, et
   // c'est son bord que le décalage promène quand il ne tient pas.
-  const contenuY = (GRILLE.longueur + murCases) * tailleCase;
+  const contenuY = (grille.longueur + murCases) * tailleCase;
   const centrageX = Math.max(0, Math.floor((largeurPx - colonnes * tailleCase) / 2));
   const centrageY = Math.max(0, Math.floor((hauteurPx - contenuY) / 2));
   return {
@@ -142,7 +165,27 @@ export function calculerProjection(largeurPx, hauteurPx, murCases = 0, vue = {})
     largeurPx,
     hauteurPx,
     murCases,
+    // ⚠ LA GRILLE VOYAGE AVEC LA PROJECTION : `margeX` et `margeY` n'ont de
+    // sens que pour elle, et c'est elle que les lecteurs ci-dessous reprennent.
+    grille,
   };
+}
+
+/**
+ * La grille pour laquelle une projection a été calculée.
+ *
+ * ⚠⚠ UNE SEULE ÉCRITURE DU REPLI, ET ELLE EST ICI — lot GRILLE-PORTÉE. Sept
+ * lecteurs en ont besoin (quatre dans ce fichier, deux dans `render/scene.js`,
+ * un dans `render/fond.js`) ; sept `?? GRILLE` recopiés seraient sept occasions
+ * d'en oublier un. Le repli n'existe que pour une projection FORGÉE À LA MAIN
+ * — les montages de test qui écrivent `{ tailleCase, margeX, margeY }` — :
+ * `calculerProjection` pose toujours la sienne.
+ *
+ * @param {object} projection Résultat de calculerProjection, ou forgé.
+ * @returns {object} la grille, `GRILLE` à défaut
+ */
+export function grilleDeLaProjection(projection) {
+  return projection.grille ?? GRILLE;
 }
 
 /** Bord gauche d'une colonne (1 à 9), en pixels. */
@@ -169,7 +212,7 @@ export function xDeColonneMilli(projection, colonneMilli) {
     ((colonneMilli - MILLI_PAR_CASE) * tailleCase) / MILLI_PAR_CASE,
   );
   const gauche = margeX;
-  const droite = margeX + (GRILLE.largeur - 1) * tailleCase;
+  const droite = margeX + (grilleDeLaProjection(projection).largeur - 1) * tailleCase;
   return Math.min(Math.max(brut, gauche), droite);
 }
 
@@ -221,14 +264,16 @@ export function xDeColonneMilli(projection, colonneMilli) {
  */
 export function yDeRangeeMilli(projection, rangeeMilli) {
   const { tailleCase, margeY } = projection;
+  const { longueur } = grilleDeLaProjection(projection);
   return margeY + Math.floor(
-    ((GRILLE.longueur * MILLI_PAR_CASE - rangeeMilli) * tailleCase) / MILLI_PAR_CASE,
+    ((longueur * MILLI_PAR_CASE - rangeeMilli) * tailleCase) / MILLI_PAR_CASE,
   );
 }
 
 /** Bord haut de la case d'une RANGÉE entière (1 à 18) — obstacles, bâtiments. */
 export function yDeRangee(projection, rangee) {
-  return projection.margeY + (GRILLE.longueur - rangee) * projection.tailleCase;
+  const { longueur } = grilleDeLaProjection(projection);
+  return projection.margeY + (longueur - rangee) * projection.tailleCase;
 }
 
 /**
@@ -268,13 +313,18 @@ export function yDeLigneEcran(projection, ligne) {
  */
 export function caseDepuisPixels(projection, xPx, yPx) {
   const { tailleCase, margeX, margeY } = projection;
+  // ⚠ LA GRILLE EST CELLE DE LA PROJECTION, PAS UN ARGUMENT DE PLUS — lot
+  // GRILLE-PORTÉE. Une réciproque inverse la projection qui a posé `margeY` ;
+  // lui passer une autre grille rendrait une case d'une géométrie qui n'est
+  // pas celle du dessin.
+  const grille = grilleDeLaProjection(projection);
   if (!Number.isFinite(xPx) || !Number.isFinite(yPx)) return null;
   const colonne = Math.floor((xPx - margeX) / tailleCase) + 1;
   // La rangée 1 est en BAS : l'axe des y descend, celui des rangées monte.
-  const rangee = GRILLE.longueur - Math.floor((yPx - margeY) / tailleCase);
+  const rangee = grille.longueur - Math.floor((yPx - margeY) / tailleCase);
   // Un point à gauche de la marge donnerait un quotient négatif que floor
   // arrondit vers −∞ : le test de bornes suffit à l'écarter.
   if (xPx < margeX || yPx < margeY) return null;
-  if (!estDansLaGrille(rangee, colonne)) return null;
+  if (!estDansLaGrille(rangee, colonne, grille)) return null;
   return { rangee, colonne };
 }

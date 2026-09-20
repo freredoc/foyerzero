@@ -21,8 +21,25 @@
 // en `scrollTop`, l'autre en marge de projection.
 
 import { GRILLE } from '../data/combat.js';
+import { verifierGrille } from '../sim/grille.js';
 import { ligneEcranDeLaBande } from './orientation.js';
 import { BANDE_SOUS_LE_MUR } from './fond.js';
+
+/**
+ * Le nom affiché de chaque bande, dans l'ordre des rangées croissantes.
+ *
+ * ⚠ C'EST LA SEULE TABLE DU DÉPÔT QUI NOMME LES TROIS CLÉS, et `RAID-E T5` le
+ * garde : les bornes, elles, se lisent dans la grille qu'on projette.
+ */
+const NOMS_DES_BANDES = [
+  { cle: 'deploiement', nom: 'Déploiement' },
+  { cle: 'defense', nom: 'Défense' },
+  { cle: 'batiments', nom: 'Chantier' },
+];
+
+function construireLesBandes(grille) {
+  return NOMS_DES_BANDES.map(({ cle, nom }) => ({ cle, nom, ...grille.bandes[cle] }));
+}
 
 /**
  * Les trois bandes de la grille, lues dans `GRILLE` et jamais réécrites.
@@ -30,12 +47,30 @@ import { BANDE_SOUS_LE_MUR } from './fond.js';
  * ⚠ LA RANGÉE 18 EST LE FOND, PAS « LE HAUT ». L'assaillant paraît aux rangées
  * 1–2 et monte en numéro ; la dernière rangée est donc la dernière qu'il
  * atteint. Le mot « haut » a coûté un lot le 26/08 et il ne se réemploie pas.
+ *
+ * ⚠⚠ ELLE RESTE UNE CONSTANTE, ET ELLE DÉCRIT LA GRILLE PAR DÉFAUT — lot
+ * GRILLE-PORTÉE, 20/09/2026. `ui/chantier.js` la lit pour la base du JOUEUR,
+ * qui n'a pas d'autre grille. Ce qui en a une passe par `bandesDe(grille)`.
  */
-export const BANDES = [
-  { cle: 'deploiement', nom: 'Déploiement', ...GRILLE.bandes.deploiement },
-  { cle: 'defense', nom: 'Défense', ...GRILLE.bandes.defense },
-  { cle: 'batiments', nom: 'Chantier', ...GRILLE.bandes.batiments },
-];
+export const BANDES = construireLesBandes(GRILLE);
+
+/**
+ * Les trois bandes d'une grille — `BANDES` même quand c'est la grille par
+ * défaut, une liste neuve sinon.
+ *
+ * ⚠ UNE GRILLE PASSÉE EST VÉRIFIÉE AVANT D'ÊTRE LUE : une bande absente ou
+ * inversée se lirait ici comme `undefined`, et la première fonction à la
+ * recevoir rendrait `NaN` sans lever. `GRILLE` est la référence de
+ * `verifierGrille` et n'a rien à prouver — d'où le raccourci, qui rend aussi
+ * l'identité de `BANDES` aux lecteurs d'hier.
+ *
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
+ * @returns {{cle: string, nom: string, premiere: number, derniere: number}[]}
+ */
+export function bandesDe(grille = GRILLE) {
+  if (grille === GRILLE) return BANDES;
+  return construireLesBandes(verifierGrille(grille, 'bandes'));
+}
 
 /**
  * Les bandes qui portent un bouton dans la barre du bas, dans l'ordre où elles
@@ -76,15 +111,17 @@ export const BANDES_NAVIGABLES = ['batiments', 'defense'];
  * ailleurs.
  *
  * @param {string} cle la bande qu'on regarde
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{premiereLigne: number, nbLignes: number}[]}
  */
-export function voilesDeLaBande(cle) {
-  const regardee = BANDES.find((b) => b.cle === cle);
+export function voilesDeLaBande(cle, grille = GRILLE) {
+  const bandes = bandesDe(grille);
+  const regardee = bandes.find((b) => b.cle === cle);
   if (regardee === undefined) throw new Error(`bandes : bande « ${cle} » inconnue`);
   const lignes = new Set();
-  for (const bande of BANDES) {
+  for (const bande of bandes) {
     if (bande.cle === cle) continue;
-    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande);
+    const { premiereLigne, nbLignes } = ligneEcranDeLaBande(bande, grille);
     for (let i = 0; i < nbLignes; i += 1) lignes.add(premiereLigne + i);
   }
   const zones = [];
@@ -108,10 +145,10 @@ export function voilesDeLaBande(cle) {
  * main ferait pointer la flèche du mauvais côté le jour où la grille se
  * retournerait — et la grille S'EST déjà retournée une fois, le 27/08.
  */
-function bandesDansLOrdreDeLEcran() {
-  return BANDES
+function bandesDansLOrdreDeLEcran(grille = GRILLE) {
+  return bandesDe(grille)
     .filter((b) => BANDES_NAVIGABLES.includes(b.cle))
-    .map((b) => ({ ...b, ...ligneEcranDeLaBande(b) }))
+    .map((b) => ({ ...b, ...ligneEcranDeLaBande(b, grille) }))
     .sort((a, b) => a.premiereLigne - b.premiereLigne);
 }
 
@@ -129,10 +166,11 @@ function bandesDansLOrdreDeLEcran() {
  * et faux le jour où la grille changerait de sens, sans que rien ne le dise.
  *
  * @param {string} cleCourante
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{cible: string, glyphe: string, libelle: string}}
  */
-export function basculeDeBande(cleCourante) {
-  const ordre = bandesDansLOrdreDeLEcran();
+export function basculeDeBande(cleCourante, grille = GRILLE) {
+  const ordre = bandesDansLOrdreDeLEcran(grille);
   const ici = ordre.findIndex((b) => b.cle === cleCourante);
   // ⚠ UNE BANDE NON NAVIGABLE RENVOIE VERS LA PREMIÈRE, elle ne lève pas. Le
   // déploiement n'a pas de bouton et n'en aura pas ; s'y trouver ne doit pas
@@ -183,18 +221,19 @@ export function basculeDeBande(cleCourante) {
  * @param {number} hauteurRangee hauteur d'une rangée à l'écran, en pixels
  * @param {number} hauteurVue hauteur visible du champ, en pixels
  * @param {number} [padding] marge de la grille, en pixels — une demi-case
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{min: number, max: number}} bornes de `scrollTop`
  */
-export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue, padding = 0) {
+export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue, padding = 0, grille = GRILLE) {
   if (!(hauteurRangee > 0)) {
     throw new RangeError(`bandes : hauteur de rangée « ${hauteurRangee} » invalide`);
   }
-  const ordre = bandesDansLOrdreDeLEcran();
+  const ordre = bandesDansLOrdreDeLEcran(grille);
   const ici = ordre.findIndex((b) => b.cle === cleBande);
   if (ici < 0) throw new RangeError(`bandes : bande « ${cleBande} » non navigable`);
   const suivante = ordre[ici + 1];
   const premiereLigneApres = suivante === undefined
-    ? GRILLE.longueur + 1
+    ? grille.longueur + 1
     : suivante.premiereLigne;
   // Le mur ne dépasse qu'au-dessus de la bande qu'il entoure — le U n'a pas de
   // bas —, et sa hauteur de dépassement est très exactement celle du `padding`.
@@ -213,10 +252,11 @@ export function bornesDeDefilement(cleBande, hauteurRangee, hauteurVue, padding 
 /**
  * La bande à laquelle appartient une rangée.
  * @param {number} rangee
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {string} clé de bande
  */
-export function bandeDeLaRangee(rangee) {
-  const trouvee = BANDES.find((b) => rangee >= b.premiere && rangee <= b.derniere);
+export function bandeDeLaRangee(rangee, grille = GRILLE) {
+  const trouvee = bandesDe(grille).find((b) => rangee >= b.premiere && rangee <= b.derniere);
   if (trouvee === undefined) {
     throw new RangeError(`bandes : rangée ${rangee} hors de la grille`);
   }
@@ -240,11 +280,12 @@ export function bandeDeLaRangee(rangee) {
  *
  * @param {string|null} cleBande clé de bande, ou `null` pour la vue d'ensemble
  * @param {number} [murCases] ce que le mur peint occupe, en cases
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {number} hauteur en cases
  */
-export function casesDeLaBande(cleBande, murCases = 0) {
-  if (cleBande === null) return GRILLE.longueur + murCases;
-  const bande = BANDES.find((b) => b.cle === cleBande);
+export function casesDeLaBande(cleBande, murCases = 0, grille = GRILLE) {
+  if (cleBande === null) return grille.longueur + murCases;
+  const bande = bandesDe(grille).find((b) => b.cle === cleBande);
   if (bande === undefined) throw new RangeError(`bandes : bande « ${cleBande} » inconnue`);
   const rangees = bande.derniere - bande.premiere + 1;
   return rangees + (cleBande === BANDE_SOUS_LE_MUR ? murCases : 0);
@@ -271,19 +312,20 @@ export function casesDeLaBande(cleBande, murCases = 0) {
  * @param {number} coteCase côté d'une case, en pixels
  * @param {number} hauteurVue hauteur visible, en pixels
  * @param {number} [murCases] ce que le mur peint occupe, en cases
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{min: number, max: number}} bornes du décalage vertical, en pixels
  */
-export function bornesDuDecalage(cleBande, coteCase, hauteurVue, murCases = 0) {
+export function bornesDuDecalage(cleBande, coteCase, hauteurVue, murCases = 0, grille = GRILLE) {
   if (!(coteCase > 0)) {
     throw new RangeError(`bandes : côté de case « ${coteCase} » invalide`);
   }
   const padding = murCases * coteCase;
   // Le contenu va du haut du mur au bas de la rangée 1 : la demi-case du mur,
   // puis les dix-huit rangées. Rien en dessous — le U s'ouvre sur le bas.
-  const contenu = padding + GRILLE.longueur * coteCase;
+  const contenu = padding + grille.longueur * coteCase;
   const plafond = Math.max(0, contenu - hauteurVue);
   if (cleBande === null) return { min: 0, max: plafond };
-  const bornes = bornesDeDefilement(cleBande, coteCase, hauteurVue, padding);
+  const bornes = bornesDeDefilement(cleBande, coteCase, hauteurVue, padding, grille);
   return { min: Math.min(bornes.min, plafond), max: Math.min(bornes.max, plafond) };
 }
 
@@ -300,12 +342,13 @@ export function bornesDuDecalage(cleBande, coteCase, hauteurVue, murCases = 0) {
  * @param {number} coteCase côté d'une case, en pixels
  * @param {number} largeurVue largeur visible, en pixels
  * @param {number} [murCases] ce que le mur peint occupe, en cases
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
  * @returns {{min: number, max: number}} bornes du décalage horizontal, en pixels
  */
-export function bornesDuDecalageX(coteCase, largeurVue, murCases = 0) {
+export function bornesDuDecalageX(coteCase, largeurVue, murCases = 0, grille = GRILLE) {
   if (!(coteCase > 0)) {
     throw new RangeError(`bandes : côté de case « ${coteCase} » invalide`);
   }
-  const contenu = (GRILLE.largeur + 2 * murCases) * coteCase;
+  const contenu = (grille.largeur + 2 * murCases) * coteCase;
   return { min: 0, max: Math.max(0, contenu - largeurVue) };
 }

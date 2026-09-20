@@ -15,6 +15,7 @@
 
 import { GRILLE } from '../data/combat.js';
 import { variante } from './variante.js';
+import { grilleDeLaProjection } from './projection.js';
 
 /**
  * Ce que le mur peint occupe de chaque côté, en cases.
@@ -34,23 +35,44 @@ import { variante } from './variante.js';
 export const MUR_CASES = 0.5;
 
 /**
- * La boîte affichée, en cases : les neuf colonnes jouables entre les deux murs.
+ * La boîte affichée d'une grille, en cases : ses colonnes jouables entre les
+ * deux murs.
  *
- * ⚠ ELLE SE DÉRIVE DE `GRILLE`, ELLE NE S'ÉCRIT PAS « 10 ». Le jour où la base
+ * ⚠ ELLE SE DÉRIVE DE LA GRILLE, ELLE NE S'ÉCRIT PAS « 10 ». Le jour où la base
  * changera de largeur, la boîte suivra et l'image se posera toujours d'un mur à
  * l'autre.
+ *
+ * ⚠ C'EST UNE FONCTION DEPUIS LE LOT GRILLE-PORTÉE, 20/09/2026, `GRILLE` EN
+ * DÉFAUT, et `LARGEUR_EN_CASES` en est la valeur pour la grille par défaut :
+ * une constante figée à l'import ne peut pas recevoir une grille, et c'est
+ * exactement le mur que le brief nomme.
+ *
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
+ * @returns {number} largeur de la boîte, en cases
  */
-export const LARGEUR_EN_CASES = GRILLE.largeur + 2 * MUR_CASES;
+export function largeurEnCases(grille = GRILLE) {
+  return grille.largeur + 2 * MUR_CASES;
+}
 
 /**
- * La hauteur de la boîte, en cases : le mur du haut, puis les dix-huit rangées.
+ * La hauteur de la boîte d'une grille, en cases : le mur du haut, puis ses
+ * rangées.
  *
  * ⚠ RIEN EN BAS, ET C'EST LA MÊME RAISON QU'AU TEMPS DE L'ANNEAU : le U s'ouvre
  * sur les deux rangées de déploiement, par lesquelles l'assaut arrive. Le mur
  * peint ne ferme pas le bas non plus — regardé sur les huit planches, les flancs
  * meurent aux alentours de 57 % de la hauteur, soit la rangée 11 sur 18.
+ *
+ * @param {object} [grille] la grille de combat ; `GRILLE` sinon
+ * @returns {number} hauteur de la boîte, en cases
  */
-export const HAUTEUR_EN_CASES = GRILLE.longueur + MUR_CASES;
+export function hauteurEnCases(grille = GRILLE) {
+  return grille.longueur + MUR_CASES;
+}
+
+/** La boîte de la grille par défaut — dix cases sur dix-huit et demie. */
+export const LARGEUR_EN_CASES = largeurEnCases(GRILLE);
+export const HAUTEUR_EN_CASES = hauteurEnCases(GRILLE);
 
 /**
  * La hauteur de l'IMAGE, en cases — plus grande que la boîte, et à dessein.
@@ -65,6 +87,12 @@ export const HAUTEUR_EN_CASES = GRILLE.longueur + MUR_CASES;
  * ⚠ ELLE SE DÉRIVE DU RAPPORT DE L'IMAGE, elle n'est pas un nombre de plus :
  * 2160 / 1080 = 2, donc la hauteur vaut deux fois la largeur en cases. Un test
  * la confronte aux fichiers de `art/sprites/fond/` plutôt que de la croire.
+ *
+ * ⚠⚠ ET LE `× 2` N'EST PAS TOUCHÉ PAR LE LOT GRILLE-PORTÉE, DÉLIBÉRÉMENT. C'est
+ * le rapport des HUIT décors d'aujourd'hui, pas une propriété de la grille :
+ * un décor de 1080 × 3240 a un rapport de 3, et le facteur devra se DÉRIVER
+ * du manifeste `fond-empreintes.json`, fond par fond — c'est le lot GRILLE
+ * LONGUE, et c'est lui qui prend `COTE_CASE_SOURCE = 108` avec.
  */
 export const HAUTEUR_IMAGE_EN_CASES = LARGEUR_EN_CASES * 2;
 
@@ -134,8 +162,20 @@ export const FONDS = {
     // 10/09 quatre décors de 1080 × 3240 — **50 % plus longs** que les huit
     // d'aujourd'hui — et arbitré le 11/09 : deux pour les verrous, un pour la
     // base finale. Ils n'entrent PAS dans ce lot : ils supposent une grille de
-    // combat de 9 × 27, ce qui rend `GRILLE` variable — trente et une lectures
-    // de `GRILLE.longueur` dans huit fichiers —, et c'est un lot à soi.
+    // combat de 9 × 27, ce qui rendait `GRILLE` variable — **trente-deux**
+    // lectures de `GRILLE.longueur` dans huit fichiers, mesuré au lot
+    // GRILLE-PORTÉE (la première écriture disait trente et une) —, et c'est
+    // un lot à soi.
+    //
+    // ⚠⚠ ET CE QUI MANQUE A CHANGÉ DE NATURE LE 20/09/2026, LOT GRILLE-PORTÉE.
+    // La grille est PORTABLE : ce qui lit `GRILLE` accepte une grille en
+    // argument — `sim/grille.js`, `sim/combat.js` par `montage.grille`,
+    // `sim/generateur.js`, et tout `render/` par `vue.grille` de la projection.
+    // `GRILLE` reste l'objet 9 × 18, une seconde grille est un second objet.
+    // Ce qui reste au lot GRILLE LONGUE tient en trois choses : la seconde
+    // grille elle-même sur `TYPES_SITE[type]` — `genererSite` la lit là et
+    // c'est sa seule ligne à changer —, le facteur d'image (`× 2` ci-dessus,
+    // à dériver du manifeste) et les trois décors longs.
     //
     // ⚠ SANS CETTE LIGNE, `fondDeLaBase` LÈVE, et une levée à l'entrée de
     // l'écran de raid laisserait le joueur devant un écran vide. Le lot doit
@@ -273,10 +313,15 @@ export function fondDeLaBase(proprietaire, type, rangee, colonne) {
  */
 export function rectangleDuFond(projection) {
   const { tailleCase, margeX, margeY } = projection;
+  // ⚠ LA LARGEUR DE LA BOÎTE EST CELLE DE LA GRILLE PROJETÉE — lot
+  // GRILLE-PORTÉE — ; la HAUTEUR reste celle de l'image par défaut, `× 2`,
+  // parce que le facteur est une propriété du DÉCOR, à dériver du manifeste
+  // au lot GRILLE LONGUE. Sur la grille par défaut les deux coïncident au
+  // pixel avec ce que la fonction rendait.
   return {
     x: margeX - MUR_CASES * tailleCase,
     y: margeY - MUR_CASES * tailleCase,
-    l: LARGEUR_EN_CASES * tailleCase,
+    l: largeurEnCases(grilleDeLaProjection(projection)) * tailleCase,
     h: HAUTEUR_IMAGE_EN_CASES * tailleCase,
     sx: 0,
     sy: 0,

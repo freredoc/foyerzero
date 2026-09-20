@@ -43,6 +43,114 @@ export const PREMIERE_COLONNE = 1;
 export const DERNIERE_COLONNE = GRILLE.largeur;
 
 // ---------------------------------------------------------------------------
+// La grille PORTÉE — lot GRILLE-PORTÉE, 20/09/2026
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ LES DEUX CONSTANTES CI-DESSUS SONT FIGÉES À L'IMPORT, ET C'EST TOUT LE MUR
+// QUE CE LOT FRANCHIT. Mesuré en mutant `GRILLE` en mémoire vers 9 × 27 APRÈS
+// un import statique — l'ordre réel du jeu : `DERNIERE_RANGEE` valait encore
+// 18, `genererSite` posait une Souche en rangée 26, et `creerCombat` la
+// refusait « hors de la grille (rangées 1–18, colonnes 1–9) ». Le générateur
+// produisait une base valide que le moteur refusait. Une constante ne prend pas
+// de paramètre ; ce qui suit en prend un.
+//
+// ⚠⚠ LA RÈGLE DU LOT : ce qui lit `GRILLE` peut recevoir une grille, et SANS
+// argument rend exactement ce qu'il rendait. `GRILLE` reste l'objet 9 × 18 de
+// `data/combat.js`, il n'est JAMAIS muté ; une autre grille est un SECOND objet,
+// passé en argument. C'est ce qui garantit que la base du JOUEUR — `data/base.js`,
+// `sim/state.js`, `ui/defense.js`, `ui/chantier.js`, qui lisent `GRILLE` — ne
+// peut pas être touchée : par construction, pas par vigilance.
+//
+// ⚠ LES DEUX CONSTANTES RESTENT, ET ELLES DÉCRIVENT `GRILLE`. Vingt fichiers de
+// `test/` les lisent pour ce qu'elles sont. Ce qui change, c'est que plus AUCUN
+// lecteur de `sim/combat.js` ne les lit : les six sites qui le faisaient
+// demandent la grille que l'état porte, par les deux fonctions ci-dessous.
+
+/**
+ * La dernière rangée d'une grille — `DERNIERE_RANGEE` sans argument.
+ * @param {object} [grille] une grille au format de `GRILLE`
+ * @returns {number}
+ */
+export function derniereRangee(grille = GRILLE) {
+  return grille.longueur;
+}
+
+/**
+ * La dernière colonne d'une grille — `DERNIERE_COLONNE` sans argument.
+ * @param {object} [grille] une grille au format de `GRILLE`
+ * @returns {number}
+ */
+export function derniereColonne(grille = GRILLE) {
+  return grille.largeur;
+}
+
+/**
+ * Une grille est-elle bien formée ? LÈVE sinon, en nommant le contexte.
+ *
+ * ⚠⚠ ELLE EXISTE PARCE QU'UNE GRILLE MALFORMÉE NE LÈVE NULLE PART AILLEURS.
+ * `estDansLaGrille` sur un `longueur` absent compare à `undefined`, rend
+ * `false`, et le moteur refuserait chaque pose « hors de la grille » sans dire
+ * que la grille est en cause. `creerCombat` l'appelle sur une grille PRÉSENTE
+ * dans le montage — et sur elle seule.
+ *
+ * ⚠ LES TROIS BANDES SONT CONTIGUËS, DANS L'ORDRE DE `GRILLE`, ET COUVRENT LA
+ * GRILLE : c'est ce que `G3` asserte de `GRILLE` depuis le lot 2A, et ce que
+ * `RANGEE_DEFENSE_FRANCHIE`, `tiersDeLaDefense` et `render/bandes.js` supposent
+ * tous. Une seconde grille qui ne le tiendrait pas ferait mentir les trois.
+ *
+ * ⚠ ET LES NOMS DES BANDES SE LISENT DANS `GRILLE`, ILS NE S'ÉCRIVENT PAS ICI :
+ * `render/bandes.js` est la seule table qui les nomme, et `RAID-E T5` refuse
+ * une seconde — mesuré, le premier jet de cette fonction l'a fait tomber. La
+ * référence est la grille par défaut elle-même, ce qui est plus fort qu'une
+ * liste : une grille portée a EXACTEMENT les bandes de `GRILLE`, dans son ordre.
+ *
+ * @param {object} grille
+ * @param {string} [contexte] nommé dans le message d'erreur
+ * @returns {object} la grille, telle quelle
+ */
+export function verifierGrille(grille, contexte = 'grille') {
+  if (grille === null || typeof grille !== 'object') {
+    throw new TypeError(`${contexte} : grille absente ou malformée`);
+  }
+  const { largeur, longueur, bandes, casesBatiments } = grille;
+  if (!Number.isInteger(largeur) || largeur < 1) {
+    throw new RangeError(`${contexte} : largeur « ${largeur} » — entier ≥ 1 attendu`);
+  }
+  if (!Number.isInteger(longueur) || longueur < 1) {
+    throw new RangeError(`${contexte} : longueur « ${longueur} » — entier ≥ 1 attendu`);
+  }
+  if (bandes === null || typeof bandes !== 'object') {
+    throw new TypeError(`${contexte} : bandes absentes`);
+  }
+  let attendue = PREMIERE_RANGEE;
+  for (const nom of Object.keys(GRILLE.bandes)) {
+    const bande = bandes[nom];
+    if (!bande || !Number.isInteger(bande.premiere) || !Number.isInteger(bande.derniere)) {
+      throw new TypeError(`${contexte} : bande « ${nom} » absente ou malformée`);
+    }
+    if (bande.premiere !== attendue || bande.derniere < bande.premiere) {
+      throw new RangeError(
+        `${contexte} : bande « ${nom} » ${bande.premiere}…${bande.derniere} — `
+        + `attendue à partir de la rangée ${attendue}, les trois bandes sont contiguës`,
+      );
+    }
+    attendue = bande.derniere + 1;
+  }
+  if (attendue - 1 !== longueur) {
+    throw new RangeError(
+      `${contexte} : les trois bandes couvrent ${attendue - 1} rangées, la grille en fait ${longueur}`,
+    );
+  }
+  const cases = (bandes.batiments.derniere - bandes.batiments.premiere + 1) * largeur;
+  if (casesBatiments !== cases) {
+    throw new RangeError(
+      `${contexte} : casesBatiments vaut ${casesBatiments}, la bande des bâtiments en fait ${cases}`,
+    );
+  }
+  return grille;
+}
+
+// ---------------------------------------------------------------------------
 // Conversions
 // ---------------------------------------------------------------------------
 
@@ -110,13 +218,20 @@ export function distanceCarreeMilli(rangeeMilliA, colonneMilliA, rangeeMilliB, c
 // Bandes et bornes
 // ---------------------------------------------------------------------------
 
-/** La case (rangee, colonne) est-elle sur la grille ? */
-export function estDansLaGrille(rangee, colonne) {
+/**
+ * La case (rangee, colonne) est-elle sur la grille ?
+ *
+ * ⚠ LE TROISIÈME PARAMÈTRE EST LA GRILLE, `GRILLE` PAR DÉFAUT — lot
+ * GRILLE-PORTÉE. Sans lui, la fonction rend exactement le prédicat d'avant ; ce
+ * n'est PAS l'élargissement que le pavé d'`estEnApproche` interdit, qui parle
+ * d'accepter une rangée 0 sur la grille par défaut.
+ */
+export function estDansLaGrille(rangee, colonne, grille = GRILLE) {
   return (
     Number.isInteger(rangee)
     && Number.isInteger(colonne)
-    && rangee >= PREMIERE_RANGEE && rangee <= DERNIERE_RANGEE
-    && colonne >= PREMIERE_COLONNE && colonne <= DERNIERE_COLONNE
+    && rangee >= PREMIERE_RANGEE && rangee <= derniereRangee(grille)
+    && colonne >= PREMIERE_COLONNE && colonne <= derniereColonne(grille)
   );
 }
 
@@ -124,15 +239,15 @@ export function estDansLaGrille(rangee, colonne) {
  * La rangée est-elle dans la bande nommée ('deploiement', 'defense',
  * 'batiments') ?
  */
-export function estDansLaBande(rangee, nomBande) {
-  const bande = GRILLE.bandes[nomBande];
+export function estDansLaBande(rangee, nomBande, grille = GRILLE) {
+  const bande = grille.bandes[nomBande];
   if (!bande) throw new Error(`grille : bande inconnue « ${nomBande} »`);
   return rangee >= bande.premiere && rangee <= bande.derniere;
 }
 
 /** Bornes d'une bande, pour les messages d'erreur. */
-export function bornesBande(nomBande) {
-  const bande = GRILLE.bandes[nomBande];
+export function bornesBande(nomBande, grille = GRILLE) {
+  const bande = grille.bandes[nomBande];
   if (!bande) throw new Error(`grille : bande inconnue « ${nomBande} »`);
   return { premiere: bande.premiere, derniere: bande.derniere };
 }
@@ -143,8 +258,10 @@ export function bornesBande(nomBande) {
  * ⚠⚠ C'EST LE PRÉDICAT DES DEUX VERROUS D'ETHAN — « elles peuvent engager le
  * combat dès qu'elles sont visibles ». Hors grille, une attaquante ne tire pas
  * et n'est pas tirable ; elle entre au combat en atteignant la rangée 1. Les
- * deux moitiés se lisent dans `ciblage` de `sim/combat.js`, et nulle part
- * ailleurs.
+ * deux moitiés se lisent dans `ciblage` de `sim/combat.js` — et `avancer` la
+ * lit une TROISIÈME fois depuis le lot APPROCHE, pour geler le compteur de repli
+ * sur la voie d'approche. Ce pavé disait « nulle part ailleurs » ; c'était
+ * périmé, mesuré au lot GRILLE-PORTÉE.
  *
  * ⚠⚠ IL PREND UN MILLI, PAS UNE CASE, ET C'EST STRUCTUREL. Tout le moteur
  * raisonne en milli-cases depuis le lot 2A : une entité franchit la rangée 1 au
@@ -157,6 +274,13 @@ export function bornesBande(nomBande) {
  * rangée 0 acceptée y ferait DÉSIGNER AU DOIGT une case sous la grille, et le
  * banc rendrait une case là où le joueur n'a rien touché. C'est une fonction de
  * géométrie, pas un droit de séjour.
+ *
+ * ⚠ « ÉLARGIR » VEUT DIRE ACCEPTER UNE RANGÉE DE PLUS SUR LA GRILLE PAR DÉFAUT.
+ * Lui avoir donné un paramètre `grille` au lot GRILLE-PORTÉE n'est PAS ça :
+ * sans argument elle rend le même prédicat qu'avant, au caractère près, et avec
+ * une autre grille elle répond de CETTE grille-là — une rangée 27 sur une grille
+ * de 27 est sur la grille. Le prochain lot ne doit pas lire ce pavé comme une
+ * interdiction de ce qui vient d'être fait.
  */
 export function estEnApproche(rangeeMilli) {
   return rangeeMilli < milliDepuisCase(PREMIERE_RANGEE);
@@ -166,8 +290,8 @@ export function estEnApproche(rangeeMilli) {
  * Une position au-delà de la dernière rangée sort du combat. Seule l'aviation
  * traversante y arrive : le sol refuse le déplacement qui l'y mènerait.
  */
-export function estSortiParLeHaut(rangeeMilli) {
-  return rangeeMilli >= milliDepuisCase(DERNIERE_RANGEE + 1);
+export function estSortiParLeHaut(rangeeMilli, grille = GRILLE) {
+  return rangeeMilli >= milliDepuisCase(derniereRangee(grille) + 1);
 }
 
 /**
@@ -185,9 +309,9 @@ export function estSortiParLeHaut(rangeeMilli) {
  * 10 quitterait la grille sans qu'aucune règle le prévoie : le déplacement qui
  * l'y mènerait est simplement REFUSÉ, et elle reste où elle est.
  */
-export function estSortiParLeCote(colonneMilli) {
+export function estSortiParLeCote(colonneMilli, grille = GRILLE) {
   const c = caseDepuisMilli(colonneMilli);
-  return c < PREMIERE_COLONNE || c > DERNIERE_COLONNE;
+  return c < PREMIERE_COLONNE || c > derniereColonne(grille);
 }
 
 // ---------------------------------------------------------------------------

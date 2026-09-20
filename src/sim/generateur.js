@@ -233,11 +233,12 @@ export function densite(type, niveau) {
 // ---------------------------------------------------------------------------
 // Composition et placement
 // ---------------------------------------------------------------------------
-
-/** Les colonnes de la grille, dans l'ordre. */
-function colonnes() {
-  return Array.from({ length: GRILLE.largeur }, (_, i) => i + 1);
-}
+//
+// ⚠ `colonnes()` — « les colonnes de la grille, dans l'ordre » — vivait ici sans
+// AUCUN appelant depuis le lot PAQUETS (09/09) : le placement par paquets tire
+// ses colonnes lui-même, et `test/generateur-ancien.js` garde sa propre copie
+// pour l'ancien modèle. Retirée au lot GRILLE-PORTÉE, où elle était le dernier
+// lecteur de `GRILLE.largeur` de ce fichier — un lecteur mort, mais un lecteur.
 
 /**
  * Composition des bâtiments : exactement une Souche et un Étai, le reste
@@ -368,11 +369,19 @@ function decouperEnPaquets(placement, nb) {
 }
 
 /**
- * Les tiers de la bande de DÉFENSE, dérivés de `GRILLE.bandes.defense` et des
+ * Les tiers de la bande de DÉFENSE, dérivés de `grille.bandes.defense` et des
  * largeurs de `tiersDeLaBande` : `{ avant: {premiere, derniere}, … }`.
+ *
+ * ⚠⚠ ELLE PREND LA GRILLE DEPUIS LE LOT GRILLE-PORTÉE, ET C'ÉTAIT LE PREMIER
+ * MUR de la sonde du 20/09 : sur une bande de seize rangées, `[3, 2, 3]` ne
+ * couvre que huit, et la garde ci-dessous LÈVE — « les tiers couvrent 8
+ * rangées, la bande en fait 16 ». La garde est juste et elle reste ; ce qui
+ * devient possible est de la mesurer sur une AUTRE grille. La table
+ * `tiersDeLaBande`, elle, ne bouge pas : c'est le lot GRILLE LONGUE qui dira
+ * comment une bande de seize se partage.
  */
-export function tiersDeLaDefense() {
-  const bande = GRILLE.bandes.defense;
+export function tiersDeLaDefense(grille = GRILLE) {
+  const bande = grille.bandes.defense;
   const sortie = {};
   let rangee = bande.premiere;
   for (const [nom, largeur] of DISPOSITION_DEFENSES.tiersDeLaBande) {
@@ -392,10 +401,10 @@ export function tiersDeLaDefense() {
  * Tire le tiers préféré d'une catégorie, sur les poids de `poidsDeTiers`.
  * @returns {{premiere:number, derniere:number}}
  */
-function tiersPrefere(cle, categorie) {
+function tiersPrefere(cle, categorie, grille) {
   const poids = DISPOSITION_DEFENSES.poidsDeTiers[categorie];
   if (poids === undefined) throw new Error(`générateur : catégorie sans poids « ${categorie} »`);
-  const tiers = tiersDeLaDefense();
+  const tiers = tiersDeLaDefense(grille);
   const total = Object.values(poids).reduce((a, b) => a + b, 0);
   let seuil = borner(cle, total);
   for (const [nom, p] of Object.entries(poids)) {
@@ -421,15 +430,19 @@ function tchebychev(a, b) {
  * Le placement d'une bande — l'état qu'un paquet consulte et qu'il modifie.
  * `prises` porte les cases occupées, `parRangee` et `parColonne` les charges.
  */
-function ouvrirLaBande(bande, plafondRangee, plafondColonne) {
+function ouvrirLaBande(bande, plafondRangee, plafondColonne, grille) {
   return {
     bande,
     plafondRangee,
     plafondColonne,
+    // ⚠ LA GRILLE VOYAGE AVEC LE PLACEMENT — lot GRILLE-PORTÉE : `admissible`
+    // et `replierCaseParCase` balaient ses colonnes, et ce sont des fonctions
+    // sans porteur. Elles la lisent ici plutôt que dans `GRILLE`.
+    grille,
     prises: new Set(),
     occupees: [],
     parRangee: new Map(),
-    parColonne: new Array(GRILLE.largeur + 1).fill(0),
+    parColonne: new Array(grille.largeur + 1).fill(0),
   };
 }
 
@@ -461,7 +474,7 @@ function admissible(etat, cases, avecPlafondColonne = true) {
   const parColonne = new Map();
   for (const c of cases) {
     if (c.rangee < etat.bande.premiere || c.rangee > etat.bande.derniere) return false;
-    if (c.colonne < 1 || c.colonne > GRILLE.largeur) return false;
+    if (c.colonne < 1 || c.colonne > etat.grille.largeur) return false;
     const cle = cleCase(c.rangee, c.colonne);
     if (etat.prises.has(cle)) return false;
     parRangee.set(c.rangee, (parRangee.get(c.rangee) ?? 0) + 1);
@@ -511,7 +524,7 @@ function replierCaseParCase(etat, taille, rangeesPreferees, quoi, compteur) {
     let meilleure = null;
     for (const strict of [true, false]) {
       for (const rangee of rangees) {
-        for (let colonne = 1; colonne <= GRILLE.largeur; colonne += 1) {
+        for (let colonne = 1; colonne <= etat.grille.largeur; colonne += 1) {
           const c = { rangee, colonne };
           if (!admissible(etat, [c], strict)) continue;
           const score = [repulsion(etat, [c]), -chargeDeColonne(etat, [c])];
@@ -565,10 +578,10 @@ function replierCaseParCase(etat, taille, rangeesPreferees, quoi, compteur) {
  * @param {string} quoi pour les messages
  * @returns {{ cases: Array<Array<{rangee,colonne}>>, compteur: object }}
  */
-function poserLesPaquets(placement, paquets, bande, plafondRangee, nb, quoi) {
+function poserLesPaquets(placement, paquets, bande, plafondRangee, nb, quoi, grille) {
   const K = DISPOSITION_DEFENSES.candidatsParPaquet;
-  const plafondColonne = Math.ceil(nb / GRILLE.largeur) + DISPOSITION_DEFENSES.margeDeColonne;
-  const etat = ouvrirLaBande(bande, plafondRangee, plafondColonne);
+  const plafondColonne = Math.ceil(nb / grille.largeur) + DISPOSITION_DEFENSES.margeDeColonne;
+  const etat = ouvrirLaBande(bande, plafondRangee, plafondColonne, grille);
   const compteur = { replis: 0, colonneRelachee: 0, candidatsRetenus: [] };
 
   // Tous les tirages d'abord, pour le nombre MAXIMAL de paquets.
@@ -580,7 +593,7 @@ function poserLesPaquets(placement, paquets, bande, plafondRangee, nb, quoi) {
       candidats.push({
         cleForme: entier(placement, 0, CLE_MAX),
         cleRangee: entier(placement, 0, CLE_MAX),
-        colonne: entier(placement, 1, GRILLE.largeur),
+        colonne: entier(placement, 1, grille.largeur),
       });
     }
     tirages.push({ cleTiers, candidats });
@@ -590,7 +603,7 @@ function poserLesPaquets(placement, paquets, bande, plafondRangee, nb, quoi) {
   paquets.forEach((paquet, p) => {
     const { cleTiers, candidats } = tirages[p];
     const formes = formesDeTaille(paquet.taille);
-    const zone = paquet.categorie === null ? bande : tiersPrefere(cleTiers, paquet.categorie);
+    const zone = paquet.categorie === null ? bande : tiersPrefere(cleTiers, paquet.categorie, grille);
     const hauteur = zone.derniere - zone.premiere + 1;
     let meilleur = null;
     candidats.forEach((cand, k) => {
@@ -637,8 +650,8 @@ function poserLesPaquets(placement, paquets, bande, plafondRangee, nb, quoi) {
  *
  * @returns {{ poses: object[], compteur: object }}
  */
-function placerBatiments(placement, liste, niveau) {
-  const bande = GRILLE.bandes.batiments;
+function placerBatiments(placement, liste, niveau, grille) {
+  const bande = grille.bandes.batiments;
   const nb = liste.length;
   const tailles = decouperEnPaquets(placement, nb);
   // Les trois tirages des uniques, toujours pris — même à un seul paquet.
@@ -678,7 +691,7 @@ function placerBatiments(placement, liste, niveau) {
 
   const paquets = tailles.map((taille) => ({ taille, categorie: null }));
   const { cases, compteur } = poserLesPaquets(
-    placement, paquets, bande, GRILLE.largeur, nb, 'bâtiments',
+    placement, paquets, bande, grille.largeur, nb, 'bâtiments', grille,
   );
   const poses = new Array(nb);
   creneaux.forEach((paquet, p) => {
@@ -759,8 +772,8 @@ function souchereDerriereLEtai(poses, uniques) {
  * la bande, le déterminisme, et la moitié GÉOMÉTRIQUE de
  * `verifierLeRetraitDesPortees`.
  */
-function placerDefenses(placement, liste, niveau) {
-  const bande = GRILLE.bandes.defense;
+function placerDefenses(placement, liste, niveau, grille) {
+  const bande = grille.bandes.defense;
   const nb = liste.length;
   if (nb === 0) return { poses: [], compteur: { replis: 0, colonneRelachee: 0, candidatsRetenus: [] } };
   const tailles = decouperEnPaquets(placement, nb);
@@ -771,7 +784,7 @@ function placerDefenses(placement, liste, niveau) {
     debut += taille;
   }
   const { cases, compteur } = poserLesPaquets(
-    placement, paquets, bande, DISPOSITION_DEFENSES.occupantsMaxParRangee, nb, 'défenses',
+    placement, paquets, bande, DISPOSITION_DEFENSES.occupantsMaxParRangee, nb, 'défenses', grille,
   );
   const poses = [];
   let i = 0;
@@ -781,7 +794,7 @@ function placerDefenses(placement, liste, niveau) {
       i += 1;
     }
   });
-  verifierLeRetraitDesPortees(poses);
+  verifierLeRetraitDesPortees(poses, grille);
   return { poses, compteur };
 }
 
@@ -812,12 +825,12 @@ function placerDefenses(placement, liste, niveau) {
  * @param {string} id
  * @returns {number} la rangée la plus avancée qui garde une cible atteignable
  */
-export function rangeeLaPlusAvanceeQuiTire(id) {
+export function rangeeLaPlusAvanceeQuiTire(id, grille = GRILLE) {
   const ligne = DEFENSES[id] ?? UNITES[id];
   if (ligne === undefined) throw new Error(`générateur : « ${id} » n'est ni défense ni unité`);
   const mini = enEntier(ligne.porteeMini ?? 0, MILLE, `${id}.porteeMini`);
   const maxi = enEntier(ligne.portee ?? 0, MILLE, `${id}.portee`);
-  const bande = GRILLE.bandes.defense;
+  const bande = grille.bandes.defense;
   // ⚠⚠ UNE PIÈCE QUI NE TIRE PAS N'A AUCUNE CONTRAINTE DE RANGÉE, et l'oublier
   // donnait l'inverse exact de la règle. Un Mur a `portee: 0` : la couronne
   // `[0 ; 0]` ne contient aucune case, la boucle ci-dessous n'aboutissait jamais
@@ -826,9 +839,9 @@ export function rangeeLaPlusAvanceeQuiTire(id) {
   // lisait 10 là où il attendait 3.
   if (maxi === 0) return bande.premiere;
   for (let rangee = bande.premiere; rangee <= bande.derniere; rangee++) {
-    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
-      for (let r = 1; r <= GRILLE.longueur; r++) {
-        for (let c = 1; c <= GRILLE.largeur; c++) {
+    for (let colonne = 1; colonne <= grille.largeur; colonne++) {
+      for (let r = 1; r <= grille.longueur; r++) {
+        for (let c = 1; c <= grille.largeur; c++) {
           const dr = (rangee - r) * MILLE;
           const dc = (colonne - c) * MILLE;
           const d2 = dr * dr + dc * dc;
@@ -856,13 +869,13 @@ export function rangeeLaPlusAvanceeQuiTire(id) {
  * mesure dans les deux sens. Une garde qui lèverait sur une artillerie en
  * rangée 5 rendrait ce biais impossible.
  */
-function verifierLeRetraitDesPortees(poses) {
+function verifierLeRetraitDesPortees(poses, grille) {
   for (const a of poses) {
     if (categorieDe(a.id) !== 'artillerie') continue;
-    if (a.rangee < rangeeLaPlusAvanceeQuiTire(a.id)) {
+    if (a.rangee < rangeeLaPlusAvanceeQuiTire(a.id, grille)) {
       throw new Error(
         `générateur : ${a.id} en rangée ${a.rangee}, devant sa rangée `
-        + `${rangeeLaPlusAvanceeQuiTire(a.id)} — elle n'aurait aucune cible`,
+        + `${rangeeLaPlusAvanceeQuiTire(a.id, grille)} — elle n'aurait aucune cible`,
       );
     }
   }
@@ -899,11 +912,11 @@ function ordonnerDefenses(liste) {
  * l'assertait continue de passer sans rien mesurer de nouveau : c'est
  * l'assertion sur la bande de défense, ajoutée le 29/08, qui porte la règle.
  */
-function placerObstacles(rng, casesPrises) {
+function placerObstacles(rng, casesPrises, grille) {
   const libres = [];
-  for (let rangee = 1; rangee <= GRILLE.longueur; rangee++) {
-    if (!estDansLaBande(rangee, 'defense')) continue;
-    for (let colonne = 1; colonne <= GRILLE.largeur; colonne++) {
+  for (let rangee = 1; rangee <= grille.longueur; rangee++) {
+    if (!estDansLaBande(rangee, 'defense', grille)) continue;
+    for (let colonne = 1; colonne <= grille.largeur; colonne++) {
       if (!casesPrises.has(cleCase(rangee, colonne))) libres.push({ rangee, colonne });
     }
   }
@@ -1044,12 +1057,23 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
     for (let k = 0; k < n; k++) listeDefenses.push(id);
   }
 
-  const batiments = placerBatiments(placement, composerBatiments(effectifs.batiments), niveau).poses;
-  const defenseurs = placerDefenses(placement, ordonnerDefenses(listeDefenses), niveau).poses;
+  // ⚠⚠ LA GRILLE DESCEND D'ICI VERS LES TROIS POSEURS — lot GRILLE-PORTÉE,
+  // 20/09/2026 —, ET C'EST `GRILLE` POUR TOUS LES TYPES AUJOURD'HUI. Aucun type
+  // de `TYPES_SITE` ne porte de champ `grille` : ce lot pose la plomberie, pas
+  // la valeur. Le lot GRILLE LONGUE la lira sur `TYPES_SITE[type]` — `type` est
+  // déjà en main ici — et c'est la SEULE ligne de cette fonction qui changera.
+  //
+  // ⚠ ET LE MONTAGE RENDU NE PORTE PAS DE `grille`, DÉLIBÉRÉMENT : `creerCombat`
+  // ne pose `etat.grille` que si le montage en porte une, et ces montages-ci
+  // sont ceux des deux cents témoins de combat. Écrire `grille: GRILLE` ici
+  // ferait bouger les deux cents empreintes pour une grille qui n'a pas changé.
+  const grille = GRILLE;
+  const batiments = placerBatiments(placement, composerBatiments(effectifs.batiments), niveau, grille).poses;
+  const defenseurs = placerDefenses(placement, ordonnerDefenses(listeDefenses), niveau, grille).poses;
 
   const casesPrises = new Set();
   for (const e of [...batiments, ...defenseurs]) casesPrises.add(cleCase(e.rangee, e.colonne));
-  const obstacles = placerObstacles(placement, casesPrises);
+  const obstacles = placerObstacles(placement, casesPrises, grille);
 
   return {
     // ⚠ LE TYPE VOYAGE AVEC LE MONTAGE DEPUIS LE LOT MULTIPLICATEUR (29/08), et
@@ -1072,8 +1096,17 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
 }
 
 /** Capacité de la bande de déploiement : deux rangées de neuf colonnes. */
-const CASES_DEPLOIEMENT = (GRILLE.bandes.deploiement.derniere
-  - GRILLE.bandes.deploiement.premiere + 1) * GRILLE.largeur;
+/**
+ * Les cases de la bande de déploiement d'une grille — le plafond d'une vague.
+ *
+ * ⚠ C'ÉTAIT UNE CONSTANTE DE MODULE, `CASES_DEPLOIEMENT`, figée à l'import sur
+ * `GRILLE` — lot GRILLE-PORTÉE. Elle n'avait qu'un lecteur, `genererVague`,
+ * qui prend désormais la grille et la lui demande.
+ */
+function casesDeDeploiement(grille) {
+  return (grille.bandes.deploiement.derniere - grille.bandes.deploiement.premiere + 1)
+    * grille.largeur;
+}
 
 /**
  * Tirage pondéré d'unités sous contrainte de budget et d'emplacements.
@@ -1146,12 +1179,12 @@ function tirerSousBudget(rng, repartition, budget, maxEmplacements) {
  * @param {number} nb le nombre d'unités à poser
  * @returns {Array<number[]>} une permutation des colonnes par rangée
  */
-function colonnesDesRangees(rng, nb) {
-  const rangees = Math.ceil(nb / GRILLE.largeur);
+function colonnesDesRangees(rng, nb, grille) {
+  const rangees = Math.ceil(nb / grille.largeur);
   const sortie = [];
   for (let r = 0; r < rangees; r += 1) {
     const colonnes = [];
-    for (let c = 1; c <= GRILLE.largeur; c += 1) colonnes.push(c);
+    for (let c = 1; c <= grille.largeur; c += 1) colonnes.push(c);
     melanger(rng, colonnes);
     sortie.push(colonnes);
   }
@@ -1179,7 +1212,7 @@ function rangSpecialite(id) {
  * @returns {{ unites: Array<{id,colonne,rangee,niveau}>, pointsEngages: number,
  *   pointsRestants: number }}
  */
-export function genererVague({ niveau, budgetPoints, graine }) {
+export function genererVague({ niveau, budgetPoints, graine }, grille = GRILLE) {
   // ⚠ UNE VAGUE EST CELLE D'UN SITE DE L'OUVRAGE — voir `genererSite` : la
   // borne suit le site, pas la courbe du joueur.
   if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
@@ -1194,16 +1227,16 @@ export function genererVague({ niveau, budgetPoints, graine }) {
   const rng = creerRng(graine);
   const repartition = composerRepartition(rng, VAGUES.parNiveau, niveau, VAGUES.variancePoints);
 
-  const { choisis, reste } = tirerSousBudget(rng, repartition, budgetPoints, CASES_DEPLOIEMENT);
+  const { choisis, reste } = tirerSousBudget(rng, repartition, budgetPoints, casesDeDeploiement(grille));
 
   choisis.sort((a, b) => rangSpecialite(a) - rangSpecialite(b));
-  const rangeeFront = GRILLE.bandes.deploiement.derniere;
-  const colonnes = colonnesDesRangees(rng, choisis.length);
+  const rangeeFront = grille.bandes.deploiement.derniere;
+  const colonnes = colonnesDesRangees(rng, choisis.length, grille);
   const unites = choisis.map((id, i) => {
-    const rang = Math.floor(i / GRILLE.largeur);
+    const rang = Math.floor(i / grille.largeur);
     return {
       id,
-      colonne: colonnes[rang][i % GRILLE.largeur],
+      colonne: colonnes[rang][i % grille.largeur],
       rangee: rangeeFront - rang,
       niveau,
     };

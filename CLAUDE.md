@@ -7,7 +7,112 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **20/09/2026**, version 0.99.72 · build 184.
+Dernière révision : **20/09/2026**, version 0.99.73 · build 185.
+⚠⚠ **LA GÉOMÉTRIE DU COMBAT EST PORTABLE, ET PAS UNE VALEUR NE CHANGE.** Lot
+GRILLE-PORTÉE. Ce qui lit `GRILLE` aujourd'hui accepte une grille en argument,
+`GRILLE` en défaut ; sans argument, tout rend exactement ce que cela rendait —
+**les 200 témoins de `test/temoins-combat.js` sont identiques au bit, 0 couche
+ajoutée**, et le témoin de BASES-0 aussi, taille de sauvegarde comprise. C'est
+la plomberie du lot GRILLE LONGUE, sans la grille longue : **aucune seconde
+grille au dépôt, aucun type de site ne reçoit de champ `grille`,
+`DISPOSITION_DEFENSES.tiersDeLaBande` reste `[3, 2, 3]`, aucun art n'entre.**
+⚠⚠ **`GRILLE` NE SE MUTE JAMAIS — C'EST L'INVARIANT DU LOT, ET `PORTÉE T1` LE
+MESURE.** Une seconde grille est un SECOND objet passé en argument. C'est ce qui
+laisse la base du JOUEUR hors de portée par construction : `data/base.js`
+(`GEOMETRIE_BASE`), `sim/state.js` (`FORCES`), `ui/defense.js`, `ui/chantier.js`
+et `sim/champs.js` lisent `GRILLE` comme avant, et ne sont pas touchés.
+⚠⚠ **LE VRAI MUR ÉTAIT LES CONSTANTES FIGÉES À L'IMPORT, PAS LES LECTURES EN
+CORPS DE FONCTION — MESURÉ PAR LA SONDE §2.2 DU BRIEF, EN IMPORT STATIQUE.**
+Sur `main`, `GRILLE` mutée en mémoire vers 9 × 27 APRÈS les imports laisse
+`DERNIERE_RANGEE` à 18 et `RANGEE_DEFENSE_FRANCHIE` à 11 : `genererSite` posait
+39 bâtiments en rangées 19–27 et **`creerCombat` LEVAIT** — « bâtiment « souche »
+en (26, 6) est hors de la grille (rangées 1–18) ». La voie retenue pour ces
+deux constantes est **hybride, (a) + (b)** : elles RESTENT, exportées,
+documentaires — `test/colonne.test.js`, `test/formation-et-garnison.test.js`
+et `test/grille.test.js` les lisent —, et **plus aucune ligne de production
+ne les lit** : `derniereRangee(grille = GRILLE)`, `derniereColonne(…)` et
+`rangeeDefenseFranchie(…)` les remplacent, et `posePermise` — le « trou »
+nommé par le brief — reçoit la grille de `ajouterEntite`, qui la lit sur
+l'état. Rejouée sur l'arbre du lot, la même sonde rend `creerCombat OK`.
+⚠⚠ **`etat.grille` N'EST POSÉ QUE SI LE MONTAGE EN PORTE UNE, ET `creerCombat`
+EST LE SEUL À L'ÉCRIRE.** `serialiserEtat` trie les clés PROPRES : un champ posé
+partout entrerait dans l'empreinte d'état des deux cents témoins. **Falsifié —
+`etat.grille = grille` inconditionnel fait tomber `JOURNAL T1` et `T1 bis` sur
+le champ 2 de `camp/richeQuartz/n5/g1/toutes`**, et `PORTÉE T2` avec ; le
+témoin de BASES-0, lui, ne bouge pas — il ne hache pas l'état de combat. Un
+lecteur privé, `grilleDuCombat(etat)`, rend `etat.grille ?? GRILLE`, et
+`PORTÉE T2` garde par la source décommentée qu'un seul `.grille =` existe dans
+`src/`, dans `creerCombat`, sous sa condition.
+⚠⚠ **LA PROJECTION PORTE SA GRILLE, ET SES LECTEURS LA REPRENNENT LÀ.**
+`calculerProjection` accepte `vue.grille`, le passe par `verifierGrille` — un
+`NaN` de marge rendrait `drawImage` muet sans lever — et le rend avec la
+projection ; `yDeRangee`, `yDeRangeeMilli`, `xDeColonneMilli`,
+`caseDepuisPixels`, `listeArsenal`, `listeDefense` et `rectangleDuFond` lisent
+`grilleDeLaProjection(projection)`, une seule écriture du repli `?? GRILLE`.
+C'est un écart de FORME au brief, qui donnait `caseDepuisPixels` « avec `GRILLE`
+en défaut » : une réciproque inverse la projection qui a posé `margeY`, et lui
+passer une autre grille rendrait une case d'une géométrie qui n'est pas celle
+du dessin. `render/bandes.js` gagne `bandesDe(grille)` — `BANDES` reste la
+constante de la grille par défaut, et `bandesDe()` la rend par IDENTITÉ — ;
+`render/fond.js` gagne `largeurEnCases` et `hauteurEnCases`, **sans toucher au
+`× 2`** de `HAUTEUR_IMAGE_EN_CASES` ni à `COTE_CASE_SOURCE = 108`, qui sont
+le verrou des fonds longs et le lot suivant.
+⚠⚠ **`verifierGrille` ENTRE, ET IL ITÈRE SUR `Object.keys(GRILLE.bandes)` — PAS
+SUR TROIS NOMS ÉCRITS.** Le premier jet nommait `'deploiement'`, `'defense'`,
+`'batiments'` en dur et **`RAID-E T5` est tombé** — « les trois bandes sont
+nommées ailleurs qu'une fois » : la grille par défaut EST la référence des
+bandes, elle se lit, elle ne se recopie pas.
+⚠ **DEUX TESTS ENTRENT, DANS `test/grille.test.js`, ET `test/` RESTE À 80.**
+`PORTÉE T1` — les sept exports sans argument, les jumelles paramétrées, le
+rendu sans grille, et l'invariant de non-mutation avec ses nombres écrits
+EXPRÈS ; `PORTÉE T2` — trois grilles synthétiques construites dans le test,
+jamais importées (9 × 27, 11 × 18, 9 × 20 défense décalée), **chacune des
+signatures modifiées exercée avec une valeur qui diffère de celle du défaut**,
+un combat monté et sérialisé sur la grille longue, et la garde de source.
+**Cinq falsifications, cinq chutes, rouge réel au rapport** — un défaut changé
+sur `estSortiParLeHaut` (`T1` : « estSortiParLeHaut(19000) sans argument
+false !== true », plus `G6`), `bornesBande` relisant `GRILLE` (`T2` :
+« bornesBande ignore sa grille »), `ligneEcranDeLaRangee` relisant `GRILLE`
+(`T2`, par `voilesDeLaBande`), un second `.grille =` dans `sim/raid.js` (`T2` :
+« écrit ailleurs que dans creerCombat : sim/combat.js 1, sim/raid.js 1 »), et
+l'inconditionnel ci-dessus.
+⚠ **SIX PROSE REMISES DROIT, MESURÉES** : `data/sites.js` (aucun test
+n'asserte la somme des tiers — la garde est le `throw` de `tiersDeLaDefense`,
+atteint par `PQ T6`), `sim/grille.js` (`avancer` est le troisième lecteur
+d'`estEnApproche`, et « élargir » n'est pas « paramétrer »), le titre de
+`PIC T7` (9 375 557 · 3,34 %, **constantes intactes, test non réancré** — 2 056
+octets sur une tolérance de 50 000), la marge en prose de `banc.test.js`
+(324 443 · 3,34 %), ce fichier §2 (NEUF fichiers de `test/` ne sont pas des
+tests — `portants.js` manquait au compte), et `render/fond.js` (trente-deux
+lectures de `GRILLE.longueur`, pas trente et une — comptées sur `main`).
+`data/base.js` est AMENDÉ : la grille portée n'est pas une grille du joueur.
+⚠ **UN HELPER MORT PART** — `colonnes()` de `sim/generateur.js`, sans appelant
+depuis PAQUETS ; `test/generateur-ancien.js` garde sa propre copie.
+`CASES_DEPLOIEMENT`, constante figée à un seul lecteur, devient
+`casesDeDeploiement(grille)`.
+⚠ **COÛT +2 056 OCTETS, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste
+contre le livrable REBÂTI dans un `git worktree` pristine de `main` = `ce3ea49`,
+qui EST le merge du lot AVARIES (**9 375 557**, retrouvé à l'octet) :
+**JavaScript +2 056 · images +0 · balisage +0 · feuille +0 · audio +0**,
+partition exacte des deux côtés — écart **0 · 0** —, `data:` à **313 lignes /
+312 URI** de part et d'autre. Borne T10 **9 700 000, NON TOUCHÉE**, marge
+**322 387 octets, 3,32 %**. `SAVE_VERSION` reste à **39** : aucun champ de
+sauvegarde ne bouge, et le témoin de BASES-0 mesure la taille sur 25 graines.
+⚠⚠ **CE QUI RESTE OUVERT, NOMMÉMENT, POUR LE LOT GRILLE LONGUE** : le `× 2` de
+`render/fond.js` (le facteur d'image se dérivera du manifeste, fond par fond),
+`COTE_CASE_SOURCE = 108`, le choix 77 / 78 du doublement des défenses,
+`cleCase` et son `× 100` (tient jusqu'à 99 colonnes, 2709 à 27 rangées), la
+garde de `replierCaseParCase` qui ne mord pas encore, la table des tiers à
+seize rangées (`tiersDeLaDefense(grilleLongue)` LÈVE aujourd'hui — c'est
+l'arbitrage, pas un défaut), et **`pourLeRejeu` qui ferait voyager
+`montage.grille` dans `etat.rapports`** : le jour où un montage en portera une,
+la sauvegarde grandira, et ce sera un `SAVE_VERSION` — ou une grille redérivée
+du type au rejeu. ⚠ Et les trois fonds longs déposés le 20/09 ont été
+DÉPLACÉS de `art/sources/` vers `art/sourcesstandby/` — non commités, SHA-256
+au rapport — parce que la garde « tout fichier d'`art/sources/` est CLASSÉ »
+rougissait sur la base ; ils n'entrent pas, le brief l'interdit.
+
+**Auparavant, après le lot AVARIES (20/09) :**
 ⚠⚠ **LES DEUX GROSSES BASES GAGNENT LEURS TROIS ÉTATS, CINQ SEMAINES APRÈS LES
 SITES D'UNE CASE.** Lot AVARIES. `base_o_2x2` et `base_o_3x3` n'avaient qu'un
 dessin ; les sites d'une case en portent quatre depuis EMBLÈMES-ABÎMÉS et
@@ -328,7 +433,30 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 20/09/2026 (après le lot AVARIES), à confronter :**
+**Référence au 20/09/2026 (après le lot GRILLE-PORTÉE), à confronter :**
+`npm test` rend **1662 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 661 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **deux**, `PORTÉE T1` et
+`PORTÉE T2` dans `test/grille.test.js` — `test/` reste à **80** fichiers, et
+aucun fichier n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **9 377 613 octets**, 0 référence externe.
+Coût **+2 056 octets**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` pristine de `main` = `ce3ea49`, qui EST le merge du lot AVARIES
+(**9 375 557**) : **JavaScript +2 056 · images +0 · balisage +0 · feuille +0 ·
+audio +0**, et les cinq postes PARTITIONNENT le fichier des deux côtés — écart
+**0 · 0**. `data:` à **313 lignes / 312 URI** de part et d'autre. Borne T10
+**9 700 000, NON TOUCHÉE**, marge **322 387 octets, 3,32 %**. `PIC T7` n'est
+PAS réancré — 2 056 octets sur une tolérance de 50 000 —, seul son titre est
+corrigé.
+⚠ `tools/verifier.py`, `tools/atlas.py` et `tools/fonds.py` **n'ont pas été
+lancés**, et c'était conforme : aucun art, aucun outil de la chaîne au diff.
+⚠ Le lot touche `src/sim/{grille,combat,generateur}.js`,
+`src/render/{projection,bandes,orientation,scene,portee,fond}.js`,
+`src/data/{sites,base}.js` (prose), `test/{grille,pictogramme,banc}.test.js`,
+`package.json`, ce fichier et `RAPPORT-lotGRILLE-PORTEE.md`.
+
+**Auparavant, après le lot AVARIES (20/09) :**
 `npm test` rend **1660 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 659 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
@@ -14167,7 +14295,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   80 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   80 fichiers *.test.js (node:test) ; NEUF n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -14181,7 +14309,12 @@ test/                   80 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
   ancres-zenith  ruines-defense  verrous  avaries-grosses-bases
-  ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
+  ⤷ ⚠⚠ LE NEUVIÈME EST `portants.js`, ENTRÉ AU LOT ÉCRASEMENT (18/09, audit
+    défaut n° 2 — le déblocage PAR PIÈCE), et cette ligne disait « HUIT »
+    jusqu'au lot GRILLE-PORTÉE : il traduit les
+    anciens montages de modules par NOM vers les identifiants de PIÈCE —
+    `test/documentation.test.js` le liste avec les huit autres. LE HUITIÈME
+    EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à
     `JOURNAL T1 bis`, qui rejoue les deux cents témoins d'AVANT le lot sur le

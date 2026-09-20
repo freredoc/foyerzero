@@ -1843,8 +1843,17 @@ export const DISPOSITION_DEFENSES = {
   // La bande de défense se lit en TROIS TIERS, de l'avant vers l'arrière :
   // 3 rangées, 2 rangées, 3 rangées — soit 3–5, 6–7, 8–10 sur la bande
   // d'aujourd'hui. Les largeurs sont écrites ici, les rangées se DÉRIVENT de
-  // `GRILLE.bandes.defense` ; un test exige que la somme fasse la hauteur de la
-  // bande.
+  // `GRILLE.bandes.defense` — de la grille PASSÉE à `tiersDeLaDefense` depuis
+  // le lot GRILLE-PORTÉE, `GRILLE` en défaut.
+  //
+  // ⚠ AUCUN TEST N'ASSERTE QUE LA SOMME FAIT LA HAUTEUR DE LA BANDE — la
+  // première écriture de ce commentaire le prétendait, et c'était faux,
+  // mesuré au lot GRILLE-PORTÉE. La garde est le `throw` de
+  // `tiersDeLaDefense` (`sim/generateur.js`), atteint indirectement par
+  // `PQ T6` de `test/paquets.test.js`. ⚠ Et cette table couvre 8 rangées :
+  // une bande de défense de 16 rangées — la grille longue — la fait LEVER,
+  // ce qui est le point d'arrêt voulu ; la table à seize est l'arbitrage du
+  // lot GRILLE LONGUE, et elle ne s'invente pas ici.
   tiersDeLaBande: [['avant', 3], ['milieu', 2], ['arriere', 3]],
 
   // Le tiers PRÉFÉRÉ d'un paquet, tiré sur ces poids selon la catégorie de son
