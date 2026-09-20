@@ -180,8 +180,37 @@ test('sprite — une exclusion de couture existe sur le disque et n\'est pas cou
   const exclus = Object.entries(exclusions).flatMap(([slug, noms]) => noms.map((n) => [slug, n]));
 
   // ⚠ FALSIFIABLE : sans cette ligne, une table vide passerait la boucle.
-  assert.equal(exclus.length, 2,
+  //
+  // ⚠⚠ LE COMPTE TOMBE DE DEUX À ZÉRO AU LOT SOUFFLE, 20/09, ET CE TEST A FAIT
+  // SON TRAVAIL EN L'ATTRAPANT. Les deux seules exclusions du dépôt étaient
+  // `base_o_2x2` et `base_o_3x3` ; elles sortent en `.webp` depuis que
+  // `tools/emblemes.py` dérive le format de l'emprise, et `sprites_de` ne liste
+  // que les `.png`. Elles ne sont donc plus CANDIDATES à la couture, et une
+  // exclusion nommée serait devenue la ligne morte que la garde inverse
+  // d'`atlas.py` punit — « une exclusion qui ne désigne rien : la retirer ».
+  //
+  // ⚠⚠ ET ZÉRO EXCLUSION LAISSERAIT CE TEST SANS RIEN À MESURER : LA BOUCLE
+  // CI-DESSOUS NE S'EXÉCUTE PLUS. C'est exactement le cas qu'un montage
+  // falsifiable doit refuser, donc la garde CHANGE DE NATURE au lieu de
+  // disparaître — elle vérifiait « l'exclu existe et n'est pas cousable », elle
+  // vérifie maintenant **« ce qui n'est plus exclu n'est plus cousable non
+  // plus »**. Sans elle, remettre un `base_o_3x3.png` de 384 × 384 dans
+  // `carte/128` le ferait entrer dans la couture, `coudre` lèverait sur une
+  // cellule non carrée, et AUCUN test de ce fichier ne l'aurait vu venir.
+  assert.equal(exclus.length, 0,
     `${exclus.length} exclusions — si le compte a changé, dire pourquoi ici`);
+
+  for (const grille of [COTE_SPRITE, 64]) {
+    const dossier = join(SPRITES, 'carte', String(grille));
+    const fichiers = readdirSync(dossier);
+    for (const nom of ['base_o_2x2', 'base_o_3x3']) {
+      assert.ok(fichiers.includes(`${nom}.webp`),
+        `carte/${grille} : « ${nom} » n'est plus le WebP hors couture qu'il doit être`);
+      assert.ok(!fichiers.includes(`${nom}.png`),
+        `carte/${grille} : « ${nom}.png » est revenu — il entrerait dans la couture, `
+        + 'qui lèverait sur une cellule non carrée');
+    }
+  }
 
   for (const [slug, nom] of exclus) {
     const chemin = join(SPRITES, dossierDeLaFamille(slug), String(COTE_SPRITE), `${nom}.png`);

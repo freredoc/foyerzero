@@ -173,7 +173,7 @@ def conditionner(im,P,N,erosion=3):
 
 SEUIL_ALPHA=8
 
-def ecrire(g,P,path,matiere=None):
+def ecrire(g,P,path,matiere=None,options=None):
     """Écrit le sprite : rendu palette sans matière, réduction par filtre avec.
 
     ⚠⚠ L'ORDRE DES CINQ GESTES COMPTE, ET LA PRÉMULTIPLICATION EST CELUI QU'ON
@@ -184,13 +184,26 @@ def ecrire(g,P,path,matiere=None):
 
     ⚠ LE RGB EST REMIS À ZÉRO SOUS LE SEUIL. Un pixel transparent qui garde une
     couleur est une donnée que personne ne lit et que tout encodeur paie.
+
+    ⚠⚠ `options` EST LE PASSE-PLAT DE L'ENCODEUR, ET IL EST VIDE PAR DÉFAUT —
+    lot SOUFFLE, 20/09. PIL déduit le FORMAT de l'extension du chemin ; ce qu'il
+    ne déduit pas, ce sont les RÉGLAGES. Un `path` en `.webp` sans options sort
+    en qualité 80 / méthode 4, les défauts de la bibliothèque, quand les
+    dix-neuf atlas du dépôt sont à 85 / 6 / `exact`. Deux encodages pour une
+    même famille d'images, c'est la seconde vérité que §4 interdit.
+
+    ⚠ LE DÉFAUT `None` GARANTIT LE BIT. Tous les appelants d'avant ce lot
+    passent quatre arguments et rendent donc EXACTEMENT les mêmes octets —
+    `tools/verifier.py` le mesure sur les 1 100 sprites de la chaîne, et c'est
+    la seule chose qui puisse le dire.
     """
     N=g.shape[0]
+    options=options or {}
     if matiere is None:
         out=np.zeros((N,N,4),np.uint8)
         for i,(n,h,c) in enumerate(P):
             k=(g==i); out[k,0],out[k,1],out[k,2],out[k,3]=c[0],c[1],c[2],255
-        Image.fromarray(out,'RGBA').save(path)
+        Image.fromarray(out,'RGBA').save(path,**options)
         return
     a,fond=matiere
     src=a.astype(np.float64).copy()
@@ -205,7 +218,7 @@ def ecrire(g,P,path,matiere=None):
     out=np.zeros((N,N,4),np.uint8)
     out[...,:3]=np.rint(rgb).astype(np.uint8)
     out[...,3]=np.where(vif,np.rint(al),0).astype(np.uint8)
-    Image.fromarray(out,'RGBA').save(path)
+    Image.fromarray(out,'RGBA').save(path,**options)
 
 # ---------------- unites ----------------
 U=[('P2_1_off_j_meute_off_j_perceurs.png',['meute','perceurs'],18),

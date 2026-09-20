@@ -953,11 +953,28 @@ test('emblèmes — les neuf pré-branchés sont joignables, pas seulement prés
   // ⚠ LES DEUX GROSSES BASES N'Y SONT PAS, ET C'EST LE POINT. Elles ne sont pas
   // carrées à la taille de case, donc `coudre` les refuse ; elles voyagent par
   // leur propre marqueur. Leur joignabilité se mesure sur le DISQUE.
+  //
+  // ⚠⚠ ET ELLES SE MESURENT EN `.webp` DEPUIS LE LOT SOUFFLE, 20/09. Elles
+  // étaient les deux seuls PNG que `tools/build.js` inlinait encore, et leurs
+  // octets de PNG étaient ceux du livrable — à la différence d'un sprite
+  // d'atlas, dont le PNG n'est qu'un intermédiaire que `coudre` réencode.
+  // **−371 454 octets**, mesurés au build et ventilés dans `PIC T7`.
+  //
+  // ⚠ ET L'EXTENSION SE LIT DANS LE DOSSIER, ELLE NE SE DEVINE PAS : un
+  // `.webp` écrit en dur ici passerait au vert le jour où un lot les
+  // rebasculerait en PNG sans toucher ce fichier, et le test cesserait de dire
+  // ce qu'il dit — que le dessin est joignable là où le build va le chercher.
   for (const nom of Object.values(SPRITES_GROSSE_BASE)) {
     assert.ok(!existeDansAtlas(FAMILLE, nom),
       `« ${nom} » est dans l'atlas : il n'a plus besoin de son marqueur`);
-    const chemin = join(RACINE, 'art', 'sprites', 'carte', '64', `${nom}.png`);
-    assert.ok(readFileSync(chemin).length > 0, `« ${nom} » est absent du disque`);
+    const dossier = join(RACINE, 'art', 'sprites', 'carte', '64');
+    const [fichier, ...doublons] = readdirSync(dossier)
+      .filter((f) => f.replace(/\.[a-z]+$/, '') === nom);
+    assert.ok(fichier, `« ${nom} » est absent du disque`);
+    assert.deepEqual(doublons, [],
+      `« ${nom} » existe en plusieurs formats : le build n'en inline qu'un`);
+    assert.ok(readFileSync(join(dossier, fichier)).length > 0,
+      `« ${nom} » est vide sur le disque`);
   }
 
   // Et leur emprise. Une 3 × 3 se centre ; une 2 × 2 n'a pas de centre, donc la

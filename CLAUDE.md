@@ -7,14 +7,83 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **19/09/2026**, version 0.99.69 · build 181.
+Dernière révision : **20/09/2026**, version 0.99.70 · build 182.
+⚠⚠ **LE LIVRABLE PERD 371 454 OCTETS SANS QU'UN DESSIN CHANGE, ET LA BORNE NE
+BOUGE PAS.** Lot SOUFFLE : les deux grosses bases de l'Ouvrage — `base_o_2x2` et
+`base_o_3x3` — étaient les **deux seuls PNG** que `tools/build.js` inlinait
+encore, au milieu de dix-neuf atlas et de neuf fonds déjà en WebP. Elles passent
+en **WebP q85**, aux réglages exacts d'`atlas.py`. Livrable **9 494 171 →
+9 122 717**, marge sur T10 **205 829 → 577 283, 2,12 % → 5,95 %**.
+⚠⚠ **ET LA DIFFÉRENCE AVEC UN SPRITE D'ATLAS EST TOUTE LA RAISON DU LOT.** Le
+PNG d'un sprite cousu est un INTERMÉDIAIRE que `coudre` réencode : son poids ne
+se retrouve nulle part dans le livrable. Ces deux-là entrent TELLES QUELLES, par
+leur propre marqueur, parce qu'elles ne sont pas carrées à la taille de case :
+**leurs octets de PNG étaient les octets du livrable**. C'est pourquoi elles
+seules sont concernées, et pourquoi la frontière ne s'écrit pas — elle EST
+`cases > 1` dans `tools/emblemes.py`, la même chose qu'« hors atlas ».
+⚠⚠ **LA PERTE D'IMAGE A ÉTÉ MESURÉE AVANT D'ÊTRE ACCEPTÉE, ET ELLE EST PLUS
+PETITE QUE CELLE QUE LE DÉPÔT S'INFLIGE DÉJÀ.** Écart RGB sur les pixels
+OPAQUES : moyenne **7,14** et **7,35**, maximum **102** et **89**, **1,2 %** de
+pixels au-delà de 30. La même mesure sur `site_base_o_n9` — un emblème de la
+MÊME famille, tel que `atlas-carte-128.webp` le porte aujourd'hui — rend
+**10,38 de moyenne, 113 de maximum, 2,77 %**. ⚠ Et l'alpha est intact **au
+bit** — écart maximum **0** sur les quatre fichiers : aucun bord ne bouge.
+⚠⚠ **LA BORNE T10 NE BOUGE PAS, ET C'EST UNE DÉCISION.** Les dix relèvements
+précédents avaient tous la même cause — une ressource entre. Ici rien n'entre,
+et §5 ne connaît qu'un sens à ce curseur : « elle se RELÈVE quand une ressource
+entre légitimement ». La DESCENDRE pour recoller à un livrable plus léger serait
+un resserrement que rien ne demande et qui coûterait le prochain lot d'art.
+**9 700 000, inchangée.**
+⚠⚠ **DEUX GARDES ONT CHANGÉ DE NATURE PLUTÔT QUE DE DISPARAÎTRE, ET C'EST LE
+POINT DÉLICAT DU LOT.** `sprites_de` d'`atlas.py` ne liste que les `.png` : les
+deux grosses bases ne sont donc plus CANDIDATES à la couture, et leur exclusion
+nommée est devenue la ligne morte que la garde inverse du même fichier punit —
+« une exclusion qui ne désigne rien : la retirer ». `FAMILLES['carte']` passe
+donc de `('base_o_2x2', 'base_o_3x3')` à `()`, **l'effectif restant 133**.
+Conséquence : `sprite.test.js` n'a plus aucune exclusion à mesurer, et sa boucle
+ne s'exécute plus. Elle vérifiait « l'exclu existe et n'est pas cousable » ; elle
+vérifie désormais **« ce qui n'est plus exclu n'est plus cousable non plus »** —
+sans quoi un `base_o_3x3.png` de 384 × 384 remis dans `carte/128` entrerait dans
+la couture et `coudre` lèverait, sans qu'aucun test ne l'ait vu venir.
+⚠ **CINQ FALSIFICATIONS, CINQ CHUTES** — `.webp` remis en `.png` dans
+`tools/build.js`, `type: 'image/png'` sur une grosse base, le format écrit par
+NOM au lieu d'être dérivé de `cases`, l'une des deux `save` d'`ecrire` privée de
+ses options, et un PNG de grosse base laissé à côté de son WebP.
+⚠ **QUATRE TESTS RÉANCRÉS, AUCUN ASSOUPLI** — `AC T8` (`png: 2` sort de la table
+des ressources, `webp` passe de 41 à 43 ; l'absence de la clé `png` EST
+l'assertion, `deepEqual` refusant une clé en trop), `PIC T7`, `EMB-C T4`,
+« emblèmes — les neuf pré-branchés », plus la garde d'exclusion ci-dessus.
+Chacun porte le nombre d'avant à côté de celui d'après.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 38** — vérifié au diff : pas un champ
+n'entre dans l'état. Un format d'encodage est une propriété de la chaîne
+graphique, pas de la partie.
+⚠⚠ **ET LA §0 D'HIER ÉCRIVAIT 37 QUAND LE CODE DISAIT 38.** Le bloc du lot
+RUINES-DÉFENSE annonce « `SAVE_VERSION` EST À 37 » ; `src/sim/state.js` porte
+**38** depuis le lot MODE-DEV, et le bloc « Auparavant » de ce même fichier le
+disait déjà. Le document se contredisait à deux cents lignes d'écart. **Corrigé
+ici**, dans le bloc d'historique, qui garde par ailleurs ce que son lot a mesuré.
+⚠⚠ **ET DEUX LIGNES DE `SPEC-FOYER-ZERO.md` §10 SONT FAUSSES DEPUIS LE 31/08,
+NON CORRIGÉES ICI.** Elle annonce une carte « 30 × 300 » (ligne 312) et une base
+terminale « à 25 cases du bord haut » (ligne 315) quand `GEOGRAPHIE` dit
+**31 × 300** et **14 cases** — rangée 15. C'est la spec qui ment, pas le code.
+Ce lot ne touche ni à l'un ni à l'autre et **ne les corrige pas** : le signaler
+sans le faire est contraire à §5, mais les corriger dans un lot d'art le serait
+aussi. **C'est au prochain lot qui touche à la géographie**, et il est déjà
+prévu — le dossier `DOSSIER-BASE-FINALE-ET-VERROUS.md` le porte en §0.
+⚠ **AUCUN FICHIER DE `src/` N'EST TOUCHÉ**, vérifié au diff. Le lot est
+entièrement dans `tools/`, `test/`, `art/sprites/carte/` et la documentation.
+
+**Auparavant, après le lot RUINES-DÉFENSE (19/09) :**
 ⚠⚠ **LE TROU DE BUILDS EST FRANCHI, IL N'Y A PLUS RIEN À SAUTER.** Les builds
 164 à 173 ont été brûlés hors dépôt ; le bump du 17/09 est passé à **174** puis
 **175**, et `PolitiqueVersion.miseAJourAcceptable` refusant un build inférieur
 **ou égal** à l'installé, tout bump repart désormais de **175** — donc **177**
 ici. Ne plus lire ce paragraphe comme une consigne de saut : il ne reste qu'un
 incrément normal.
-⚠⚠ **`SAVE_VERSION` EST À 37, ET DEUX MAILLONS TRADUISENT AU LIEU D'UN.** La PR
+⚠⚠ **`SAVE_VERSION` EST À 38** — le bloc disait « 37 » ; le code dit 38 depuis le
+lot MODE-DEV, et c'est le lot SOUFFLE qui a relevé l'écart. Le reste du
+paragraphe décrit la chaîne de maillons telle que RUINES-DÉFENSE l'a posée.
+**ET DEUX MAILLONS TRADUISENT AU LIEU D'UN.** La PR
 test du 17/09 (`test-bump-175-save-36`, merge `e4b0359`) a posé **trois maillons
 vides** 33 → 34 → 35 → 36 et laissé en §0 la consigne inverse (« `SAVE_VERSION`
 reste à 33 […] ne PAS écrire 36 ») : le dépôt se contredisait lui-même, le code
@@ -68,7 +137,42 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 19/09/2026 (après le lot RUINES-DÉFENSE), à confronter :**
+**Référence au 20/09/2026 (après le lot SOUFFLE), à confronter :**
+`npm test` rend **1650 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 649 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **deux**, `SOUFFLE T1` et
+`SOUFFLE T2` de `test/embleme.test.js`.
+`npm run build` → `dist/index.html`, **9 122 717 octets**, 0 référence externe.
+Gain **−371 454 octets**, mesuré poste par poste contre le livrable rebâti dans
+un `git worktree` depuis l'arbre pristine de `main` = `c8567bc`
+(**9 494 171**) : **images −371 454 · JavaScript +0 · feuille +0 · balisage +0 ·
+audio +0**, et les cinq postes PARTITIONNENT le fichier des deux côtés — chacun
+NET de ses `data:`, somme exacte sur le total avant comme après — `data:` à
+**307 lignes / 306 URI** des deux côtés. Borne T10 **9 700 000, NON TOUCHÉE**,
+marge **577 283 octets, 5,95 %**.
+⚠ `python3 tools/verifier.py --outil emblemes` rend **271 identiques · 0
+différents · 0 nouveaux**, et `atlas.py --verifier` **17 identiques · 3
+différents** — `carte-64`, `carte-128`, `interface-128`, les trois ÉCARTs
+préexistants, laissés où le lot les a trouvés, comme le lot précédent.
+⚠⚠ **MAIS `verifier.py` SANS `--outil` SORT EN ROUGE — 950 identiques · 176
+DIFFÉRENTS —, ET CE N'EST PAS CE LOT.** Mesuré deux fois : **aucun fichier de
+`carte/` ne diffère** (les 176 sont `bâtiment` 132, `defense` 24, `socle` 18,
+`chassis` 2), et le MÊME rouge sort de `main` pristine — `--outil batiments_v2`
+dans un `git worktree` sur `c8567bc`, sans une ligne du lot, rend **30
+identiques · 132 différents**. Cause probable : l'environnement d'exécution
+(**Pillow 12.2.0 / numpy 2.4.4** dans le conteneur) plutôt que le dépôt. **À
+vérifier sur la machine d'Ethan avant d'en faire un lot** : si la commande y est
+verte, il n'y a rien à corriger. Le corriger ici aurait voulu dire régénérer 176
+sprites que personne n'a demandés, ou épingler une version de Pillow — un lot
+d'outillage à part entière. **Ethan tranche.**
+⚠ Le lot touche `tools/final128.py`, `tools/emblemes.py`, `tools/atlas.py`,
+`tools/build.js`, `test/embleme.test.js`, `test/sprite.test.js`,
+`test/monde.test.js`, `test/chantier.test.js`, `test/pictogramme.test.js`,
+`test/banc.test.js`, `package.json`, ce fichier et `RAPPORT-lotSOUFFLE.md` ;
+côté art il fait ENTRER quatre `.webp` et SORTIR quatre `.png`.
+
+**Auparavant, après le lot RUINES-DÉFENSE (19/09) :**
 ⚠⚠ **UNE PIÈCE DE DÉFENSE ABATTUE LAISSE SA RUINE, ET CE N'EST PAS CELLE D'UN
 BÂTIMENT.** `RESTE_APRES_DESTRUCTION.defense` passe de `'rien'` à `'ruine'`, et
 le commentaire daté qui promettait ce jour-là part avec. ⚠ **Le geste ne suffit
