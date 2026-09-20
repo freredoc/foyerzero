@@ -362,7 +362,9 @@ const sprite = (famille, nom, x, y, l, h, angle = 0, alpha = OPACITE_PLEINE) => 
  */
 export function listeDuFond(nom, projection) {
   if (nom === null || nom === undefined) return [];
-  const r = rectangleDuFond(projection);
+  // ⚠ LE DÉCOR DONNE SA HAUTEUR — lot GRILLE LONGUE : un décor long fait trente
+  // cases, un court vingt, et c'est l'image qui le dit, pas la grille.
+  const r = rectangleDuFond(projection, nom);
   return [{
     forme: 'sprite',
     famille: nom,

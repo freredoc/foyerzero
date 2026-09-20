@@ -13,13 +13,24 @@
 // de faire des tests de raid pour l'équilibrage, c'est mon boulot ». Ce fichier
 // mesure des faits — où sont les verrous, ce qui est refusé, ce qui est exclu —
 // jamais si c'est jouable.
+//
+// ⚠⚠ DEUX TESTS DE PLUS AU LOT GRILLE LONGUE, 20/09/2026 — `LONGUE T1` et
+// `LONGUE T2` —, PARCE QUE CE LOT ACHÈVE CE QUE VERROUS AVAIT LAISSÉ OUVERT :
+// les sept bases du bout de carte se combattent sur une grille de 9 × 27, avec
+// seize rangées de défense et 78 défenses, et leur grille voyage jusqu'au
+// rejeu. Même règle qu'au-dessus : on mesure où sont les rangées et ce qui
+// rejoue, jamais si 78 défenses sont jouables — c'est l'affaire d'Ethan.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   GEOGRAPHIE, TYPES_SITE, TYPES_DE_BASE, NIVEAU_MAXIMAL_DUN_SITE, EMBLEMES_CARTE,
 } from '../src/data/sites.js';
+import { GRILLE, GRILLE_LONGUE } from '../src/data/combat.js';
 import {
   positionsDesVerrous, positionBaseTerminale, grossesBasesDeLaCarte,
   grosseBaseDeLaCase, empriseDeLaGrosseBase, niveauDeLaGrosseBase, estSurLaCarte,
@@ -29,12 +40,73 @@ import { estBaseOuvrage } from '../src/sim/peuplement.js';
 import { siteDeLaCase, montageDuSite } from '../src/sim/site-de-la-case.js';
 import { problemesDuRaid } from '../src/sim/raid.js';
 import { verrousDebout, finaleDeverrouillee } from '../src/sim/ruines.js';
-import { creerEtat, SAVE_VERSION, migrer } from '../src/sim/state.js';
-import { creerCombat } from '../src/sim/combat.js';
-import { densite } from '../src/sim/generateur.js';
+import {
+  creerEtat, SAVE_VERSION, migrer, rattraperJeu, serialiser, charger, poserEffectif,
+} from '../src/sim/state.js';
+import { baseCourante } from '../src/sim/base-courante.js';
+import { creerCombat, resoudre, serialiserEtat } from '../src/sim/combat.js';
+import {
+  densite, genererSite, facteurDeDefenseMilli, effectifDeDefense, tiersDeLaDefense,
+  casesDeDefense,
+} from '../src/sim/generateur.js';
+import { verifierGrille } from '../src/sim/grille.js';
 import { estAPorteeDAttaque } from '../src/sim/points-attaque.js';
+import {
+  executerRaid, montageDuRaid, composerLesVagues, pourLeRejeu,
+} from '../src/sim/raid.js';
+import { crediterLesReserves, plafondDeLaReserve } from '../src/sim/reparation.js';
 
 const GRAINE = 7;
+const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * ⚠ UNE GARDE QUI LIT CE QU'ON A ÉCRIT À SON SUJET NE GARDE RIEN — la doc de
+ * `GRILLE_LONGUE` NOMME les champs de calibrage pour dire qu'elle ne les porte
+ * pas. La source se lit décommentée, et un appât prouve que le filtre ne mange
+ * pas tout.
+ */
+const sansCommentaires = (code) => code
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+
+/**
+ * Une partie qui peut raider : un Chantier au niveau 12, les trois bâtiments de
+ * production, six Meutes en vague 1, des points d'attaque et de la scorie. C'est
+ * le montage de `test/journal-raids.test.js`, repris tel quel.
+ */
+function partieJouable(graine) {
+  const etat = creerEtat(graine);
+  rattraperJeu(etat, 3001);
+  baseCourante(etat).disposition[0].niveau = 12;
+  let colonne = 1;
+  for (const id of ['caserne', 'depotDeVehicules', 'aerodrome']) {
+    baseCourante(etat).disposition.push({ id, rangee: 13, colonne, niveau: 5 });
+    baseCourante(etat).economie.residus.push({});
+    colonne += 2;
+  }
+  for (let c = 1; c <= 6; c += 1) {
+    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne: c, niveau: 1 });
+  }
+  baseCourante(etat).economie.ressources.scorie = 1_000_000_000;
+  etat.attaque.points = 100_000;
+  crediterLesReserves(etat, plafondDeLaReserve(etat));
+  return etat;
+}
+
+/** Le premier camp posé autour de la base — un site ORDINAIRE, sans grille. */
+function premierCamp(etat) {
+  const s = baseCourante(etat).satellites.presents.find((x) => x.type === 'camp');
+  return s === undefined ? null : { rangee: s.rangee, colonne: s.colonne };
+}
+
+/** Le combat d'ORIGINE d'un raid, recomposé AVANT qu'il ait lieu, résolu. */
+function combatDOrigine(etat, cible) {
+  const site = siteDeLaCase(etat, cible.rangee, cible.colonne);
+  const montage = { ...montageDuRaid(etat, site), vagues: composerLesVagues(etat).vagues };
+  const combat = creerCombat(montage);
+  const resultat = resoudre(combat);
+  return { montage: pourLeRejeu(montage), combat, resultat };
+}
 
 /** Les six verrous rasés, sous la forme que `basesRasees` porte depuis la v28. */
 function tousLesVerrousRases(minute = 0) {
@@ -338,7 +410,9 @@ test('VERROU T6 — la finale se compose et se combat au niveau 60', () => {
 // ---------------------------------------------------------------------------
 
 test('VERROU T7 — la v39 retire les ruines tombées sous les sept emprises', () => {
-  assert.equal(SAVE_VERSION, 39, 'SAVE_VERSION n\'est plus celle du lot VERROUS');
+  // ⚠ LE NUMÉRO EST CELUI DU LOT GRILLE LONGUE (40) DEPUIS LE 20/09/2026 ; ce que
+  // ce test garde est que SON maillon, 38 → 39, est encore dans la chaîne.
+  assert.equal(SAVE_VERSION, 40, 'SAVE_VERSION n\'est plus celle du lot GRILLE LONGUE');
 
   // ⚠⚠ CE QUE CE MAILLON ÉVITE EST UNE PANNE MUETTE. `siteDeLaCase` interroge
   // `casesRasees` AVANT de rendre une grosse base : une case rasée sous une
@@ -376,4 +450,247 @@ test('VERROU T7 — la v39 retire les ruines tombées sous les sept emprises', (
     assert.ok(siteDeLaCase(etat, base.rangee, base.colonne),
       `« ${base.type} » reste introuvable après migration`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// LONGUE T1 — les sept jouent long, les autres ne bougent pas
+// ---------------------------------------------------------------------------
+
+test('LONGUE T1 — les sept jouent long, les autres ne bougent pas', () => {
+  // ⚠⚠ LA GRILLE LONGUE EST UN SECOND OBJET, GÉOMÉTRIE SEULE, ET `GRILLE` N'EST
+  // PAS MUTÉE — c'est l'invariant du lot GRILLE-PORTÉE, mesuré par `PORTÉE T1`,
+  // et il est le préalable de tout ce qui suit. Ses quatre clés se NOMMENT : un
+  // champ de calibrage recopié ici serait une seconde vérité, et surtout il
+  // VOYAGERAIT dans chaque rapport rejouable de la sauvegarde.
+  assert.equal(TYPES_SITE.baseVerrou.grille, GRILLE_LONGUE);
+  assert.equal(TYPES_SITE.baseTerminale.grille, GRILLE_LONGUE);
+  assert.notEqual(GRILLE_LONGUE, GRILLE, 'la grille longue est la grille par défaut');
+  assert.deepEqual(Object.keys(GRILLE_LONGUE).sort(), ['bandes', 'casesBatiments', 'largeur', 'longueur'],
+    'GRILLE_LONGUE porte autre chose que sa géométrie');
+  assert.deepEqual(GRILLE_LONGUE, {
+    largeur: 9, longueur: 27,
+    bandes: {
+      deploiement: { premiere: 1, derniere: 2 },
+      defense: { premiere: 3, derniere: 18 },
+      batiments: { premiere: 19, derniere: 27 },
+    },
+    casesBatiments: 81,
+  });
+  assert.doesNotThrow(() => verifierGrille(GRILLE_LONGUE, 'LONGUE T1'));
+  assert.deepEqual(GRILLE.bandes.defense, { premiere: 3, derniere: 10 }, 'GRILLE a été mutée');
+  assert.equal(GRILLE.longueur, 18, 'GRILLE a été mutée');
+  // Les cinq autres types n'ont pas le champ — donc prennent le défaut.
+  for (const type of ['camp', 'avantPoste', 'base']) {
+    assert.equal(Object.hasOwn(TYPES_SITE[type], 'grille'), false,
+      `« ${type} » porte une grille : il jouerait long`);
+  }
+
+  // ⚠⚠ ET AUCUNE LIGNE DE `src/` NE LIT UN CALIBRAGE SUR UNE GRILLE REÇUE EN
+  // ARGUMENT. Mesuré avant d'écrire la table : les treize lectures de
+  // `vaguesParRaid`, `intervalleVagueSec`, `tickSec`, `dureeMaxCombatSec`,
+  // `plancherReservePct`, `ticksAvantRepli` et `lateral` nomment toutes
+  // `GRILLE`. Le jour où une lecture `grille.<calibrage>` entrera, ce test la
+  // nommera, et c'est ce jour-là que l'étalement deviendra juste.
+  const CALIBRAGE = ['vaguesParRaid', 'intervalleVagueSec', 'tickSec', 'dureeMaxCombatSec',
+    'plancherReservePct', 'ticksAvantRepli', 'lateral'];
+  const motif = new RegExp(`(?<![A-Za-z0-9_$])grille\\??\\.(${CALIBRAGE.join('|')})(?![A-Za-z0-9_$])`);
+  assert.match('const n = grille.vaguesParRaid;', motif, 'le motif ne reconnaît pas la faute');
+  assert.match('etat.grille?.tickSec', motif, 'le motif ne reconnaît pas la faute optionnelle');
+  assert.doesNotMatch('GRILLE.vaguesParRaid', motif, 'le motif accuse la grille par défaut');
+  const fautives = [];
+  for (const dossier of ['data', 'sim', 'render', 'ui']) {
+    for (const fichier of readdirSync(join(RACINE, 'src', dossier))) {
+      const source = sansCommentaires(readFileSync(join(RACINE, 'src', dossier, fichier), 'utf8'));
+      if (motif.test(source)) fautives.push(`${dossier}/${fichier}`);
+    }
+  }
+  assert.deepEqual(fautives, [], 'une grille reçue en argument porte du calibrage : l\'étalement devient juste');
+
+  // ⚠⚠ LES TIERS SE DÉRIVENT PAR LE RAPPORT ENTIER DES HAUTEURS, ET LE RESTE EST
+  // UN REFUS. Seize sur huit font 2, donc `[6, 4, 6]` — les proportions 3/2/3
+  // tiennent par construction, pas par recopie. Une bande de DOUZE n'est pas un
+  // multiple : elle demande sa propre table, et répartir un reste serait choisir
+  // OÙ vont les rangées en trop, c'est-à-dire de l'équilibrage.
+  assert.deepEqual(tiersDeLaDefense(GRILLE_LONGUE), {
+    avant: { premiere: 3, derniere: 8 }, milieu: { premiere: 9, derniere: 12 }, arriere: { premiere: 13, derniere: 18 },
+  });
+  assert.deepEqual(tiersDeLaDefense(), {
+    avant: { premiere: 3, derniere: 5 }, milieu: { premiere: 6, derniere: 7 }, arriere: { premiere: 8, derniere: 10 },
+  }, 'les tiers de la grille par défaut ont bougé');
+  const douze = verifierGrille({
+    ...GRILLE_LONGUE,
+    longueur: 23,
+    bandes: { ...GRILLE_LONGUE.bandes, defense: { premiere: 3, derniere: 14 }, batiments: { premiere: 15, derniere: 23 } },
+  }, 'LONGUE T1 douze');
+  assert.throws(() => tiersDeLaDefense(douze), /les tiers couvrent 8 rangées, la bande en fait 12/,
+    'une bande de douze se répartit au lieu d\'être refusée');
+
+  // ⚠⚠ LE FACTEUR SE DÉRIVE DES CASES DE DÉFENSE, IL NE S'ÉCRIT PAS « × 2 » —
+  // et il est en MILLIÈMES, ce qui est un écart déclaré au brief (« === 1 ») :
+  // c'est l'unité de tout le moteur. 144 cases de défense pour 72 font 2000 ;
+  // la grille par défaut rend 1000, et `effectifDeDefense` y est l'identité.
+  assert.equal(casesDeDefense(GRILLE), 72);
+  assert.equal(casesDeDefense(GRILLE_LONGUE), 144);
+  assert.equal(facteurDeDefenseMilli(GRILLE), 1000);
+  assert.equal(facteurDeDefenseMilli(), 1000);
+  assert.equal(facteurDeDefenseMilli(GRILLE_LONGUE), 2000);
+  const defensesDUneBase = densite('base', GEOGRAPHIE.niveauPlafond).defenses;
+  assert.equal(defensesDUneBase, 39, 'le montage ne mesure rien : une base de niveau 50 ne fait plus 39 défenses');
+  assert.equal(effectifDeDefense(defensesDUneBase, GRILLE), defensesDUneBase);
+  // Le 78 est CALCULÉ — deux fois, par deux chemins — et jamais écrit.
+  assert.equal(effectifDeDefense(defensesDUneBase, GRILLE_LONGUE), defensesDUneBase * 2);
+  assert.equal(effectifDeDefense(defensesDUneBase, GRILLE_LONGUE),
+    Math.floor((defensesDUneBase * facteurDeDefenseMilli(GRILLE_LONGUE) + 500) / 1000));
+  // ⚠ ET C'EST 78, PAS 77 : `DENSITE.parNiveau` sert les cinq types et ne bouge
+  // pas — doubler la table donnerait 77, l'arrondi au demi supérieur donne 78.
+  assert.equal(effectifDeDefense(39, GRILLE_LONGUE), 78);
+  assert.notEqual(effectifDeDefense(39, GRILLE_LONGUE), 77);
+
+  // ⚠⚠ LES SITES, SUR PLUSIEURS GRAINES : les sept jouent long, les trois autres
+  // ne bougent pas — 39 bâtiments dans la bande 19–27 et 78 défenses dans la
+  // bande 3–18 d'un côté, les bandes d'hier de l'autre. « Identique au bit à ce
+  // que `main` rendait » est ce que les deux cents témoins de `JOURNAL T1`
+  // mesurent ; ici on nomme les bandes, et on exige que la bande LONGUE serve
+  // vraiment — au moins une défense au-delà de la rangée 10, qui n'existe pas
+  // sur la grille par défaut. ⚠ Le premier jet écrivait les rangées EXACTES
+  // (12–18 pour un camp) : elles varient avec la graine depuis PAQUETS, et c'est
+  // la bande qui est la règle, pas la rangée où le tirage a posé le premier
+  // paquet.
+  const mesure = (site, grille) => {
+    const rb = site.batiments.map((b) => b.rangee);
+    const rd = site.defenseurs.map((d) => d.rangee);
+    const dans = (r, bande) => r >= bande.premiere && r <= bande.derniere;
+    return {
+      batiments: site.batiments.length,
+      defenses: site.defenseurs.length,
+      batimentsDansLaBande: rb.every((r) => dans(r, grille.bandes.batiments)),
+      defensesDansLaBande: rd.every((r) => dans(r, grille.bandes.defense)),
+      derniereRangeeDeDefense: Math.max(...rd),
+    };
+  };
+  const ATTENDU = {
+    camp: { grille: GRILLE, batiments: 25, defenses: 25 },
+    avantPoste: { grille: GRILLE, batiments: 35, defenses: 35 },
+    base: { grille: GRILLE, batiments: 39, defenses: 39 },
+    baseVerrou: { grille: GRILLE_LONGUE, batiments: 39, defenses: 78 },
+    baseTerminale: { grille: GRILLE_LONGUE, batiments: 39, defenses: 78 },
+  };
+  assert.deepEqual(Object.keys(ATTENDU).sort(), Object.keys(TYPES_SITE).sort(), 'un type du roster n\'est pas mesuré');
+  for (const graine of [7, 11, 42, 1234, 99991]) {
+    for (const [type, attendu] of Object.entries(ATTENDU)) {
+      const site = genererSite({ type, niveau: GEOGRAPHIE.niveauPlafond, graine });
+      const m = mesure(site, attendu.grille);
+      assert.equal(m.batiments, attendu.batiments, `« ${type} » graine ${graine} : bâtiments`);
+      assert.equal(m.defenses, attendu.defenses, `« ${type} » graine ${graine} : défenses`);
+      assert.ok(m.batimentsDansLaBande, `« ${type} » graine ${graine} : un bâtiment hors de sa bande`);
+      assert.ok(m.defensesDansLaBande, `« ${type} » graine ${graine} : une défense hors de sa bande`);
+      if (attendu.grille === GRILLE_LONGUE) {
+        assert.ok(m.derniereRangeeDeDefense > GRILLE.bandes.defense.derniere,
+          `« ${type} » graine ${graine} : la bande longue ne sert pas, tout tient en 3–10`);
+        assert.ok(Math.min(...site.batiments.map((b) => b.rangee)) >= 19,
+          `« ${type} » graine ${graine} : un bâtiment sous la rangée 19`);
+      } else {
+        assert.ok(m.derniereRangeeDeDefense <= GRILLE.bandes.defense.derniere);
+      }
+      // ⚠ LA GRILLE EST SUR LE MONTAGE DES SEPT, ET ABSENTE — PAS `undefined`,
+      // ABSENTE — DES AUTRES : `serialiserEtat` trie les clés PROPRES, et un
+      // champ posé partout entrerait dans l'empreinte des deux cents témoins.
+      if (Object.hasOwn(TYPES_SITE[type], 'grille')) {
+        assert.equal(site.grille, GRILLE_LONGUE, `« ${type} » ne porte pas sa grille`);
+        // Et le site long se combat : `creerCombat` accepte les rangées 19–27.
+        assert.doesNotThrow(() => creerCombat({ ...site, vagues: [] }), `« ${type} » ne se combat pas`);
+      } else {
+        assert.equal(Object.hasOwn(site, 'grille'), false, `« ${type} » porte une clé grille`);
+      }
+    }
+  }
+  // Et la finale au niveau 60 joue long aussi — c'est le niveau qu'elle a.
+  const finale = genererSite({ type: 'baseTerminale', niveau: GEOGRAPHIE.niveauDeLaBaseFinale, graine: GRAINE });
+  const mf = mesure(finale, GRILLE_LONGUE);
+  assert.equal(mf.batiments, 39);
+  assert.equal(mf.defenses, 78);
+  assert.ok(mf.batimentsDansLaBande && mf.defensesDansLaBande && mf.derniereRangeeDeDefense > 10);
+});
+
+// ---------------------------------------------------------------------------
+// LONGUE T2 — la grille longue voyage jusqu'au rejeu, et le maillon la laisse passer
+// ---------------------------------------------------------------------------
+
+test('LONGUE T2 — la grille longue voyage jusqu\'au rejeu, et le maillon la laisse passer', () => {
+  // ⚠ LE MONTAGE : une partie qui peut raider, posée à cinq cases sous le
+  // premier verrou. `position` bouge, `fondation` non — le terrain reste celui
+  // du départ, et c'est la règle du dépôt depuis le 27/08.
+  const etat = partieJouable(GRAINE);
+  const verrou = positionsDesVerrous()[0];
+  baseCourante(etat).position = { rangee: verrou.rangee + 5, colonne: verrou.colonne };
+  assert.ok(estAPorteeDAttaque(baseCourante(etat).position, verrou),
+    'le montage ne mesure rien : le verrou est hors de portée');
+  const site = siteDeLaCase(etat, verrou.rangee, verrou.colonne);
+  assert.equal(site.type, 'baseVerrou', 'le montage ne mesure rien : la case n\'est pas un verrou');
+
+  // 1. Un combat monté sur un verrou porte `etat.grille` ; un combat sur une base
+  //    ordinaire N'A PAS LA CLÉ — c'est `creerCombat` qui l'écrit, seul, et
+  //    seulement si le montage en porte une (`PORTÉE T2`, par la source).
+  const origine = combatDOrigine(etat, verrou);
+  assert.equal(Object.hasOwn(origine.combat, 'grille'), true, 'un combat sur un verrou ne porte pas sa grille');
+  assert.equal(origine.combat.grille.longueur, 27);
+  assert.equal(origine.montage.grille, GRILLE_LONGUE, 'le montage rangé ne porte pas la grille longue');
+  const camp = premierCamp(etat);
+  assert.ok(camp !== null, 'le montage ne mesure rien : aucun camp autour de la base');
+  const ordinaire = combatDOrigine(etat, camp);
+  assert.equal(Object.hasOwn(ordinaire.combat, 'grille'), false, 'un combat ordinaire porte une clé grille');
+  assert.equal(Object.hasOwn(ordinaire.montage, 'grille'), false, 'un montage ordinaire porte une clé grille');
+
+  // 2. Le rapport rangé par `pourLeRejeu` PORTE LA GRILLE, et le rejeu du rapport
+  //    rend le même résultat que le combat d'origine — au tick près, et à
+  //    l'octet près sur l'état sérialisé.
+  const rapport = executerRaid(etat, baseCourante(etat), verrou);
+  assert.equal(etat.rapports.length, 1);
+  assert.deepEqual(rapport.rejeu, origine.montage, 'le montage rangé n\'est pas celui du combat d\'origine');
+  assert.deepEqual(rapport.rejeu.grille, GRILLE_LONGUE, 'le rapport ne porte pas la grille longue');
+  const rejoue = creerCombat(rapport.rejeu);
+  assert.equal(Object.hasOwn(rejoue, 'grille'), true);
+  const resultatRejoue = resoudre(rejoue);
+  assert.equal(resultatRejoue.cause, rapport.cause);
+  assert.equal(resultatRejoue.tick, rapport.ticks);
+  assert.equal(serialiserEtat(rejoue), serialiserEtat(origine.combat),
+    'le rejeu du rapport ne rend pas le combat d\'origine');
+  // Et le montage n'est pas dégénéré : le combat a eu lieu, sur une grille où
+  // les défenses vont jusqu'en rangée 18.
+  assert.ok(rapport.ticks > 0, 'le montage ne mesure rien : aucun tick joué');
+  assert.equal(Math.max(...rapport.rejeu.defenseurs.map((d) => d.rangee)), 18);
+  // ⚠ ET LA GRILLE TRAVERSE LA SAUVEGARDE — c'est TOUT le motif de SAVE_VERSION 40.
+  const relu = charger(serialiser(etat, 1_700_000_000_000), 1_700_000_000_000);
+  assert.deepEqual(relu.rapports[0].rejeu.grille, GRILLE_LONGUE, 'la grille ne traverse pas la sauvegarde');
+  const rejoueRelu = creerCombat(relu.rapports[0].rejeu);
+  resoudre(rejoueRelu);
+  assert.equal(serialiserEtat(rejoueRelu), serialiserEtat(origine.combat), 'le rejeu après rechargement diverge');
+
+  // 3. Le maillon 39 → 40 LAISSE INTACTS les rapports d'avant : un rapport sans
+  //    grille rejoue sur `GRILLE`, et rend le même résultat — c'est ce que sa
+  //    doc annonce, « une montée de version sans transformation ».
+  const ancien = partieJouable(GRAINE);
+  const campAncien = premierCamp(ancien);
+  const origineAncienne = combatDOrigine(ancien, campAncien);
+  const rapportAncien = executerRaid(ancien, baseCourante(ancien), campAncien);
+  assert.equal(Object.hasOwn(rapportAncien.rejeu, 'grille'), false, 'un raid ordinaire range une grille');
+  const v39 = JSON.parse(serialiser(ancien, 1_700_000_000_000));
+  v39.version = 39;
+  const migre = migrer(v39);
+  assert.equal(migre.version, 40);
+  assert.deepEqual(migre.rapports, JSON.parse(serialiser(ancien, 1_700_000_000_000)).rapports,
+    'le maillon 39 → 40 a réécrit les rapports');
+  assert.equal(JSON.stringify(migre.rapports[0].rejeu), JSON.stringify(rapportAncien.rejeu),
+    'le montage d\'un vieux rapport a bougé d\'un octet');
+  assert.equal(Object.hasOwn(migre.rapports[0].rejeu, 'grille'), false, 'le maillon a posé une grille sur un vieux rapport');
+  const vieux = creerCombat(migre.rapports[0].rejeu);
+  assert.equal(Object.hasOwn(vieux, 'grille'), false, 'un vieux rapport rejoue sur une grille posée');
+  const resultatVieux = resoudre(vieux);
+  assert.equal(resultatVieux.cause, rapportAncien.cause);
+  assert.equal(resultatVieux.tick, rapportAncien.ticks);
+  assert.equal(serialiserEtat(vieux), serialiserEtat(origineAncienne.combat),
+    'un vieux rapport ne rejoue plus le combat qui a eu lieu');
+  // ⚠ ET LE MAILLON EXISTE — un `SAVE_VERSION` à 40 sans maillon 39 ferait lever
+  // la chaîne sur toute sauvegarde d'avant le lot.
+  assert.doesNotThrow(() => migrer({ ...JSON.parse(serialiser(ancien, 1_700_000_000_000)), version: 39 }));
 });

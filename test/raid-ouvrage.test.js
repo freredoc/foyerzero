@@ -1274,7 +1274,8 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // un numéro inférieur OU ÉGAL.
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39. Ce que ce test garde est
   // que SON lot n'a rien ajouté à l'état, pas que le nombre ne bouge jamais.
-  assert.equal(SAVE_VERSION, 39, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — VERROUS, lui, y est passé (20/09)');
+  // ⚠ RÉANCRÉ AU LOT GRILLE LONGUE, 20/09/2026 : 39 → 40.
+  assert.equal(SAVE_VERSION, 40, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — GRILLE LONGUE, lui, y est passé (20/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

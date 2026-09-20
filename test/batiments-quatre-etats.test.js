@@ -340,7 +340,9 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // un numéro inférieur OU ÉGAL.
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39. Un maillon v38 → v39
   // nettoie les ruines tombées sous les sept grosses bases du bout de carte.
-  assert.equal(SAVE_VERSION, 39);
+  // ⚠ RÉANCRÉ AU LOT GRILLE LONGUE, 20/09/2026 : 39 → 40, maillon sans
+  // transformation — la grille d'un site voyage dans ses rapports.
+  assert.equal(SAVE_VERSION, 40);
   assert.notEqual(SAVE_VERSION, 38, 'le maillon des verrous a été défait');
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.

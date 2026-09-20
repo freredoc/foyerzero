@@ -488,9 +488,17 @@ test('PORTÉE T2 — une grille passée change le résultat, et `creerCombat` es
   assert.deepEqual(tiersDeLaDefense(decalee), {
     avant: { premiere: 5, derniere: 7 }, milieu: { premiere: 8, derniere: 9 }, arriere: { premiere: 10, derniere: 12 },
   }, 'tiersDeLaDefense ignore sa grille');
-  // Seize rangées de défense demandent une table de seize : la table à huit
-  // LÈVE, ce qui est le point d'arrêt voulu — l'arbitrage du lot GRILLE LONGUE.
-  assert.throws(() => tiersDeLaDefense(longue), /les tiers couvrent 8 rangées, la bande en fait 16/);
+  // ⚠⚠ RETOURNÉE AU LOT GRILLE LONGUE, 20/09/2026. Elle exigeait que la table à
+  // huit LÈVE sur seize rangées — « le point d'arrêt voulu, l'arbitrage du lot
+  // GRILLE LONGUE ». L'arbitrage est rendu : les largeurs se multiplient par le
+  // rapport ENTIER de la hauteur à la somme de la table, donc `[6, 4, 6]` sur
+  // seize, et la garde ne mord plus que sur une hauteur qui n'est PAS un
+  // multiple — `LONGUE T1` de `test/verrous.test.js` la fait lever sur douze.
+  assert.deepEqual(tiersDeLaDefense(longue), {
+    avant: { premiere: 3, derniere: 8 }, milieu: { premiere: 9, derniere: 12 }, arriere: { premiere: 13, derniere: 18 },
+  }, 'les tiers de seize rangées ne se dérivent plus de la table à huit');
+  assert.notDeepEqual(tiersDeLaDefense(longue), tiersDeLaDefense(),
+    'tiersDeLaDefense ignore la grille longue');
   assert.equal(rangeeLaPlusAvanceeQuiTire('faucheuse', decalee), 5,
     'rangeeLaPlusAvanceeQuiTire ignore sa grille');
   assert.equal(rangeeLaPlusAvanceeQuiTire('faucheuse'), 3);
@@ -523,12 +531,26 @@ test('PORTÉE T2 — une grille passée change le résultat, et `creerCombat` es
   assert.equal(xDeColonneMilli(pDefaut, 11_000), xDeColonne(pDefaut, 9));
   assert.throws(() => calculerProjection(1080, 2000, MUR_CASES, { grille: { ...longue, longueur: 26 } }),
     /projection : vue\.grille/);
-  // fond.js — la boîte suit la grille, le `× 2` de l'image ne bouge pas.
+  // fond.js — la boîte suit la grille, et l'IMAGE suit son DÉCOR. ⚠⚠ RÉANCRÉ AU
+  // LOT GRILLE LONGUE, 20/09/2026 : `rectangleDuFond` prend le décor, le `× 2`
+  // d'hier est devenu le format `court`, et un décor long fait trente cases.
+  // Une boîte de DOUZE n'a aucun décor de sa largeur — `rectangleDuFond` LÈVE
+  // au lieu d'étirer, et c'est ce que la garde de largeur existe pour dire.
   assert.equal(largeurEnCases(large), 12, 'largeurEnCases ignore sa grille');
   assert.equal(hauteurEnCases(longue), 27 + MUR_CASES, 'hauteurEnCases ignore sa grille');
-  assert.equal(rectangleDuFond(pLarge).l, 12 * pLarge.tailleCase, 'rectangleDuFond ignore la grille de la projection');
-  assert.equal(rectangleDuFond(pLarge).h, HAUTEUR_IMAGE_EN_CASES * pLarge.tailleCase,
-    'la hauteur de l\'image a suivi la grille : le facteur d\'image est le lot GRILLE LONGUE');
+  assert.throws(() => rectangleDuFond(pLarge, 'fond_o_hostile'),
+    /« fond_o_hostile » fait 10 cases de large, la boîte projetée en fait 12/,
+    'rectangleDuFond pose un décor de dix cases sur une boîte de douze');
+  const rLong = rectangleDuFond(pLongue, 'fond_o_finale');
+  assert.equal(rLong.l, 10 * pLongue.tailleCase, 'rectangleDuFond ignore la grille de la projection');
+  assert.equal(rLong.h, 30 * pLongue.tailleCase, 'la hauteur d\'un décor long ne suit pas son format');
+  assert.equal(rLong.sh, 3240);
+  // C'est le DÉCOR qui donne la hauteur, pas la grille : un décor court sur
+  // la projection longue garde ses vingt cases — c'est la garde de
+  // `test/sprite.test.js` qui interdit ce couple-là au niveau de la table.
+  assert.equal(rectangleDuFond(pLongue, 'fond_o_hostile').h, HAUTEUR_IMAGE_EN_CASES * pLongue.tailleCase,
+    'la hauteur de l\'image suit la grille et non le décor');
+  assert.notEqual(rLong.h, rectangleDuFond(pLongue, 'fond_o_hostile').h);
   // bandes.js
   assert.deepEqual(bandesDe(longue)[2], { cle: 'batiments', nom: 'Chantier', premiere: 19, derniere: 27 },
     'bandesDe ignore sa grille');

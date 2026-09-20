@@ -25,7 +25,7 @@ import { TYPES_SITE } from '../src/data/sites.js';
 import {
   MUR_CASES, LARGEUR_EN_CASES, HAUTEUR_EN_CASES, HAUTEUR_IMAGE_EN_CASES,
   BANDE_SOUS_LE_MUR, FONDS, tousLesFonds, fondDeLaBase, rectangleDuFond,
-  VARIABLE_DU_FOND, nomCssDuFond, SEL_FOND,
+  VARIABLE_DU_FOND, nomCssDuFond, SEL_FOND, hauteurImageEnCases,
 } from '../src/render/fond.js';
 import {
   calculerProjection, xDeColonne, yDeRangee, caseDepuisPixels,
@@ -164,16 +164,38 @@ test('FOND T4 — à 1080 px de large, la case vaut 108 px et le décor tombe au
   const p = calculerProjection(1080, 4000, MUR_CASES);
   assert.equal(p.tailleCase, 108);
 
-  const r = rectangleDuFond(p);
+  // ⚠ `rectangleDuFond` PREND LE DÉCOR DEPUIS LE LOT GRILLE LONGUE, 20/09/2026 :
+  // c'est LUI qui donne la hauteur de l'image, vingt cases pour un court.
+  const r = rectangleDuFond(p, 'fond_j_01');
   assert.equal(r.l, 1080, 'le décor ne couvre plus la largeur de la boîte');
   assert.equal(r.l, r.sl, 'le décor n\'est plus au 1:1 : destination et source diffèrent');
   assert.equal(r.h, r.sh, 'le décor n\'est plus au 1:1 en hauteur');
+  assert.equal(r.sh, 2160, 'la source d\'un décor court ne fait plus 2160');
+  assert.equal(r.h, hauteurImageEnCases('fond_j_01') * p.tailleCase);
 
   // ⚠ ET IL PART DU COIN DE LA BOÎTE, PAS DE CELUI DU CONTENU. `margeX` pointe
   // sur la colonne 1 ; le mur peint est replié dans la marge, donc le décor
   // recule d'une demi-case.
   assert.equal(r.x, p.margeX - MUR_CASES * p.tailleCase);
   assert.equal(r.y, p.margeY - MUR_CASES * p.tailleCase);
+
+  // ⚠⚠ ET LA GRILLE LONGUE TOMBE AU 1:1 AU MÊME ENDROIT — même largeur, donc
+  // même case de 108, et un décor long y fait 3240 de haut, trente cases.
+  // Elle se lit dans `TYPES_SITE.baseTerminale.grille`, jamais dans une
+  // grille forgée ici : c'est le couple réel qui est mesuré.
+  const pLong = calculerProjection(1080, 4000, MUR_CASES, { grille: TYPES_SITE.baseTerminale.grille });
+  assert.equal(pLong.tailleCase, 108, 'la grille longue ne tombe plus au 1:1 à 1080 px');
+  const rLong = rectangleDuFond(pLong, 'fond_o_finale');
+  assert.equal(rLong.l, 1080);
+  assert.equal(rLong.l, rLong.sl);
+  assert.equal(rLong.h, rLong.sh, 'le décor long n\'est plus au 1:1 en hauteur');
+  assert.equal(rLong.sh, 3240, 'la source d\'un décor long ne fait plus 3240');
+  assert.notEqual(rLong.h, r.h, 'un décor long et un décor court rendent la même hauteur');
+  // Un décor sans format LÈVE : une image posée au format d'une autre
+  // s'étirerait sans qu'une erreur le dise.
+  assert.throws(() => rectangleDuFond(p, 'fond_x'), /« fond_x » n'a pas de format/);
+  assert.throws(() => rectangleDuFond(p), /n'a pas de format/,
+    'rectangleDuFond accepte encore un appel sans décor');
 });
 
 test('FOND T5 — `murCases = 0` rend EXACTEMENT l\'ancienne projection', () => {

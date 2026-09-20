@@ -2581,8 +2581,8 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39.
-  assert.equal(SAVE_VERSION, 39, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — VERROUS, lui, y est passé (20/09)');
+  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
+  assert.equal(SAVE_VERSION, 40, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — GRILLE LONGUE, lui, y est passé (20/09)');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
@@ -2733,8 +2733,8 @@ test('MODULES-PIÈCE T1 — la migration v35 → v36 traduit les listes d\'un re
   // Le geste : une sauvegarde v33 qui porte un rapport rejouable.
   const migre = migrer({ version: 33, rapports: [{ rejeu: structuredClone(montage) }] });
   assert.equal(migre.version, SAVE_VERSION);
-  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39.
-  assert.equal(SAVE_VERSION, 39, 'la version cible a bougé : ce test est à reprendre');
+  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
+  assert.equal(SAVE_VERSION, 40, 'la version cible a bougé : ce test est à reprendre');
   assert.deepEqual(
     migre.rapports[0].rejeu.modulesDebloques.ouvrage,
     { offense: [], defense: ['herse', 'merlon', 'ronce'] },

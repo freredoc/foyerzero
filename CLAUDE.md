@@ -7,7 +7,104 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **20/09/2026**, version 0.99.73 · build 185.
+Dernière révision : **20/09/2026**, version 0.99.74 · build 186.
+⚠⚠ **LES SEPT BASES DU BOUT DE CARTE SE COMBATTENT SUR 9 × 27, ET LES 200
+TÉMOINS NE BOUGENT PAS D'UN BIT.** Lot GRILLE LONGUE. `GRILLE_LONGUE` entre dans
+`data/combat.js` — déploiement 1–2, défense **3–18**, bâtiments **19–27**,
+`casesBatiments` 81 —, et `TYPES_SITE.baseVerrou.grille` comme
+`TYPES_SITE.baseTerminale.grille` la NOMMENT, sur le précédent de
+`densiteComme`. Les cinq autres types n'ont pas le champ et prennent `GRILLE` :
+**`JOURNAL T1` rend les deux cents combats identiques au bit, 0 couche ajoutée**,
+et le témoin de BASES-0 aussi. `genererSite` lit `TYPES_SITE[type].grille` et
+la passe par `verifierGrille` — c'est sa seule ligne de plomberie —, et le
+montage porte `grille` SEULEMENT si le type en nomme une : clé ABSENTE, jamais
+`undefined`, parce que `serialiserEtat` trie les clés propres.
+⚠⚠ **`GRILLE_LONGUE` NE PORTE QUE SA GÉOMÉTRIE — ÉCART DÉCLARÉ AU BRIEF, QUI
+RECOMMANDAIT L'ÉTALEMENT DE `GRILLE`.** Mesuré avant d'écrire : les treize
+lectures de `vaguesParRaid`, `intervalleVagueSec`, `tickSec`,
+`dureeMaxCombatSec`, `plancherReservePct`, `ticksAvantRepli` et `lateral` dans
+`src/` nomment TOUTES `GRILLE`, et `verifierGrille` n'exige que les quatre
+champs de géométrie. Six valeurs recopiées que rien ne lirait auraient fait une
+seconde vérité, et surtout elles auraient VOYAGÉ dans chaque rapport rejouable
+de la sauvegarde. `LONGUE T1` balaie `src/` décommenté et refuse toute lecture
+`grille.<calibrage>` : le jour où une entrera, il la nommera.
+⚠⚠ **LES TIERS SE DÉRIVENT PAR LE RAPPORT ENTIER DES HAUTEURS — `[6, 4, 6]` —
+ET LE RESTE EST UN REFUS.** `tiersDeLaDefense(grille)` multiplie
+`DISPOSITION_DEFENSES.tiersDeLaBande` par `hauteur / somme`, qui vaut 2 sur
+seize rangées ; une hauteur qui n'est pas un multiple LÈVE — « les tiers
+couvrent 8 rangées, la bande en fait 12 » —, parce que répartir un reste
+serait choisir OÙ vont les rangées en trop, c'est-à-dire de l'équilibrage.
+`PORTÉE T2` est RETOURNÉ (il exigeait la levée sur seize), `LONGUE T1` fait
+lever sur douze.
+⚠⚠ **78 DÉFENSES, PAS 77, ET LE FACTEUR SE DÉRIVE DES CASES.**
+`facteurDeDefenseMilli(grille)` rend `1000 × cases / 72` arrondi au demi
+supérieur — 1000 sur `GRILLE`, **2000** sur la longue — et `effectifDeDefense`
+l'applique dans `genererSite`, AU-DESSUS de `densite`, qui sert les cinq types
+et ne bouge pas : doubler `DENSITE.parNiveau` aurait rendu 77. ⚠ En millièmes,
+ce qui est un écart de FORME au brief (« `=== 1` ») : c'est l'unité du moteur.
+Mesuré, niveau 50, cinq graines : camp 25/25, avant-poste 35/35, base 39/39 en
+3–10 et 11–18 ; **verrou et finale 39 bâtiments en 19–27 et 78 défenses en
+3–18**, la finale au niveau 60 aussi.
+⚠⚠ **LA GARDE DU PLACEMENT MORD DANS UN SEUL SENS, ET C'EST MESURÉ.** Le
+facteur écrit « × 2 » — 78 défenses sur la bande COURTE — fait lever
+`replierCaseParCase` : **« générateur : défenses — 48 posés, 3 restent sans
+case sous le plafond de 6 par rangée »**, et `JOURNAL T1`, `JOURNAL T5`,
+`JOURNAL T8`, `PORTÉE T2` tombent avec. L'inverse — la grille longue SANS
+doublement — ne lève pas : 39 défenses tiennent en 5–18, et c'est `LONGUE T1`
+qui le voit (39 ≠ 78). Aucune seconde garde n'a été écrite.
+⚠⚠ **`SAVE_VERSION` 39 → 40, ET LE MAILLON NE TRANSFORME RIEN — IL LE DIT EN
+TOUTES LETTRES POUR QU'ON NE LE LISE PAS COMME UN OUBLI.** `pourLeRejeu` garde
+le montage entier, donc `etat.rapports[].rejeu.grille` existe depuis ce lot ;
+un champ de sauvegarde neuf est un numéro de plus. Les rapports d'avant portent
+des montages SANS grille et rejouent sur `GRILLE`, ce qui est exact — aucune
+base du bout de carte ne s'est combattue ailleurs avant ce lot. `LONGUE T2`
+mesure qu'un rapport v39 traverse le maillon sans qu'un octet de son montage
+bouge et rejoue le même combat, et qu'un raid sur un verrou range sa grille,
+la fait traverser la sauvegarde, et rejoue à l'octet près l'état du combat
+d'origine. Sept épingles réancrées 39 → 40.
+⚠⚠ **LE FACTEUR D'IMAGE EST UNE PROPRIÉTÉ DU DÉCOR, PAS DE LA GRILLE.**
+`render/fond.js` gagne `FORMATS` (`court` 1080 × 2160, `long` 1080 × 3240),
+`FORMAT_DU_FOND` fond par fond, `formatDuFond(nom)` qui LÈVE sur un inconnu,
+et `hauteurImageEnCases(nom)` ; `HAUTEUR_IMAGE_EN_CASES` reste la hauteur du
+format COURT pour `ui/chantier.js`, dont les décors sont tous courts — un test
+l'exige. `rectangleDuFond(projection, nom)` prend le décor et LÈVE si sa
+largeur en cases n'est pas celle de la boîte ; `listeDuFond` lui passe le nom,
+`dimensionner()` d'`ui/raid.js` passe `combat?.grille` aux bandes et à la
+projection sans jamais nommer `GRILLE`. `SOURCE_LARGEUR` et `SOURCE_HAUTEUR`
+partent. **`COTE_CASE_SOURCE = 108` tient sur 3240** — 30 cases, entier, et la
+grille de 108 décalée de 54 longe les flancs sur x = 54 et 1026 des trois
+planches, regardé. Le manifeste confronte les deux formats fond par fond.
+⚠⚠ **TROIS DÉCORS ENTRENT, EN q70, ET LE LIVRABLE FRANCHIT DIX MÉGAOCTETS.**
+`base_fond_ouvrage_{verrou_a,verrou_b,finale}.png` passent de
+`art/sourcesstandby/` à `art/sources/`, déclarés par `entrees.py --declarer`
+(**518 consommées · 175 dormantes · 693**), encodés par `tools/fonds.py` —
+**918 518 octets, 1 224 696 en base64** —, les neuf WebP d'avant identiques à
+l'octet. `FONDS.ouvrage.baseVerrou = ['fond_o_verrou_a', 'fond_o_verrou_b']`,
+`baseTerminale = ['fond_o_finale']`, le commentaire provisoire de VERROUS part.
+**Le q70 est mesuré** : à q75 (1 307 840) la marge sur la borne tombait à
+132 911, SOUS le plancher de 150 000 de `PIC T7`. Les huit courts restent à q75.
+⚠⚠ **LES 176 SPRITES ROUGES DE `verifier.py` NE SONT PAS DE CE LOT** — voir le
+§0 de RUINES-DÉFENSE ; seuls `--outil fonds` et `--outil emblemes` ont été
+lancés, comme le brief le demande.
+⚠ **ÉCARTS DÉCLARÉS AU BRIEF, EN PLUS DES DEUX CI-DESSUS** : les rangées
+d'un site varient avec la graine depuis PAQUETS (un camp pose son premier
+paquet en 11 ou en 12), donc `LONGUE T1` mesure les BANDES et exige que la
+bande longue serve, pas les rangées exactes ; et `rectangleDuFond` ne juge
+que la largeur — le couple type → décor se juge dans `test/sprite.test.js`,
+où un décor court sur la grille longue tombe.
+⚠ **SIX FALSIFICATIONS, SIX CHUTES, ROUGE RÉEL AU RAPPORT** — `grille` retirée
+de `baseVerrou`, facteur écrit « × 2 », grille longue donnée à `base` (les 200
+témoins tombent : « base/-/n5/g1/toutes : le champ 1 a bougé »), grille retirée
+du montage rangé, maillon qui réécrit les vieux rapports (`PORTÉE T2` tombe par
+la source : un second `.grille =` dans `sim/state.js`), `etat.grille`
+inconditionnel (`JOURNAL T1` et `T1 bis`).
+⚠ **RÉANCRAGES, AUCUN ASSOUPLI** : `PIC T7` (9 375 557 → 10 603 945, marge
+324 443 → 216 055, `notEqual` 324 443 et 322 387), `AC T8` (312 → 315 URI,
+`webp` 49 → 52, 313 → 316 lignes), `FOND T4`, `PORTÉE T2` (retourné),
+`sprite.test.js` « fond » (11 décors, deux formats, garde du couple), le
+compte des décors de `monde.test.js` (8 → 11), et sept `SAVE_VERSION`.
+
+**Auparavant, après le lot GRILLE-PORTÉE (20/09) :**
 ⚠⚠ **LA GÉOMÉTRIE DU COMBAT EST PORTABLE, ET PAS UNE VALEUR NE CHANGE.** Lot
 GRILLE-PORTÉE. Ce qui lit `GRILLE` aujourd'hui accepte une grille en argument,
 `GRILLE` en défaut ; sans argument, tout rend exactement ce que cela rendait —
@@ -433,7 +530,37 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 20/09/2026 (après le lot GRILLE-PORTÉE), à confronter :**
+**Référence au 20/09/2026 (après le lot GRILLE LONGUE), à confronter :**
+`npm test` rend **1664 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 663 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **deux**, `LONGUE T1` et
+`LONGUE T2` dans `test/verrous.test.js` — `test/` reste à **80** fichiers, et
+aucun fichier n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **10 603 945 octets**, 0 référence externe.
+Coût **+1 226 332 octets**, mesuré poste par poste contre le livrable rebâti
+dans un `git worktree` pristine de `main` = `7e68258`, qui EST le merge du lot
+GRILLE-PORTÉE (**9 377 613**, retrouvé à l'octet) : **images +1 224 765 ·
+JavaScript +1 322 · balisage +146 · feuille +99 · audio +0**, et les cinq postes
+PARTITIONNENT le fichier des deux côtés — écart **0 · 0**. `data:` de **313
+lignes / 312 URI** à **316 / 315** — les trois décors longs, un marqueur chacun.
+Borne T10 **9 700 000 → 10 820 000**, marge **216 055 octets, 2,00 %**, au-dessus
+du plancher de 150 000 ; `PIC T7` réancré avec deux contre-assertions.
+⚠ `tools/fonds.py` rend **12 fichiers écrits**, les neuf d'avant identiques à
+l'octet ; `tools/entrees.py --declarer` **518 consommées · 175 dormantes ·
+693**. `tools/verifier.py --outil fonds` rend **12 identiques · 1 différent**
+— le manifeste, qui ne diffère que par les 89 CRLF du mode texte de Windows,
+identique CR retirés — et `--outil emblemes` **17 identiques · 266 différents**
+à l'octet, **282 · 0 au PIXEL** : les deux verdicts sont LES MÊMES sur `main`
+pristine `7e68258` (même liste de 266), c'est l'encodeur de Pillow 12.3.0 sur
+cette machine, déjà mesuré au lot VERROUS, pas ce lot.
+⚠ Le lot touche `src/data/{combat,sites}.js`, `src/sim/{generateur,state}.js`,
+`src/render/{fond,scene}.js`, `src/ui/raid.js`, `tools/{fonds.py,build.js}`,
+`src/index.src.html`, treize fichiers de `test/`, `art/sources-declarees.json`,
+`art/sprites/fond/fond-empreintes.json`, `package.json`, ce fichier et
+`RAPPORT-lotGRILLE-LONGUE.md` ; il FAIT ENTRER trois sources et trois WebP.
+
+**Auparavant, après le lot GRILLE-PORTÉE (20/09) :**
 `npm test` rend **1662 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 661 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
@@ -14513,9 +14640,17 @@ tools/                  **45 fichiers**, dont UN SEUL sert au build — RECOMPT�
     il se mesure par empreinte de l'arbre avant et après, pas par relecture.
 android/                enveloppe WebView (app/) + module maj/ (Kotlin, 7 classes, 7 tests JVM)
 art/etalon/             étalons visuels des sprites : joueur/, ennemi_pale/, ennemi_sombre/
-art/sources/            sources brutes, hors chaîne de build — **684 fichiers à
-                        la racine, 509 consommées · 175 dormantes**, RECOMPTÉ le
-                        19/09 au lot RUINES-DÉFENSE par `entrees.py --declarer`,
+art/sources/            sources brutes, hors chaîne de build — **693 fichiers à
+                        la racine, 518 consommées · 175 dormantes**, RECOMPTÉ le
+                        20/09 au lot GRILLE LONGUE par `entrees.py --declarer`,
+                        qui en fait entrer TROIS — les décors longs
+                        `base_fond_ouvrage_{verrou_a,verrou_b,finale}.png`,
+                        1080 × 3240, déplacés depuis `art/sourcesstandby/` où
+                        GRILLE-PORTÉE les avait mis de côté —, CONSOMMÉES.
+                        ⚠ Auparavant, 690 · 515 consommées au lot AVARIES (six
+                        états de grosses bases), et 684 · 509 au lot
+                        RUINES-DÉFENSE, RECOMPTÉ le
+                        19/09 par `entrees.py --declarer`,
                         qui en fait entrer HUIT — les quatre ruines de pièce de
                         défense de chaque camp, `ruine_def_{j,o}_variante_01..04`,
                         toutes CONSOMMÉES. Elles sont huit des vingt-trois que le
@@ -14675,7 +14810,13 @@ art/sourcesstandby/     les images en ATTENTE d'intégration — 33 images dépo
                           image en attente parmi les sources. `entrees.py`
                           compare le dossier PARENT, jamais le texte.
 art/sprites/            les sprites conditionnés — **QUATORZE dossiers de famille
-                        et 1 173 fichiers en tout**, recomptés le 19/09 au lot
+                        et 1 188 fichiers en tout**, recomptés le 20/09 au lot
+                        GRILLE LONGUE par `git ls-files` : TROIS entrent dans
+                        `fond/` — `fond_o_{verrou_a,verrou_b,finale}.webp`, q70,
+                        1080 × 3240 —, et le compte annoncé au lot précédent
+                        était déjà faux de douze : il disait 1 173, `HEAD` en
+                        portait 1 185 depuis les douze sprites d'AVARIES.
+                        ⚠ Auparavant, 1 173 recomptés le 19/09 au lot
                         RUINES-DÉFENSE par `git ls-files`, qui en fait entrer
                         SEIZE dans `defense/` : huit ruines de pièce aux deux
                         grilles, produites par `tools/ruines.py`.
@@ -14762,7 +14903,8 @@ art/sprites/            les sprites conditionnés — **QUATORZE dossiers de fam
                         DIX familles en 128 et 64 : unité, bâtiment, terrain,
                         defense, tourelle-unite, socle, carte, effet, chassis,
                         limite. La onzième, `fond`, n'est même pas une famille de
-                        sprites : neuf décors et leur manifeste.
+                        sprites : douze décors et leur manifeste — neuf jusqu'au
+                        lot GRILLE LONGUE, qui en fait entrer trois de 1080 × 3240.
                         ⤷ ⚠⚠ ET LA DOUZIÈME, `son/`, N'EST PAS UNE IMAGE DU
                           TOUT — lot SON-MOTEUR, 04/09, et **264 fichiers depuis
                           le lot SON-CATALOGUE** : les 263 `.opus` du pack et

@@ -75,6 +75,53 @@ export const GRILLE = {
   lateral: { numerateur: 2, denominateur: 3 },
 };
 
+/**
+ * La grille LONGUE — celle des sept bases du bout de carte, lot GRILLE LONGUE,
+ * 20/09/2026. Neuf colonnes sur vingt-sept rangées : le déploiement ne bouge
+ * pas, la défense DOUBLE (huit rangées → seize), les bâtiments gagnent une
+ * rangée (huit → neuf, 81 cases). C'est l'arbitrage Q7 « A » d'Ethan : la
+ * longueur ajoutée va entièrement à la défense, sauf une rangée.
+ *
+ * ⚠⚠ ELLE NE PORTE QUE LA GÉOMÉTRIE, ET C'EST UN ÉCART DÉCLARÉ AU BRIEF, QUI
+ * RECOMMANDAIT L'ÉTALEMENT DE `GRILLE`. Mesuré avant d'écrire : les treize
+ * lectures de `vaguesParRaid`, `intervalleVagueSec`, `tickSec`,
+ * `dureeMaxCombatSec`, `plancherReservePct`, `ticksAvantRepli` et `lateral`
+ * dans `src/` nomment TOUTES `GRILLE` en majuscules — pas une ne passe par
+ * une grille reçue en argument, et `verifierGrille` (`sim/grille.js`) n'exige
+ * que ces quatre champs. Recopier ici six valeurs de calibrage que rien ne
+ * lirait en ferait une seconde vérité, et surtout les ferait VOYAGER dans
+ * chaque rapport rejouable de la sauvegarde — `pourLeRejeu` garde tout le
+ * montage, grille comprise. Un test balaie `src/` et refuse toute lecture
+ * `grille.<calibrage>` : le jour où une entrera, il nommera la ligne, et
+ * c'est ce jour-là que l'étalement deviendra juste.
+ *
+ * ⚠⚠ ELLE N'EST PAS UNE COPIE DE `GRILLE` ET NE LA MUTE PAS. Une seconde grille
+ * est un SECOND objet passé en argument — c'est l'invariant du lot
+ * GRILLE-PORTÉE, et `PORTÉE T1` le mesure. Qui la reçoit se lit dans
+ * `TYPES_SITE[type].grille` de `data/sites.js` : les deux types du bout de
+ * carte, et eux seuls. Un camp, un avant-poste, une base ordinaire et la base
+ * du joueur n'ont pas le champ et prennent `GRILLE` — c'est ce que les deux
+ * cents témoins de `test/temoins-combat.js` mesurent au bit.
+ *
+ * ⚠ `casesBatiments` VAUT 81 = 9 × 9, ET `verifierGrille` LE RECOMPTE. Les
+ * 144 cases de défense — le double des 72 de `GRILLE` — sont ce dont
+ * `facteurDeDefense` de `sim/generateur.js` dérive le doublement des
+ * effectifs : 39 défenses deviennent 78, et le remplissage de la bande reste
+ * le même par construction, 54,2 % des deux côtés.
+ */
+export const GRILLE_LONGUE = {
+  largeur: 9,
+  longueur: 27,
+
+  bandes: {
+    deploiement: { premiere: 1, derniere: 2 }, // inchangé : les vagues y apparaissent
+    defense: { premiere: 3, derniere: 18 }, // 16 rangées — le double
+    batiments: { premiere: 19, derniere: 27 }, // 9 rangées = 81 cases
+  },
+
+  casesBatiments: 81,
+};
+
 // --- obstacles de terrain ----------------------------------------------------
 // 10 cases dispersées au hasard sur la grille. Traversables : elles ne bloquent
 // jamais. L'aviation les ignore. On ne peut ni y poser une structure ni y

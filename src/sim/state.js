@@ -81,7 +81,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 39;
+export const SAVE_VERSION = 40;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -3551,6 +3551,35 @@ const MIGRATIONS = {
       (e) => e === null || typeof e !== 'object'
         || grosseBaseDeLaCase(e.rangee, e.colonne) === null,
     );
+  },
+
+  /**
+   * v39 → v40 : la grille d'un site voyage dans ses rapports — lot GRILLE LONGUE,
+   * 20/09/2026.
+   *
+   * ⚠⚠ C'EST UNE MONTÉE DE VERSION SANS TRANSFORMATION, ET ELLE LE DIT EN
+   * TOUTES LETTRES POUR QU'ON NE LA LISE PAS COMME UN OUBLI. Ce qui change est
+   * la FORME d'un champ persisté : `genererSite` pose `grille` sur le montage
+   * des sept bases du bout de carte, et `pourLeRejeu` garde tout le montage —
+   * donc `etat.rapports[].rejeu.grille` existe depuis ce lot, dans les dix
+   * rapports que garde une sauvegarde. Un champ de sauvegarde neuf, c'est un
+   * numéro de plus : c'est la règle, et `pourLeRejeu` l'impose — redériver la
+   * grille du TYPE au rejeu ferait rejouer un vieux rapport sur la grille
+   * d'aujourd'hui, donc faux le jour où la table bouge.
+   *
+   * ⚠⚠ ET IL N'Y A RIEN À RÉÉCRIRE. Les rapports d'avant le lot portent des
+   * montages SANS grille, et un montage sans grille rejoue sur `GRILLE` — ce
+   * qui est exact, puisque ces combats ont eu lieu sur `GRILLE` : aucune base
+   * du bout de carte ne s'est jamais combattue sur une autre grille avant ce
+   * lot. Leur poser une grille inventerait un fait ; ne pas la poser est la
+   * vérité. `LONGUE T2` de `test/verrous.test.js` mesure qu'un rapport v39
+   * traverse ce maillon sans qu'un octet de son montage bouge, et qu'il rejoue
+   * le même résultat qu'avant.
+   *
+   * @param {object} s
+   */
+  39: (s) => {
+    s.version = 40;
   },
 };
 

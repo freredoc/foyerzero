@@ -8,6 +8,14 @@
 // Les niveaux de déblocage NE SONT PAS dupliqués ici : ils vivent dans
 // UNITES[x].apparition et DEFENSES[x].apparition de combat.js, une seule table
 // fait foi. Dupliquer était exactement le défaut C4 de l'audit.
+//
+// ⚠ CE FICHIER N'IMPORTAIT RIEN JUSQU'AU LOT GRILLE LONGUE (20/09/2026). Il
+// importe `GRILLE_LONGUE` de `combat.js` — une table de `data/` vers une autre,
+// comme `couts-militaires.js` le fait déjà —, parce qu'un type de site NOMME la
+// grille qu'il emprunte, et qu'écrire la géométrie ici en ferait deux. Aucun
+// cycle : `combat.js` n'importe rien.
+
+import { GRILLE_LONGUE } from './combat.js';
 
 // --- bâtiments de site -------------------------------------------------------
 // Deux bâtiments uniques, les autres proportionnels. Le générateur n'a besoin
@@ -141,15 +149,31 @@ export const TYPES_SITE = {
   // ORDINAIRE : un verrou entamé se répare. Ce qui ne revient pas, c'est un
   // verrou RASÉ — `respawn: false`, et c'est `etat.basesRasees` qui porte le
   // fait, exactement comme pour une base de l'Ouvrage.
+  //
+  // ⚠⚠ `grille` EST NEUF AU LOT GRILLE LONGUE (20/09/2026), ET IL SUIT LE PRÉCÉDENT
+  // DE `densiteComme` : le type NOMME ce qu'il emprunte, et la PRÉSENCE du
+  // champ vaut la règle. `genererSite` lit `TYPES_SITE[type].grille ?? GRILLE`
+  // et la fait descendre — la plomberie est celle du lot GRILLE-PORTÉE, il n'y
+  // a rien à recâbler. Les cinq autres types n'ont pas le champ, donc prennent
+  // le défaut, donc ne bougent pas d'un bit : c'est ce que les deux cents
+  // témoins de combat mesurent. ⚠ La base du JOUEUR n'a pas de type ici et n'a
+  // donc aucun chemin vers ce champ — l'arbitrage du 26/08 (`data/base.js`,
+  // `GEOMETRIE_BASE`) reste vrai sans qu'on ait rien à faire pour ça.
+  //
+  // ⚠⚠ ET C'EST CE CHAMP QUI FAIT VOYAGER LA GRILLE DANS LA SAUVEGARDE. Un
+  // montage qui le porte range sa grille dans `etat.rapports[].rejeu`, par
+  // `pourLeRejeu` — d'où `SAVE_VERSION` 40, lot GRILLE LONGUE.
   baseVerrou: {
     multiplicateurButin: null, attaqueLeJoueur: false, indexeSur: 'rayon',
     destructionDefinitive: false, reparationHeures: 1, respawn: false,
     role: 'verrou de la base finale', densiteComme: 'avantPoste',
+    grille: GRILLE_LONGUE,
   },
   baseTerminale: {
     multiplicateurButin: null, attaqueLeJoueur: false, indexeSur: 'rayon',
     destructionDefinitive: false, reparationHeures: 1, respawn: false,
     role: 'base finale', densiteComme: 'avantPoste',
+    grille: GRILLE_LONGUE,
   },
 };
 
@@ -1850,10 +1874,21 @@ export const DISPOSITION_DEFENSES = {
   // première écriture de ce commentaire le prétendait, et c'était faux,
   // mesuré au lot GRILLE-PORTÉE. La garde est le `throw` de
   // `tiersDeLaDefense` (`sim/generateur.js`), atteint indirectement par
-  // `PQ T6` de `test/paquets.test.js`. ⚠ Et cette table couvre 8 rangées :
-  // une bande de défense de 16 rangées — la grille longue — la fait LEVER,
-  // ce qui est le point d'arrêt voulu ; la table à seize est l'arbitrage du
-  // lot GRILLE LONGUE, et elle ne s'invente pas ici.
+  // `PQ T6` de `test/paquets.test.js`.
+  //
+  // ⚠⚠ CETTE TABLE COUVRE 8 RANGÉES, ET UNE BANDE PLUS HAUTE NE LUI DONNE PAS
+  // UNE SECONDE TABLE — lot GRILLE LONGUE, 20/09/2026. Les largeurs se
+  // MULTIPLIENT par le rapport ENTIER de la hauteur de la bande à leur somme :
+  // seize rangées font `16 / 8 = 2`, donc `[6, 4, 6]`, et les proportions
+  // 3/2/3 sont conservées par construction, pas par recopie. Une seconde table
+  // aurait été une seconde vérité, ce que le dépôt a déjà refusé deux fois.
+  // ⚠ ET LA RÈGLE DE RESTE EST LE REFUS : une bande dont la hauteur n'est pas un
+  // multiple de la somme fait LEVER `tiersDeLaDefense` — « les tiers couvrent
+  // N rangées, la bande en fait H ». Répartir un reste serait choisir OÙ vont
+  // les rangées en trop, c'est-à-dire de l'équilibrage, qui est le domaine
+  // d'Ethan ; une telle bande demande sa propre table, arbitrée. La garde est
+  // donc encore le seul filet, et elle mord — `LONGUE T1` la fait lever sur
+  // une bande de douze.
   tiersDeLaBande: [['avant', 3], ['milieu', 2], ['arriere', 3]],
 
   // Le tiers PRÉFÉRÉ d'un paquet, tiré sur ces poids selon la catégorie de son

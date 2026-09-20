@@ -1572,7 +1572,10 @@ test('atlas — la page les déclare UNE fois, et l\'image reçoit son adresse a
   assert.equal(Object.keys(ATLAS_DE_LA_PAGE).length, 7 + tousLesFonds().length);
   assert.ok(!('monde-atlas' in ATLAS_DE_LA_PAGE),
     'l\'atlas du fond de carte est revenu dans la table : il n\'a plus de variable');
-  assert.equal(tousLesFonds().length, 8, 'les huit décors ne sont plus huit');
+  // ⚠ ONZE DEPUIS LE LOT GRILLE LONGUE, 20/09/2026 : 8 → 11, les trois décors
+  // longs du bout de carte — deux pour les verrous, un pour la finale.
+  assert.equal(tousLesFonds().length, 11, 'les onze décors ne sont plus onze');
+  assert.notEqual(tousLesFonds().length, 8, 'les trois décors longs ont disparu de la table');
   assert.match(source, /export function garnirLesAtlas\(doc\)/, '`garnirLesAtlas` a disparu');
   assert.match(source, /garnirLesAtlas\(doc\);/, 'la session ne garnit plus les atlas au démarrage');
 

@@ -36,7 +36,7 @@ import {
   EMPLACEMENTS_ASSAUT,
 } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
-import { enEntier, cleCase, estDansLaBande } from './grille.js';
+import { enEntier, cleCase, estDansLaBande, verifierGrille } from './grille.js';
 
 const MILLE = 1000;
 
@@ -230,6 +230,61 @@ export function densite(type, niveau) {
   return { batiments: majorer(brut.batiments), defenses: majorer(brut.defenses) };
 }
 
+/** Les cases de la bande de défense d'une grille. */
+export function casesDeDefense(grille = GRILLE) {
+  const bande = grille.bandes.defense;
+  return (bande.derniere - bande.premiere + 1) * grille.largeur;
+}
+
+/**
+ * Le facteur qui multiplie l'effectif de DÉFENSE d'un site posé sur `grille`,
+ * en MILLIÈMES entiers : le rapport des cases de défense de cette grille à
+ * celles de `GRILLE` — lot GRILLE LONGUE, 20/09/2026.
+ *
+ * ⚠⚠ IL SE DÉRIVE, IL NE S'ÉCRIT PAS « × 2 ». Sur la grille longue, la bande de
+ * défense fait seize rangées sur neuf colonnes contre huit : `144 / 72`, donc
+ * 2 000 millièmes, et 39 défenses deviennent 78 — le remplissage de la bande
+ * est CONSERVÉ par construction (54,2 % des deux côtés), ce qui est la phrase
+ * d'Ethan, « tu remplis donc 2 fois les défenses », et non une coïncidence à
+ * vérifier. Sur `GRILLE` il vaut 1 000, et tout appelant d'avant le lot rend
+ * exactement le même effectif.
+ *
+ * ⚠⚠ ET IL NE TOUCHE PAS `DENSITE.parNiveau`, QUI SERT TOUTES LES BASES.
+ * Doubler la table aurait changé les effectifs de toutes les bases
+ * procédurales de toutes les cartes existantes — l'effet de bord massif qui
+ * a fait écarter l'option (A) du niveau 60 au dossier §7 — et rendrait 77,
+ * pas 78 : `35 × 2 = 70`, majoré × 1,1. Le facteur se pose AU-DESSUS de
+ * `densite`, dans `genererSite`, où le type et la grille sont en main.
+ *
+ * ⚠ LE BRIEF L'ÉCRIVAIT `facteurDeDefense(GRILLE) === 1` ; il rend des
+ * MILLIÈMES, comme `FACTEUR_BASE_MILLI` et tout facteur de ce fichier —
+ * l'en-tête dit pourquoi aucun flottant n'en sort. Arrondi au demi
+ * supérieur, `floor((2 × cases × 1000 + ref) / (2 × ref))`, l'idiome
+ * d'`interpolerEntier` : le rapport vaut 2 ici et la question ne se pose
+ * pas, mais elle se posera sur une grille non proportionnelle, et l'arrondi
+ * est écrit plutôt que laissé au hasard de la première.
+ *
+ * @param {object} [grille] la grille du site ; `GRILLE` sinon
+ * @returns {number} le facteur, en millièmes entiers
+ */
+export function facteurDeDefenseMilli(grille = GRILLE) {
+  const cases = casesDeDefense(grille);
+  const reference = casesDeDefense(GRILLE);
+  return Math.floor((2 * cases * MILLE + reference) / (2 * reference));
+}
+
+/**
+ * L'effectif de défense d'un site : celui de la table, multiplié par le facteur
+ * de sa grille, arrondi au demi supérieur en entiers — le même arrondi que
+ * `majorer` ci-dessus, jamais un flottant.
+ * @param {number} defenses l'effectif que `densite` rend
+ * @param {object} grille la grille du site
+ * @returns {number}
+ */
+export function effectifDeDefense(defenses, grille) {
+  return Math.floor((defenses * facteurDeDefenseMilli(grille) + MILLE / 2) / MILLE);
+}
+
 // ---------------------------------------------------------------------------
 // Composition et placement
 // ---------------------------------------------------------------------------
@@ -374,25 +429,37 @@ function decouperEnPaquets(placement, nb) {
  *
  * ⚠⚠ ELLE PREND LA GRILLE DEPUIS LE LOT GRILLE-PORTÉE, ET C'ÉTAIT LE PREMIER
  * MUR de la sonde du 20/09 : sur une bande de seize rangées, `[3, 2, 3]` ne
- * couvre que huit, et la garde ci-dessous LÈVE — « les tiers couvrent 8
- * rangées, la bande en fait 16 ». La garde est juste et elle reste ; ce qui
- * devient possible est de la mesurer sur une AUTRE grille. La table
- * `tiersDeLaBande`, elle, ne bouge pas : c'est le lot GRILLE LONGUE qui dira
- * comment une bande de seize se partage.
+ * couvre que huit, et la garde LEVAIT — « les tiers couvrent 8 rangées, la
+ * bande en fait 16 ».
+ *
+ * ⚠⚠ LES LARGEURS SE DÉRIVENT DEPUIS LE LOT GRILLE LONGUE, 20/09/2026, ET LA
+ * TABLE NE BOUGE TOUJOURS PAS. Elles se multiplient par le rapport ENTIER de
+ * la hauteur de la bande à leur somme : seize rangées font `16 / 8 = 2`,
+ * donc `[6, 4, 6]` — 3–8, 9–12, 13–18 —, et les proportions 3/2/3 sont
+ * conservées par construction. Une seconde table aurait été une seconde
+ * vérité. ⚠ LA RÈGLE DE RESTE EST LE REFUS : une hauteur qui n'est pas un
+ * multiple de la somme LÈVE, avec le même message qu'avant — répartir un reste
+ * serait choisir où vont les rangées en trop, c'est-à-dire de l'équilibrage.
+ * La garde est donc encore le seul filet, et elle MORD : `LONGUE T1` la fait
+ * lever sur une bande de douze.
  */
 export function tiersDeLaDefense(grille = GRILLE) {
   const bande = grille.bandes.defense;
+  const hauteur = bande.derniere - bande.premiere + 1;
+  const table = DISPOSITION_DEFENSES.tiersDeLaBande;
+  const somme = table.reduce((acc, [, largeur]) => acc + largeur, 0);
+  const facteur = Math.floor(hauteur / somme);
+  if (facteur < 1 || facteur * somme !== hauteur) {
+    throw new Error(
+      `générateur : les tiers couvrent ${somme} rangées, la bande en fait ${hauteur}`
+      + ` — la hauteur n'est pas un multiple de la table, et une telle bande demande sa propre table`,
+    );
+  }
   const sortie = {};
   let rangee = bande.premiere;
-  for (const [nom, largeur] of DISPOSITION_DEFENSES.tiersDeLaBande) {
-    sortie[nom] = { premiere: rangee, derniere: rangee + largeur - 1 };
-    rangee += largeur;
-  }
-  if (rangee - 1 !== bande.derniere) {
-    throw new Error(
-      `générateur : les tiers couvrent ${rangee - bande.premiere} rangées, `
-      + `la bande en fait ${bande.derniere - bande.premiere + 1}`,
-    );
+  for (const [nom, largeur] of table) {
+    sortie[nom] = { premiere: rangee, derniere: rangee + largeur * facteur - 1 };
+    rangee += largeur * facteur;
   }
   return sortie;
 }
@@ -1046,28 +1113,36 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
   // Un `graine + 1` aurait donc pu recoller au premier flux ; l'avalanche de
   // `hachageBrut` ne le peut pas.
   const placement = creerRng(hachageBrut(graine, 0, 0, SEL_PLACEMENT_DES_RANGEES));
+
+  // ⚠⚠ LA GRILLE SE LIT SUR LE TYPE, ET ELLE DESCEND D'ICI VERS LES TROIS
+  // POSEURS — lot GRILLE-PORTÉE pour la plomberie, lot GRILLE LONGUE (20/09/2026)
+  // pour la valeur. `TYPES_SITE[type].grille` n'existe que sur les deux types
+  // du bout de carte ; les cinq autres prennent `GRILLE` et ne bougent pas d'un
+  // bit — les deux cents témoins de combat le mesurent. Elle passe par
+  // `verifierGrille` ICI, à la source, plutôt que de laisser `creerCombat` la
+  // refuser dix appels plus loin.
+  const grilleDuType = TYPES_SITE[type].grille;
+  const grille = grilleDuType === undefined
+    ? GRILLE
+    : verifierGrille(grilleDuType, `générateur : TYPES_SITE.${type}.grille`);
+
+  // ⚠⚠ LE DOUBLEMENT DES DÉFENSES SE POSE ICI, AU-DESSUS DE `densite`, ET IL SE
+  // DÉRIVE DE LA GRILLE — `facteurDeDefenseMilli`, qui dit pourquoi ce n'est
+  // ni « × 2 » ni un doublement de `DENSITE.parNiveau`. Les bâtiments ne sont
+  // PAS multipliés : 39 sur 81 cases au lieu de 72, c'est l'effet de la rangée
+  // en plus, et c'est l'arbitrage Q7 « A ».
   const effectifs = densite(type, niveau);
+  const nbDefenses = effectifDeDefense(effectifs.defenses, grille);
 
   // ⚠⚠ LA COMPOSITION TIRE SUR `rng`, LE PLACEMENT SUR `placement`, ET LES DEUX
   // NE SE CROISENT PLUS — lot PAQUETS, 09/09. La garnison se compose AVANT
   // toute pose et après aucune : `rng` n'est plus consommé par personne d'autre.
   const garnison = composerRepartition(rng, GARNISON.parNiveau, niveau, GARNISON.variancePoints);
   const listeDefenses = [];
-  for (const [id, n] of auPlusGrandReste(garnison, effectifs.defenses)) {
+  for (const [id, n] of auPlusGrandReste(garnison, nbDefenses)) {
     for (let k = 0; k < n; k++) listeDefenses.push(id);
   }
 
-  // ⚠⚠ LA GRILLE DESCEND D'ICI VERS LES TROIS POSEURS — lot GRILLE-PORTÉE,
-  // 20/09/2026 —, ET C'EST `GRILLE` POUR TOUS LES TYPES AUJOURD'HUI. Aucun type
-  // de `TYPES_SITE` ne porte de champ `grille` : ce lot pose la plomberie, pas
-  // la valeur. Le lot GRILLE LONGUE la lira sur `TYPES_SITE[type]` — `type` est
-  // déjà en main ici — et c'est la SEULE ligne de cette fonction qui changera.
-  //
-  // ⚠ ET LE MONTAGE RENDU NE PORTE PAS DE `grille`, DÉLIBÉRÉMENT : `creerCombat`
-  // ne pose `etat.grille` que si le montage en porte une, et ces montages-ci
-  // sont ceux des deux cents témoins de combat. Écrire `grille: GRILLE` ici
-  // ferait bouger les deux cents empreintes pour une grille qui n'a pas changé.
-  const grille = GRILLE;
   const batiments = placerBatiments(placement, composerBatiments(effectifs.batiments), niveau, grille).poses;
   const defenseurs = placerDefenses(placement, ordonnerDefenses(listeDefenses), niveau, grille).poses;
 
@@ -1092,6 +1167,14 @@ export function genererSite({ type, niveau, saveur = null, graine }) {
       ouvrage: { offense: [], defense: modulesOuvrageAu(niveau) },
       joueur: { offense: [], defense: [] },
     },
+    // ⚠⚠ LE MONTAGE NE PORTE `grille` QUE SI LE TYPE EN PORTE UNE — lot GRILLE
+    // LONGUE. `creerCombat` ne pose `etat.grille` que sur un montage qui en
+    // porte, et `serialiserEtat` trie les clés PROPRES : un `grille: GRILLE`
+    // écrit ici sur les cinq types ordinaires ferait bouger les deux cents
+    // empreintes de combat pour une grille qui n'a pas changé. La clé est
+    // ABSENTE, pas `undefined` — `pourLeRejeu` garde tout le montage, et un
+    // `undefined` ne traverse pas JSON de la même façon qu'une absence.
+    ...(grilleDuType === undefined ? {} : { grille }),
   };
 }
 
