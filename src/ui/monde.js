@@ -42,7 +42,9 @@ import {
   GEOGRAPHIE, ZOOM_CARTE, TERRAIN_CARTE, EMBLEMES_CARTE, ETIQUETTE_CARTE, POI,
   palierDeNiveau, DEPLACEMENT, FONDATION, TYPES_SITE, ORIGINE_DU_NIVEAU,
 } from '../data/sites.js';
-import { niveauDeLaRangee, positionBaseTerminale } from '../sim/carte.js';
+import {
+  niveauDeLaRangee, positionBaseTerminale, grossesBasesDeLaCarte, niveauDeLaGrosseBase,
+} from '../sim/carte.js';
 import { basesDeLaFenetre } from '../sim/peuplement.js';
 // ⚠⚠ `carteDesPoi` ENTRE AU LOT ÉCRANS — point 11 d'Ethan, 10/09. Elle rend la
 // LISTE des soixante-dix, là où `poisDeLaFenetre` n'en rend que ce qui tombe
@@ -79,6 +81,7 @@ import {
 } from '../render/terrain.js';
 import {
   cotesDuSite, dessinerGrosseBase, dessinerEmblemeDUneCase,
+  SPRITES_GROSSE_BASE, spriteDeLaGrosseBase, spriteDeLaGrosseRuine,
 } from '../render/embleme.js';
 import { niveauDesBatiments } from '../sim/niveau-de-base.js';
 // ⚠ LE FORMATAGE D'UN NIVEAU EN DIXIÈMES VIT DANS `ui/chantier.js`, ET IL N'Y
@@ -478,14 +481,28 @@ export function sitesDeLaFenetre(etat, fenetre) {
     });
   }
 
-  const terminale = positionBaseTerminale();
-  if (dedans(terminale.rangee, terminale.colonne)) {
+  // ⚠⚠ LES SEPT GROSSES BASES, PAS LA SEULE TERMINALE — CORRECTION D'UN TROU DU
+  // LOT VERROUS, relevée au lot AVARIES, 20/09/2026. Ce bloc ne poussait que la
+  // base finale : les six verrous existaient dans le MODÈLE — `siteDeLaCase` les
+  // rendait, `problemesDuRaid` les gardait, le peuplement les excluait — et
+  // n'étaient **dessinés nulle part**. Le joueur ne pouvait pas les voir, donc
+  // pas les viser, donc pas ouvrir la base finale.
+  //
+  // ⚠ LE DÉFAUT ÉTAIT MUET, et c'est ce qui l'a laissé passer : aucun test ne
+  // tombait, la carte s'affichait, et la seule façon de s'en apercevoir était de
+  // regarder le haut de la carte. `EMB-AV T3` le garde désormais.
+  //
+  // ⚠ LE NIVEAU SE DEMANDE À `niveauDeLaGrosseBase`, JAMAIS À LA RANGÉE : la
+  // base finale vaut 60 par son TYPE, et `niveauDeLaRangee` rendrait 50.
+  for (const grosse of grossesBasesDeLaCarte()) {
+    if (!dedans(grosse.rangee, grosse.colonne)) continue;
     sites.push({
-      type: 'baseTerminale',
-      rangee: terminale.rangee,
-      colonne: terminale.colonne,
-      niveau: niveauDeLaRangee(terminale.rangee),
-      saveur: saveur(terminale.rangee, terminale.colonne, 'base'),
+      type: grosse.type,
+      rangee: grosse.rangee,
+      colonne: grosse.colonne,
+      niveau: niveauDeLaGrosseBase(grosse.type, grosse.rangee),
+      saveur: saveur(grosse.rangee, grosse.colonne, 'base'),
+      avarie: avarie(grosse.rangee, grosse.colonne),
     });
   }
 
@@ -2222,7 +2239,20 @@ export function initialiserEcranMonde(doc, crochets = {}) {
   function chargerGrossesBases() {
     if (grossesBases !== null || grossesBasesDemandees) return;
     grossesBasesDemandees = true;
-    const images = { 2: $('monde-base-2x2'), 3: $('monde-base-3x3') };
+    // ⚠⚠ HUIT IMAGES, INDEXÉES PAR LE NOM DU SPRITE — lot AVARIES. Elles
+    // l'étaient par le nombre de CÔTÉS, ce qui suffisait tant qu'il n'y avait
+    // qu'un état. La table se DÉRIVE des deux axes : deux emprises × quatre
+    // états, et l'identifiant DOM se fabrique par la même règle que le HTML.
+    // Une liste écrite à la main serait la première à oublier un état.
+    const images = {};
+    for (const cotes of Object.keys(SPRITES_GROSSE_BASE).map(Number)) {
+      for (const avarieDuSprite of ['aucune', 'fumee', 'feu', 'ruine']) {
+        const nom = avarieDuSprite === 'ruine'
+          ? spriteDeLaGrosseRuine(cotes)
+          : spriteDeLaGrosseBase(cotes, avarieDuSprite);
+        images[nom] = $(`monde-base-${nom.replace('base_o_', '').replace(/_/g, '-')}`);
+      }
+    }
     const enAttente = Object.values(images)
       .filter((im) => !im.complete || im.naturalWidth === 0);
     if (enAttente.length > 0) {
@@ -2653,8 +2683,23 @@ export function initialiserEcranMonde(doc, crochets = {}) {
       dessinerEmbleme(site, (site.colonne - 1) * pas - ox, (site.rangee - 1) * pas - oy, pas);
       return;
     }
-    const d = dessinerGrosseBase(cotes, site, pas, { x: ox, y: oy });
-    ctx.drawImage(grossesBases[cotes], d.x, d.y, d.cote, d.cote);
+    // ⚠⚠ L'ÉTAT VOYAGE JUSQU'AU DESSIN — lot AVARIES, 20/09/2026. Sans ce
+    // paramètre, le câblage serait complet côté chaîne graphique — les huit
+    // sprites au dépôt, les huit dans le livrable — et MUET à l'écran : un
+    // verrou à moitié cassé se dessinerait intact, et les six états n'auraient
+    // servi à rien. C'est la faute que le lot EMBLÈMES-ABÎMÉS a déjà payée sur
+    // les sites d'une case.
+    //
+    // ⚠ LE NOM SE DEMANDE À `render/embleme.js`, ET L'IMAGE SE PREND PAR CE
+    // NOM : deux tables — une de noms, une d'images — divergeraient au premier
+    // état ajouté. Il n'y en a qu'une, celle du DOM, indexée par le nom.
+    const d = dessinerGrosseBase(cotes, site, pas, { x: ox, y: oy }, site.avarie ?? 'aucune');
+    const image = grossesBases[d.nom];
+    // ⚠ ET UN NOM SANS IMAGE RETOMBE SUR LE SAIN PLUTÔT QUE DE VIDER L'ÉCRAN.
+    // `ctx.drawImage(undefined, …)` LÈVE, et une levée dans la boucle de dessin
+    // vide tout l'écran Monde — c'est ce que `dessinerGrosseBase` a coûté au lot
+    // ZOOM-CONTINU. Le cas n'arrive pas aujourd'hui, `EMB-AV T2` le mesure.
+    ctx.drawImage(image ?? grossesBases[SPRITES_GROSSE_BASE[cotes]], d.x, d.y, d.cote, d.cote);
   }
 
   /**

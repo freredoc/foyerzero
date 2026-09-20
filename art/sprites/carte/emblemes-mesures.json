@@ -1,4 +1,46 @@
 {
+ "base_o_2x2": {
+  "cellules": {
+   "base_o_2x2": {
+    "cotePlanche": 1254,
+    "planche": "S10_base_ouvrage_2x2.png"
+   },
+   "base_o_2x2_feu": {
+    "cotePlanche": 1024,
+    "planche": "base_ouvrage_2x2_tres_abimee.png"
+   },
+   "base_o_2x2_fumee": {
+    "cotePlanche": 1024,
+    "planche": "base_ouvrage_2x2_abimee.png"
+   },
+   "base_o_2x2_ruine": {
+    "cotePlanche": 1024,
+    "planche": "base_ouvrage_2x2_ruine.png"
+   }
+  },
+  "reference": 0.9425837320574163
+ },
+ "base_o_3x3": {
+  "cellules": {
+   "base_o_3x3": {
+    "cotePlanche": 1254,
+    "planche": "S10_base_ouvrage_3x3_finale.png"
+   },
+   "base_o_3x3_feu": {
+    "cotePlanche": 1024,
+    "planche": "base_ouvrage_3x3_tres_abimee.png"
+   },
+   "base_o_3x3_fumee": {
+    "cotePlanche": 1024,
+    "planche": "base_ouvrage_3x3_abimee.png"
+   },
+   "base_o_3x3_ruine": {
+    "cotePlanche": 1024,
+    "planche": "base_ouvrage_3x3_ruine.png"
+   }
+  },
+  "reference": 0.98828125
+ },
  "coupes": [
   {
    "colonne": 1,

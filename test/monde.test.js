@@ -300,9 +300,32 @@ test('sites — la base du joueur et la base terminale se dessinent en dernier',
   assert.deepEqual(
     { rangee: terminale.rangee, colonne: terminale.colonne }, positionBaseTerminale(),
   );
-  assert.equal(terminale.niveau, GEOGRAPHIE.niveauPlafond);
+  // ⚠⚠ LE NIVEAU DE LA FINALE EST CELUI DE SON TYPE, PAS DE SA RANGÉE — lot
+  // VERROUS, 20/09/2026. Il valait `niveauPlafond`, 50, parce que l'écran
+  // demandait `niveauDeLaRangee` ; la base finale vaut 60, et c'est
+  // `niveauDeLaGrosseBase` qui le dit. Écrire 50 ici ferait mentir le panneau
+  // sur la seule base que tout le jeu a pour but d'atteindre.
+  assert.equal(terminale.niveau, GEOGRAPHIE.niveauDeLaBaseFinale);
+  assert.notEqual(terminale.niveau, GEOGRAPHIE.niveauPlafond,
+    'la finale est retombée au niveau de sa rangée : Q8 a été défaite');
   assert.ok(sites.indexOf(terminale) > sites.findIndex((s) => s.type === 'base'),
     'la base terminale passe sous les bases de l\'Ouvrage');
+
+  // ⚠⚠ ET LES SIX VERROUS SONT DESSINÉS, CE QUI N'ALLAIT PAS DE SOI — correction
+  // d'un trou du lot VERROUS, relevée au lot AVARIES. `sitesDeLaFenetre` ne
+  // poussait que la base finale : les six verrous existaient dans le MODÈLE et
+  // n'étaient dessinés NULLE PART. Le joueur ne pouvait ni les voir, ni les
+  // viser, ni donc ouvrir la base finale — et aucun test ne tombait.
+  const verrous = sites.filter((s) => s.type === 'baseVerrou');
+  assert.equal(verrous.length, GEOGRAPHIE.verrous.nombre,
+    `${verrous.length} verrous dessinés sur ${GEOGRAPHIE.verrous.nombre}`);
+  assert.deepEqual(
+    verrous.map((v) => `${v.rangee},${v.colonne}`),
+    positionsDesVerrous().map((p) => `${p.rangee},${p.colonne}`),
+    'les verrous dessinés ne sont pas ceux de la carte');
+  for (const v of verrous) {
+    assert.equal(v.niveau, GEOGRAPHIE.niveauPlafond, 'un verrou n\'est plus au niveau 50');
+  }
 
   // ⚠ ON NE DÉDOUBLONNE PAS, ET C'EST VOULU. La liste des bases de l'Ouvrage
   // reste exactement celle du peuplement, quoi qu'il y ait sur la même case.
@@ -2428,7 +2451,15 @@ function fauxDocumentMonde({ largeurCss = 360, hauteurCss = 640, dpr = 3 } = {})
     // canevas de 1080 × 1920. Le « Fermer » du panneau en est un cinquième.
     'monde-mini', 'monde-mini-panneau', 'monde-mini-corps', 'monde-mini-canvas',
     'monde-mini-fermer',
-    'monde-base-2x2', 'monde-base-3x3',
+    // ⚠⚠ HUIT BALISES, ET ELLES SE DÉRIVENT — lot AVARIES, 20/09/2026. Elles
+    // étaient deux, une par emprise ; les deux grosses bases portent désormais
+    // quatre états chacune. La règle qui fabrique l'identifiant est celle de
+    // `ui/monde.js`, qui va les chercher : une liste recopiée aurait vieilli au
+    // premier état ajouté, et la confrontation au balisage ci-dessous ne
+    // l'aurait pas dit — elle vérifie que la liste est DANS la page, pas que la
+    // page est dans la liste.
+    ...Object.keys(SPRITES_GROSSE_BASE).flatMap((cotes) => ['', '_fumee', '_feu', '_ruine']
+      .map((etat) => `monde-base-${cotes}x${cotes}${etat.replace('_', '-')}`)),
     // ⚠ LES VINGT-DEUX PLANCHES SE DÉRIVENT, ELLES NE SE RECOPIENT PAS — lot
     // SOL-OUVRAGE. Elles étaient huit et écrites à la main ; le sol en porte
     // vingt-deux depuis que la carte bascule vers l'Ouvrage, et une liste

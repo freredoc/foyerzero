@@ -3355,6 +3355,18 @@
       <img id="monde-limites" alt="" hidden src="%ATLAS_LIMITE%">
       <img id="monde-base-2x2" alt="" hidden src="%BASE_O_2X2%">
       <img id="monde-base-3x3" alt="" hidden src="%BASE_O_3X3%">
+      <!-- ⚠⚠ LES TROIS ÉTATS DE CHAQUE GROSSE BASE — lot AVARIES, 20/09/2026.
+           Un verrou entamé se dessinait comme un verrou intact : le joueur
+           n'avait aucun moyen de voir ce qu'il avait déjà cassé, sur les seules
+           bases où ça compte vraiment. Six balises, parce qu'une grosse base
+           n'est PAS une cellule d'atlas — elle couvre 2 × 2 ou 3 × 3 cases, et
+           `coudre` n'accepte que des cellules carrées à la taille de case. -->
+      <img id="monde-base-2x2-fumee" alt="" hidden src="%BASE_O_2X2_FUMEE%">
+      <img id="monde-base-2x2-feu" alt="" hidden src="%BASE_O_2X2_FEU%">
+      <img id="monde-base-2x2-ruine" alt="" hidden src="%BASE_O_2X2_RUINE%">
+      <img id="monde-base-3x3-fumee" alt="" hidden src="%BASE_O_3X3_FUMEE%">
+      <img id="monde-base-3x3-feu" alt="" hidden src="%BASE_O_3X3_FEU%">
+      <img id="monde-base-3x3-ruine" alt="" hidden src="%BASE_O_3X3_RUINE%">
       <!-- ⚠⚠ LES ATLAS DU CHAMP DE BATAILLE SONT DES `<img>`, PAS DES VARIABLES
            CSS, et c'est `drawImage` qui l'impose : il veut un
            `HTMLImageElement`, pas une URL. Les atlas du DOM — bâtiment, terrain,

@@ -418,9 +418,16 @@ test('EMB-C T4 — le compte de sprites et les noms de l\'atlas sont intacts', (
     const webps = fichiers.filter((f) => f.endsWith('.webp'));
     assert.equal(pngs.length, 133,
       `carte/${grille} : ${pngs.length} PNG — 126 emblèmes et ruines, 7 POI`);
-    assert.deepEqual(webps.sort(), ['base_o_2x2.webp', 'base_o_3x3.webp'],
-      `carte/${grille} : les deux grosses bases doivent être les seuls WebP`);
-    assert.equal(pngs.length + webps.length, 135,
+    // ⚠⚠ HUIT WEBP DEPUIS LE LOT AVARIES, 20/09/2026, ET ILS SE DÉRIVENT. Les
+    // deux grosses bases portent quatre états chacune — sain, fumée, feu,
+    // ruine —, exactement comme les sites d'une case depuis CONQUÊTE-24H. La
+    // liste se calcule des deux axes : l'écrire à la main aurait été huit
+    // occasions d'oublier un état.
+    const attendus = [2, 3].flatMap((cotes) => ['', '_fumee', '_feu', '_ruine']
+      .map((etat) => `base_o_${cotes}x${cotes}${etat}.webp`)).sort();
+    assert.deepEqual(webps.sort(), attendus,
+      `carte/${grille} : les WebP ne sont pas les huit états des deux grosses bases`);
+    assert.equal(pngs.length + webps.length, 141,
       `carte/${grille} : le total des sprites a bougé — un dessin est entré ou sorti`);
     // ⚠ ET AUCUN PNG DE GROSSE BASE NE SURVIT À CÔTÉ DE SON WEBP. Deux fichiers
     // pour une image seraient deux vérités : `tools/build.js` en inlinerait une
@@ -471,8 +478,13 @@ test('EMB-C T5 — `recadrer` sait toujours ancrer en bas', () => {
   // `EMB-C T1`, et le seul appel du dépôt est celui-là.
   const outil = readFileSync(join(RACINE, 'tools', 'emblemes.py'), 'utf8');
   const sansCommentaires = outil.replace(/^\s*#.*$/gm, '');
+  // ⚠⚠ DEUX APPELS DEPUIS LE LOT AVARIES, 20/09/2026, ET TOUS DEUX EN
+  // « centre ». Les deux grosses bases ont gagné leurs états, donc leur propre
+  // boucle à référence d'échelle — la même que les quatre familles d'emblème,
+  // pour le même motif. Ce que ce test garde n'a pas changé d'un mot : AUCUN
+  // appel du dépôt n'ancre en « bas », et une vue zénithale n'a pas de sol.
   const appels = [...sansCommentaires.matchAll(/ancrage='(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(appels, ['centre'],
+  assert.deepEqual(appels, ['centre', 'centre'],
     `tools/emblemes.py passe ${JSON.stringify(appels)} : un seul appel, en « centre », est attendu`);
   // ⚠ ET `cote_ref` EST TOUJOURS PASSÉ AU MÊME APPEL : les deux paramètres sont
   // indépendants, et un lot qui aurait retiré l'échelle avec l'ancrage tomberait
@@ -759,28 +771,46 @@ test('EMB T13 — le discriminant est `raseLeSite`, jamais un nom de bâtiment',
 test('SOUFFLE T1 — les deux grosses bases entrent en WebP, et par le seul chemin qui existe', () => {
   const build = readFileSync(join(RACINE, 'tools', 'build.js'), 'utf8');
 
-  // ⚠ LE MONTAGE D'ABORD : sans ces deux marqueurs, les assertions du dessous
-  // porteraient sur des lignes qui n'existent plus et passeraient au vert.
-  for (const marqueur of ['%BASE_O_2X2%', '%BASE_O_3X3%']) {
-    assert.ok(build.includes(marqueur),
-      `tools/build.js n'inline plus ${marqueur}`);
+  // ⚠⚠ LE MONTAGE SE PREND SUR LE HTML DEPUIS LE LOT AVARIES, PAS SUR
+  // `tools/build.js`. Les marqueurs y étaient LITTÉRAUX tant que la table en
+  // portait deux ; ils sont DÉRIVÉS depuis qu'il y en a huit, donc les chercher
+  // dans l'outil rendait ce montage faux — et un montage faux fait tomber un
+  // test sain, ce qui est la pire des deux fautes.
+  //
+  // ⚠ LE HTML, LUI, LES PORTE ÉCRITS : c'est lui qui déclare les balises, une
+  // par état, et c'est là que l'absence d'un marqueur se voit.
+  const page = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8');
+  for (const cotes of [2, 3]) {
+    for (const etat of ['', '_FUMEE', '_FEU', '_RUINE']) {
+      const marqueur = `%BASE_O_${cotes}X${cotes}${etat}%`;
+      assert.ok(page.includes(marqueur),
+        `src/index.src.html ne déclare plus ${marqueur}`);
+    }
   }
 
-  for (const nom of ['base_o_2x2', 'base_o_3x3']) {
-    assert.ok(build.includes(`'${nom}.webp'`),
-      `tools/build.js n'inline pas ${nom}.webp`);
-    assert.ok(!build.includes(`'${nom}.png'`),
-      `tools/build.js inline encore ${nom}.png : le gain du lot SOUFFLE est défait`);
-  }
-  // ⚠ LE TYPE MIME SUIT L'EXTENSION, ET IL NE SE DÉDUIT PAS TOUT SEUL : la table
-  // de `tools/build.js` l'écrit à la main pour chaque entrée. Un `image/png`
-  // laissé sur un fichier WebP produirait un `data:` que le navigateur refuse
-  // de peindre, sans rien dire à la console.
-  const lignes = build.split('\n').filter((l) => l.includes('%BASE_O_'));
-  assert.equal(lignes.length, 2, 'les deux grosses bases ne sont plus sur deux lignes');
-  for (const l of lignes) {
-    assert.ok(l.includes("type: 'image/webp'"),
-      `une grosse base garde un type autre que image/webp : ${l.trim()}`);
+  // ⚠⚠ LA TABLE EST DEVENUE UNE DÉRIVATION AU LOT AVARIES, 20/09/2026 : deux
+  // lignes écrites à la main sont devenues un `flatMap` sur deux emprises et
+  // quatre états, soit HUIT entrées. Ce test ne cherche donc plus deux lignes,
+  // il exerce la RÈGLE — et il le fait sur le LIVRABLE, qui est le seul endroit
+  // où un marqueur oublié se voit.
+  assert.ok(!build.includes('.png\''),
+    'tools/build.js inline encore un PNG : le gain du lot SOUFFLE est défait');
+  assert.match(build, /base_o_\$\{cotes\}x\$\{cotes\}\$\{etat\}\.webp/,
+    'tools/build.js ne dérive plus le chemin des grosses bases');
+  assert.ok(!build.includes("type: 'image/png'"),
+    'tools/build.js déclare encore un type image/png');
+
+  // ⚠ ET LES HUIT ENTRENT VRAIMENT, mesuré sur le fichier bâti : un marqueur
+  // resté en clair dans la page est une image VIDE, sans erreur — c'est ce que
+  // `CÂB T1` raconte déjà. On compte donc les `data:image/webp` de grosse base
+  // plutôt que les lignes de la table.
+  const livrable = readFileSync(join(RACINE, 'dist', 'index.html'), 'utf8');
+  for (const cotes of [2, 3]) {
+    for (const etat of ['', '_FUMEE', '_FEU', '_RUINE']) {
+      const marqueur = `%BASE_O_${cotes}X${cotes}${etat}%`;
+      assert.ok(!livrable.includes(marqueur),
+        `${marqueur} survit au build : l'image est vide et rien ne le dit`);
+    }
   }
 });
 
