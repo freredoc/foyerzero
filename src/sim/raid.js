@@ -25,6 +25,7 @@
 // donc elle reste à la maison sans qu'on la retire.
 
 import { APRES_RAID, TYPES_SITE } from '../data/sites.js';
+import { verrousDebout, finaleDeverrouillee } from './ruines.js';
 import { enModeDeveloppeur } from './mode-developpeur.js';
 import { UNITES, GRILLE } from '../data/combat.js';
 import { reservoirsDeLArmee } from './reparation.js';
@@ -286,7 +287,32 @@ export function problemesDuRaid(etat, baseAttaquante, cible, formation = null) {
   // franchise écrite deux fois », c'est ce qui empêche la première de faire
   // tomber un geste de jeu sur une RangeError.
   if (!enModeDeveloppeur(etat)) {
-    const cout = coutDUnRaid(etat, baseAttaquante, cible);
+    // ⚠⚠ LE VERROU DE LA BASE FINALE — ETHAN, 10/09 : « pour attaquer la base
+  // finale, il faut d'abord avoir rasé les six bases intermédiaires ». Six sur
+  // six : c'est une porte, pas une jauge.
+  //
+  // ⚠⚠ IL EST POSÉ APRÈS LA PORTÉE ET AVANT LE PRIX, ET L'ORDRE SE LIT DANS LE
+  // MESSAGE. Une cible hors de portée doit dire « hors de portée », pas
+  // « verrouillée » : le joueur qui regarde la finale depuis sa base de départ
+  // n'a pas un problème de verrou. À l'inverse, se faire refuser un raid pour
+  // manque de points d'attaque sur une cible qu'on ne peut de toute façon pas
+  // toucher enverrait épargner pour rien.
+  //
+  // ⚠ IL NE REND PAS TOUT DE SUITE, à la différence des deux refus du dessus.
+  // Le joueur doit voir, d'un coup, TOUT ce qui bloque : il lui reste peut-être
+  // aussi des points à trouver et une armée à réparer, et les trois se
+  // préparent en parallèle.
+  if (site.type === 'baseTerminale' && !finaleDeverrouillee(etat)) {
+    const debout = verrousDebout(etat);
+    problemes.push({
+      code: 'verrou-terminale',
+      message: `La base finale est verrouillée : il reste ${debout} `
+        + `${debout > 1 ? 'verrous' : 'verrou'} à raser sur `
+        + `${GEOGRAPHIE.verrous.nombre}.`,
+    });
+  }
+
+  const cout = coutDUnRaid(etat, baseAttaquante, cible);
     const manque = manquePourPayer(etat.attaque, cout);
     if (manque !== null) {
       problemes.push({
@@ -653,6 +679,13 @@ export function executerRaid(etat, baseAttaquante, cible, options = {}) {
   //
   // ⚠ ET `payer` NE S'APPELLE PAS AVEC ZÉRO : `manquePourPayer` exige un entier
   // ≥ 1 et LÈVE en dessous. Le `> 0` n'est pas une coquetterie.
+  //
+  // ⚠ LE VERROU DE LA BASE FINALE N'EST PAS REVÉRIFIÉ ICI, ET C'EST VOULU. Il
+  // vit dans `problemesDuRaid`, posé après la portée et avant le prix, et cette
+  // fonction-ci vient de LEVER sur sa liste : un second `problemes.push` après
+  // le `throw` du haut ne serait lu par personne. Le premier jet du lot VERROUS
+  // en portait un — code mort, retiré à l'ouverture de la PR.
+
   const cout = coutDUnRaid(etat, baseAttaquante, cible);
   // ⚠ ON PAIE AVANT DE PARTIR, et jamais après. Un raid raté coûte ses points :
   // c'est ce qui fait du choix de cible une décision. Payer au retour ferait de

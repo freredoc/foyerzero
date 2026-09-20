@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 est de 5,95 %', () => {
+test('PIC T7 — le livrable pèse 9 123 813 octets, la marge sur la borne T10 est de 5,94 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -927,10 +927,37 @@ test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 e
   // aurait passé au VERT en faisant mentir la mesure écrite — c'est la dérive
   // que la dernière assertion existe pour refuser, et ÉCHELLE-RECHERCHE en a
   // réancré 51 pour la même raison.
+  // ⚠⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : **+1 349 octets**. Mesuré poste par
+  // poste contre le livrable rebâti dans un `git worktree` sur l'arbre pristine
+  // de `main` = `31b40dc`, qui est le merge de SOUFFLE et de son cavalier
+  // (**9 122 673**) : **JavaScript +2 077 · images −728 · feuille +0 ·
+  // balisage +0 · audio +0**, la partition tombant EXACTEMENT sur le total des
+  // DEUX côtés — écart **0 · 0** —, et **306 URI / 307 lignes `data:`** de part
+  // et d'autre. Aucun marqueur n'entre ni ne sort.
+  //
+  // ⚠⚠ ET LES IMAGES BAISSENT ALORS QUE LE LOT AJOUTE UNE NOTION : la 2 × 2 de
+  // l'Ouvrage est REMPLACÉE par celle qu'Ethan a livrée le 10/09, et le dessin
+  // neuf se comprime mieux — 18 684 → 18 136 octets à la grille 128, 6 496 →
+  // 6 448 à la 64. Le lot ne fait entrer aucune ressource : les six verrous se
+  // dessinent avec la 2 × 2 qui dormait au dépôt depuis le 30/08.
+  //
+  // ⚠ LES 2 077 OCTETS DE JAVASCRIPT SONT LE CÂBLAGE : la géométrie de
+  // l'hexagone, les deux types de site, les gardes d'exclusion, la porte de
+  // `problemesDuRaid` et le maillon de migration. Pas une image ne les porte.
+  // ⚠ RÉANCRÉ À L'OUVERTURE DE LA PR DU LOT VERROUS, 20/09 : `executerRaid`
+  // portait un SECOND bloc « verrou-terminale », copié de `problemesDuRaid`
+  // et poussé dans une liste sur laquelle la fonction venait de LEVER — du
+  // code mort, que `esbuild` ne peut pas élaguer (un `push` a l'air d'un effet).
+  // Retiré : **−209 octets de JavaScript, 9 124 022 → 9 123 813**, le coût du
+  // lot passant de +1 349 à **+1 140**. Un lot qui sait ce qu'il déplace réancre.
   const BORNE = 9_700_000;           // T10 de `banc.test.js`, relevée au lot RUINES-DÉFENSE
-  const MESURE = 9_122_673;          // SOUFFLE + cavalier RÉSERVE-RASAGE — 9 122 717 avant le cavalier
-  const MARGE = BORNE - MESURE;      // 577 327 octets — 577 283 pour SOUFFLE seul, 205 829 avant le WebP
-  assert.equal(MARGE, 577_327);
+  const MESURE = 9_123_813;          // lot VERROUS sans son bloc mort — 9 124 022 avec, 9 122 673 avant
+  const MARGE = BORNE - MESURE;      // 576 187 octets — 577 327 avant les verrous
+  assert.equal(MARGE, 576_187);
+  assert.notEqual(MARGE, 575_978,
+    'la marge est celle du premier jet de VERROUS : le bloc mort de executerRaid est revenu');
+  assert.notEqual(MARGE, 577_327,
+    'la marge est celle d\'avant VERROUS : les sept bases du bout de carte ont disparu');
   assert.notEqual(MARGE, 577_283,
     'la marge est celle de SOUFFLE seul : le cavalier RÉSERVE-RASAGE a été défait, ou son réancrage');
   assert.notEqual(MARGE, 205_829,
@@ -949,7 +976,7 @@ test('PIC T7 — le livrable pèse 9 122 673 octets, la marge sur la borne T10 e
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 5.95);
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 5.94);
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

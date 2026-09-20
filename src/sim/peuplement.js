@@ -64,7 +64,7 @@
 // « niveau 1 à 10 » des rangées basses. Le recopier ici serait une seconde table.
 
 import { GEOGRAPHIE, PEUPLEMENT } from '../data/sites.js';
-import { estSurLaCarte, positionDepartJoueur } from './carte.js';
+import { estSurLaCarte, positionDepartJoueur, grosseBaseDeLaCase } from './carte.js';
 
 /**
  * Hachage d'une case, salé.
@@ -195,6 +195,31 @@ export const VOISINES_EXCLUES = (() => {
 function estCandidate(graine, rangee, colonne) {
   if (!estSurLaCarte(rangee, colonne)) return false;
   if (!horsDeLaGarde(rangee, colonne)) return false;
+  // ⚠⚠ LES SEPT GROSSES BASES DU BOUT DE CARTE SONT INTERDITES AU TIRAGE — lot
+  // VERROUS, 20/09/2026. La base finale et ses six verrous sont des sites FIXES,
+  // posés par `sim/carte.js` et non par la graine : une base procédurale tirée
+  // sous leur emprise serait recouverte par le dessin sans que rien ne le dise,
+  // et `siteDeLaCase` rendrait deux sites pour une case.
+  //
+  // ⚠⚠ ET CETTE LIGNE DÉPLACE DES BASES SUR LES CARTES EXISTANTES. C'est la
+  // première fois que le dépôt le fait : le lot POI s'était explicitement
+  // interdit d'y toucher — « ajouter les POI ne déplace AUCUNE base sur AUCUNE
+  // carte existante », et un test le mesurait. Ici on ne le peut pas : les sept
+  // emprises sont au bout de la carte, et la graine y posait des bases.
+  //
+  // ⚠ LE PRIX EST MESURÉ, PAS ESTIMÉ : sur les graines 1 à 60, les rangées 1 à
+  // 30 portent **168,08 bases en moyenne sans l'exclusion et 164,90 avec**, soit
+  // **3,18 bases retirées par carte**. Les sept emprises couvrent 33 cases —
+  // 9 pour la finale, 4 par verrou —, et la règle de non-contact en libère
+  // alentour, si bien que le tirage en récupère une partie ailleurs. Le test de
+  // non-régression du peuplement est donc RETOURNÉ, pas supprimé : il mesurait
+  // « aucune base ne bouge », il mesure « seules les sept emprises bougent ».
+  //
+  // ⚠ ELLE EST ICI, DANS `estCandidate`, ET PAS DANS `estBaseOuvrage`. Une case
+  // exclue ne doit pas seulement cesser d'être une base : elle doit cesser
+  // d'être CANDIDATE, sans quoi elle continuerait de dominer le hachage de ses
+  // huit voisines et creuserait un trou de neuf cases au lieu d'une.
+  if (grosseBaseDeLaCase(rangee, colonne) !== null) return false;
   return hachageDeCase(graine, rangee, colonne, 0) < PEUPLEMENT.probabiliteCandidate;
 }
 

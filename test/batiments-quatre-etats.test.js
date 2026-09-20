@@ -338,7 +338,10 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  assert.equal(SAVE_VERSION, 38);
+  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39. Un maillon v38 → v39
+  // nettoie les ruines tombées sous les sept grosses bases du bout de carte.
+  assert.equal(SAVE_VERSION, 39);
+  assert.notEqual(SAVE_VERSION, 38, 'le maillon des verrous a été défait');
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.
   assert.equal(batimentDeLaVignette('collecteurMixte', 'quartz'), 'collecteurQuartz');

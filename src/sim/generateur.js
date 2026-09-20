@@ -27,6 +27,7 @@ import {
   VAGUES,
   SAVEURS,
   TYPES_SITE,
+  NIVEAU_MAXIMAL_DUN_SITE,
   RAID_OUVRAGE,
   DISPOSITION_DEFENSES,
   FORMES_DE_PAQUET,
@@ -207,12 +208,23 @@ const FACTEUR_BASE_MILLI = enEntier(DENSITE.facteurBase, MILLE, 'DENSITE.facteur
 export function densite(type, niveau) {
   const { bas, haut, delta, portee } = encadrer(DENSITE.parNiveau, niveau);
   const lire = (palier, cle, champ) => DENSITE.parNiveau[palier][cle][champ];
-  const cle = type === 'base' ? 'avantPoste' : type;
+  // ⚠⚠ DEUX `=== 'base'` SONT DEVENUS UNE LECTURE DE DONNÉE — lot VERROUS,
+  // 20/09/2026. Ils étaient tenables tant qu'il n'y avait qu'une sorte de base ;
+  // il y en a trois depuis que la finale et les verrous existent, et un
+  // troisième nom écrit ici aurait été le premier cas particulier à diverger.
+  // `TYPES_SITE[x].densiteComme` nomme la colonne empruntée, et sa PRÉSENCE vaut
+  // aussi « majoré de `DENSITE.facteurBase` » : c'est la même phrase de la §8 de
+  // la spec — « base = avant-poste de même niveau + 10 % » — et elle vaut pour
+  // les trois. Un camp et un avant-poste n'ont pas le champ ; ils lisent leur
+  // propre colonne, sans majoration. **Comportement inchangé au nombre près
+  // pour les trois types d'avant**, et un test le mesure.
+  const empruntee = TYPES_SITE[type]?.densiteComme;
+  const cle = empruntee ?? type;
   const brut = {
     batiments: interpolerEntier(lire(bas, cle, 'batiments'), lire(haut, cle, 'batiments'), delta, portee),
     defenses: interpolerEntier(lire(bas, cle, 'defenses'), lire(haut, cle, 'defenses'), delta, portee),
   };
-  if (type !== 'base') return brut;
+  if (empruntee === undefined) return brut;
   // Arrondi au demi supérieur, en entiers : jamais « × 1,1 » en flottant.
   const majorer = (n) => Math.floor((n * FACTEUR_BASE_MILLI + MILLE / 2) / MILLE);
   return { batiments: majorer(brut.batiments), defenses: majorer(brut.defenses) };
@@ -916,8 +928,22 @@ function verifierParametres({ type, niveau, saveur, graine }) {
   if (!Object.prototype.hasOwnProperty.call(TYPES_SITE, type)) {
     throw new Error(`générateur : type de site inconnu « ${type} »`);
   }
-  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
-    throw new Error(`générateur : niveau ${niveau} hors de 1…${NIVEAU.plafond}`);
+  // ⚠⚠ LA BORNE D'UN SITE DE L'OUVRAGE N'EST PLUS CELLE DE LA COURBE — lot
+  // VERROUS, 20/09/2026. La base finale vaut 60 : sans cette ouverture, le
+  // dernier site du jeu ne peut pas être ENGENDRÉ, donc pas attaqué.
+  //
+  // ⚠ DEUX DES QUATRE BORNES DE CE FICHIER S'OUVRENT, PAS LES QUATRE. Celle-ci
+  // et celle de `genererVague` décrivent l'OUVRAGE ; `budgetAssaut` et
+  // `genererAssaut` décrivent le JOUEUR, qui ne dépasse pas `NIVEAU.plafond`.
+  // Les ouvrir toutes aurait laissé composer un assaut de niveau 60 que rien
+  // dans le jeu ne peut produire.
+  //
+  // ⚠ ET LA COURBE TIENT, MESURÉ : `facteurEconomiqueMilli(60)` vaut
+  // 7 723 812 617, entier sûr, **16,06 fois** la valeur du niveau 50. C'est ce
+  // que la base finale frappe et encaisse de plus qu'un verrou — un fait
+  // d'équilibrage, qu'Ethan a arbitré, pas un effet de bord.
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
+    throw new Error(`générateur : niveau ${niveau} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`);
   }
   if (!Number.isInteger(graine)) {
     throw new Error(`générateur : graine ${graine} n'est pas un entier`);
@@ -1154,8 +1180,10 @@ function rangSpecialite(id) {
  *   pointsRestants: number }}
  */
 export function genererVague({ niveau, budgetPoints, graine }) {
-  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
-    throw new Error(`générateur : niveau ${niveau} hors de 1…${NIVEAU.plafond}`);
+  // ⚠ UNE VAGUE EST CELLE D'UN SITE DE L'OUVRAGE — voir `genererSite` : la
+  // borne suit le site, pas la courbe du joueur.
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
+    throw new Error(`générateur : niveau ${niveau} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`);
   }
   if (!Number.isInteger(budgetPoints) || budgetPoints < 0) {
     throw new Error(`générateur : budget ${budgetPoints} doit être un entier ≥ 0`);

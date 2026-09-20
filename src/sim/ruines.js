@@ -39,8 +39,9 @@
 // qu'on lui donne et le rend tel quel ; `JOUEUR` et `OUVRAGE` restent définis
 // une seule fois, là où la carte les emploie.
 
-import { APRES_RAID, GEOGRAPHIE } from '../data/sites.js';
+import { APRES_RAID, GEOGRAPHIE, NIVEAU_MAXIMAL_DUN_SITE } from '../data/sites.js';
 import { TICKS_PAR_HEURE } from './clock.js';
+import { positionsDesVerrous } from './carte.js';
 
 /**
  * Combien de ticks une ruine revendique le terrain.
@@ -117,9 +118,12 @@ export function ruineFraiche(rangee, colonne, type, vainqueur, niveau, tick) {
   // DESSIN. `palierDeNiveau` lève au-delà de `niveauPlafond` : sans cette borne,
   // une entrée mal formée passerait la sauvegarde et ferait tomber la CARTE, très
   // loin de l'endroit où l'erreur a été commise.
-  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+  // ⚠ LA BORNE SUIT `palierDeNiveau` — lot VERROUS : une base finale rasée
+  // laisse une ruine de niveau 60, et refuser ce niveau-là ferait lever sur le
+  // dernier site du jeu, au moment exact où le joueur vient de le prendre.
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
     throw new RangeError(
-      `ruines : niveau « ${niveau} » — entier de 1 à ${GEOGRAPHIE.niveauPlafond} attendu`,
+      `ruines : niveau « ${niveau} » — entier de 1 à ${NIVEAU_MAXIMAL_DUN_SITE} attendu`,
     );
   }
   if (!Number.isInteger(tick) || tick < 0) {
@@ -254,4 +258,46 @@ export function ruinesActives(etat) {
     });
   }
   return actives;
+}
+
+// ---------------------------------------------------------------------------
+// Les verrous de la base finale — lot VERROUS, 20/09/2026
+// ---------------------------------------------------------------------------
+
+/**
+ * Combien des six verrous tiennent encore debout.
+ *
+ * ⚠⚠ RIEN N'EST STOCKÉ, ET C'EST LA RÈGLE DU DÉPÔT. Un champ
+ * `verrousRases: 4` dans la sauvegarde serait une SECONDE vérité à côté de
+ * `basesRasees`, et les deux divergeraient au premier maillon de migration
+ * oublié. Le compte se DÉRIVE des six positions et de la liste des rasées —
+ * la même liste qui fait disparaître une base de l'Ouvrage.
+ *
+ * ⚠ ET IL NE REGARDE PAS L'HORLOGE, pour la même raison que `siteDeLaCase` :
+ * ce qui expire au bout de vingt-quatre heures est la revendication de
+ * TERRITOIRE d'une ruine, pas la disparition du site. Un verrou rasé l'est pour
+ * de bon — `TYPES_SITE.baseVerrou.respawn` vaut `false`.
+ *
+ * @param {object} etat
+ * @returns {number} de 0 à `GEOGRAPHIE.verrous.nombre`
+ */
+export function verrousDebout(etat) {
+  const rasees = casesRasees(etat);
+  return positionsDesVerrous()
+    .filter((p) => !rasees.has(cleDeLaCase(p.rangee, p.colonne)))
+    .length;
+}
+
+/**
+ * La base finale est-elle déverrouillée ?
+ *
+ * ⚠ ETHAN, 10/09 : « pour attaquer la base finale, il faut d'abord avoir rasé
+ * les six bases intermédiaires ». SIX sur six, pas cinq : c'est une porte, pas
+ * une jauge.
+ *
+ * @param {object} etat
+ * @returns {boolean}
+ */
+export function finaleDeverrouillee(etat) {
+  return verrousDebout(etat) === 0;
 }

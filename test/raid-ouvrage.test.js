@@ -379,8 +379,20 @@ test('RAID-B T6 — une base de niveau < 10 n\'est jamais attaquante', () => {
   for (const a of attaquantes) {
     assert.equal(TYPES_SITE[a.type].attaqueLeJoueur, true, `« ${a.type} » ne devrait pas attaquer`);
   }
+  // ⚠⚠ LES DEUX TYPES DU BOUT DE CARTE REJOIGNENT LES NON-ATTAQUANTS AU LOT
+  // VERROUS, 20/09/2026 — Ethan, 11/09, Q9 : « pas d'attaque ». Les sept bases
+  // de la fin sont PASSIVES : elles attendent qu'on vienne les chercher. Une
+  // base de niveau 60 qui enverrait des raids sur un joueur de niveau 12 à
+  // deux cent quatre-vingts cases de là n'aurait aucun sens.
+  //
+  // ⚠ ET LE CÂBLAGE EST GRATUIT, CE QUI EST LE SIGNE QUE LA TABLE EST AU BON
+  // ENDROIT : `basesAttaquantes` filtre déjà sur `attaqueLeJoueur !== true`, et
+  // pas une ligne de `sim/raid-ouvrage.js` n'a changé pour ce lot.
   const nonAttaquants = Object.keys(TYPES_SITE).filter((t) => !TYPES_SITE[t].attaqueLeJoueur);
-  assert.deepEqual(nonAttaquants.sort(), ['avantPoste', 'camp']);
+  assert.deepEqual(nonAttaquants.sort(),
+    ['avantPoste', 'baseTerminale', 'baseVerrou', 'camp']);
+  assert.notDeepEqual(nonAttaquants.sort(), ['avantPoste', 'camp'],
+    'les sept bases du bout de carte attaquent à nouveau : Q9 a été défaite');
 
   // Une partie neuve, elle, n'est attaquée par personne : le début de partie est
   // à l'abri, et c'est la garde du peuplement autant que le seuil de niveau.
@@ -1150,7 +1162,23 @@ test('RCU T10 — camps et avant-postes n\'attaquent toujours pas', () => {
   for (const b of etat.bases) {
     for (const s of ciblesAPortee(etat, b)) genres.add(s.type);
   }
-  for (const t of Object.keys(TYPES_SITE).filter((x) => !TYPES_SITE[x].attaqueLeJoueur)) {
+  // ⚠⚠ LE MONTAGE NE PEUT EXIGER QUE LES NON-ATTAQUANTS QU'IL PEUT ATTEINDRE —
+  // lot VERROUS, 20/09/2026. Cette boucle balayait TOUS les types non
+  // attaquants ; ils étaient deux, camp et avant-poste, et tous deux sont des
+  // satellites qui paraissent autour de la base du joueur. Les sept bases du
+  // bout de carte sont non attaquantes elles aussi depuis ce lot, mais elles
+  // sont FIXES, aux rangées 3 à 27 : aucune partie de test posée au sud ne les
+  // aura jamais à portée, et l'exiger aurait fait échouer un montage sain.
+  //
+  // ⚠ LE DISCRIMINANT EST `respawn`, PAS UNE LISTE DE NOMS. Un satellite
+  // réapparaît autour du joueur — c'est ce qui le rend atteignable depuis
+  // n'importe où —, une base ne réapparaît jamais. Deux noms écrits ici
+  // seraient le premier cas particulier à diverger.
+  const satellites = Object.keys(TYPES_SITE)
+    .filter((x) => !TYPES_SITE[x].attaqueLeJoueur && TYPES_SITE[x].respawn);
+  assert.deepEqual(satellites.slice().sort(), ['avantPoste', 'camp'],
+    'les sites non attaquants qui suivent le joueur ont changé');
+  for (const t of satellites) {
     assert.ok(genres.has(t), `le montage ne mesure rien : aucun « ${t} » à portée`);
   }
 });
@@ -1244,7 +1272,9 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // `state.test.js` le garde désormais. ⚠ POURQUOI 36 ET PAS 34 : des livrables
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
-  assert.equal(SAVE_VERSION, 38, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — RAID-ET-ÉCRAN, lui, y est passé (10/09)');
+  // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39. Ce que ce test garde est
+  // que SON lot n'a rien ajouté à l'état, pas que le nombre ne bouge jamais.
+  assert.equal(SAVE_VERSION, 39, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — VERROUS, lui, y est passé (20/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

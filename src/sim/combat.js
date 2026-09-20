@@ -36,6 +36,7 @@
 import { GRILLE, UNITES, DEFENSES, COLONNES_DEGATS } from '../data/combat.js';
 import {
   BATIMENTS, BUTIN, SAVEURS, POINTS_RECHERCHE, GEOGRAPHIE, TYPES_SITE,
+  NIVEAU_MAXIMAL_DUN_SITE,
 } from '../data/sites.js';
 import { NIVEAU } from '../data/niveaux.js';
 // ⚠⚠ LA SEULE DÉPENDANCE DE CE MOTEUR VERS LA BASE DU JOUEUR, ET ELLE EST
@@ -453,10 +454,17 @@ export function verifierArithmetique() {
   // pas supposé : une pente plus douce partant plus haut finit plus bas.
   const bareme = Math.max(...Object.values(POINTS_RECHERCHE.parCible));
   const bonus = MILLE + Math.round(MILLE * POINTS_RECHERCHE.bonusModuleDebloque);
-  const plafond = bareme * facteurRechercheMilli(GEOGRAPHIE.niveauPlafond) * bonus;
+  // ⚠⚠ L'ASSERTION MONTE À `NIVEAU_MAXIMAL_DUN_SITE` AU LOT VERROUS, ET ELLE
+  // TIENT — MESURÉ, PAS SUPPOSÉ. Le garde-fou surveillait le plafond de carte,
+  // 50 ; la base finale vaut 60, donc c'est à 60 qu'il faut qu'il tienne, sans
+  // quoi il resterait vert pendant que le seul combat qu'il devait surveiller
+  // déborderait. Mesuré : **60 × 3 487 954 433 × 1 200 = 251 132 719 176 000**,
+  // contre 9 007 199 254 740 991 pour l'entier sûr — **35,9 fois de marge**,
+  // contre 318 fois au niveau 50. La marge se divise par neuf et reste large.
+  const plafond = bareme * facteurRechercheMilli(NIVEAU_MAXIMAL_DUN_SITE) * bonus;
   if (!Number.isSafeInteger(plafond)) {
     throw new Error(
-      `combat : ${bareme} × ${facteurRechercheMilli(GEOGRAPHIE.niveauPlafond)} × ${bonus} `
+      `combat : ${bareme} × ${facteurRechercheMilli(NIVEAU_MAXIMAL_DUN_SITE)} × ${bonus} `
       + `= ${plafond} n'est pas un entier sûr`,
     );
   }
@@ -481,8 +489,19 @@ verifierArithmetique();
  * @returns {number} entier de millièmes.
  */
 export function facteurMilli(niveau) {
-  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU.plafond) {
-    throw new Error(`combat : niveau ${niveau} hors de 1…${NIVEAU.plafond}`);
+  // ⚠⚠ LA BORNE EST `NIVEAU_MAXIMAL_DUN_SITE`, ET `NIVEAU.plafond` NE BOUGE PAS
+  // — lot VERROUS, 20/09/2026. Les deux plafonds à 50 du dépôt restent à 50, et
+  // un test les asseoit l'un contre l'autre ; ce qui change, c'est jusqu'où
+  // cette COURBE-ci se laisse évaluer. Elle est une pente unique de 1,1 depuis
+  // le lot COURBE-2 : elle n'a pas de régime au-delà de 50 à inventer, elle
+  // continue. ⚠ Mesuré à l'entrée du lot : `facteurMilli(60)` reste un entier
+  // sûr, et vaut 16,06 fois celui du niveau 50.
+  //
+  // ⚠ CE N'EST PAS UNE INVITATION À MONTER LE JOUEUR À 60. `budgetAssaut` et
+  // `genererAssaut` de `sim/generateur.js` gardent `NIVEAU.plafond` : seul un
+  // SITE de l'Ouvrage dépasse, et un seul le fait.
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
+    throw new Error(`combat : niveau ${niveau} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`);
   }
   const exposantBas = NIVEAU.deuxRegimes ? Math.min(niveau, NIVEAU.niveauBascule) - 1 : 0;
   const exposantHaut = NIVEAU.deuxRegimes
@@ -689,8 +708,15 @@ function ajouterEntite(
   // — une base est « composée de deux niveaux adjacents », ce que le niveau de
   // site seul ne sait pas exprimer.
   const niveauEntite = niveau ?? etat.niveau;
-  if (!Number.isInteger(niveauEntite) || niveauEntite < 1 || niveauEntite > NIVEAU.plafond) {
-    throw new Error(`combat : ${ou} — niveau ${niveauEntite} hors de 1…${NIVEAU.plafond}`);
+  // ⚠ ELLE SUIT `facteurMilli`, qu'elle appelle juste en dessous : une borne
+  // plus étroite ici refuserait un défenseur que la courbe sait pourtant
+  // évaluer — c'est exactement ce qui a fait lever la base finale au premier
+  // essai du lot VERROUS, sur une Faucheuse de niveau 60.
+  if (!Number.isInteger(niveauEntite) || niveauEntite < 1
+    || niveauEntite > NIVEAU_MAXIMAL_DUN_SITE) {
+    throw new Error(
+      `combat : ${ou} — niveau ${niveauEntite} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`,
+    );
   }
   const facteur = facteurMilli(niveauEntite);
   // pvMaxMilli = pv × 1000 × facteurMilli / 1000 = pv × facteurMilli. Exact.
@@ -885,9 +911,18 @@ export function creerCombat(montage) {
     throw new Error('combat : montage absent');
   }
   const { niveau } = montage;
-  if (!Number.isInteger(niveau) || niveau < 1 || niveau > GEOGRAPHIE.niveauPlafond) {
+  // ⚠⚠ LA BORNE EST `NIVEAU_MAXIMAL_DUN_SITE`, PAS `niveauPlafond` — lot
+  // VERROUS, 20/09/2026. La base finale vaut 60 quand le plafond de la carte
+  // vaut 50 : un site peut dépasser ce que sa rangée donnerait, et c'est
+  // l'arbitrage Q8 d'Ethan. Sans cette ouverture, `creerCombat` LÈVE sur la
+  // seule base que tout le jeu a pour but d'atteindre.
+  //
+  // ⚠ ELLE S'OUVRE POUR UN NOMBRE NOMMÉ, JAMAIS « au cas où ». La constante dit
+  // quel site la justifie ; élargir à 99 aurait laissé passer n'importe quel
+  // montage fautif sans que rien ne le dise.
+  if (!Number.isInteger(niveau) || niveau < 1 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
     throw new Error(
-      `combat : niveau ${niveau} hors de 1…${GEOGRAPHIE.niveauPlafond}`,
+      `combat : niveau ${niveau} hors de 1…${NIVEAU_MAXIMAL_DUN_SITE}`,
     );
   }
   const saveur = montage.saveur ?? null;

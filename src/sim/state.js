@@ -16,7 +16,7 @@ import {
   TICKS_APPARITION,
   PREMIERE_INSTANCE, ANNEAUX,
 } from './satellites.js';
-import { positionDepartJoueur, estSurLaCarte } from './carte.js';
+import { positionDepartJoueur, estSurLaCarte, grosseBaseDeLaCase } from './carte.js';
 import { releverLesPoisAcquis, majorationsDeProduction, problemesDesPoisAcquis } from './poi.js';
 import {
   creerPointsAttaque, avancerPointsAttaque, plafondDuNiveau, plafondVise,
@@ -81,7 +81,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 38;
+export const SAVE_VERSION = 39;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -3519,6 +3519,38 @@ const MIGRATIONS = {
   37: (s) => {
     s.version = 38;
     if (typeof s.modeDeveloppeur !== 'boolean') s.modeDeveloppeur = false;
+  },
+
+  /**
+   * v38 → v39 : les sept grosses bases du bout de carte — lot VERROUS.
+   *
+   * ⚠⚠ AUCUN CHAMP N'ENTRE DANS L'ÉTAT, ET LE MAILLON N'EST POURTANT PAS VIDE.
+   * Ce que le lot change est la CARTE : `estCandidate` du peuplement exclut
+   * désormais les 33 cases de la base finale et de ses six verrous, donc une
+   * base que la graine posait sous l'une d'elles n'existe plus. Une partie
+   * d'avant le lot peut porter, dans `basesRasees`, une case qui ne désigne
+   * plus rien — le joueur l'avait rasée quand elle existait.
+   *
+   * ⚠⚠ UNE ENTRÉE ORPHELINE N'EST PAS INOFFENSIVE. `siteDeLaCase` interroge
+   * `casesRasees` AVANT de rendre une grosse base : une case rasée sous une
+   * emprise rendrait `null` là où le jeu doit rendre un verrou, et le joueur
+   * trouverait un trou au bout de la carte — une base finale inattaquable, sans
+   * qu'aucune ligne ne l'explique. C'est exactement la panne muette que ce
+   * maillon existe pour éviter.
+   *
+   * ⚠ LES RUINES DES SEPT EMPRISES SONT DONC RETIRÉES, ET ELLES SEULES. Une
+   * base rasée ailleurs reste rasée : le lot ne rend au joueur aucune conquête
+   * qu'il a faite.
+   *
+   * @param {object} s
+   */
+  38: (s) => {
+    s.version = 39;
+    if (!Array.isArray(s.basesRasees)) return;
+    s.basesRasees = s.basesRasees.filter(
+      (e) => e === null || typeof e !== 'object'
+        || grosseBaseDeLaCase(e.rangee, e.colonne) === null,
+    );
   },
 };
 

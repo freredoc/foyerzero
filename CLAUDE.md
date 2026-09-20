@@ -7,7 +7,112 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **20/09/2026**, version 0.99.70 · build 182.
+Dernière révision : **20/09/2026**, version 0.99.71 · build 183.
+⚠⚠ **LA BASE FINALE DEVIENT ATTAQUABLE, ET ELLE NE L'EST QU'APRÈS SIX.** Lot
+VERROUS. Elle existait comme DÉCOR depuis le 30/08 — `ui/monde.js` la dessinait,
+`sim/poi.js` l'esquivait, et `siteDeLaCase` rendait `null` dessus. Elle a
+désormais **six verrous en hexagone**, rayon **12**, pointe en haut :
+`(3,16) (9,26) (21,26) (27,16) (21,6) (9,6)`. `problemesDuRaid` rend le refus
+`verrou-terminale` tant qu'il en reste UN debout — c'est une porte, pas une
+jauge.
+⚠⚠ **LE RAYON N'EST NI 10 NI 15, ET LES DEUX BOUTS DE LA FOURCHETTE D'ETHAN
+SONT MORTS À LA MESURE.** « Entre dix et quinze cases », 10/09. À **15**, le
+sommet du haut tombe **rangée 0** : `empriseDeLaGrosseBase` LÈVE, et une levée
+dans la boucle de dessin vide tout l'écran Monde. À **10**, le cercle inscrit de
+l'hexagone vaut `10 × cos 30° = 8,66`, sous le rayon d'attaque de 10 : **76 des
+317 cases** d'où la finale est atteignable sont HORS de la ligne des verrous, et
+elle se contourne. À **12**, l'inscrit vaut **10,392** et il n'en reste
+**aucune**.
+⚠⚠ **ET LE PREMIER JET DU LOT AVAIT ÉCRIT LA MAUVAISE PROPRIÉTÉ — SON PROPRE
+TEST L'A FAIT TOMBER.** Il affirmait « à R = 12, aucune case ne porte un verrou
+ET la finale ». C'est **FAUX : il y en a 308**, et il ne peut pas en être
+autrement — deux disques de rayon 10 dont les centres sont à 12 se recoupent
+largement, il aurait fallu écarter les verrous de plus de vingt cases. Ce qui
+tient est la propriété du CERCLE INSCRIT, pas celle-là. **Une affirmation non
+mesurée a failli entrer au dépôt ; c'est le test qui l'a arrêtée.**
+⚠⚠ **NIVEAU 60 PAR LE TYPE, PAS PAR LA RANGÉE — ARBITRAGE Q8 D'ETHAN, 11/09 :
+« B ».** `niveauPlafond` reste **50** ; `GEOGRAPHIE.niveauDeLaBaseFinale` vaut
+**60**, et `NIVEAU_MAXIMAL_DUN_SITE` s'en dérive. L'option écartée — porter le
+plafond à 60 — déplaçait le niveau de TOUTES les rangées hautes, donc celui de
+toutes les bases procédurales des sauvegardes. ⚠ **SEPT bornes s'ouvrent,
+nommément** : `palierDeNiveau`, `creerCombat`, la validation d'entité,
+`facteurMilli`, `genererSite`, `genererVague` et celle des ruines. **Deux ne
+s'ouvrent PAS** — `budgetAssaut` et `genererAssaut` gardent `NIVEAU.plafond` :
+le JOUEUR ne dépasse pas 50.
+⚠ **ET LE BARÈME TIENT À 60, MESURÉ, PAS SUPPOSÉ.** `verifierArithmetique`
+asserte désormais au niveau de la finale : **60 × 3 487 954 433 × 1 200 =
+251 132 719 176 000** contre 9 007 199 254 740 991 — **35,9 fois de marge**,
+contre 318 au niveau 50.
+⚠⚠ **LES SEPT SONT PASSIVES, ET LE CÂBLAGE EST GRATUIT.** Q9 : « pas
+d'attaque ». `attaqueLeJoueur: false` sur les deux types, et **pas une ligne de
+`sim/raid-ouvrage.js` n'a changé** — il filtrait déjà sur ce champ. C'est le
+signe que la table était au bon endroit. ⚠ Elles tiennent quand même du
+TERRITOIRE : `raisonDeLaForce` vaut 2, donc une base 60 en vaut **1 024** de
+niveau 50.
+⚠⚠ **`empriseDeLaGrosseBase` MONTE DANS `sim/carte.js`, ET C'EST `sim/poi.js`
+QUI AVAIT ÉCRIT LA CONDITION DE SON PROPRE DÉMÉNAGEMENT** le 31/08 : « le jour
+où [`render/embleme.js`] lirait [de `sim/`], c'est CETTE ligne qu'il faudra
+défaire, en montant la géométrie dans `sim/` plutôt qu'en recopiant le
+décalage. » Trois modules de `sim/` en ont besoin désormais. `render/embleme.js`
+la **réexporte** : aucun import du dépôt ne change.
+⚠⚠ **L'EXCLUSION DU PEUPLEMENT DÉPLACE DES BASES SUR LES CARTES EXISTANTES —
+UNE PREMIÈRE, ET `POI T5` EST RETOURNÉ.** Ce test gardait une ABSTINENCE :
+« ajouter les POI ne déplace AUCUNE base sur AUCUNE carte existante ». Le lot ne
+peut pas la tenir — les sept emprises couvrent **33 cases** où la graine posait
+des bases. La propriété se RESSERRE en « seules les cases des sept grosses bases
+bougent », assertée case par case sur la carte entière, ce qui est **plus fort**
+que six comptes. Mesuré : **−3,18 bases par carte** (168,08 → 164,90 sur les
+rangées 1-30, 60 graines).
+⚠⚠ **`SAVE_VERSION` 38 → 39, ET LE MAILLON N'EST PAS DÉCORATIF.** Aucun champ
+n'entre dans l'état ; ce qui change est la CARTE. Une partie d'avant le lot peut
+porter dans `basesRasees` une case tombée sous une emprise — `siteDeLaCase`
+interroge `casesRasees` AVANT de rendre une grosse base, donc elle rendrait
+`null` là où le jeu doit rendre un verrou : **une base finale à jamais
+inattaquable, sans qu'aucune ligne ne l'explique**. Le maillon retire ces
+ruines-là, et elles seules.
+⚠⚠ **LE VERROU SORTAIT EN ROUGE, ET UN TEST A CORRIGÉ LE PREMIER JET.** Il
+portait le bord `#E43E32`, qui désigne EXACTEMENT ce qui attaque le joueur —
+`monde.test.js` asserte l'égalité des deux ensembles. Un verrou est
+`attaqueLeJoueur: false` : le peindre en rouge annonçait une menace qu'il
+n'exerce pas. Il porte le bord de la base finale, dont il est l'avant-poste.
+⚠ **LA 2 × 2 A TROUVÉ SON EMPLOI, cinq semaines après avoir été pré-branchée.**
+`render/embleme.js` disait depuis le 30/08 : « elle reste pré-branchée — nommée,
+vérifiée contre l'art — et sans emploi. Lui en inventer un serait trancher à sa
+place. » Ethan a tranché. ⚠ Et elle est **REMPLACÉE** par la planche livrée le
+10/09 (Q2, « oui ») : `verifier.py --outil emblemes` rend **271 identiques · 0
+différents**.
+⚠ **SIX FALSIFICATIONS, SIX CHUTES** — rayon ramené à 10, verrou rendu
+attaquant, exclusion du peuplement retirée, porte devenue jauge (5 sur 6
+ouvrirait), migration qui ne nettoie plus, et chaque case rendant SA position
+au lieu de celle du site.
+⚠ **TREIZE TESTS RÉANCRÉS, AUCUN ASSOUPLI** — `POI T5`, `EUCLIDE T5 ter`,
+`T15`, `§7`, `FOND T8`, `RAID-B T6`, `RCU T10`, `MODE-DEV T1`, `PIC T7`, les
+quatre d'emblème de `monde.test.js`, et les six épingles de `SAVE_VERSION`.
+⚠⚠ **ET `MODE-DEV T1` CACHAIT UN PIÈGE DE MONTAGE.** Il partait de
+`SAVE_VERSION - 1` pour mesurer le maillon 37 → 38 : le raccourci était juste
+tant que MODE-DEV était le dernier lot. À 39, il désignait 38 et le maillon
+mesuré n'était **plus traversé du tout** — le test annonçait que la migration
+n'éteint pas le mode, alors qu'elle n'était jamais appelée. **Un test épingle le
+maillon qu'il mesure, jamais « le dernier ».**
+⚠ **LES DEUX LIGNES PÉRIMÉES DE `SPEC-FOYER-ZERO.md` §10 SONT CORRIGÉES**, comme
+le lot SOUFFLE l'avait annoncé : carte **31 × 300** et base finale à **14 cases**
+du bord haut. La §10 gagne les verrous, leur rayon et le niveau 60.
+⚠⚠ **CE QUI N'EST PAS DANS CE LOT, ET QUI SE VOIT :** la grille de combat
+**9 × 27** que la base finale impose, avec ses seize rangées de défense et ses
+78 défenses. Elle rend `GRILLE` variable — **31 lectures de `GRILLE.longueur`
+dans 8 fichiers**, `GRILLE.bandes` dans 12 — et fait entrer trois fonds longs de
+1080 × 3240. C'est le lot suivant, et c'est LUI qui relèvera T10. En attendant,
+les sept se combattent sur la grille ordinaire, avec la densité d'une base :
+**39 bâtiments / 39 défenses**, la même pour la finale que pour un verrou.
+⚠ **AUCUN ÉQUILIBRAGE, ET C'EST EXPLICITE.** Ethan, 11/09 : « inutile de faire
+des tests de raid pour l'équilibrage, c'est mon boulot ». Le lot pose la
+mécanique et les effectifs dérivés des tables ; il ne juge pas si c'est jouable.
+⚠ Un fait à connaître quand même : au niveau 60 la finale a **les mêmes
+effectifs** qu'un verrou — `DENSITE` s'arrête à 50 et borne au dernier palier —
+mais chaque unité vaut **16,06 fois** plus, `facteurEconomiqueMilli` passant de
+480 941 681 à 7 723 812 617.
+
+**Auparavant, après le lot SOUFFLE (20/09) :**
 ⚠⚠ **LE LIVRABLE PERD 371 454 OCTETS SANS QU'UN DESSIN CHANGE, ET LA BORNE NE
 BOUGE PAS.** Lot SOUFFLE : les deux grosses bases de l'Ouvrage — `base_o_2x2` et
 `base_o_3x3` — étaient les **deux seuls PNG** que `tools/build.js` inlinait
@@ -137,7 +242,42 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 20/09/2026 (après le lot SOUFFLE), à confronter :**
+**Référence au 20/09/2026 (après le lot VERROUS), à confronter :**
+`npm test` rend **1657 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 656 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **sept**, `VERROU T1` à
+`T7` du nouveau `test/verrous.test.js` — `test/` passe de 78 à **79** fichiers.
+`npm run build` → `dist/index.html`, **9 123 813 octets**, 0 référence externe
+— **9 124 022 au premier jet**, voir le ⚠ ci-dessous.
+Coût **+1 349 octets** au premier jet, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` depuis l'arbre pristine de `main` = `31b40dc`, qui est le merge de
+SOUFFLE et de son cavalier (**9 122 673**) : **JavaScript +2 077 · images −728 ·
+feuille +0 · balisage +0 · audio +0**, et les cinq postes PARTITIONNENT le
+fichier des deux côtés — chacun NET de ses `data:`, somme exacte sur le total
+avant comme après — `data:` à **307 lignes / 306 URI** des deux côtés. Borne T10
+**9 700 000, NON TOUCHÉE** ; c'est au lot de la grille longue de la relever.
+Marge **575 978 octets, 5,94 %** au premier jet.
+⚠⚠ **UN BLOC MORT A ÉTÉ RETIRÉ À L'OUVERTURE DE LA PR, ET LE LIVRABLE PERD
+209 OCTETS.** `executerRaid` portait un SECOND bloc « verrou-terminale »,
+copié de `problemesDuRaid` avec son commentaire, poussé dans `problemes`
+APRÈS le `throw` qui lève sur cette liste — jamais lu par personne, et le
+commentaire laissait croire que la fonction revérifiait le verrou. La porte
+vit dans `problemesDuRaid` seul, que `executerRaid` consulte en tête ; rien
+ne change au comportement, `VERROU T5` et les 1 657 sont verts des deux
+côtés. Livrable **9 123 813**, coût du lot **+1 140** (JavaScript +1 868),
+marge **576 187 octets, 5,94 %**, `PIC T7` réancré avec sa contre-assertion.
+⚠ `python3 tools/verifier.py --outil emblemes` rend **271 identiques · 0
+différents · 0 nouveaux** APRÈS le remplacement de la 2 × 2, et `atlas.py
+--verifier` **17 identiques · 3 différents** — les trois ÉCARTs préexistants,
+laissés où le lot les a trouvés.
+⚠ Le lot touche `src/data/sites.js`, `src/sim/{carte,peuplement,poi,
+site-de-la-case,raid,ruines,generateur,combat,disposition,state}.js`,
+`src/render/{embleme,fond}.js`, douze fichiers de `test/`, `SPEC-FOYER-ZERO.md`,
+`package.json`, ce fichier et `RAPPORT-lotVERROUS.md` ; il FAIT ENTRER
+`test/verrous.test.js` et remplace `art/sources/S10_base_ouvrage_2x2.png`.
+
+**Auparavant, après le lot SOUFFLE (20/09) :**
 `npm test` rend **1650 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 649 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
@@ -13919,7 +14059,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   78 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
+test/                   79 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -13932,7 +14072,7 @@ test/                   78 fichiers *.test.js (node:test) ; HUIT n'en sont PAS
   journal-raids  batiments-quatre-etats  formation-et-garnison  etat-en-raid
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
-  ancres-zenith  ruines-defense
+  ancres-zenith  ruines-defense  verrous
   ⤷ ⚠⚠ LE HUITIÈME EST `generateur-ancien.js`, ENTRÉ AU LOT PAQUETS (09/09) :
     la COPIE de l'ancien placement de site — modèle ligne/colonne —, sous le
     nom `genererSiteAncien`, jamais dans `src/`. Elle ne sert qu'à

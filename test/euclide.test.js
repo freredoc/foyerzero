@@ -25,7 +25,9 @@ import {
 } from '../src/sim/peuplement.js';
 import { casesDeLAnneau } from '../src/sim/satellites.js';
 import { distanceCarreeMilli } from '../src/sim/grille.js';
-import { positionDepartJoueur, estSurLaCarte } from '../src/sim/carte.js';
+import {
+  positionDepartJoueur, estSurLaCarte, grosseBaseDeLaCase,
+} from '../src/sim/carte.js';
 import {
   creerEtat, serialiser, migrer, SAVE_VERSION,
 } from '../src/sim/state.js';
@@ -229,6 +231,17 @@ function carteParPasses(graine, p, tours, voisinage = HUIT) {
   for (let r = 1; r <= HAUTEUR_CARTE; r += 1) {
     for (let c = 1; c <= LARGEUR_CARTE; c += 1) {
       if (!horsDeLaGarde(r, c)) continue;
+      // ⚠⚠ LES SEPT GROSSES BASES SONT EXCLUES DES DEUX CÔTÉS — lot VERROUS,
+      // 20/09/2026. `estCandidate` du peuplement les refuse depuis ce lot ; sans
+      // le même refus ici, la passe globale poserait des bases sous la base
+      // finale et ses six verrous, et la comparaison tomberait sur une
+      // différence VOULUE au lieu de mesurer ce qu'elle mesure — que la
+      // récursion locale n'a pas oublié un tour.
+      //
+      // ⚠ ELLE SE DEMANDE À `sim/carte.js`, elle ne se réécrit pas ici. Une
+      // seconde géométrie dans un test serait exactement la duplication que
+      // cette comparaison existe pour débusquer ailleurs.
+      if (grosseBaseDeLaCase(r, c) !== null) continue;
       if (hachageDeCase(graine, r, c, 0) < p) candidate.add(cle(r, c));
     }
   }
