@@ -557,7 +557,18 @@ function exigerChamp(etat, champ) {
 // une pièce déjà posée sans que le joueur ait touché à quoi que ce soit.
 // Le défaut reste SIGNALÉ — `problemesDeLaPoseDEffectif` le rend, l'écran le
 // montre — et toute NOUVELLE pose au même endroit est refusée.
-export const CODES_TOLERES_AU_CHARGEMENT = new Set(['uniques-voisins', 'obstacle']);
+// ⚠⚠ `artillerie-unique` A REJOINT L'ENSEMBLE LE 22/09, LOT ARTILLERIE, ET SANS
+// LUI DES PARTIES EN COURS DEVIENNENT INJOUABLES. Les trois bâtiments
+// d'artillerie sont posables SANS AUCUNE LIMITE depuis le lot
+// BÂTIMENTS-JOUEUR-V2 : n'importe quelle sauvegarde peut légalement en porter
+// deux ou trois sur la même base, posées par un joueur qui ne violait rien.
+// `verifierEtat` lève sur un problème non toléré, donc ce lot transformerait une
+// partie légitime en `Error` au chargement.
+// ⚠ ET CE N'EST PAS UN RETRAIT DÉGUISÉ : les artilleries en trop restent posées,
+// se réparent, se montent, et CONTRIBUENT TOUTES au retrait d'avant-combat —
+// `retraitDesArtilleries` boucle sur la disposition sans compter. Ce qui est
+// interdit est d'en POSER une seconde ; ce qui est déjà là reste.
+export const CODES_TOLERES_AU_CHARGEMENT = new Set(['uniques-voisins', 'obstacle', 'artillerie-unique']);
 
 function verifierEtat(etat) {
   // ⚠ `fondation` EST REDONDANT ICI, et la garde reste quand même. Mesuré le

@@ -7,7 +7,141 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **20/09/2026**, version 0.99.74 · build 186.
+Dernière révision : **22/09/2026**, version 0.99.75 · build 187.
+⚠⚠ **LES TROIS ARTILLERIES DU JOUEUR CESSENT D'ÊTRE DES IDENTIFIANTS SANS
+LECTEUR, ET ELLES NE TIRENT TOUJOURS PAS.** Lot ARTILLERIE. Elles sont dans
+`BASE_BATIMENTS` depuis BÂTIMENTS-JOUEUR-V2, avec leurs sprites et leurs quatre
+états, et **aucune branche du dépôt ne les lisait** — troisième fois du dépôt
+après `ui_pause` et `ruine_j`/`ruine_o`. Elles deviennent une **attrition
+passive d'avant-combat** : quand l'Ouvrage vient, la vague arrive déjà entamée,
+et c'est tout. Pas de tir, pas de portée dessinée, pas de ligne au rapport de
+défense — le brief le met hors périmètre en toutes lettres.
+⚠⚠ **LES TROIS RAYONS SONT UN ARBITRAGE D'ETHAN DU 22/09, ET C'EST UNE ROTATION
+QUI NE COÏNCIDE AVEC AUCUNE LECTURE ANTÉRIEURE.** « 4 pour l'anti-infanterie,
+3 pour l'anti-véhicule et 6 pour l'anti-avion. Il n'y a pas eu de confirmation
+sur le brief. » Le brief lisait **6 · 4 · 3** et le donnait lui-même comme une
+lecture déclarée. L'arbitrage rend **4 · 3 · 6** — donc ni l'un ni l'autre.
+Les trois `rayonCases` de `SOUTIEN_DE_BASE` portent la valeur du brief EN
+COMMENTAIRE à côté de la leur, pour qu'un lot futur ne « corrige » pas
+l'arbitrage en croyant réparer une coquille.
+⚠⚠ **ET LE DÉPÔT PORTE DEUX RELEVÉS QUI SE CONTREDISENT SUR LES RAYONS — TROUVÉ
+À LA RELECTURE HOSTILE, LE BRIEF N'EN CITE QU'UN.** `RELEVE-TA-ARSENAL.md` §4
+donne Skystrike 12, Falcon 10, Ion Cannon 8 (« le rayon décroît quand la cible
+devient plus lourde ») ; `RELEVE-TA-COURBES-2.md` §6.6 donne Skystrike **8**,
+Falcon 10, Ion Cannon **12**, l'ORDRE INVERSE, corroboré par sa colonne de
+calibrage — 30 s · 60 s · 120 s, monotone avec le rayon. Reportés sur l'échelle
+du brief : **6 · 3 · 4** d'un côté, **3 · 6 · 4** de l'autre. L'arbitrage ne
+coïncide avec AUCUNE des trois — il met l'anti-aérien en tête, ce qu'aucun
+relevé ne dit. ⚠ **Le lot ne tranche pas la contradiction** : l'arbitrage rend
+la question sans objet ici, et elle est écrite à côté de la table pour le
+prochain lot qui voudra s'appuyer sur « le relevé ». **Ethan tranche.**
+⚠ **ET LES NEUF NOMBRES DE RETRAIT SONT AU DÉPÔT, PAS SEULEMENT RAPPORTÉS** —
+`RELEVE-TA-COURBES-2.md` §6.6, colonne « vs 1 » : 5 · 3 · 3, 0 · 0 · 8,
+4 · 6 · 0, au chiffre près. ⚠ Le relevé DIVISE l'effet par le nombre de cibles
+(ses colonnes « vs 2 » et « vs 3 » valent `base / N`) ; **nous non** — le
+retrait est un POURCENTAGE des PV appliqué à chaque assaillant, ce qu'Ethan a
+demandé. Écart déclaré, à ne pas « corriger » en divisant.
+⚠⚠ **LE RETRAIT EST ÉCRIT DANS LE MONTAGE, PAS APPLIQUÉ APRÈS COUP — ET C'EST
+`pourLeRejeu` QUI L'IMPOSE.** Il ne retire que `indicesDefenseurs` et
+`indicesBatiments` ; tout le reste du montage traverse la sauvegarde et rejoue à
+l'octet. Un retrait posé sur une COPIE servie à `creerCombat` rendrait un
+rapport qui rejoue une vague **INTACTE** : le combat d'origine cesserait d'être
+rejouable, et rien ne le dirait. `ART T2` le mesure de bout en bout — montage
+rangé, sauvegarde traversée, rejeu — et **la falsification qui l'applique après
+coup fait tomber les DEUX tests**.
+⚠⚠ **À RETRAIT NUL, LA CLÉ N'EXISTE PAS — ABSENTE, JAMAIS `undefined`.**
+`serialiserEtat` trie les clés PROPRES : un `pvMilli` posé partout entrerait
+dans l'empreinte de chaque rapport rejouable et ferait bouger les deux cents
+témoins de combat sur des montages où pas une artillerie n'est posée. `ART T1`
+mesure par `hasOwnProperty` sur **quatre chemins** — aucune artillerie, hors de
+portée, colonne à zéro, malus qui annule l'effet — et trois des quatre
+falsifications du lot le font tomber.
+⚠⚠ **LE PLANCHER DU MALUS EST INERTE AUX NOMBRES DU BRIEF, ET C'EST MESURÉ.**
+Son §6 monte le cas 3 avec « un Canon ionique de niveau 1 contre un assaillant
+de niveau 21 », soit un écart de VINGT : `1000 − 50 × 20` vaut **zéro tout
+rond**, donc `Math.max(0, …)` ne mord sur rien et la falsification que le brief
+nomme lui-même — « le cas 3 tombe aussi si le malus est borné à autre chose que
+zéro » — **NE MORD PAS**, plancher retiré la suite reste verte. Le montage passe
+donc au niveau **31**, où le malus nu vaut **−500** et où le retrait
+s'INVERSERAIT sans le plancher ; la falsification mord alors, 38 / 1. **Écart
+déclaré au brief, et le test porte les deux mesures à côté l'une de l'autre.**
+⚠⚠ **LA PORTÉE EST EUCLIDIENNE, ET LE MONTAGE DU BRIEF NE LA DISCRIMINAIT PAS.**
+Il pose la base voisine à quatre cases en ligne DROITE, où Tchebychev et Euclide
+répondent la même chose : la falsification « la portée devient un carré » y
+passait au VERT. Elle est en **(203, 18)** désormais — Δr 3, Δc 2 : Tchebychev
+rend `max(3, 2) = 3 ≤ 3`, donc DEDANS, quand Euclide rend `9 + 4 = 13 > 9`, donc
+DEHORS. La falsification mord. C'est la doctrine du lot EUCLIDE, et un montage
+qui ne distingue pas les deux métriques ne garde ni l'une ni l'autre.
+⚠⚠ **LES TROIS PASSENT DE `courant` À `majeur`, ET LE COEFFICIENT SUIT DANS LE
+MÊME GESTE** — 6 → **8**, arbitré par Ethan le 20/09. Les deux bougent ENSEMBLE :
+l'ancre du niveau 2 et le coefficient de régime décrivent la MÊME entité, et en
+déplacer une seule ferait un bâtiment cher à l'entrée et bon marché en fin de
+partie. Mesuré sur `artillerieAntiInfanterie` : ancre **5 → 8**, palier 12
+**144 000 → 192 000**, palier 30 **21 315 389 → 28 420 518**, palier 50
+**5 497 584 051 → 7 330 112 068**. ⚠ Et **rien n'a été écrit pour
+l'électricité** : `COUT_ELECTRICITE.fraction.autres` vaut 0,25 et suit toute
+seule — au niveau 3 l'artillerie coûtait 6 quartz et **2** d'électricité, elle
+en coûte **10 et 3**. L'illustration du brief donne le nombre d'AVANT le lot.
+⚠ **`ARTILLERIES` SE DÉRIVE DE `role === 'artillerie'`, ET AUCUN
+`id.startsWith('artillerie')` N'ENTRE AU DÉPÔT.** La clé existait déjà dans la
+table ; un préfixe de NOM serait la seconde vérité que §4 interdit, et il
+mentirait au premier bâtiment d'artillerie qui s'appellerait autrement. Elle est
+déclarée **APRÈS** `BASE_BATIMENTS` — un `const` ne se lit pas avant d'être
+écrit, et c'est la zone morte temporelle que `BATIMENTS_DONNES` a payée le
+10/09.
+⚠ **`COLONNE_PAR_CHASSIS` DEVIENT `export`, ET C'EST LE SEUL CHANGEMENT DE
+`src/sim/combat.js`** — vérifié au diff : neuf lignes ajoutées dont SEPT de
+commentaire, deux retirées, et la seule ligne de CODE qui bouge est le mot-clé
+`export`. La recopier dans `raid-ouvrage.js` aurait donné deux tables pour la
+même correspondance, dont une seule recevrait la prochaine correction.
+⚠⚠ **UNE SEULE ARTILLERIE PAR BASE, ET LE CODE EST TOLÉRÉ AU CHARGEMENT.**
+`artillerie-unique` entre dans `problemesDeDisposition` **et** dans
+`CODES_TOLERES_AU_CHARGEMENT` : la règle naît APRÈS des sauvegardes qui peuvent
+la violer — les trois bâtiments étaient posables sans contrainte depuis
+BÂTIMENTS-JOUEUR-V2 — et faire lever `verifierEtat` là-dessus rendrait une
+partie injouable pour une faute que le joueur n'a pas commise. **Toléré n'est
+pas effacé** : le défaut reste signalé, et la palette refuse toute pose neuve.
+⚠ Les trois vignettes se **GRISENT**, elles ne disparaissent pas, et leur phrase
+NOMME celle qui occupe la base — arbitrage du 28/08, « griser le bouton, pas le
+faire disparaître ».
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 40** — vérifié au diff : pas un champ
+n'entre dans l'état. Le retrait vit dans un MONTAGE de combat, qui naît de
+`subirUnRaid` et meurt avec lui.
+⚠ **QUATRE FALSIFICATIONS, QUATRE CHUTES, ET LA QUATRIÈME FAIT TOMBER LES DEUX
+TESTS** — la clé posée à retrait nul, le plancher du malus retiré (au niveau 31,
+voir ci-dessus), la portée passée à Tchebychev, et le retrait appliqué après coup
+dans `subirUnRaid` sur une copie servie à `creerCombat` (**37 / 2**).
+⚠ **QUATRE RÉANCRAGES, AUCUN ASSOUPLI** — `PIC T7` (10 603 945 → **10 605 304**,
+marge 216 055 → **214 696**, 2,00 % → **1,98 %**, avec son `notEqual` sur
+l'ancienne marge), le compte des classes de coût de `base.test.js`
+(`{majeur: 3, courant: 7}` → **`{majeur: 6, courant: 4}`**, avec son
+`notDeepEqual`), et les deux de `state.test.js` sur
+`CODES_TOLERES_AU_CHARGEMENT`.
+⚠⚠ **ET `test/temoins-couts.js` EST PÉRIMÉ DEPUIS AVANT CE LOT — RELEVÉ, NON
+RÉGÉNÉRÉ.** Il porte **42 lignes dont ONZE bâtiments** quand le roster en compte
+**quinze** : les deux collecteurs de la bascule `collecteur` →
+`collecteurQuartz`/`collecteurScorie` y manquent, il porte encore une ligne
+`batiment/collecteur` qui ne désigne plus rien, et **les trois artilleries n'y
+ont jamais été**. Le changement de classe de coût ne s'y voit donc PAS, et
+`donnees.test.js` épingle `TEMOINS_COUTS.length` à 42 : le régénérer ferait
+entrer cinq lignes qu'aucun brief n'a demandées et réancrer un test qui n'est
+pas de ce lot. **Ethan tranche.**
+⚠ **LE RENDU A ÉTÉ VU, ET SEULEMENT LA PALETTE.** Faux document de
+`chantier.test.js`, base neuve : **treize vignettes, aucune grisée** ; un Canon
+ionique posé, **les trois grisées** et la même phrase sur les trois — « Canon
+ionique occupe déjà cette base : une seule artillerie par base ». Rien n'a été
+ouvert dans un navigateur, et **ce que le lot change au COMBAT ne se voit nulle
+part** : une vague entamée avant le premier tick n'a pas de dessin. **À regarder
+au premier essai** : que les trois noms neufs tiennent dans la vignette.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff, et le
+brief l'écarte nommément.
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/artillerie-soutien` ; l'environnement d'exécution épingle la
+session à `claude/rayons-artillerie-arbitrage-8jyf8c` et interdit de pousser
+ailleurs sans autorisation explicite.
+
+**Auparavant, après le lot GRILLE LONGUE (20/09) :**
 ⚠⚠ **LES SEPT BASES DU BOUT DE CARTE SE COMBATTENT SUR 9 × 27, ET LES 200
 TÉMOINS NE BOUGENT PAS D'UN BIT.** Lot GRILLE LONGUE. `GRILLE_LONGUE` entre dans
 `data/combat.js` — déploiement 1–2, défense **3–18**, bâtiments **19–27**,
@@ -530,7 +664,31 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 20/09/2026 (après le lot GRILLE LONGUE), à confronter :**
+**Référence au 22/09/2026 (après le lot ARTILLERIE), à confronter :**
+`npm test` rend **1666 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 665 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **deux**, `ART T1` et
+`ART T2` dans `test/raid-ouvrage.test.js` — `test/` reste à **80** fichiers, et
+aucun fichier n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **10 605 304 octets**, 0 référence externe.
+Coût **+1 359 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre
+le livrable rebâti dans un `git worktree` pristine de `main` = `014f9f4`, qui EST
+le merge du lot GRILLE LONGUE (**10 603 945**, retrouvé à l'octet) : **JavaScript
++1 359 · images +0 · audio +0 · feuille +0 · balisage +0**, et les cinq postes
+PARTITIONNENT le fichier des deux côtés — écart **0 · 0**. `data:` à **316
+lignes / 315 URI** de part et d'autre. Borne T10 **10 820 000, NON TOUCHÉE**,
+marge **214 696 octets, 1,98 %**, au-dessus du plancher de 150 000 ; `PIC T7`
+réancré **sur le POURCENTAGE** — les 1 359 octets valent un trente-septième de
+sa tolérance de 50 000, donc il serait resté VERT en faisant mentir cette §0.
+⚠ Le lot touche `src/data/base.js`, `src/sim/{combat,disposition,raid-ouvrage,
+state}.js`, `src/ui/chantier.js`, quatre fichiers de `test/`, `package.json`, ce
+fichier et `RAPPORT-lotARTILLERIE.md` ; **douze fichiers au diff**, et il n'en
+fait entrer ni sortir aucun de `src/` ni de `test/`. **Pas une ligne de
+`src/render/`, `src/son/`, `src/data/` hors `base.js`, `tools/` ni `art/`** —
+vérifié au diff.
+
+**Auparavant, après le lot GRILLE LONGUE (20/09) :**
 `npm test` rend **1664 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 663 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le

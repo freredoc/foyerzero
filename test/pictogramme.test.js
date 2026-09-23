@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 10 603 945 octets, la marge sur la borne T10 est de 2,00 %', () => {
+test('PIC T7 — le livrable pèse 10 605 304 octets, la marge sur la borne T10 est de 1,98 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -997,10 +997,34 @@ test('PIC T7 — le livrable pèse 10 603 945 octets, la marge sur la borne T10 
   // rapport, pas une décision d'ici. La borne passe à **10 820 000**, marge
   // **216 055, 2,00 %** ; à q75 elle serait tombée à 132 911, sous le
   // plancher, et c'est ce qui a fixé q70 — voir `tools/fonds.py`.
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT ARTILLERIE, 22/09/2026, ET LE MOTIF N'EST PAS LA
+  // TOLÉRANCE — C'EST LE POURCENTAGE. Le lot coûte **+1 359 octets, ENTIÈREMENT
+  // DU JAVASCRIPT** : mesuré poste par poste contre le livrable rebâti dans un
+  // `git worktree` pristine de `main` = `014f9f4`, qui EST le merge de GRILLE
+  // LONGUE (**10 603 945**, retrouvé à l'octet), **images +0 · audio +0 ·
+  // JavaScript +1 359 · feuille +0 · balisage +0**, les cinq postes
+  // PARTITIONNANT le fichier des deux côtés — écart **0 · 0** — et `data:` à
+  // **316 lignes / 315 URI** de part et d'autre. Aucune image n'entre.
+  //
+  // ⚠⚠ 1 359 OCTETS VALENT UN TRENTE-SEPTIÈME DE LA TOLÉRANCE DE 50 000 : LE
+  // LAISSER AURAIT PASSÉ AU VERT. Ce qui l'interdit est la LIGNE D'EN DESSOUS —
+  // la marge s'arrondit à **1,98 %** et non plus à 2,00 %, et elle se calcule
+  // sur DEUX CONSTANTES, donc elle serait restée verte en annonçant un
+  // pourcentage que le disque ne rend plus. La §0 de `CLAUDE.md` écrit 1,98 :
+  // les deux documents se seraient contredits, ce que ce fichier-ci punit
+  // ailleurs quatre fois. Le précédent exact est le réancrage de 51 octets du
+  // lot ÉCHELLE-RECHERCHE.
+  //
+  // ⚠ LA BORNE T10 NE BOUGE PAS, ET C'EST §5 PRISE À LA LETTRE : elle se RELÈVE
+  // quand une ressource entre légitimement, et ce lot n'en fait entrer aucune.
+  // Marge **214 696 octets**, au-dessus du plancher de 150 000.
   const BORNE = 10_820_000;          // T10 de `banc.test.js`, relevée au lot GRILLE LONGUE
-  const MESURE = 10_603_945;         // lot GRILLE LONGUE sur `main` = 7e68258 (GRILLE-PORTÉE)
-  const MARGE = BORNE - MESURE;      // 216 055 octets — 322 387 avant les trois décors longs
-  assert.equal(MARGE, 216_055);
+  const MESURE = 10_605_304;         // lot ARTILLERIE sur `main` = 014f9f4 (GRILLE LONGUE)
+  const MARGE = BORNE - MESURE;      // 214 696 octets — 216 055 avant le lot ARTILLERIE
+  assert.equal(MARGE, 214_696);
+  assert.notEqual(MARGE, 216_055,
+    'la marge est celle de GRILLE LONGUE : le retrait des artilleries n\'est plus dans le livrable');
   assert.notEqual(MARGE, 322_387,
     'la marge est celle de GRILLE-PORTÉE : les trois décors longs ne sont plus dans le livrable');
   assert.notEqual(MARGE, 324_443,
@@ -1033,7 +1057,7 @@ test('PIC T7 — le livrable pèse 10 603 945 octets, la marge sur la borne T10 
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 2);  // 2,00 %
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.98);  // 1,98 %
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.
