@@ -200,8 +200,15 @@ export const CAUSES = ['souche', 'attaquants', 'batiments', 'duree'];
 // (aucun aéronef ne défend, aucun défenseur ne rencontre de structure amie),
 // donc une seule table de correspondance suffit : elle dit, pour une CIBLE,
 // quelle colonne de matrice le tireur doit lire.
+//
+// ⚠⚠ ELLE EST EXPORTÉE DEPUIS LE LOT ARTILLERIE, ET ELLE NE SE RECOPIE PAS.
+// `sim/raid-ouvrage.js` la lit pour savoir à quelle colonne de `retraitPourMille`
+// appartient un assaillant. C'est la SEULE vérité du dépôt sur « à quelle
+// colonne de la matrice appartient un châssis » ; une copie ailleurs donnerait,
+// au premier châssis ajouté, une artillerie qui ignore une famille entière
+// d'assaillants SANS qu'aucun test ne tombe.
 
-const COLONNE_PAR_CHASSIS = {
+export const COLONNE_PAR_CHASSIS = {
   escouade: 'infanterie',
   blinde: 'vehicule',
   aeronef: 'structureOuAviation',

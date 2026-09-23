@@ -299,50 +299,96 @@ export const BASE_BATIMENTS = {
   // elles occupent un emplacement du Chantier, elles se montent en niveau, elles
   // se réparent. Les fusionner ferait un objet qui obéit à deux moteurs.
   //
-  // ⚠⚠ LEUR EFFET DE JEU N'EST PAS DANS CE LOT, ET `role: 'artillerie'` LE DIT
-  // EN CLAIR. Le brief les fait entrer comme IDENTIFIANTS, avec leurs sprites et
-  // leurs quatre états ; aucune branche du dépôt ne lit ce rôle-là, si bien
-  // qu'elles se posent, se montent et se réparent sans rien produire. C'est un
-  // rôle NEUF plutôt qu'un rôle emprunté : leur donner `'production'` les aurait
-  // fait entrer dans la garde des trois casernes, et `'producteur'` dans le
-  // calcul des débits — deux mensonges silencieux au lieu d'un blanc déclaré.
+  // ⚠⚠ `role: 'artillerie'` EST LU DEPUIS LE LOT ARTILLERIE, ET C'EST LE SEUL
+  // DRAPEAU. `ARTILLERIES`, plus bas, s'en DÉRIVE ; le refus de pose, la palette
+  // et le retrait d'avant-combat la lisent, et rien ne teste un identifiant à la
+  // main. Le rôle était NEUF plutôt qu'emprunté — leur donner `'production'` les
+  // aurait fait entrer dans la garde des trois casernes, et `'producteur'` dans
+  // le calcul des débits. Le blanc déclaré du lot BÂTIMENTS-JOUEUR-V2 est
+  // comblé : elles ne produisent toujours rien, elles ENTAMENT l'assaut avant
+  // qu'il n'arrive — voir `SOUTIEN_DE_BASE` et `sim/raid-ouvrage.js`.
   //
-  // ⚠ LES PV ET LE COÛT SONT POSÉS POUR ÊTRE JOUÉS ET CHANGÉS. 2 000 PV les
-  // met entre la Centrale et les trois casernes, ce qui est la place d'une pièce
-  // fixe et lourde ; `courant` est la classe des bâtiments qu'on pose en
-  // plusieurs exemplaires sans qu'ils soient bon marché. Aucune mesure ne les
-  // dicte — Ethan n'a pas arbitré, et le brief ne le demande pas.
+  // ⚠⚠ ET ELLES NE TIRENT PAS. Ni portée de tir, ni cadence, ni `degats` : le
+  // retrait se fait AVANT le combat, sur les PV de départ des assaillants. Ne
+  // pas les confondre avec `DEFENSES.faucheuse` / `mortier` / `harpon` — Mirador,
+  // Artillerie lourde, SAM —, qui sont des PIÈCES de garnison et se battent.
+  //
+  // ⚠ LES TROIS NOMS SONT ARBITRÉS PAR ETHAN LE 22/09, ET LES TROIS `ta` SONT
+  // MESURÉS. `RELEVE-TA-ARSENAL.md` §4, « Structures de soutien (3, une seule
+  // par base) », les nomme et donne leur cible : Skystrike → infanterie,
+  // Falcon → aviation, Ion Cannon → véhicules. Le rapprochement est
+  // contre-intuitif — c'est le *Skystrike* qui vise l'infanterie — et c'est
+  // exactement pourquoi il se cite au lieu de se deviner. ⚠ `nom.ouvrage` reste
+  // ABSENT : l'Ouvrage n'a pas de structure de soutien, et lui en inventer une
+  // ferait l'appariement faux que la Raffinerie a été du 25 au 26/08.
+  //
+  // ⚠ LA CLASSE DE COÛT EST `majeur` DEPUIS LE 20/09 — Ethan : « le même coût
+  // que les chantiers de construction et postes de commande. 8 de base. » Elle
+  // bouge avec `COEFFICIENT_DE_REGIME`, qui passe de 6 à 8 : l'ancre commande
+  // l'accueil, le coefficient la courbe au-delà du niveau 12, et les deux ne
+  // coïncident que pour `majeur`. Monter l'une sans l'autre poserait une entité
+  // mi-Chantier mi-Caserne que personne n'a demandée. ⚠ Les 2 000 PV, eux, ne
+  // sont toujours dictés par aucune mesure.
   artillerieAntiInfanterie: {
-    nom: { joueur: 'Artillerie anti-infanterie' },
-    ta: 'Anti-Infantry Artillery',
+    nom: { joueur: 'Batterie de saturation' },
+    ta: 'Skystrike Support',
     role: 'artillerie',
     pv: 2000,
     reparationSec: 65,
     unique: false,
-    classeDeCout: 'courant',
+    classeDeCout: 'majeur',
     plancherPv: true,
   },
   artillerieAntiVehicule: {
-    nom: { joueur: 'Artillerie anti-véhicule' },
-    ta: 'Anti-Vehicle Artillery',
+    nom: { joueur: 'Canon ionique' },
+    ta: 'Ion Cannon Support',
     role: 'artillerie',
     pv: 2000,
     reparationSec: 65,
     unique: false,
-    classeDeCout: 'courant',
+    classeDeCout: 'majeur',
     plancherPv: true,
   },
   artillerieAntiAerien: {
-    nom: { joueur: 'Artillerie anti-aérienne' },
-    ta: 'Anti-Air Artillery',
+    nom: { joueur: 'Intercepteur' },
+    ta: 'Falcon Support',
     role: 'artillerie',
     pv: 2000,
     reparationSec: 65,
     unique: false,
-    classeDeCout: 'courant',
+    classeDeCout: 'majeur',
     plancherPv: true,
   },
 };
+
+/**
+ * Les bâtiments d'artillerie, DÉRIVÉS de leur rôle et jamais écrits à la main.
+ *
+ * ⚠⚠ C'EST L'UNIQUE DÉFINITION DE « UNE ARTILLERIE » DANS LE DÉPÔT. Les trois
+ * endroits qui en ont besoin la lisent : le refus de pose
+ * (`sim/disposition.js`), la palette (`ui/chantier.js`) et le calcul du retrait
+ * d'avant-combat (`sim/raid-ouvrage.js`). Un `id.startsWith('artillerie')`
+ * quelque part est un défaut, pas un raccourci — il rendrait vrai un quatrième
+ * bâtiment qui porterait le préfixe sans porter le rôle, et faux celui qui
+ * porterait le rôle sous un autre nom.
+ *
+ * ⚠⚠ AUCUN DRAPEAU NEUF. Ethan demandait le 20/09 « un drapeau distinct »
+ * plutôt que `unique: true` — la raison tient, voir `problemesDeDisposition` —,
+ * mais le drapeau EXISTE : c'est `role: 'artillerie'`, posé au lot
+ * BÂTIMENTS-JOUEUR-V2 précisément pour ne rien emprunter à un rôle existant.
+ * Ajouter `unParBase: true` à côté ferait deux vérités sur la même question, et
+ * la première divergence serait un quatrième bâtiment d'artillerie portant l'un
+ * sans l'autre. La règle porte sur ce qu'une chose EST, pas sur un mot posé à
+ * côté — c'est le motif du QG de défense et du Complexe de défense, qui portent
+ * « défense » dans leur nom et coûtent du quartz.
+ *
+ * ⚠ ELLE SE DÉCLARE APRÈS `BASE_BATIMENTS`, ET LA FAUTE INVERSE EST DÉJÀ PAYÉE
+ * DANS CE FICHIER : `BATIMENTS_DONNES` vit sous `BASE_NEUVE` pour cette raison
+ * exacte. Un `const` ne se lit pas avant d'être écrit — la déclarer au-dessus de
+ * sa source passe `node --check` et LÈVE au chargement du module.
+ */
+export const ARTILLERIES = Object.keys(BASE_BATIMENTS)
+  .filter((id) => BASE_BATIMENTS[id].role === 'artillerie');
 
 /**
  * L'ordre des vignettes dans la palette du bas.
@@ -1183,6 +1229,101 @@ export const RETOUR_DEFENSES = {
 };
 
 // ---------------------------------------------------------------------------
+// Le soutien d'artillerie
+// ---------------------------------------------------------------------------
+//
+// Ce que les trois artilleries retirent à un assaillant de l'Ouvrage AVANT que
+// le combat ne commence, et jusqu'où elles portent. C'est une attrition PASSIVE
+// — elles ne tirent pas, elles ne sont pas des pièces de garnison, et rien de
+// ceci n'entre dans la boucle de combat : le retrait est appliqué au MONTAGE,
+// donc il voyage dans le rapport rejouable.
+//
+// ⚠⚠ LES TROIS CLÉS DE COLONNE SONT CELLES DE `COLONNE_PAR_CHASSIS` DE
+// `sim/combat.js`, JAMAIS UNE SECONDE NOMENCLATURE. `infanterie`, `vehicule` et
+// `structureOuAviation` sont les noms que le moteur emploie déjà pour les
+// colonnes de la matrice de dégâts. Écrire `aviation` ici ferait deux façons de
+// nommer la même grandeur, et la traduction entre les deux serait le site de la
+// première divergence.
+//
+// ⚠⚠ ET `structureOuAviation` NE PORTE ICI QUE L'AVIATION. Aucun bâtiment n'est
+// assaillant : dans un raid de l'Ouvrage, la troisième colonne ne peut désigner
+// que des aéronefs. C'est un fait du modèle, déclaré et non corrigé en
+// renommant la clé — la renommer casserait l'égalité avec `COLONNE_PAR_CHASSIS`
+// pour un gain de lecture qui vaudrait jusqu'au premier châssis ajouté.
+//
+// ⚠ D'OÙ VIENNENT LES NEUF NOMBRES, ET ILS SONT AU DÉPÔT PLUTÔT QUE RAPPORTÉS.
+// `RELEVE-TA-COURBES-2.md` §6.6, colonne « vs 1 », les donne tous les neuf :
+// Skystrike 5 · 3 · 3, Falcon 0 · 0 · 8, Ion Cannon 4 · 6 · 0. Ethan les a
+// redits le 20/09 ; c'est la table qui fait foi. Ils sont en MILLIÈMES parce que
+// tout le moteur compte en milli-PV : un pourcentage flottant y introduirait le
+// seul arrondi intermédiaire du chemin.
+//
+// ⚠⚠ ET LE RELEVÉ DIVISE L'EFFET PAR LE NOMBRE DE CIBLES — NOUS NON, ÉCART
+// DÉCLARÉ. Ses colonnes « vs 2 » et « vs 3 » valent `base / N` : dans TA le
+// soutien répartit un POOL de dégâts. Ici le retrait est un POURCENTAGE des PV,
+// appliqué à chaque assaillant : c'est une autre mécanique, et c'est celle
+// qu'Ethan a demandée. Ne pas « corriger » en divisant — ce serait changer la
+// règle, pas réparer un oubli.
+//
+// ⚠⚠ LES TROIS RAYONS SONT UN ARBITRAGE D'ETHAN DU 22/09, ET C'EST UNE ROTATION
+// DES TROIS VALEURS, PAS UN ÉCHANGE DE DEUX. « pour les rayons, c'est 4 pour
+// l'artillerie anti-infanterie, 3 pour l'artillerie anti-véhicule et 6 pour
+// l'artillerie anti-avion. Il n'y a pas eu de confirmation sur le brief. Et
+// voici l'arbitrage. » ⚠ Le brief du lot lisait 6 / 4 / 3 — l'ordre où Ethan
+// avait écrit les noms le 20/09 — et annonçait qu'une révision serait « deux
+// nombres qui s'échangent » : c'est FAUX, les trois tournent.
+//
+// ⚠⚠ ET LE DÉPÔT PORTE DEUX RELEVÉS QUI SE CONTREDISENT SUR CE POINT, TROUVÉ À
+// LA RELECTURE HOSTILE DU LOT. `RELEVE-TA-ARSENAL.md` §4 donne Skystrike 12,
+// Falcon 10, Ion Cannon 8 — « le rayon décroît quand la cible devient plus
+// lourde », ce qui range l'anti-infanterie en tête et donnerait 6 / 3 / 4 ;
+// `RELEVE-TA-COURBES-2.md` §6.6 donne Skystrike **8**, Falcon 10, Ion Cannon
+// **12**, l'ORDRE INVERSE, corroboré par sa propre colonne de calibrage
+// (30 s · 60 s · 120 s, monotone avec le rayon) — ce qui donnerait 3 / 6 / 4.
+// Le brief ne cite que le premier et ignore le second. **Aucune des trois
+// lectures n'est l'arbitrage** : il met l'anti-aérien en tête, ce qu'aucun
+// relevé ne dit. C'est donc une valeur de jeu, pas une mesure, et c'est ici
+// qu'elle se change. ⚠ La contradiction entre les deux relevés n'est PAS
+// tranchée par ce lot : elle est relevée, et Ethan tranche.
+//
+// ⚠ LE RAYON EST EUCLIDIEN, comme toutes les portées du dépôt depuis le lot
+// EUCLIDE : `distanceCarreeCases(a, b) <= rayonCases²`. Un carré de Tchebychev
+// couvrirait des cases que la carte ne montre pas comme couvertes.
+//
+// ⚠⚠ `malusParNiveauPourMille` EST UN SEUL NOMBRE POUR LES TROIS, ET C'EST 5 %
+// DE L'EFFET, PAS CINQ POINTS DE POURCENTAGE. Ethan, 20/09 : « ils enlèvent 5 %
+// de moins par niveau au-dessus », avec son exemple — un bâtiment de niveau 20
+// contre des unités de niveau 24 retire « 20 % de moins », c'est-à-dire qu'il
+// retire 0,8 fois son nominal. Le malus est donc LINÉAIRE et CUMULATIF.
+//
+// ⚠⚠ CONSÉQUENCE À CONNAÎTRE : À +20 NIVEAUX L'EFFET VAUT EXACTEMENT ZÉRO, et
+// au-delà il se BORNE à zéro. Sans cette borne, une artillerie dépassée
+// SOIGNERAIT l'assaillant — le retrait deviendrait négatif, donc un ajout de PV.
+//
+// ⚠⚠ ET VERS LE BAS, AUCUNE MAJORATION. Arbitrage d'Ethan, 22/09 : « vers le bas
+// on n'augmente pas le % ». Un assaillant de niveau INFÉRIEUR au bâtiment subit
+// le retrait NOMINAL, pas davantage. Le relevé TA ne parle que du cas supérieur ;
+// c'est donc un arbitrage, et il se cite comme tel.
+
+export const SOUTIEN_DE_BASE = {
+  artillerieAntiInfanterie: {
+    retraitPourMille: { infanterie: 50, vehicule: 30, structureOuAviation: 30 },
+    rayonCases: 4, // arbitrage 22/09 ; le brief lisait 6
+  },
+  artillerieAntiVehicule: {
+    retraitPourMille: { infanterie: 40, vehicule: 60, structureOuAviation: 0 },
+    rayonCases: 3, // arbitrage 22/09 ; le brief lisait 4
+  },
+  artillerieAntiAerien: {
+    retraitPourMille: { infanterie: 0, vehicule: 0, structureOuAviation: 80 },
+    rayonCases: 6, // arbitrage 22/09 ; le brief lisait 3
+  },
+
+  /** 5 % de l'EFFET retirés par niveau d'assaillant au-dessus du bâtiment. */
+  malusParNiveauPourMille: 50,
+};
+
+// ---------------------------------------------------------------------------
 // Coûts de construction
 // ---------------------------------------------------------------------------
 //
@@ -1247,14 +1388,21 @@ export const COEFFICIENT_DE_REGIME = {
   collecteurScorie: 2,
   raffinerie: 2, //            mesuré — le Silo, 1,999 au niveau 56
   accumulateur: 2, //          mesuré — 2,000 au niveau 62
-  // ⚠⚠ LES TROIS ARTILLERIES N'ONT AUCUNE MESURE, ET ELLES PRENNENT CELLE DES
-  // TROIS CASERNES — 6. C'est un emprunt déclaré, pas un relevé : elles partagent
-  // la classe de coût `courant` avec la Caserne, le Dépôt et l'Aérodrome, et rien
-  // dans `RELEVE-TA-*` ne parle d'elles. Le jour où Ethan les calibrera, ce sont
-  // ces trois lignes-ci qui bougent, et elles seules.
-  artillerieAntiInfanterie: 6,
-  artillerieAntiVehicule: 6,
-  artillerieAntiAerien: 6,
+  // ⚠⚠ LES TROIS ARTILLERIES N'ONT TOUJOURS AUCUNE MESURE, ET L'EMPRUNT AUX TROIS
+  // CASERNES EST DEVENU UN ARBITRAGE — 6 → 8, ETHAN, 20/09 : « le même coût que
+  // les chantiers de construction et postes de commande. 8 de base. » Ce
+  // commentaire disait jusqu'ici « le jour où Ethan les calibrera, ce sont ces
+  // trois lignes-ci qui bougent » : ce jour est arrivé, et ce sont bien ces
+  // trois lignes-là, et elles seules.
+  //
+  // ⚠ IL BOUGE AVEC `classeDeCout`, QUI PASSE DE `courant` À `majeur` DANS
+  // `BASE_BATIMENTS`. L'ancre commande l'accueil — le prix du niveau 2 —, le
+  // coefficient commande la courbe au-delà du niveau 12, et les deux ne
+  // coïncident que pour `majeur` (8 et 8). Monter l'une sans l'autre poserait
+  // une entité mi-Chantier mi-Caserne que personne n'a demandée.
+  artillerieAntiInfanterie: 8,
+  artillerieAntiVehicule: 8,
+  artillerieAntiAerien: 8,
 };
 
 // Coût en électricité d'une amélioration, à partir du niveau 3. Exprimé en

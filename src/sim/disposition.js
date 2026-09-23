@@ -24,7 +24,7 @@
 // Aucune valeur de calibrage en dur : tout vient de data/base.js.
 
 import {
-  BASE_BATIMENTS, DEBITS, CHAMPS, VOISINAGE, EMPLACEMENTS, BASE_NEUVE,
+  BASE_BATIMENTS, DEBITS, CHAMPS, VOISINAGE, EMPLACEMENTS, BASE_NEUVE, ARTILLERIES,
   emplacementsDuNiveau, debitParHeure, debitVoisinParHeure, estDansLaBase,
   posablesSurUnChamp,
 } from '../data/base.js';
@@ -148,6 +148,42 @@ export function problemesDeDisposition(disposition, champs) {
     if (def?.unique === true && n > 1) {
       ajouter('doublon', `${def.nom.joueur} est unique, ${n} exemplaires posés`);
     }
+  }
+
+  // ⚠⚠ UNE BASE NE PORTE QU'UNE SEULE ARTILLERIE, TOUS TYPES CONFONDUS — Ethan,
+  // 20/09 : « un bâtiment d'artillerie, il peut pas mettre les trois. »
+  //
+  // ⚠⚠ ET SURTOUT PAS PAR `unique: true`, QUE LA MESURE ÉCARTE AUTANT QU'ETHAN.
+  // Ce drapeau-là traîne une SECONDE règle — l'interdiction pour deux uniques
+  // d'être voisins au sens des huit cases, juste en dessous. Sept bâtiments sur
+  // quinze la portent déjà ; l'étendre aux trois artilleries changerait la
+  // géométrie de TOUTES les bases sans qu'aucun arbitrage ne le demande. Le
+  // compte se dit ici, seul, et la liste vient de `ARTILLERIES`, dérivée du
+  // rôle — jamais d'un `id.startsWith('artillerie')`.
+  //
+  // ⚠ ELLE SE COMPTE COMME `doublon`, PAS COMME `uniques-voisins` : le premier
+  // compte sur toute la `disposition`, le second filtre par `estDansLaBase`
+  // parce qu'il parle de GÉOMÉTRIE. Ici on compte, donc aucun filtre — et
+  // surtout pas celui du voisin d'en dessous, recopié parce qu'il était là.
+  //
+  // ⚠ LE MESSAGE NOMME LE BÂTIMENT DÉJÀ POSÉ, pas seulement la règle : sans lui
+  // le joueur ne sait pas lequel des trois démolir.
+  //
+  // ⚠ ET ELLE EST TOLÉRÉE AU CHARGEMENT — voir `CODES_TOLERES_AU_CHARGEMENT`.
+  // Les trois artilleries sont posables SANS AUCUNE LIMITE depuis le lot
+  // BÂTIMENTS-JOUEUR-V2 : une sauvegarde peut légitimement en porter deux ou
+  // trois, posées par un joueur qui ne violait rien.
+  const artilleriesPosees = disposition
+    .map((b, index) => ({ b, index }))
+    .filter(({ b }) => ARTILLERIES.includes(b.id));
+  for (let i = 1; i < artilleriesPosees.length; i++) {
+    const deja = BASE_BATIMENTS[artilleriesPosees[0].b.id].nom.joueur;
+    const enTrop = artilleriesPosees[i];
+    ajouter(
+      'artillerie-unique',
+      `${deja} occupe déjà cette base : une seule artillerie par base`,
+      enTrop.index,
+    );
   }
 
   // ⚠ DEUX BÂTIMENTS UNIQUES NE SE TOUCHENT PAS — arbitré par Ethan le 28/08 :

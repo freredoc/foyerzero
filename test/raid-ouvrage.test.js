@@ -27,12 +27,14 @@ import {
   basesAttaquantes, montageDeLaBaseDuJoueur, subirUnRaid, resoudreLaMinute,
   prochaineMinuteDeRaid,
 } from '../src/sim/raid-ouvrage.js';
-import { creerCombat, resoudre, pointsRechercheDefense } from '../src/sim/combat.js';
-import { garderLeRapport } from '../src/sim/raid.js';
+import {
+  creerCombat, resoudre, pointsRechercheDefense, TICKS_MAX_COMBAT,
+} from '../src/sim/combat.js';
+import { garderLeRapport, pvMaxDeLUnite } from '../src/sim/raid.js';
 import { genererSite, budgetRaid } from '../src/sim/generateur.js';
 import { RAID_OUVRAGE, TYPES_SITE, APRES_RAID, GEOGRAPHIE } from '../src/data/sites.js';
-import { GRILLE } from '../src/data/combat.js';
-import { BASE_BATIMENTS } from '../src/data/base.js';
+import { GRILLE, UNITES } from '../src/data/combat.js';
+import { BASE_BATIMENTS, SOUTIEN_DE_BASE, ARTILLERIES } from '../src/data/base.js';
 import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import { estSurLaCarte } from '../src/sim/carte.js';
 import { ciblesAPortee } from '../src/sim/site-de-la-case.js';
@@ -93,6 +95,38 @@ function baseALaRangee(graine, rangee, { niveau = 20, garnison = true } = {}) {
 
 function poserSansCasser(etat, id, rangee, colonne) {
   try { poser(etat, id, rangee, colonne); return true; } catch { return false; }
+}
+
+/**
+ * Pose une artillerie sur la première case libre d'une base, à un niveau choisi.
+ *
+ * ⚠ ELLE PASSE PAR `poser`, DONC PAR `problemesDeLaPose`, DONC PAR
+ * `artillerie-unique` : ce qui sort d'ici est une base que le jeu accepterait,
+ * et une seconde artillerie dans la même base ferait LEVER au lieu de mentir.
+ * Le NIVEAU s'écrit à la main — améliorer coûte des ressources qu'on n'a pas.
+ *
+ * ⚠ ELLE REND L'INDICE DANS `disposition`, parce qu'`ART T2` a besoin de
+ * RETIRER le bâtiment après coup, et qu'un `findIndex` écrit chez l'appelant
+ * serait une seconde façon de désigner la même ligne.
+ */
+function poserUneArtillerie(etat, id, niveau, indiceBase = etat.baseCourante) {
+  const avant = etat.baseCourante;
+  etat.baseCourante = indiceBase;
+  const base = etat.bases[indiceBase];
+  const pris = new Set(base.obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  for (const b of base.disposition) pris.add(`${b.rangee}:${b.colonne}`);
+  const bande = GRILLE.bandes.batiments;
+  for (let r = bande.premiere; r <= bande.derniere; r += 1) {
+    for (let c = 1; c <= GRILLE.largeur; c += 1) {
+      if (pris.has(`${r}:${c}`)) continue;
+      if (!poserSansCasser(etat, id, r, c)) continue;
+      base.disposition[base.disposition.length - 1].niveau = niveau;
+      etat.baseCourante = avant;
+      return base.disposition.length - 1;
+    }
+  }
+  etat.baseCourante = avant;
+  throw new Error(`aucune case libre pour « ${id} » : le montage ne mesure rien`);
 }
 
 /** Une base SYNTHÉTIQUE de l'Ouvrage, pour les montages qui n'ont pas à tirer. */
@@ -1322,4 +1356,224 @@ test('RCU T13 — un assaut repoussé crédite la recherche, moitié tarif, et l
   const rapportNu = subirUnRaid(nue, ATTAQUANTE, 5);
   assert.equal(BigInt(nue.recherche.pointsMilli), avantNue);
   assert.equal(rapportNu.rechercheMilli, '0');
+});
+
+// ---------------------------------------------------------------------------
+// Le soutien d'artillerie — lot ARTILLERIE, 22/09/2026
+// ---------------------------------------------------------------------------
+//
+// DEUX tests, pas trois. Ils portent sur les deux verrous RÉELS du lot : la clé
+// absente et le voyage du retrait dans le rapport. **Aucun test de calibrage** —
+// les pourcentages de `SOUTIEN_DE_BASE` sont des mesures d'équilibrage, pas des
+// propriétés, et `CLAUDE.md` §5 interdit de les figer dans la suite : les épingler
+// ferait rougir la suite au premier réglage d'Ethan, pour une raison qui n'est pas
+// une régression.
+
+// ⚠⚠ L'ASSAILLANT EST DE NIVEAU 31, ET LE BRIEF EN DONNAIT 21 — ÉCART
+// DÉCLARÉ, ET IL EST MESURÉ. Voir le cas 3 ci-dessous : à vingt niveaux
+// d'écart le malus vaut ZÉRO TOUT ROND, donc son plancher est un
+// non-événement et la falsification que le brief nomme ne mord pas.
+const NIVEAU_ASSAILLANT = 31;
+const ARGS_VAGUE = [NIVEAU_ASSAILLANT, 400, 7]; // niveau de l'assaillant, budget, graine
+
+/** Une base plantée rangée 200, sans garnison, à qui on posera des artilleries. */
+function baseSansArtillerie(graine) {
+  const etat = creerEtat(graine);
+  baseCourante(etat).position.rangee = 200;
+  for (const b of baseCourante(etat).disposition) b.niveau = 30;
+  return etat;
+}
+
+test('ART T1 — la clé `pvMilli` n\'existe PAS quand le retrait est nul, sur quatre chemins', () => {
+  // ⚠⚠ LES DEUX LISTES D'ARTILLERIE SE CONFRONTENT ICI, ET RIEN D'AUTRE NE LES
+  // TIENT ENSEMBLE — TROUVÉ À LA RELECTURE HOSTILE, PAS À L'ÉCRITURE.
+  // `ARTILLERIES` commande la palette et le refus de pose ; `SOUTIEN_DE_BASE`
+  // commande le RETRAIT, et `retraitDesArtilleries` y discrimine par
+  // `=== undefined`. Les deux se dérivent de sources différentes : un quatrième
+  // bâtiment `role: 'artillerie'` entrerait dans la première — donc grisé,
+  // donc unique — et serait IGNORÉ par la seconde, **sans qu'un seul test ne
+  // tombe**. C'est la seconde vérité que §4 interdit, et elle se mesure dans
+  // les DEUX sens : une entrée de `SOUTIEN_DE_BASE` qui n'est pas une
+  // artillerie serait lue sur un bâtiment ordinaire.
+  assert.deepEqual(
+    Object.keys(SOUTIEN_DE_BASE).filter((c) => c !== 'malusParNiveauPourMille').sort(),
+    [...ARTILLERIES].sort(),
+    'SOUTIEN_DE_BASE et ARTILLERIES ont divergé : une artillerie sans retrait, ou l\'inverse',
+  );
+
+  // ⚠⚠ C'EST L'ABSENCE DE LA CLÉ QUI EST MESURÉE, JAMAIS SA VALEUR.
+  // `serialiserEtat` trie les clés PROPRES : une clé POSÉE — même porteuse du
+  // maximum — change les octets de tout rapport rejouable, donc l'empreinte
+  // d'état des deux cents témoins de `test/temoins-combat.js`. Écrire
+  // `u.pvMilli = pvBase` au lieu de ne rien écrire fait tomber ce test-ci ET
+  // ferait rougir les deux cents au premier `npm run check`, pour une cause
+  // qu'on mettrait une heure à retrouver. Mesuré par `hasOwnProperty`, jamais
+  // par une comparaison à `undefined` — les deux ne disent pas la même chose.
+  const aLaCle = (u) => Object.prototype.hasOwnProperty.call(u, 'pvMilli');
+
+  const nu = montageDeLaBaseDuJoueur(baseSansArtillerie(1), ...ARGS_VAGUE);
+  const reference = JSON.stringify(nu.vagues);
+
+  // ⚠ LE MONTAGE PROUVE D'ABORD QU'IL MESURE QUELQUE CHOSE : la vague porte les
+  // TROIS châssis, donc les trois colonnes de matrice sont exercées. Sans cette
+  // assertion, une vague d'escouades seules rendrait le cas 4 vacueux.
+  const chassis = new Set(nu.vagues[0].map((u) => UNITES[u.id].chassis));
+  assert.deepEqual([...chassis].sort(), ['aeronef', 'blinde', 'escouade']);
+  assert.equal(nu.vagues[0].filter(aLaCle).length, 0,
+    'une base SANS artillerie entame déjà la vague : le montage ne mesure rien');
+
+  // --- 1. aucune artillerie : c'est la référence elle-même, et elle est muette.
+
+  // --- 2. hors de portée --------------------------------------------------
+  // ⚠⚠ LE RAYON EST UN DISQUE EUCLIDIEN, comme toute portée du dépôt depuis le
+  // lot EUCLIDE — et la case choisie est celle qui DÉPARTAGE les deux
+  // géométries, faute de quoi la falsification ne mordrait pas. Une base
+  // voisine trois rangées plus haut et deux colonnes à côté d'un Canon ionique
+  // de rayon 3 : Tchebychev rend `max(3, 2) = 3`, donc DEDANS ; le disque rend
+  // `3² + 2² = 13 > 9`, donc DEHORS. Sur un alignement pur — quatre rangées,
+  // même colonne — les deux répondent pareil et le test serait vert sur un
+  // moteur en Tchebychev.
+  const horsDePortee = baseSansArtillerie(1);
+  const voisine = ajouterUneBase(horsDePortee, { rangee: 203, colonne: 18 });
+  poserUneArtillerie(horsDePortee, 'artillerieAntiVehicule', NIVEAU_ASSAILLANT, voisine);
+  const rayon = SOUTIEN_DE_BASE.artillerieAntiVehicule.rayonCases;
+  assert.equal(rayon, 3, 'le rayon a bougé : ce montage ne mesure plus « hors de portée »');
+  assert.ok(3 * 3 + 2 * 2 > rayon * rayon, 'le disque ne place plus la voisine dehors');
+  assert.ok(Math.max(3, 2) <= rayon, 'Tchebychev ne place plus la voisine dedans');
+  assert.equal(
+    JSON.stringify(montageDeLaBaseDuJoueur(horsDePortee, ...ARGS_VAGUE).vagues),
+    reference,
+    'une artillerie hors de portée entame quand même la vague',
+  );
+
+  // --- 3. trente niveaux en dessous ---------------------------------------
+  // ⚠ LE MALUS EST BORNÉ À ZÉRO, PAS LAISSÉ NÉGATIF. À 5 % de l'effet par
+  // niveau d'écart, vingt niveaux l'annulent EXACTEMENT ; au-delà, sans le
+  // plancher, le retrait repasserait NÉGATIF et l'artillerie SOIGNERAIT
+  // l'assaillant.
+  // ⚠⚠ ET C'EST POURQUOI L'ÉCART DU MONTAGE VAUT TRENTE, PAS VINGT — ÉCART
+  // DÉCLARÉ AU BRIEF, MESURÉ ET NON SUPPOSÉ. Son §6 monte ce cas avec « un
+  // Canon ionique de niveau 1 contre un assaillant de niveau 21 », soit un
+  // écart de VINGT, où `1000 − 50 × 20` vaut **zéro tout rond** : le plancher
+  // y est un NON-ÉVÉNEMENT — rien ne passe sous zéro — et la falsification que
+  // le brief nomme lui-même (« le cas 3 tombe aussi si le malus est borné à
+  // autre chose que zéro ») NE MORD PAS. Mesuré : plancher retiré, la suite
+  // reste à 39 pass / 0 fail. À trente niveaux d'écart le malus nu vaut
+  // **−500**, donc le retrait s'inverse, donc la falsification mord.
+  assert.equal(SOUTIEN_DE_BASE.malusParNiveauPourMille * 20, 1000,
+    'le malus a bougé : vingt niveaux n\'annulent plus l\'effet');
+  assert.ok(SOUTIEN_DE_BASE.malusParNiveauPourMille * (NIVEAU_ASSAILLANT - 1) > 1000,
+    'l\'écart du montage ne pousse plus le malus SOUS zéro : le plancher redevient inerte');
+  const troisDeNiveauUn = baseSansArtillerie(1);
+  poserUneArtillerie(troisDeNiveauUn, 'artillerieAntiVehicule', 1);
+  assert.equal(
+    JSON.stringify(montageDeLaBaseDuJoueur(troisDeNiveauUn, ...ARGS_VAGUE).vagues),
+    reference,
+    'une artillerie trente niveaux trop bas entame quand même la vague',
+  );
+
+  // --- 4. à portée, à niveau égal, mais DEUX colonnes à zéro ---------------
+  // ⚠⚠ C'EST LE CAS QUI SE TROMPE EN PREMIER À L'ÉCRITURE. Comparer ce montage
+  // au nu EN BLOC rendrait le test FAUX : l'Intercepteur entame bel et bien les
+  // aéronefs, et c'est ce qu'on lui demande. Ce qui doit rester muet est la
+  // COLONNE nulle, pas le bâtiment — donc l'égalité se mesure unité par unité,
+  // sur les escouades et les blindés seulement.
+  const soutien = SOUTIEN_DE_BASE.artillerieAntiAerien;
+  assert.equal(soutien.retraitPourMille.infanterie, 0);
+  assert.equal(soutien.retraitPourMille.vehicule, 0);
+  assert.ok(soutien.retraitPourMille.structureOuAviation > 0,
+    'l\'Intercepteur ne retire plus rien : le cas 4 ne discrimine plus');
+
+  const aPortee = baseSansArtillerie(1);
+  poserUneArtillerie(aPortee, 'artillerieAntiAerien', NIVEAU_ASSAILLANT);
+  const avec = montageDeLaBaseDuJoueur(aPortee, ...ARGS_VAGUE);
+  assert.equal(avec.vagues[0].length, nu.vagues[0].length);
+  let aeronefsEntames = 0;
+  avec.vagues[0].forEach((unite, i) => {
+    const temoin = nu.vagues[0][i];
+    if (UNITES[unite.id].chassis === 'aeronef') {
+      assert.ok(aLaCle(unite), `l'aéronef ${unite.id} n'est pas entamé par l'Intercepteur`);
+      assert.ok(unite.pvMilli > 0 && unite.pvMilli < pvMaxDeLUnite(unite.id, unite.niveau),
+        'le retrait sur un aéronef sort de ]0 ; max[');
+      aeronefsEntames += 1;
+      return;
+    }
+    assert.ok(!aLaCle(unite),
+      `${unite.id} porte un \`pvMilli\` pour une colonne à 0 ‰ : les témoins de combat vont rougir`);
+    assert.deepEqual(unite, temoin);
+  });
+  assert.ok(aeronefsEntames > 0, 'aucun aéronef dans la vague : le cas 4 est vacueux');
+});
+
+test('ART T2 — le retrait voyage dans le rapport, et le rejeu survit à la démolition', () => {
+  // ⚠⚠ LE RETRAIT S'ÉCRIT DANS LE MONTAGE, ET C'EST TOUT L'ENJEU DE CE TEST.
+  // `garderLeRapport` range ce que rend `pourLeRejeu`, qui ne retire que deux
+  // tableaux d'indices : le reste se rejoue TEL QUEL. Appliqué après coup dans
+  // `subirUnRaid`, ou relu depuis l'état par `creerCombat`, le retrait donnerait
+  // un rapport qui se rejoue SANS l'artillerie — donc un rejeu qui contredit le
+  // combat qu'il montre, dès que le joueur démolit ou perd le bâtiment.
+  const etat = baseSansArtillerie(7);
+
+  // ⚠ UNE GARNISON, SANS QUOI `restantDefense` VAUT `null` et la moitié de
+  // l'assertion d'identité ne mesure rien.
+  const pris = new Set(baseCourante(etat).obstacles.cases.map((o) => `${o.rangee}:${o.colonne}`));
+  const d = GRILLE.bandes.defense;
+  let i = 0;
+  for (let r = d.premiere; r <= d.derniere; r += 1) {
+    for (let c = 1; c <= GRILLE.largeur; c += 1) {
+      if (pris.has(`${r}:${c}`)) continue;
+      baseCourante(etat).garnison.push({
+        id: i % 2 ? 'casemate' : 'merlon', rangee: r, colonne: c, niveau: 20, degatsMilli: 0,
+      });
+      i += 1;
+    }
+  }
+
+  const attaquante = basesAttaquantes(etat)[0];
+  const indice = poserUneArtillerie(etat, 'artillerieAntiVehicule', attaquante.niveau);
+  const rapport = subirUnRaid(etat, attaquante, 5);
+
+  // --- Le retrait EST dans le montage conservé ----------------------------
+  const blindes = rapport.rejeu.vagues[0].filter((u) => UNITES[u.id].chassis === 'blinde');
+  assert.ok(blindes.length > 0, 'aucun blindé dans la vague : le montage ne mesure rien');
+  for (const u of blindes) {
+    assert.ok(Object.prototype.hasOwnProperty.call(u, 'pvMilli'),
+      'le blindé traverse le rapport à ses PV pleins : le retrait ne voyage pas');
+    assert.ok(u.pvMilli < pvMaxDeLUnite(u.id, u.niveau),
+      'le blindé du montage rangé n\'est pas entamé');
+    assert.ok(u.pvMilli > 0, 'un `pvMilli` nul ferait LEVER `creerCombat` au rejeu');
+  }
+
+  // --- Le rejeu reproduit le combat d'origine -----------------------------
+  // ⚠ LES QUATRE CHIFFRES SONT CEUX QUE `subirUnRaid` A PUBLIÉS, donc ceux du
+  // combat RÉELLEMENT joué ; le pour-cent est recalculé ici par une SECONDE
+  // écriture de la formule plutôt que recopié, pour qu'un rejeu qui dériverait
+  // ne puisse pas se cacher derrière la fonction qu'il est censé reproduire.
+  const partRestante = (lignes) => {
+    let initial = 0;
+    let reste = 0;
+    for (const l of lignes) {
+      initial += l.pvInitialMilli;
+      reste += l.pvMilli > 0 ? l.pvMilli : 0;
+    }
+    return initial === 0 ? null : Math.round((reste * 100) / initial);
+  };
+  const avantDemolition = resoudre(creerCombat(rapport.rejeu), { maxTicks: TICKS_MAX_COMBAT });
+  assert.equal(avantDemolition.tick, rapport.ticks);
+  assert.equal(avantDemolition.cause, rapport.cause);
+  assert.equal(partRestante(avantDemolition.defenses), rapport.restantDefense);
+  assert.equal(partRestante(avantDemolition.batiments), rapport.restantBatiments);
+  assert.ok(rapport.restantDefense !== null,
+    'la base n\'a pas de garnison : la moitié « défense » de l\'identité est vacueuse');
+
+  // --- L'artillerie démolie, le rejeu ne bouge pas d'un bit ---------------
+  assert.ok(ARTILLERIES.includes(baseCourante(etat).disposition[indice].id),
+    'ce n\'est pas l\'artillerie qu\'on retire');
+  baseCourante(etat).disposition.splice(indice, 1);
+  assert.equal(
+    baseCourante(etat).disposition.filter((b) => ARTILLERIES.includes(b.id)).length, 0,
+    'la base porte encore une artillerie : la démolition n\'a rien retiré');
+  const apresDemolition = resoudre(creerCombat(rapport.rejeu), { maxTicks: TICKS_MAX_COMBAT });
+  assert.deepEqual(apresDemolition, avantDemolition,
+    'le rejeu lit l\'état au lieu de lire son montage');
 });

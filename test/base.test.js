@@ -274,11 +274,19 @@ test('base — les trois châssis de production tombent sur ceux de combat.js', 
 });
 
 test('base — les quatre classes de coût couvrent exactement les quinze bâtiments', () => {
-  // MESURÉ : majeur 3 · courant 7 · modeste 3 · mineur 2 = 15.
-  // ⚠ `courant` PASSE DE 4 À 7 ET `modeste` DE 2 À 3 — lot
-  // BÂTIMENTS-QUATRE-ÉTATS. Les trois artilleries sont `courant`, comme les trois
-  // casernes qu'elles côtoient en PV ; le second collecteur est `modeste`, comme
-  // le premier.
+  // MESURÉ : majeur 6 · courant 4 · modeste 3 · mineur 2 = 15.
+  // ⚠⚠ `majeur` PASSE DE 3 À 6 ET `courant` DE 7 À 4 — lot ARTILLERIE, ETHAN,
+  // 20/09 : « le même coût que les chantiers de construction et postes de
+  // commande. 8 de base. » Les trois artilleries quittent `courant`, où elles
+  // étaient entrées par EMPRUNT aux trois casernes qu'elles côtoient en PV, et
+  // ce paragraphe disait déjà que l'emprunt attendait une mesure. Elle est
+  // venue.
+  // ⚠ ET LA CLASSE BOUGE AVEC `COEFFICIENT_DE_REGIME`, QUI PASSE DE 6 À 8. Une
+  // ancre sans son coefficient poserait une entité mi-Chantier mi-Caserne : la
+  // première commande le prix du niveau 2, le second la courbe au-delà du
+  // niveau 12, et les deux ne coïncident que pour `majeur`.
+  // ⚠ Le second collecteur reste `modeste`, comme le premier — lot
+  // BÂTIMENTS-QUATRE-ÉTATS, inchangé ici.
   // C'est ce test qui empêchera un futur bâtiment d'entrer sans classe, et une
   // classe de rester dans un commentaire sans porteur — la faute exacte qui a
   // laissé « dépôt de véhicules » vivre un mois dans le commentaire de
@@ -292,7 +300,12 @@ test('base — les quatre classes de coût couvrent exactement les quinze bâtim
     );
     compte[c] = (compte[c] ?? 0) + 1;
   }
-  assert.deepEqual(compte, { majeur: 3, courant: 7, modeste: 3, mineur: 2 });
+  assert.deepEqual(compte, { majeur: 6, courant: 4, modeste: 3, mineur: 2 });
+  // Et l'ancienne répartition ne revient pas en silence : les trois artilleries
+  // sont le seul déplacement du lot, et c'est exactement trois de part et
+  // d'autre.
+  assert.notDeepEqual(compte, { majeur: 3, courant: 7, modeste: 3, mineur: 2 },
+    'les trois artilleries sont redescendues en « courant »');
   // Aucune classe orpheline dans l'autre sens.
   assert.deepEqual(Object.keys(COUT_NIVEAU_DEUX).sort(), Object.keys(compte).sort());
   // Les ancrages décroissent avec la classe, et le premier niveau payant est

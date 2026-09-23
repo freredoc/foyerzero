@@ -30,6 +30,7 @@ import { GRILLE } from '../data/combat.js';
 // La recopier ici en ferait une seconde vérité.
 import { GEOGRAPHIE, ZOOM_CARTE, EMBLEMES_CARTE } from '../data/sites.js';
 import {
+  ARTILLERIES,
   BASE_BATIMENTS, COUT_NIVEAU_DEUX, coutDeMontee, debitVoisinParHeure,
   emplacementsDuNiveau, remboursementDuNiveau,
   ORDRE_PALETTE, RETOUR_DEFENSES,
@@ -2308,12 +2309,37 @@ export const LIBELLE_VERDICT = {
  * une répartition qu'Ethan n'a pas arbitrée. Un nombre sans ressource, dit comme
  * tel, est plus honnête.
  *
+ * ⚠⚠ ET LA VIGNETTE PORTE SA RAISON DEPUIS LE LOT ARTILLERIE, comme celle de
+ * la garnison la porte depuis toujours. Les deux phrases du terrain des
+ * bâtiments — le titre de la vignette et le toast de `choisirPosable` —
+ * écrivaient « déjà posé, et il est unique » EN DUR, sous un
+ * `terrain.force === null` : juste tant que le seul grisage possible était
+ * celui d'un unique, FAUX le jour où une artillerie en grise deux autres
+ * qu'elle n'est pas. Les deux lisent maintenant `raison`, et les deux cas
+ * particuliers de terrain tombent avec — c'est la discipline que
+ * `messageVerrouille` écrit déjà : la raison vient de la vignette, elle ne se
+ * recalcule pas au point d'affichage.
+ *
  * @param {object} etat
- * @returns {Array<{id: string, nom: string, famille: string, coutPremiereAmelioration: number}>}
+ * @returns {Array<{id: string, nom: string, famille: string,
+ *   coutPremiereAmelioration: number, raison: (string|null), dejaPose: boolean}>}
  */
 export function posablesDeLaBase(etat) {
   const laBase = baseCourante(etat);
   const poses = new Set(laBase.disposition.map((b) => b.id));
+  // ⚠⚠ UNE SEULE ARTILLERIE PAR BASE — ETHAN, 20/09, ET C'EST UN SECOND MOTIF
+  // DE GRISAGE, PAS UN SECOND MÉCANISME. Les trois artilleries ne sont PAS
+  // `unique: true` : ce drapeau-là traîne avec lui la règle de géométrie
+  // `uniques-voisins`, que sept bâtiments sur quinze portent déjà et qu'Ethan
+  // n'a pas demandée ici. La palette grise donc les TROIS vignettes dès qu'une
+  // artillerie, quelle qu'elle soit, occupe la base — et le refus, lui, vit
+  // dans `problemesDeDisposition` sous le code `artillerie-unique`.
+  //
+  // ⚠ ON NOMME CELLE QUI OCCUPE, PAS CELLE QU'ON TOUCHE. « Canon ionique occupe
+  // déjà cette base » envoie le joueur regarder sa base ; « celui-là est
+  // verrouillé » ne lui apprend rien de ce qu'il faut démolir.
+  const artillerieEnPlace = laBase.disposition
+    .find((b) => ARTILLERIES.includes(b.id));
   // ⚠ L'ORDRE VIENT DE `ORDRE_PALETTE`, PAS DE LA TABLE. Ethan, 03/09 : les
   // quatre bâtiments d'économie d'abord. Trier ici sur un critère deviné —
   // la classe de coût, la famille — donnerait un ordre que personne n'a
@@ -2325,19 +2351,53 @@ export function posablesDeLaBase(etat) {
   // classe et rôle : l'emprunt est exact, et un test le vérifie.
   return ORDRE_PALETTE
     .map((id) => [id, BASE_BATIMENTS[batimentDeReference(id)]])
-    .map(([id, def]) => ({
-      id,
-      nom: VIGNETTES_MIXTES[id]?.nom ?? def.nom.joueur,
-      famille: familleDuBatiment(id),
-      coutPremiereAmelioration: COUT_NIVEAU_DEUX[def.classeDeCout],
-      // ⚠ UN UNIQUE DÉJÀ POSÉ RESTE DANS LA LISTE, GRISÉ — arbitré par Ethan le
-      // 28/08 : « quand on pose un bâtiment unique, griser le bouton, pas le
-      // faire disparaître ». La palette gardait onze vignettes puis en perdait
-      // une à chaque unique posé, si bien qu'elle changeait de longueur et que
-      // les autres se déplaçaient sous le doigt. Une vignette grisée dit en
-      // plus quelque chose de vrai : ce bâtiment EXISTE et tu l'as déjà.
-      dejaPose: def.unique === true && poses.has(id),
-    }));
+    .map(([id, def]) => {
+      // ⚠ LA RAISON SE CALCULE UNE FOIS, ET LES DEUX CHAMPS EN DÉRIVENT. Deux
+      // appels côte à côte seraient deux lectures de la même règle, donc deux
+      // occasions d'en corriger une seule.
+      const raison = raisonDuGrisage(id, def, poses, artillerieEnPlace);
+      return {
+        id,
+        nom: VIGNETTES_MIXTES[id]?.nom ?? def.nom.joueur,
+        famille: familleDuBatiment(id),
+        coutPremiereAmelioration: COUT_NIVEAU_DEUX[def.classeDeCout],
+        raison,
+        // ⚠ UN UNIQUE DÉJÀ POSÉ RESTE DANS LA LISTE, GRISÉ — arbitré par Ethan
+        // le 28/08 : « quand on pose un bâtiment unique, griser le bouton, pas
+        // le faire disparaître ». La palette gardait onze vignettes puis en
+        // perdait une à chaque unique posé, si bien qu'elle changeait de
+        // longueur et que les autres se déplaçaient sous le doigt. Une vignette
+        // grisée dit en plus quelque chose de vrai : ce bâtiment EXISTE et tu
+        // l'as déjà.
+        //
+        // ⚠⚠ LA MARQUE SE DÉRIVE DE LA RAISON DEPUIS LE LOT ARTILLERIE, et
+        // c'est ce qui interdit qu'une vignette soit grisée sans que rien ne
+        // puisse le dire au joueur : un grisage sans phrase serait le bouton
+        // inerte que « un indice n'est pas une interdiction » (CLAUDE.md §4)
+        // refuse.
+        dejaPose: raison !== null,
+      };
+    });
+}
+
+/**
+ * Pourquoi une vignette de bâtiment est grisée, ou `null` si elle ne l'est pas.
+ *
+ * ⚠ ELLE REND LA PHRASE, JAMAIS UN CODE. C'est la forme qu'a déjà `raison` sur
+ * la palette de garnison, et les deux phrases se peignent par le même chemin ;
+ * un code à traduire au point d'affichage aurait rendu deux tables de mots.
+ *
+ * ⚠ ET L'ORDRE DES DEUX MOTIFS NE PEUT PAS SE POSER : ils sont disjoints —
+ * aucune artillerie n'est `unique: true`, mesuré par un test. Le `else` dit ce
+ * fait plutôt que d'ouvrir une priorité que personne n'aurait arbitrée.
+ */
+function raisonDuGrisage(id, def, poses, artillerieEnPlace) {
+  if (def.unique === true && poses.has(id)) return 'il est unique, et il est déjà posé';
+  if (artillerieEnPlace !== undefined && ARTILLERIES.includes(id)) {
+    return `${BASE_BATIMENTS[artillerieEnPlace.id].nom.joueur} occupe déjà cette base`
+      + ' : une seule artillerie par base';
+  }
+  return null;
 }
 
 /**
@@ -4705,16 +4765,23 @@ export function initialiserEcranChantier(doc, {
   }
 
   /**
-   * Pourquoi une pièce de garnison est verrouillée. Le message NOMME le niveau
-   * qui l'ouvrirait, ou dit qu'il n'y a pas de QG du tout — « un indice n'est
-   * pas une interdiction » : une vignette grise qui ne répond rien n'apprend
-   * rien au joueur.
+   * Pourquoi une vignette est verrouillée, sur l'un ou l'autre terrain. Le
+   * message NOMME ce qui bloque — le niveau qui l'ouvrirait, l'absence de QG,
+   * l'artillerie qui occupe déjà la base — parce que « un indice n'est pas une
+   * interdiction » : une vignette grise qui ne répond rien n'apprend rien.
+   *
+   * ⚠⚠ ELLE SERT LES DEUX TERRAINS DEPUIS LE LOT ARTILLERIE. Le terrain des
+   * bâtiments écrivait sa phrase en dur, sous un `terrain.force === null` ;
+   * elle est devenue fausse le jour où une artillerie a grisé deux vignettes
+   * qui ne sont ni uniques ni posées, et `posablesDeLaBase` porte désormais sa
+   * `raison` comme `posablesDeLaDefense` portait déjà la sienne.
    */
   function messageVerrouille(vignette) {
     // ⚠ LA RAISON VIENT DE LA VIGNETTE, ELLE NE SE RECALCULE PAS ICI. Elles
-    // sont trois depuis le 29/08 — pas de QG, niveau d'apparition, bâtiment de
-    // production manquant — et les redéduire dans le message aurait fait deux
-    // lectures de la même règle, dont une seule serait juste au prochain ajout.
+    // sont quatre depuis le lot ARTILLERIE — pas de QG, pièce non cherchée,
+    // unique déjà posé, artillerie déjà en place — et les redéduire dans le
+    // message aurait fait deux lectures de la même règle, dont une seule
+    // serait juste au prochain ajout.
     return `${vignette.nom} — ${vignette.raison}.`;
   }
 
@@ -4758,6 +4825,21 @@ export function initialiserEcranChantier(doc, {
    * niveau 1 et gratuit ». Ce que le titre porte, c'est ce que coûtera la
    * SUITE — un nombre pour un bâtiment, des points d'armée pour une pièce de
    * garnison, qui se paient sur le budget et non sur les stocks.
+   *
+   * ⚠⚠ ET LA PHRASE DU VERROU VIENT DE LA VIGNETTE DES DEUX CÔTÉS DEPUIS LE LOT
+   * ARTILLERIE. Elle s'écrivait « déjà posé, et il est unique » EN DUR pour le
+   * terrain des bâtiments : juste tant qu'un unique posé était le seul grisage
+   * possible, FAUX depuis qu'une artillerie grise les deux autres, qui ne sont
+   * ni uniques ni posées. Le cas particulier de terrain tombe avec la phrase,
+   * et `posablesDeLaBase` porte sa raison comme `posablesDeLaDefense` portait
+   * déjà la sienne.
+   *
+   * ⚠ ET CE PAVÉ EST DANS LA DOCUMENTATION, PAS DANS LE CORPS : la garde
+   * « aucune vignette de pose ne présente un coût de POSE » de
+   * `chantier.test.js` cherche le mot « gratuit » dans les sept cents
+   * caractères qui SUIVENT la ligne de déclaration, et un commentaire posé
+   * au-dedans repousse la phrase hors de sa fenêtre. Écrit là, il ne coûte
+   * rien à une garde qui n'a rien de faux.
    */
   function titreDeLaVignette(terrain, posable) {
     // ⚠ LE TERRAIN EST PASSÉ, IL NE SE DEVINE PAS. Une première écriture
@@ -4765,11 +4847,7 @@ export function initialiserEcranChantier(doc, {
     // sur la FORME de l'objet, pas sur ce qu'il est. Le jour où une vignette de
     // bâtiment porterait des points pour une raison sans rapport, elle aurait
     // basculé de titre toute seule.
-    if (posable.verrouille) {
-      return terrain.force === null
-        ? `${posable.nom} — déjà posé, et il est unique.`
-        : `${posable.nom} — ${posable.raison}.`;
-    }
+    if (posable.verrouille) return `${posable.nom} — ${posable.raison}.`;
     return terrain.force === null
       ? `${posable.nom} — poser au niveau 1 est gratuit ; la première `
         + `amélioration coûtera ${posable.coutPremiereAmelioration}.`
@@ -4789,10 +4867,14 @@ export function initialiserEcranChantier(doc, {
     // sur un bouton qui ne fait rien.
     const terrain = TERRAINS[terrainCourant()];
     const vignette = terrain.posables(etatCourant).find((p) => p.id === id);
+    // ⚠⚠ ET LE MESSAGE PASSE PAR `messageVerrouille` DES DEUX CÔTÉS DEPUIS LE
+    // LOT ARTILLERIE — voir `titreDeLaVignette` juste au-dessus, qui portait la
+    // même phrase en dur et le même cas particulier de terrain. Les deux sont
+    // tombés ENSEMBLE : n'en corriger qu'un aurait laissé le titre d'une
+    // vignette d'artillerie annoncer « déjà posé, et il est unique » au-dessus
+    // d'un toast qui dit l'inverse.
     if (vignette !== undefined && vignette.verrouille) {
-      toast(terrain.force === null
-        ? `${vignette.nom} est unique, et il est déjà posé.`
-        : messageVerrouille(vignette));
+      toast(messageVerrouille(vignette));
       return;
     }
     // Choisir un posable désarme l'action : un seul mode à la fois.

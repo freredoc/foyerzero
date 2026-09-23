@@ -1229,7 +1229,18 @@ test('état — une règle née APRÈS les sauvegardes ne rend pas une partie il
   // tirage des obstacles bougera encore. Ce n'est pas une faute structurelle —
   // la pièce est bien formée, elle est juste mal placée — et elle reste
   // SIGNALÉE : toute nouvelle pose au même endroit est refusée.
-  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins', 'obstacle']);
+  // ⚠⚠ `artillerie-unique` L'A REJOINT LE 22/09, LOT ARTILLERIE, ET IL EST LE
+  // CAS LE PLUS FRANC DES TROIS. Les trois artilleries sont POSABLES SANS
+  // LIMITE depuis le lot BÂTIMENTS-JOUEUR-V2 : une base qui en porte deux est
+  // exactement ce que le jeu autorisait hier, et faire lever le chargement
+  // dessus rendrait la partie injouable pour un geste que le jeu a permis. Ce
+  // n'est pas non plus un retrait déguisé — les exemplaires en trop restent,
+  // se réparent, se montent, et TOUS contribuent au retrait d'artillerie.
+  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT],
+    ['uniques-voisins', 'obstacle', 'artillerie-unique']);
+  // Et l'ensemble d'AVANT ne revient pas en silence : il en portait deux.
+  assert.notDeepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins', 'obstacle'],
+    '`artillerie-unique` est reparti, et une base à deux artilleries ne se charge plus');
   for (const structurel of ['sans-chantier', 'superposition', 'hors-base', 'inconnu', 'doublon']) {
     assert.ok(!CODES_TOLERES_AU_CHARGEMENT.has(structurel),
       `${structurel} est structurel, il ne doit jamais être toléré`);
@@ -2538,7 +2549,15 @@ test('PD T6 — le CHARGEMENT n\'est jamais refusé, et c\'est le test du lot', 
   // règle absente vaut mieux qu'une règle présente et filtrée — la seconde tient
   // par un `Set` qu'on peut vider par mégarde.
   assert.ok(!CODES_TOLERES_AU_CHARGEMENT.has('sans-batiment-de-production'));
-  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins', 'obstacle']);
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE — l'ensemble portait DEUX codes, il en porte
+  // TROIS : `artillerie-unique` est né le 22/09, donc APRÈS des sauvegardes qui
+  // peuvent porter deux artilleries dans la même base. Ce que ce test-ci garde
+  // n'a pas bougé d'un mot — c'est que le refus du bâtiment de production, LUI,
+  // n'y est pas — et la contre-assertion refuse le retour de l'ensemble d'avant.
+  assert.deepEqual([...CODES_TOLERES_AU_CHARGEMENT],
+    ['uniques-voisins', 'obstacle', 'artillerie-unique']);
+  assert.notDeepEqual([...CODES_TOLERES_AU_CHARGEMENT], ['uniques-voisins', 'obstacle'],
+    '`artillerie-unique` est reparti : une partie à deux artilleries ne se charge plus');
 });
 
 test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegarde ne se réécrit', () => {

@@ -34,9 +34,10 @@ import { hachageBrut } from './peuplement.js';
 import { creerRng, tirer } from './rng.js';
 import { TICKS_PAR_HEURE } from './clock.js';
 import { RAID_OUVRAGE, TYPES_SITE, APRES_RAID, GEOGRAPHIE } from '../data/sites.js';
-import { BASE_BATIMENTS } from '../data/base.js';
+import { BASE_BATIMENTS, SOUTIEN_DE_BASE } from '../data/base.js';
 import {
   creerCombat, resoudre, facteurMilli, TICKS_MAX_COMBAT, pointsRechercheDefense,
+  COLONNE_PAR_CHASSIS,
 } from './combat.js';
 import { genererVague, budgetRaid } from './generateur.js';
 import { ciblesAPortee } from './site-de-la-case.js';
@@ -47,10 +48,14 @@ import { UNITES } from '../data/combat.js';
 import { majorationsDeCombat } from './poi.js';
 import { poserLaBaseSur } from './deplacement.js';
 import {
-  reparerLaGarnison, garderLeRapport, pourLeRejeu, rechercheMilli,
+  reparerLaGarnison, garderLeRapport, pourLeRejeu, rechercheMilli, pvMaxDeLUnite,
 } from './raid.js';
 import { baseCourante } from './base-courante.js';
 import { pvMaxDeLaPieceDeGarnisonMilli, ramenerLaGarnison } from './reparation.js';
+import { distanceCarreeCases } from './points-attaque.js';
+
+/** Un millier — l'échelle des milli-PV et des millièmes de retrait. */
+const MILLE = 1000;
 
 /**
  * Le sel du tirage de raid — le SIXIÈME du dépôt, et il était libre.
@@ -464,6 +469,75 @@ export function modulesOuvrageOffenseAu(niveau) {
   return [...pieces].sort();
 }
 
+/**
+ * Ce que les artilleries du joueur retirent à un assaillant, par colonne.
+ *
+ * Lot ARTILLERIE, 22/09/2026. Les trois bâtiments d'artillerie existaient comme
+ * identifiants et comme sprites depuis BÂTIMENTS-JOUEUR-V2 et **aucune branche
+ * du dépôt ne les lisait** : ils se posaient, se montaient, se réparaient, et
+ * ne faisaient rien. Ils font désormais une attrition PASSIVE d'avant-combat.
+ *
+ * ⚠⚠ LE BALAYAGE PREND TOUTES LES BASES DU JOUEUR, `laBase` COMPRISE À DISTANCE
+ * ZÉRO. Ethan, 22/09 : « on additionne tout. » Deux artilleries du même type à
+ * portée additionnent leurs millièmes ; deux types différents qui touchent la
+ * même colonne additionnent aussi. Une base ne portant qu'UNE artillerie (le
+ * refus `artillerie-unique` de `sim/disposition.js`), cumuler demande plusieurs
+ * bases : c'est le prix, et c'est voulu.
+ *
+ * ⚠ AUCUN FILTRE D'ÉTAT SUR LES BASES. Une base sans artillerie ne contribue
+ * rien, une artillerie abîmée contribue au prorata de sa santé, une artillerie
+ * au plancher contribue zéro — les trois cas se règlent par le CALCUL, et une
+ * garde « base vivante » serait une règle inventée.
+ *
+ * ⚠⚠ ET UNE ARTILLERIE AU PLANCHER S'ÉTEINT TOUTE SEULE, SANS CAS PARTICULIER.
+ * `plancherPv: true` la laisse à `APRES_RAID.plancherPvMilli`, soit 1 000
+ * milli-PV contre 2 000 000 au niveau 1 : `floor(1000 * 1000 / 2000000)` vaut
+ * ZÉRO. Écrire une garde « si détruite » ne servirait jamais et donnerait
+ * l'impression d'une règle.
+ *
+ * ⚠⚠ `pvCourantsMilli` REND `undefined` SUR UN BÂTIMENT INTACT, ET LE `?? pvMax`
+ * N'EST PAS UNE PRÉCAUTION DE STYLE. Sans lui, la division rend `NaN`, qui
+ * traverse `Math.floor`, `Math.max` et la soustraction SANS LEVER, et pose un
+ * `pvMilli: NaN` que `creerCombat` refuserait à l'autre bout avec un message
+ * qui parlerait d'autre chose. **Une artillerie intacte est le cas ORDINAIRE.**
+ *
+ * ⚠ LA PORTÉE EST UN DISQUE, `d² <= rayon²`, comme toute portée du dépôt depuis
+ * le lot EUCLIDE. `distanceCarreeCases` est la primitive ; un carré de
+ * Tchebychev couvrirait 124 coins que la carte ne montre pas comme couverts.
+ *
+ * ⚠ LE MALUS DE NIVEAU EST 5 % DE L'EFFET PAR NIVEAU AU-DESSUS, donc zéro à
+ * +20, BORNÉ à zéro : sans cette borne, une artillerie dépassée SOIGNERAIT
+ * l'assaillant. Vers le bas, aucune majoration — arbitrage d'Ethan du 22/09.
+ *
+ * @returns {{infanterie: number, vehicule: number, structureOuAviation: number}}
+ *   des millièmes, un par colonne de `COLONNE_PAR_CHASSIS`.
+ */
+function retraitDesArtilleries(etat, laBase, niveauAttaquant) {
+  const contribution = { infanterie: 0, vehicule: 0, structureOuAviation: 0 };
+  for (const base of etat.bases) {
+    const d2 = distanceCarreeCases(base.position, laBase.position);
+    for (const batiment of base.disposition) {
+      const soutien = SOUTIEN_DE_BASE[batiment.id];
+      if (soutien === undefined) continue;
+      if (d2 > soutien.rayonCases * soutien.rayonCases) continue;
+      const pvMax = pvMaxDuBatiment(batiment.id, batiment.niveau);
+      const pvCourant = pvCourantsMilli(pvMax, batiment.degatsMilli) ?? pvMax;
+      const santeMilli = Math.floor((pvCourant * MILLE) / pvMax);
+      const ecart = Math.max(0, niveauAttaquant - batiment.niveau);
+      const malusMilli = Math.max(
+        0, MILLE - SOUTIEN_DE_BASE.malusParNiveauPourMille * ecart,
+      );
+      for (const colonne of Object.keys(contribution)) {
+        contribution[colonne] += Math.floor(
+          (soutien.retraitPourMille[colonne] * malusMilli * santeMilli)
+          / (MILLE * MILLE),
+        );
+      }
+    }
+  }
+  return contribution;
+}
+
 export function montageDeLaBaseDuJoueur(
   etat, niveauAttaquant, budgetPoints, graine, laBase = baseCourante(etat),
 ) {
@@ -495,6 +569,40 @@ export function montageDeLaBaseDuJoueur(
     indicesDefenseurs.push(index);
   });
   const vague = genererVague({ niveau: niveauAttaquant, budgetPoints, graine });
+
+  // ⚠⚠ LE RETRAIT S'ÉCRIT DANS LE MONTAGE, ET C'EST LE POINT DUR DU LOT.
+  // `garderLeRapport` range le montage rendu par `pourLeRejeu`, qui ne retire
+  // que `indicesDefenseurs` et `indicesBatiments` : TOUT LE RESTE SE REJOUE TEL
+  // QUEL. Appliqué après coup dans `subirUnRaid`, ou pire dans `creerCombat` en
+  // relisant l'état, le retrait donnerait un rapport qui se rejoue SANS
+  // l'artillerie — donc un rejeu qui contredit le combat qu'il montre, dès que
+  // le joueur démolit ou perd le bâtiment.
+  //
+  // ⚠⚠ QUAND LA COLONNE EST À ZÉRO, `pvMilli` N'EXISTE PAS SUR L'UNITÉ. Ni
+  // `undefined`, ni la valeur pleine : `serialiserEtat` trie les clés PROPRES,
+  // donc une clé posée — même porteuse du maximum — change les octets de tous
+  // les rapports rejouables et fait rougir les deux cents témoins de combat.
+  // C'est le motif de `pvMilli` / `reserve` / `embarquee` dans
+  // `composerLesVagues`, et la leçon que le lot GRILLE LONGUE vient de payer sur
+  // `grille`. Conséquence : sans artillerie, hors de portée, vingt niveaux en
+  // dessous ou sur une colonne à 0 ‰, le montage est IDENTIQUE AU BIT à celui
+  // d'avant ce lot.
+  const retrait = retraitDesArtilleries(etat, laBase, niveauAttaquant);
+  for (const unite of vague.unites) {
+    const colonne = COLONNE_PAR_CHASSIS[UNITES[unite.id].chassis];
+    if (retrait[colonne] === 0) continue;
+    // ⚠ LE NIVEAU EST CELUI DE L'UNITÉ, JAMAIS `niveauAttaquant`. Les deux
+    // coïncident aujourd'hui — `genererVague` les pose au niveau du site — et le
+    // jour où ils divergeront, la faute serait muette.
+    const pvBase = pvMaxDeLUnite(unite.id, unite.niveau);
+    // ⚠ LE PLANCHER D'UN MILLI-PV EST IMPOSÉ PAR LE MOTEUR, PAS CHOISI :
+    // `creerCombat` LÈVE sur `pvMilli === 0`. Arbitrage d'Ethan du 20/09 :
+    // « on peut mettre un plancher à un PV. »
+    unite.pvMilli = Math.max(
+      1, pvBase - Math.floor((pvBase * retrait[colonne]) / MILLE),
+    );
+  }
+
   return {
     // ⚠ `base`, ET CE N'EST PAS UN DÉTAIL DE FORME : `type` ne sert qu'à `butin`,
     // qui n'est jamais appelé sur un combat de défense — mais c'est le même mot
