@@ -2601,7 +2601,11 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
-  assert.equal(SAVE_VERSION, 40, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — GRILLE LONGUE, lui, y est passé (20/09)');
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
+  // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
+  // première ouverture de l'écran Recherche.
+  assert.equal(SAVE_VERSION, 41, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — ARTILLERIE-RECHERCHE, lui, y est passé (23/09)');
+  assert.notEqual(SAVE_VERSION, 40, 'le maillon des soutiens a été défait');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
   const etat = poserLesBatimentsDeProduction(baseSansProduction());
@@ -2753,7 +2757,10 @@ test('MODULES-PIÈCE T1 — la migration v35 → v36 traduit les listes d\'un re
   const migre = migrer({ version: 33, rapports: [{ rejeu: structuredClone(montage) }] });
   assert.equal(migre.version, SAVE_VERSION);
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
-  assert.equal(SAVE_VERSION, 40, 'la version cible a bougé : ce test est à reprendre');
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
+  // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
+  // première ouverture de l'écran Recherche.
+  assert.equal(SAVE_VERSION, 41, 'la version cible a bougé : ce test est à reprendre');
   assert.deepEqual(
     migre.rapports[0].rejeu.modulesDebloques.ouvrage,
     { offense: [], defense: ['herse', 'merlon', 'ronce'] },

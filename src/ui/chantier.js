@@ -110,7 +110,13 @@ import {
   secondesPleines,
   etatDeLaPose, pvMaxDuBatimentMilli, pvMaxDeLaPieceDeGarnisonMilli,
 } from '../sim/reparation.js';
-import { acquisesDe } from '../sim/recherche.js';
+import { acquisesDe, soutienQuiOuvre, soutienEstAcquis } from '../sim/recherche.js';
+// ⚠ LA PALETTE LIT `SPECIAL` POUR LE SEUL LIBELLÉ DU NŒUD, ET C'EST LA MÊME
+// TABLE QUE L'ÉCRAN RECHERCHE PEINT. Recomposer la phrase à partir du nom du
+// bâtiment — « la recherche du Canon ionique » — donnerait au joueur un libellé
+// qu'il ne retrouverait dans aucun onglet ; c'est le nom du NŒUD qu'il doit
+// chercher, pas celui du bâtiment.
+import { SPECIAL } from '../data/recherche.js';
 import { DEFENSES, UNITES, COLONNES_DEGATS } from '../data/combat.js';
 import { facteurMilli } from '../sim/combat.js';
 import { rosterDefensif, remboursementDEffectif } from '../data/couts-militaires.js';
@@ -2340,6 +2346,28 @@ export function posablesDeLaBase(etat) {
   // verrouillé » ne lui apprend rien de ce qu'il faut démolir.
   const artillerieEnPlace = laBase.disposition
     .find((b) => ARTILLERIES.includes(b.id));
+  // ⚠⚠ LA PORTE DE LA RECHERCHE EST DANS LA PALETTE, PAS DANS
+  // `problemesDeDisposition` — ET C'EST LE PRÉCÉDENT DE LA GARNISON, PAS UNE
+  // FACILITÉ. `posablesDeLaDefense` lit déjà `acquisesDe(etat, 'defense')` pour
+  // griser ce que la recherche n'a pas ouvert, et `verifierEtat` ne re-refuse
+  // rien au chargement. Conséquence directe et VOULUE : **une artillerie posée
+  // avant ce lot reste posée**, se répare, se monte et contribue au retrait
+  // d'avant-combat. Mettre la porte dans la disposition rendrait injouables les
+  // parties en cours — dont celle d'Ethan — et demanderait un troisième code
+  // dans `CODES_TOLERES_AU_CHARGEMENT` pour réparer un dégât qu'on se serait
+  // infligé soi-même.
+  //
+  // ⚠⚠ ET LA LECTURE PASSE PAR LE MOTEUR, JAMAIS PAR `etat.recherche.soutiens`
+  // EN CLAIR. `soutienEstAcquis` appelle `exigerEtat`, donc un montage bâti sans
+  // `recherche` LÈVE en NOMMANT le champ qui manque, là où un accès direct
+  // rendrait « Cannot read properties of undefined ». Les trois artilleries
+  // étant toujours dans `ORDRE_PALETTE`, l'appel a lieu au moins une fois à
+  // chaque peinture : la garde ne peut pas se taire par hasard.
+  const soutiensAcquis = new Set(
+    ORDRE_PALETTE
+      .map((id) => soutienQuiOuvre(id))
+      .filter((soutien) => soutien !== null && soutienEstAcquis(etat, soutien)),
+  );
   // ⚠ L'ORDRE VIENT DE `ORDRE_PALETTE`, PAS DE LA TABLE. Ethan, 03/09 : les
   // quatre bâtiments d'économie d'abord. Trier ici sur un critère deviné —
   // la classe de coût, la famille — donnerait un ordre que personne n'a
@@ -2355,7 +2383,7 @@ export function posablesDeLaBase(etat) {
       // ⚠ LA RAISON SE CALCULE UNE FOIS, ET LES DEUX CHAMPS EN DÉRIVENT. Deux
       // appels côte à côte seraient deux lectures de la même règle, donc deux
       // occasions d'en corriger une seule.
-      const raison = raisonDuGrisage(id, def, poses, artillerieEnPlace);
+      const raison = raisonDuGrisage(id, def, poses, artillerieEnPlace, soutiensAcquis);
       return {
         id,
         nom: VIGNETTES_MIXTES[id]?.nom ?? def.nom.joueur,
@@ -2387,15 +2415,44 @@ export function posablesDeLaBase(etat) {
  * la palette de garnison, et les deux phrases se peignent par le même chemin ;
  * un code à traduire au point d'affichage aurait rendu deux tables de mots.
  *
- * ⚠ ET L'ORDRE DES DEUX MOTIFS NE PEUT PAS SE POSER : ils sont disjoints —
- * aucune artillerie n'est `unique: true`, mesuré par un test. Le `else` dit ce
- * fait plutôt que d'ouvrir une priorité que personne n'aurait arbitrée.
+ * ⚠⚠ TROIS MOTIFS DEPUIS LE LOT ARTILLERIE-RECHERCHE, ET L'ORDRE EST DÉSORMAIS
+ * UN ARBITRAGE — LA PHRASE QUI DISAIT LE CONTRAIRE EST RÉÉCRITE, PAS ENJAMBÉE.
+ * Elle posait que « l'ordre des deux motifs ne peut pas se poser : ils sont
+ * disjoints — aucune artillerie n'est `unique: true` ». C'était vrai des DEUX
+ * motifs d'alors, et c'est FAUX du troisième : un joueur sans recherche ET avec
+ * une artillerie en place tombe dans les deux à la fois, sur les trois mêmes
+ * vignettes. Laisser le commentaire aurait été le motif mort sous une conclusion
+ * vivante que ce dépôt punit ailleurs quatre fois.
+ *
+ * ⚠⚠ L'ARTILLERIE EN PLACE PRIME SUR LA RECHERCHE, ET C'EST LA PLUS
+ * ACTIONNABLE QUI GAGNE — arbitrage du brief, 23/09 : démolir est un geste que
+ * le joueur peut faire tout de suite, acheter une recherche dépend de ses
+ * points. Il lit donc UNE raison, jamais deux collées. ⚠ Et l'unique reste en
+ * tête parce qu'il est disjoint des deux autres — aucune artillerie n'est
+ * `unique: true`, mesuré par un test — : sa position ne décide de rien, et la
+ * déplacer ne changerait aucune phrase.
+ *
+ * ⚠ LE LIBELLÉ EST CELUI DU NŒUD, PAS CELUI DU BÂTIMENT. « la recherche Soutien
+ * anti-véhicule ouvre ce bâtiment » nomme ce que le joueur doit aller chercher
+ * dans l'onglet Spécial ; une phrase bâtie sur « Canon ionique » le renverrait
+ * vers un mot qui n'y figure pas.
+ *
+ * @param {string} id
+ * @param {object} def la ligne de `BASE_BATIMENTS` du bâtiment de référence
+ * @param {Set<string>} poses les identifiants déjà posés sur la base
+ * @param {object|undefined} artillerieEnPlace l'artillerie qui occupe la base
+ * @param {Set<string>} soutiensAcquis les nœuds de soutien achetés
+ * @returns {string|null}
  */
-function raisonDuGrisage(id, def, poses, artillerieEnPlace) {
+function raisonDuGrisage(id, def, poses, artillerieEnPlace, soutiensAcquis) {
   if (def.unique === true && poses.has(id)) return 'il est unique, et il est déjà posé';
   if (artillerieEnPlace !== undefined && ARTILLERIES.includes(id)) {
     return `${BASE_BATIMENTS[artillerieEnPlace.id].nom.joueur} occupe déjà cette base`
       + ' : une seule artillerie par base';
+  }
+  const soutien = soutienQuiOuvre(id);
+  if (soutien !== null && !soutiensAcquis.has(soutien)) {
+    return `la recherche ${SPECIAL[soutien].libelle} ouvre ce bâtiment`;
   }
   return null;
 }

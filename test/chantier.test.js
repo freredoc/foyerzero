@@ -66,7 +66,7 @@ import {
   DEBITS, RETOUR_DEFENSES,
   remboursementDuNiveau, stockagePropreDuNiveau,
   capaciteDuNiveau,
-  ORDRE_PALETTE, BATIMENTS_DONNES,
+  ORDRE_PALETTE, BATIMENTS_DONNES, ARTILLERIES,
   messageSansBatiment,
 } from '../src/data/base.js';
 import { GEOGRAPHIE } from '../src/data/sites.js';
@@ -108,6 +108,7 @@ import {
 } from '../src/sim/reparation.js';
 import { rattraperJeu } from '../src/sim/state.js';
 import { subirUnRaid } from '../src/sim/raid-ouvrage.js';
+import { creerRecherche } from '../src/sim/raid.js';
 import { PALIERS, SEUIL_COMPACT } from '../src/render/nombre.js';
 import { batimentDeLaVignette } from '../src/data/base.js';
 import { ressourceDeLaCase } from '../src/sim/champs.js';
@@ -253,7 +254,20 @@ function baseDeLaMaquette() {
     // `tickJeu` les lit, un montage qui les omet n'est plus un état de jeu.
     sitesEntames: {},
     basesRasees: [],
-    recherche: { pointsMilli: '0' },
+    // ⚠⚠ LE CHAMP `recherche` EST COMPLET DEPUIS LE LOT ARTILLERIE-RECHERCHE,
+    // ET C'ÉTAIT LE SEUL MONTAGE FRAGILE DU DÉPÔT — RECENSÉ AVANT D'ÉCRIRE LA
+    // LIGNE QUI L'AURAIT FAIT LEVER. Il portait `{ pointsMilli: '0' }` et rien
+    // d'autre ; `posablesDeLaBase` lit désormais les soutiens achetés, donc
+    // `exigerEtat` aurait levé ici « `recherche.soutiens` manque ». Les sept
+    // autres appelants passent par `creerEtat`, qui appelle déjà
+    // `creerRecherche` — vérifié un par un.
+    //
+    // ⚠ ET ON APPELLE LE CONSTRUCTEUR, ON NE RECOPIE PAS SA FORME. Un
+    // `soutiens: []` écrit à la main serait la seconde vérité que §4 interdit, et
+    // elle vieillirait au prochain champ qui entre dans `recherche`. Surtout :
+    // **jamais un `?? []` dans `src/`**, qui ferait passer pour « rien d'acheté »
+    // un état qu'on n'a pas compris.
+    recherche: creerRecherche(),
     // ⚠ ET LES POI ACQUIS DEPUIS LE 31/08, pour la raison EXACTE des quatre
     // champs d'avant : `tickJeu` les relève, et un montage qui les omet n'est
     // plus un état de jeu. Ils sont GLOBAUX depuis le lot BASES-0 — « acquis une
@@ -665,21 +679,44 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
       `${multiple} devrait être posé`);
   }
 
-  // ⚠⚠ FALSIFIABLE PAR CONTRASTE, ET LE CONTRASTE A CHANGÉ DE SENS LE 10/09.
-  // Ce bloc disait « sur une base NEUVE, seul le Chantier porte la marque » : la
-  // marque du Chantier était la seule chose qui distinguait une base neuve d'une
-  // palette entièrement vive, et le point 3 vient de la retirer — le Chantier n'a
-  // plus de vignette à marquer.
+  // ⚠⚠ FALSIFIABLE PAR CONTRASTE, ET LE CONTRASTE A CHANGÉ DE SENS DEUX FOIS.
+  // Le 10/09, ce bloc a cessé de dire « sur une base NEUVE, seul le Chantier
+  // porte la marque », le point 3 lui ayant retiré sa vignette ; il exigeait
+  // depuis une liste VIDE.
   //
-  // ⚠ UNE LISTE VIDE NE PROUVE DONC PLUS RIEN TOUTE SEULE : un `dejaPose`
-  // toujours faux la rendrait aussi. Ce qui discrimine est l'ÉCART entre les deux
-  // montages — la maquette en marque, la base neuve n'en marque aucune —, et les
-  // deux moitiés sont assertées ici pour qu'aucune ne parte sans l'autre.
+  // ⚠⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : « AUCUNE vignette »
+  // DEVIENT « LES TROIS ARTILLERIES », ET C'EST LA PROPRIÉTÉ QUE CE LOT-CI
+  // RENVERSE. Les trois soutiens de l'onglet Spécial ouvrent chacun un bâtiment
+  // d'artillerie, et une base neuve n'en a acheté aucun : ses trois vignettes
+  // sont grisées dès la première image, avec la phrase qui dit où aller les
+  // ouvrir. Le nombre d'avant est écrit à côté de celui d'après — zéro, puis
+  // trois — et la contre-assertion refuse le retour de la liste vide : un lot
+  // qui débrancherait la porte ferait ROUGIR ce test au lieu de le laisser vert.
+  //
+  // ⚠ ET L'ÉCART ENTRE LES DEUX MONTAGES N'A PAS DISPARU, IL A CHANGÉ DE
+  // PORTEUR. Il ne tient plus à « l'une marque, l'autre pas » — les deux
+  // marquent désormais — mais aux UNIQUES : la maquette a posé sa Caserne et son
+  // Complexe, la base neuve non. Sans cette moitié-là, un `dejaPose` qui
+  // marquerait tout le monde passerait.
   const paletteNeuve = posablesDeLaBase(creerEtat(7));
-  assert.deepEqual(paletteNeuve.filter((p) => p.dejaPose).map((p) => p.id), [],
-    'une base neuve ne marque plus aucune vignette : le Chantier n\'en a plus');
-  assert.ok(posables.filter((p) => p.dejaPose).length > 0,
-    'le montage ne mesure rien : `dejaPose` ne marque plus personne nulle part');
+  const marqueesNeuve = paletteNeuve.filter((p) => p.dejaPose).map((p) => p.id);
+  assert.deepEqual(marqueesNeuve.slice().sort(), [...ARTILLERIES].sort(),
+    'une base neuve ne grise plus exactement les trois artilleries');
+  assert.notDeepEqual(marqueesNeuve, [],
+    'la porte de la recherche est débranchée : une base neuve ne grise plus rien');
+  // ⚠ ET LA RAISON EST CELLE DE LA RECHERCHE, PAS CELLE DE L'ARTILLERIE EN
+  // PLACE : une base neuve n'en porte aucune. Sans cette ligne, un grisage qui
+  // se tromperait de motif passerait — la marque serait la même.
+  for (const id of ARTILLERIES) {
+    assert.match(paletteNeuve.find((p) => p.id === id).raison, /^la recherche .+ ouvre ce bâtiment$/,
+      `${id} n'est pas grisé par la recherche sur une base neuve`);
+  }
+  const marqueesMaquette = posables.filter((p) => p.dejaPose).map((p) => p.id);
+  for (const unique of ['caserne', 'complexeDeDefense']) {
+    assert.ok(marqueesMaquette.includes(unique), `${unique} devrait être marqué`);
+    assert.ok(!marqueesNeuve.includes(unique),
+      `${unique} est marqué sur une base neuve : le montage ne discrimine plus`);
+  }
 
   // Et l'écran LIT cette marque au lieu de recompter les uniques lui-même.
   //
@@ -733,13 +770,36 @@ test('chantier — la palette GRISE un unique déjà posé, elle ne le retire pl
   // pour quinze bâtiments. Ce que ce test garde reste entier : elle ne bouge pas
   // d'une pose à l'autre.
   assert.equal(posablesDeLaBase(neuve).length, ORDRE_PALETTE.length);
-  // ⚠⚠ ZÉRO GRISÉE, LÀ OÙ IL Y EN AVAIT UNE — ET C'EST LA MESURE DU POINT 3.
-  // La seule vignette grisée d'une base neuve ÉTAIT le Chantier, posé d'office :
-  // le joueur ouvrait le jeu devant une palette dont un bouton sur quatorze ne
-  // pouvait rien faire, et ne pourrait jamais rien faire. Il n'y en a plus, donc
-  // toutes les vignettes d'une base neuve offrent un geste.
-  assert.equal(posablesDeLaBase(neuve).filter((p) => !p.dejaPose).length,
-    ORDRE_PALETTE.length, 'une base neuve ne devrait plus avoir de vignette grisée');
+  // ⚠⚠ « ZÉRO GRISÉE » DEVIENT « LES TROIS ARTILLERIES », ET LE NOMBRE DU 10/09
+  // EST ÉCRIT À CÔTÉ DE CELUI DU 23/09. La seule vignette grisée d'une base neuve
+  // ÉTAIT le Chantier, posé d'office ; le point 3 lui a retiré sa vignette, et la
+  // mesure est tombée à ZÉRO. Elle vaut TROIS depuis le lot ARTILLERIE-RECHERCHE :
+  // les trois soutiens de l'onglet Spécial ouvrent chacun une artillerie, et une
+  // base neuve n'en a acheté aucun.
+  //
+  // ⚠⚠ ET CE QUE LE 10/09 GARDAIT RESTE ENTIER, SOUS UNE AUTRE FORME. Sa
+  // propriété était « aucune vignette ne propose un geste que le joueur ne pourra
+  // JAMAIS faire » — le Chantier grisé pour toujours, sur une palette qu'il
+  // ouvrait à la première image. Une artillerie grisée, elle, s'ouvre en achetant
+  // sa recherche : le geste existe, il est ailleurs, et la phrase du grisage dit
+  // où. Ce qui est asserté ici est donc que les DIX AUTRES offrent un geste tout
+  // de suite, et le compte se dérive d'`ARTILLERIES` plutôt que de s'écrire 10 :
+  // une quatrième artillerie le suivrait toute seule.
+  const paletteDeLaNeuve = posablesDeLaBase(neuve);
+  const griseesDeLaNeuve = paletteDeLaNeuve.filter((p) => p.dejaPose).map((p) => p.id);
+  assert.equal(paletteDeLaNeuve.filter((p) => !p.dejaPose).length,
+    ORDRE_PALETTE.length - ARTILLERIES.length,
+    'une vignette hors artillerie n\'offre plus de geste sur une base neuve');
+  assert.notEqual(paletteDeLaNeuve.filter((p) => !p.dejaPose).length, ORDRE_PALETTE.length,
+    'la porte de la recherche est débranchée : une base neuve ne grise plus rien');
+  // ⚠ ET AUCUNE DES TROIS N'EST GRISÉE PAR UNE POSE. Une base neuve ne porte
+  // qu'un Chantier, qui n'a plus de vignette : sans cette ligne, un `dejaPose`
+  // qui se tromperait de motif passerait — la marque serait la même.
+  for (const id of griseesDeLaNeuve) {
+    assert.match(paletteDeLaNeuve.find((p) => p.id === id).raison,
+      /^la recherche .+ ouvre ce bâtiment$/,
+      `${id} est grisé sur une base neuve pour un autre motif que la recherche`);
+  }
   // ⚠ ET LE BÂTIMENT EST BIEN LÀ, LUI : c'est la vignette qui sort, pas la base
   // neuve qui change. Sans cette ligne, vider `BASE_NEUVE` passerait aussi.
   assert.equal(baseCourante(neuve).disposition[0].id, 'chantierDeConstruction');

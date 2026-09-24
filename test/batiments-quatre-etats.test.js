@@ -342,7 +342,9 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // nettoie les ruines tombées sous les sept grosses bases du bout de carte.
   // ⚠ RÉANCRÉ AU LOT GRILLE LONGUE, 20/09/2026 : 39 → 40, maillon sans
   // transformation — la grille d'un site voyage dans ses rapports.
-  assert.equal(SAVE_VERSION, 40);
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui pose
+  // `recherche.soutiens` sur toute partie en cours.
+  assert.equal(SAVE_VERSION, 41);
   assert.notEqual(SAVE_VERSION, 38, 'le maillon des verrous a été défait');
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.

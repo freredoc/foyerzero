@@ -130,6 +130,8 @@ import {
   DEPLACES_PAR_ECRASEMENT, EMPREINTES_PAR_GRAINE_ECRASEMENT,
   RAPPORTS_PROCHE_SILHOUETTES, RAPPORTS_OUVRAGE_SILHOUETTES,
   DEPLACES_PAR_RESERVE_RASAGE, EMPREINTES_PAR_GRAINE_RESERVE_RASAGE,
+  DEPLACES_PAR_ARTILLERIE_RECHERCHE, EMPREINTES_PAR_GRAINE_ARTILLERIE_RECHERCHE,
+  OCTETS_AJOUTES_PAR_ARTILLERIE_RECHERCHE,
 } from './temoins-bases-0.js';
 
 /** Les vingt-trois champs relevés : les vingt-deux d'origine, plus celui de BASES-1. */
@@ -359,7 +361,16 @@ function empreinteAttendue(phase, champ) {
   // subissent un rasage, qui vide sous les deux règles. Le lot change la
   // CONDITION d'un vidage, pas le combat : il ne peut mordre que sur une
   // défaite SANS rasage, et le témoin le mesure sur quatre graines.
-  return DEPLACES_PAR_RESERVE_RASAGE[phase]?.[champ]
+  // ⚠⚠ TRENTE-TROISIÈME COUCHE — lot ARTILLERIE-RECHERCHE, 23/09. **UN SEUL
+  // champ, `recherche`, sur les QUATORZE phases** : le lot ne change aucun
+  // comportement, il change la FORME de l'état — `creerAcquises` pose
+  // `recherche.soutiens: []`. Tout ce qui hache `recherche` bouge, et rien
+  // d'autre : les vingt-deux autres champs ne bougent sur AUCUNE phase, et
+  // c'est cette absence-là qui attribue. ⚠ Le regroupement des phases est
+  // IDENTIQUE avant et après — cinq valeurs distinctes, même partition — donc
+  // pas un tick de ce qui fait changer la recherche n'a bougé.
+  return DEPLACES_PAR_ARTILLERIE_RECHERCHE[phase]?.[champ]
+    ?? DEPLACES_PAR_RESERVE_RASAGE[phase]?.[champ]
     ?? DEPLACES_PAR_ECRASEMENT[phase]?.[champ]
     ?? DEPLACES_PAR_SILHOUETTES[phase]?.[champ]
     ?? DEPLACES_PAR_RECHERCHE_DEFENSE[phase]?.[champ]
@@ -836,7 +847,13 @@ test('BASES-0 T1 — empreinte par graine : aucune graine ne diverge', () => {
     // ne mord que sur une DÉFAITE SANS RASAGE, et sur vingt et une parties tous
     // les assauts subis rasent. Le `??` reste donc NÉCESSAIRE, et pas par
     // précaution.
-    if (obtenue !== (EMPREINTES_PAR_GRAINE_RESERVE_RASAGE[g]
+    // ⚠⚠ ARTILLERIE-RECHERCHE (23/09), LUI, LES DÉPLACE TOUTES LES VINGT-CINQ,
+    // et c'est le contraire exact : un changement de RÈGLE ne mord que là où
+    // elle s'applique, un changement de FORME de l'état touche toute partie qui
+    // en porte une. Sa table est PLEINE, et sa plénitude est la mesure — une
+    // graine absente voudrait dire que le maillon 40 → 41 n'a pas posé le champ.
+    if (obtenue !== (EMPREINTES_PAR_GRAINE_ARTILLERIE_RECHERCHE[g]
+      ?? EMPREINTES_PAR_GRAINE_RESERVE_RASAGE[g]
       ?? EMPREINTES_PAR_GRAINE_ECRASEMENT[g]
       ?? EMPREINTES_PAR_GRAINE_SILHOUETTES[g]
       ?? EMPREINTES_PAR_GRAINE_RECHERCHE_DEFENSE[g]
@@ -897,7 +914,13 @@ test('BASES-0 T1 — les scalaires en clair, gestes et raids compris', () => {
         + OCTETS_AJOUTES_PAR_REGLES_DE_CARTE
         // ⚠ LE HUITIÈME TERME EST ENTRÉ AU LOT MODE-DEV, 19/09 : `modeDeveloppeur`
         // à la RACINE, `false`, 24 octets fixes sur les vingt-cinq graines.
-        + OCTETS_AJOUTES_PAR_MODE_DEV,
+        + OCTETS_AJOUTES_PAR_MODE_DEV
+        // ⚠ LE NEUVIÈME TERME EST ENTRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09 : un
+        // champ de plus DANS `recherche`, `soutiens`, et lui aussi d'un nombre
+        // FIXE — 14 octets sur les vingt-cinq graines, soit `,"soutiens":[]` au
+        // caractère près. Un écart qui dépendrait de la partie dirait qu'un
+        // CONTENU a bougé, et pas seulement la forme.
+        + OCTETS_AJOUTES_PAR_ARTILLERIE_RECHERCHE,
       `graine ${g} : taille de la sauvegarde`,
     );
     assert.equal(x.nbCasesAtteignables, attendu.nbCasesAtteignables, `graine ${g} : cases atteignables`);

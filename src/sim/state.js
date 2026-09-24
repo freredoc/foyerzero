@@ -81,7 +81,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 40;
+export const SAVE_VERSION = 41;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -3591,6 +3591,45 @@ const MIGRATIONS = {
    */
   39: (s) => {
     s.version = 40;
+  },
+
+  /**
+   * v40 → v41 : les trois soutiens d'artillerie — lot ARTILLERIE-RECHERCHE,
+   * 23/09/2026.
+   *
+   * ⚠⚠ CE MAILLON N'EST PAS VIDE, ET C'EST TOUT SON OBJET. `creerAcquises` pose
+   * désormais `recherche.soutiens: []`, et `exigerEtat` de `sim/recherche.js`
+   * EXIGE ce champ au même titre qu'`acquises`, `modules` et `basesAutorisees`.
+   * Sans ce maillon, une partie en cours — toutes les parties en cours — lèverait
+   * « champ `recherche.soutiens` absent — sauvegarde non migrée ? » à la première
+   * ouverture de l'écran Recherche, c'est-à-dire chez le joueur et pas chez nous.
+   *
+   * ⚠⚠ IL POSE UNE LISTE VIDE, ET IL N'ACCORDE RIEN. Une v40 n'avait aucun moyen
+   * d'acheter un soutien : les trois nœuds portaient `cout: null` et n'avaient ni
+   * prix, ni moteur, ni bouton. Lui en créditer un ouvrirait un bâtiment que le
+   * joueur n'a pas payé ; la liste vide dit la vérité de ce qu'il a fait.
+   *
+   * ⚠⚠ ET IL EST IDEMPOTENT — LE `!Array.isArray` EST LA GARDE, PAS UNE
+   * PRÉCAUTION. Rejoué sur une sauvegarde qui porte déjà ses soutiens, il ne
+   * touche à rien : le remettre à `[]` sans condition effacerait trois achats
+   * payés plusieurs millions de points, en silence. C'est la discipline du
+   * maillon 23 → 24 et du 37 → 38, qui n'écrasent pas non plus une valeur
+   * présente. `SOUT T1` de `test/artillerie-recherche.test.js` mesure les deux
+   * moitiés — la liste posée sur une v40 réelle, et la liste existante rendue
+   * INTACTE, ordre compris.
+   *
+   * ⚠ IL NE TOUCHE À RIEN D'AUTRE, ET `SOUT T1` L'EXIGE PAR `deepStrictEqual`
+   * SUR TOUT LE RESTE. Une `recherche` absente ou malformée n'est pas réparée
+   * ici : c'est `verifierEtat` qui refuse une sauvegarde incohérente, et un
+   * maillon qui fabriquerait une recherche entière rendrait jouable un état que
+   * le chargement doit rejeter.
+   *
+   * @param {object} s
+   */
+  40: (s) => {
+    s.version = 41;
+    if (s.recherche === null || typeof s.recherche !== 'object') return;
+    if (!Array.isArray(s.recherche.soutiens)) s.recherche.soutiens = [];
   },
 };
 

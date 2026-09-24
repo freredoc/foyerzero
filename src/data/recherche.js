@@ -83,12 +83,34 @@ export const BRANCHES = ['offense', 'defense'];
 /**
  * L'onglet SPÉCIAL.
  *
- * ⚠⚠ LA PREMIÈRE LIGNE S'ACHÈTE DEPUIS BASES-1, ET ELLE SE RACHÈTE. Les TROIS
- * SOUTIENS, eux, n'ont toujours ni moteur ni prix : le classeur leur donne un
- * NIVEAU d'apparition (« vers niv 25 / 30 / 35 »), qui ne veut plus rien dire
- * depuis que la recherche seule ouvre les pièces. `cout: null` dit donc « le
- * classeur n'a pas retenu de prix », et l'écran n'affiche aucun nombre plutôt
- * qu'un zéro qui se lirait « gratuit ».
+ * ⚠⚠ LES QUATRE LIGNES S'ACHÈTENT DEPUIS LE LOT ARTILLERIE-RECHERCHE, ET LA
+ * PREMIÈRE SEULE SE RACHÈTE. Les trois soutiens ont porté `cout: null` du lot
+ * RECHERCHE au 23/09 : le classeur ne leur donnait qu'un NIVEAU d'apparition
+ * (« vers niv 25 / 30 / 35 »), qui ne veut plus rien dire depuis que la
+ * recherche seule ouvre les pièces. Ils portent trois prix arbitrés par Ethan,
+ * et chacun OUVRE un bâtiment d'artillerie — voir `ouvre` ci-dessous.
+ *
+ * ⚠⚠ LES TROIS PRIX SONT L'ÉCHELLE DU DÉPÔT, PAS CELLE DU DOCUMENT, ET LE
+ * FACTEUR EST MESURÉ. `ARBRE-RECHERCHE.md` §3.5 propose 40 000 / 90 000 /
+ * 200 000 ⟨proposé⟩ ; ses nombres sont sur l'ANCIENNE échelle de points, celle
+ * d'avant le lot ÉCHELLE-RECHERCHE. Mesuré sur les TREIZE lignes de défense que
+ * le document et `ARBRE_RECHERCHE` nomment toutes deux, le rapport
+ * code / document va de **×29,1 à ×337,5, médiane ×37,9** — et les trois prix
+ * retenus tombent à **×37,5 · ×38,9 · ×37,5**, c'est-à-dire sur cette médiane.
+ *
+ * ⚠ LA FOURCHETTE S'OUVRE PAR LE BAS, ET IL FAUT LE SAVOIR AVANT DE LA CITER.
+ * Les trois lignes les moins chères du document — Chasseur 400, Grenadiers 900,
+ * Herse 2 100 — rendent ×337,5, ×188,9 et ×95,2 : le plancher du dépôt est à
+ * 135 000 là où le document part de 400. Sur les NEUF lignes au-dessus de
+ * 11 000 points, le rapport se resserre à **×29,1..×45,9, médiane ×35,3**.
+ * C'est cette moitié-là qui porte l'analogie ; l'autre dit que l'échelle du
+ * document n'est pas affine.
+ *
+ * ⚠⚠ ET LE DOCUMENT NE FAIT PAS AUTORITÉ SUR UN PRIX DE CETTE TABLE — SA
+ * PREMIÈRE LIGNE LE PROUVE. Le même §3.5 écrit « Deuxième base 500 000 » quand
+ * `baseSupplementaire` porte **2 000 000** depuis l'arbitrage du 02/09. Un prix
+ * de `SPECIAL` se lit ici, jamais là-bas : le document est de la matière
+ * première, le dépôt est la décision.
  *
  * ⚠⚠ `deuxiemeBase` A ÉTÉ RENOMMÉ `baseSupplementaire`, ET CE N'EST PAS DE LA
  * COSMÉTIQUE. La chaîne est OUVERTE — rang 2, rang 3, rang 4… — donc
@@ -119,9 +141,31 @@ export const SPECIAL = {
     facteurNumerateur: 5,
     facteurDenominateur: 2,
   },
-  soutienAntiVehicule: { cout: null, libelle: 'Soutien anti-véhicule' },
-  soutienAntiAerien: { cout: null, libelle: 'Soutien anti-aérien' },
-  soutienAntiInfanterie: { cout: null, libelle: 'Soutien anti-infanterie' },
+  // ⚠⚠ `ouvre` PORTE L'IDENTIFIANT DU BÂTIMENT, ET IL EST SUR LE NŒUD. Une
+  // seconde table `soutien → bâtiment` serait la seconde vérité que §4 interdit,
+  // et elle mentirait au premier renommage. La lecture inverse — « quel soutien
+  // ouvre ce bâtiment » — est une BOUCLE sur cette table, jamais un index :
+  // trois entrées, et un index serait la même seconde vérité rangée autrement.
+  //
+  // ⚠ `baseSupplementaire` N'EN A PAS, ET CE N'EST PAS UN OUBLI : il n'ouvre
+  // aucun bâtiment, il ouvre un RANG. Lui donner un `ouvre: null` inviterait à
+  // le traiter comme les trois autres ; l'absence de la clé dit qu'il n'est pas
+  // de la même espèce, et un test l'exige.
+  soutienAntiVehicule: {
+    cout: 7500000,
+    libelle: 'Soutien anti-véhicule',
+    ouvre: 'artillerieAntiVehicule',
+  },
+  soutienAntiAerien: {
+    cout: 3500000,
+    libelle: 'Soutien anti-aérien',
+    ouvre: 'artillerieAntiAerien',
+  },
+  soutienAntiInfanterie: {
+    cout: 1500000,
+    libelle: 'Soutien anti-infanterie',
+    ouvre: 'artillerieAntiInfanterie',
+  },
 };
 
 /** L'identifiant du nœud répétable — nommé une fois, jamais retapé. */
