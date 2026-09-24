@@ -412,7 +412,9 @@ test('VERROU T6 — la finale se compose et se combat au niveau 60', () => {
 test('VERROU T7 — la v39 retire les ruines tombées sous les sept emprises', () => {
   // ⚠ LE NUMÉRO EST CELUI DU LOT GRILLE LONGUE (40) DEPUIS LE 20/09/2026 ; ce que
   // ce test garde est que SON maillon, 38 → 39, est encore dans la chaîne.
-  assert.equal(SAVE_VERSION, 40, 'SAVE_VERSION n\'est plus celle du lot GRILLE LONGUE');
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41. Ce que ce test
+  // garde est que SON maillon, 38 → 39, est encore dans la chaîne — pas le nombre.
+  assert.equal(SAVE_VERSION, 41, 'SAVE_VERSION n\'est plus celle du lot ARTILLERIE-RECHERCHE');
 
   // ⚠⚠ CE QUE CE MAILLON ÉVITE EST UNE PANNE MUETTE. `siteDeLaCase` interroge
   // `casesRasees` AVANT de rendre une grosse base : une case rasée sous une
@@ -677,7 +679,8 @@ test('LONGUE T2 — la grille longue voyage jusqu\'au rejeu, et le maillon la la
   const v39 = JSON.parse(serialiser(ancien, 1_700_000_000_000));
   v39.version = 39;
   const migre = migrer(v39);
-  assert.equal(migre.version, 40);
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE : la chaîne ne s'arrête plus à 40.
+  assert.equal(migre.version, 41);
   assert.deepEqual(migre.rapports, JSON.parse(serialiser(ancien, 1_700_000_000_000)).rapports,
     'le maillon 39 → 40 a réécrit les rapports');
   assert.equal(JSON.stringify(migre.rapports[0].rejeu), JSON.stringify(rapportAncien.rejeu),

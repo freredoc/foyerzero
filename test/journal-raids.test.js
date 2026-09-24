@@ -523,7 +523,10 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
-  assert.equal(SAVE_VERSION, 40);
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
+  // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
+  // première ouverture de l'écran Recherche.
+  assert.equal(SAVE_VERSION, 41);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

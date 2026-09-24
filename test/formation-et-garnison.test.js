@@ -1009,7 +1009,10 @@ test('FR T3 — la chaîne de migration se rejoue en entier, et le maillon 31 �
   // ont été publiés hors du dépôt jusqu'à la v35, et `PolitiqueVersion` refuse
   // un numéro inférieur OU ÉGAL.
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39 ; AU LOT GRILLE LONGUE : 39 → 40.
-  assert.equal(SAVE_VERSION, 40, 'SAVE_VERSION a bougé sans que ce test suive');
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
+  // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
+  // première ouverture de l'écran Recherche.
+  assert.equal(SAVE_VERSION, 41, 'SAVE_VERSION a bougé sans que ce test suive');
   // ⚠⚠ LE MAILLON 31 → 32 A JOUÉ, ET IL N'A RIEN INVENTÉ. Une v0 ne sait ni
   // quelle cible le joueur regardait, ni comment il avait rangé ses unités : la
   // formation vivait dans la fermeture de l'écran et ne se sérialisait pas.

@@ -5647,3 +5647,96 @@ export const EMPREINTES_PAR_GRAINE_RESERVE_RASAGE = {
   17: "6b370f7c6331335c",
   22: "d663d07f4f0328f5",
 };
+
+// ---------------------------------------------------------------------------
+// Lot ARTILLERIE-RECHERCHE — 23/09 : les trois soutiens d'artillerie prennent
+// leur porte, et `recherche` gagne un quatrième champ
+// ---------------------------------------------------------------------------
+//
+// ⚠⚠ TRENTE-TROISIÈME COUCHE, ET LA DOCTRINE NE CHANGE PAS : **on EMPILE, on ne
+// recapture pas.** Le `??` de `bases.test.js` lit de la plus RÉCENTE à la plus
+// ancienne, donc celle-ci l'emporte là où elle nomme un champ, et se tait
+// partout ailleurs.
+//
+// ⚠⚠ ET ELLE A LA FORME INVERSE DES TROIS PRÉCÉDENTES : **UN SEUL champ, sur
+// les QUATORZE phases**, là où ÉCRASEMENT en déplaçait cinq sur deux phases et
+// RÉSERVE-RASAGE trois sur deux. Ce lot ne change AUCUN comportement — il change
+// la FORME de l'état : `creerAcquises` pose `recherche.soutiens: []`, donc tout
+// ce qui hache `recherche` bouge, et rien d'autre. **Les vingt-deux autres
+// champs ne bougent sur AUCUNE phase**, et c'est cette absence-là qui attribue :
+// ni le combat, ni le butin, ni la pose, ni un stock, ni un satellite.
+//
+// ⚠⚠ LA MESURE QUI LE PROUVE N'EST PAS LE COMPTE, C'EST LE REGROUPEMENT.
+// `recherche` prenait CINQ valeurs distinctes sur les quatorze phases ; il en
+// prend cinq autres, **groupées EXACTEMENT de la même façon** — p01 à p06, puis
+// p07 à p10, puis p11-p12, puis p13, puis p14, avant comme après. Rien de ce
+// qui fait changer la recherche d'une phase à l'autre n'a bougé d'un tick : ce
+// sont les mêmes instants, sous une autre écriture.
+//
+// ⚠ LA LISTE NAÎT VIDE, ET ELLE LE RESTE SUR LES QUATORZE PHASES. Le scénario du
+// témoin n'ouvre jamais l'écran Recherche et n'achète rien ; `gratuitesDe` ne
+// connaît que `ARBRE_RECHERCHE`, où aucun soutien n'est. Ce que ces quatorze
+// empreintes mesurent est donc le CHAMP, pas son contenu — et c'est exactement
+// ce qu'on leur demande.
+export const DEPLACES_PAR_ARTILLERIE_RECHERCHE = {
+  p01_batir: { recherche: "511b4f536de191f6" },
+  p02_6h: { recherche: "511b4f536de191f6" },
+  p03_batiComplet: { recherche: "511b4f536de191f6" },
+  p04_arme: { recherche: "511b4f536de191f6" },
+  p05_18h: { recherche: "511b4f536de191f6" },
+  p06_relu: { recherche: "511b4f536de191f6" },
+  p07_raidProcheApres: { recherche: "9f9b16f41f8a1cbe" },
+  p08_100ticks: { recherche: "9f9b16f41f8a1cbe" },
+  p09_deplace: { recherche: "9f9b16f41f8a1cbe" },
+  p10_montee: { recherche: "9f9b16f41f8a1cbe" },
+  p11_raidOuvrageApres: { recherche: "ca8a6df888c91bc2" },
+  p12_veilleDuRaid: { recherche: "ca8a6df888c91bc2" },
+  p13_apresLeRaid: { recherche: "1cc06d59d08d2547" },
+  p14_sousLeFeu: { recherche: "ee057b73d8819b34" },
+};
+
+// ⚠⚠ VINGT-CINQ GRAINES SUR VINGT-CINQ, ET C'EST LE CONTRAIRE DE LA COUCHE
+// D'AVANT. RÉSERVE-RASAGE n'en déplaçait que quatre — il changeait une RÈGLE,
+// donc il ne mordait que là où elle s'applique. Un changement de FORME de l'état
+// touche toute partie qui en porte une, donc les vingt-cinq : la table est
+// PLEINE, et sa plénitude est la mesure. Une table creuse ici voudrait dire
+// qu'une sauvegarde sur deux ne porte pas le champ, c'est-à-dire que le maillon
+// 40 → 41 ne l'a pas posé.
+export const EMPREINTES_PAR_GRAINE_ARTILLERIE_RECHERCHE = {
+  1: "fff0236d2080e63a",
+  2: "9a68318a68cc97bd",
+  3: "232d1992daff0c13",
+  4: "c80248df1ab8f79b",
+  5: "957f012b6f1eb75f",
+  6: "0cba87aff267de77",
+  7: "3111605abced4985",
+  8: "22e47360f774c2cb",
+  9: "797972fe84680b72",
+  10: "80b9b96f47509ea1",
+  11: "c8c2aa3423ae5b8b",
+  12: "76de2170ce950351",
+  13: "d9574dbfd172a7bf",
+  14: "55e7631ea94c19d2",
+  15: "b5bb38421a3b45ab",
+  16: "b1286b0fa14b4cb1",
+  17: "9a38a73887ff0b0b",
+  18: "9bded52854d76068",
+  19: "585baacfe3a7fddd",
+  20: "367501cc7748f3f7",
+  21: "014666475b8701bc",
+  22: "034b1533ad7bdb99",
+  23: "2e5e6b3c50e9af2f",
+  24: "d7d1bc3fd381fc24",
+  25: "0cedc591d0f6ebc0",
+};
+
+// ⚠⚠ QUATORZE OCTETS, FIXES SUR LES VINGT-CINQ GRAINES, ET C'EST `,"soutiens":[]`
+// AU CARACTÈRE PRÈS. `serialiserEtat` trie les clés PROPRES, donc `soutiens`
+// vient après `pointsMilli` dans `recherche` et la chaîne s'écrit d'un bloc.
+// Mesuré graine par graine — 3 148 → 3 162 sur les neuf premières, 3 150 → 3 164
+// sur les seize autres — et l'écart vaut **14 des deux côtés** : **si l'écart
+// dépendait de la partie, c'est qu'un CONTENU aurait bougé**, et pas seulement
+// la forme. C'est le neuvième terme de la somme de `bases.test.js`, et il
+// S'AJOUTE aux huit précédents au lieu de les remplacer — chacun dit ce que son
+// lot a coûté, et la somme reste lisible ligne par ligne.
+export const OCTETS_AJOUTES_PAR_ARTILLERIE_RECHERCHE = 14;

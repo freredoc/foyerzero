@@ -7,7 +7,158 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **22/09/2026**, version 0.99.75 · build 187.
+Dernière révision : **23/09/2026**, version 0.99.76 · build 188.
+⚠⚠ **LES TROIS SOUTIENS D'ARTILLERIE PRENNENT LEUR PORTE, ET LE LOT NE FAIT QUE
+ÇA.** Lot ARTILLERIE-RECHERCHE. `soutienAntiInfanterie`, `soutienAntiAerien` et
+`soutienAntiVehicule` portaient `cout: null` depuis le lot RECHERCHE — ni prix,
+ni moteur, ni bouton — et les trois artilleries que le lot ARTILLERIE venait de
+brancher étaient donc posables sans rien payer. Elles s'achètent, chacune ouvre
+UN bâtiment, et tant qu'elle n'est pas achetée la vignette reste **grisée**.
+**L'EFFET ne bouge pas d'un millième** : `RETRAIT_ARTILLERIE`, les trois
+`rayonCases`, le plancher du malus, la portée euclidienne et les deux tests
+`ART T1`/`ART T2` sont intacts — vérifié au diff.
+⚠⚠ **TROIS PRIX ARBITRÉS PAR ETHAN — 1 500 000 · 3 500 000 · 7 500 000 POINTS —
+ET LE FACTEUR D'ÉCHELLE DU BRIEF EST FAUX SUR SES DEUX NOMBRES.** Il annonce un
+rapport document → dépôt mesuré « sur les douze lignes de défense communes aux
+deux », « de ×29 à ×46, médiane ×38 ». Mesuré : elles sont **TREIZE**, et
+l'étendue va de **×29,1 à ×337,5**, médiane **×37,9**. La fourchette ne tient
+que sur les **neuf** lignes au-dessus de 11 000 points de document ; en dessous,
+Chasseur **×337,5**, Grenadiers **×188,9**, Herse **×95,2** la font éclater.
+⚠ **LA CONCLUSION, ELLE, TIENT** : les trois prix arbitrés tombent à **×37,5 ·
+×38,9 · ×37,5** du barème d'`ARBRE-RECHERCHE.md` §3.5, donc au cœur de la
+médiane. **Ce sont les deux chiffres qui l'appuyaient qui sont faux, pas le
+résultat** — et c'est écrit dans `src/data/recherche.js`, à côté des prix, pour
+qu'un lot futur ne cite pas la fourchette du brief en croyant citer une mesure.
+⚠⚠ **`ouvre` VIT SUR LE NŒUD, ET LA LECTURE INVERSE EST UNE BOUCLE, JAMAIS UN
+INDEX.** `soutienQuiOuvre(idBatiment)` balaie `SPECIAL` : une seconde table
+`bâtiment → soutien` serait la seconde vérité que §4 interdit, et elle
+mentirait au premier bâtiment qui changerait de porte. ⚠ Et
+`baseSupplementaire` n'a **PAS** de champ `ouvre` — c'est un nœud de l'onglet
+Spécial qui n'ouvre aucun bâtiment, et lui en poser un à vide inviterait à le
+lire. `problemesDeLAchatDUnSoutien` et `acheterUnSoutien` sont les jumeaux de
+`problemesDeLAchat`/`acheter`, prix en `BigInt` comme partout.
+⚠⚠ **`SAVE_VERSION` PASSE DE 40 À 41, ET C'EST LA SEULE CHOSE DU LOT QU'ON NE
+RATTRAPE PAS APRÈS COUP.** `recherche` gagne un quatrième champ, `soutiens`, et
+le maillon 40 → 41 ne fait que ça : il pose **`[]`** si le champ manque ou n'est
+pas un tableau, et **laisse une liste existante intacte, ordre compris**. Le
+garde-fou est `!Array.isArray`, pas `=== undefined` : un `soutiens: null` hérité
+d'un état malformé passerait le second et ferait lever `.includes` au fond d'une
+palette. ⚠ **Il est IDEMPOTENT par construction** — tourné deux fois sur les
+trois formes qu'une v40 peut prendre (`recherche` absent, `soutiens` non
+tableau, `soutiens` peuplé), il rend le même objet.
+⚠ **ET IL SORT AVANT D'ÉCRIRE SI `recherche` N'EST PAS UN OBJET**, plutôt que de
+le fabriquer : une v40 sans `recherche` est une sauvegarde malformée, et c'est
+`exigerEtat` qui doit la refuser en la NOMMANT, pas le maillon qui doit la
+réparer en silence.
+⚠⚠ **`exigerEtat` EXIGE `soutiens` COMME LES TROIS AUTRES**, et c'est la
+troisième falsification déclarée du brief : un maillon qui ne ferait
+qu'`s.version = 41` laisserait une v40 traverser `migrer` et lever à la première
+lecture de la recherche. Le message nomme la migration — « sauvegarde non
+migrée ? » — au lieu de laisser `undefined.includes` lever dans une palette.
+⚠ **LA SAUVEGARDE GRANDIT DE 14 OCTETS EXACTEMENT, SUR LES 25 GRAINES.**
+`serialiserEtat` trie les clés PROPRES, donc `soutiens` tombe en dernier dans
+`recherche` et le texte ajouté est `,"soutiens":[]` — quatorze caractères, le
+même nombre partout. `OCTETS_AJOUTES_PAR_ARTILLERIE_RECHERCHE = 14`
+**S'AJOUTE** aux termes précédents de `test/temoins-bases-0.js`, il ne les
+remplace pas.
+⚠⚠ **LE TÉMOIN DE BASES-0 PREND SA TRENTE-TROISIÈME COUCHE, ET ELLE A LA FORME
+INVERSE DES TROIS PRÉCÉDENTES : UN SEUL CHAMP, SUR LES QUATORZE PHASES.**
+`recherche` bouge partout, **les vingt-deux autres champs ne bougent sur AUCUNE
+phase**, et c'est cette absence qui attribue : ni le combat, ni le butin, ni la
+pose, ni un stock, ni un satellite. ⚠ **Et la mesure qui le prouve n'est pas le
+compte, c'est le REGROUPEMENT** — `recherche` prenait CINQ valeurs distinctes sur
+les quatorze phases, il en prend cinq autres **groupées exactement pareil**
+(p01–p06, p07–p10, p11–p12, p13, p14). Les mêmes instants, sous une autre
+écriture.
+⚠ **LA LISTE NAÎT VIDE ET LE RESTE SUR LES QUATORZE PHASES** : le scénario
+n'ouvre jamais l'écran Recherche, et `gratuitesDe` ne connaît que
+`ARBRE_RECHERCHE`, où aucun soutien n'est. Ces quatorze empreintes mesurent donc
+le CHAMP, pas son contenu — et c'est ce qu'on leur demande.
+⚠⚠ **LA PORTE EST DANS LA PALETTE, PAS DANS `problemesDeDisposition` — ET CE
+N'EST PAS UN CONFORT.** Précédent exact : `posablesDeLaDefense`. Conséquence
+mesurée et voulue : **une artillerie posée AVANT ce lot y reste**, `verifierEtat`
+ne lève pas, et **aucun troisième code n'entre dans
+`CODES_TOLERES_AU_CHARGEMENT`** — la règle naît après des sauvegardes qui peuvent
+la violer, exactement comme `artillerie-unique` au lot précédent, et on ne la
+tolère pas au chargement : on ne l'y met jamais.
+⚠⚠ **DEUX MOTIFS DE GRISAGE SE CROISENT, ET L'ARTILLERIE EN PLACE PRIME — ÉCART
+DÉCLARÉ.** Une base qui porte déjà un Canon ionique et n'a pas acheté
+l'anti-aérien grise la vignette anti-aérienne pour **deux** raisons ; c'est celle
+de l'artillerie en place qui s'affiche. Le motif : elle est la plus proche du
+geste — le joueur voit ce qu'il a posé —, et elle vaudra encore quand le soutien
+sera acheté. **Une ligne inverse l'ordre.**
+⚠⚠ **ET LE COMMENTAIRE DE `raisonDuGrisage` AFFIRMAIT QUE LES MOTIFS SONT
+DISJOINTS — C'ÉTAIT VRAI DE DEUX, C'EST FAUX DE TROIS.** Il écrivait « un
+bâtiment unique déjà posé et une artillerie en place ne peuvent pas se poser
+ensemble : ils sont disjoints ». Le troisième motif recoupe le second, mesuré
+ci-dessus. **Réécrit dans le même geste**, avec l'arbitrage et la raison pour
+laquelle la phrase d'hier était vraie — un commentaire juste hier et faux
+aujourd'hui est le mensonge que ce fichier punit ailleurs quatre fois.
+⚠ **`SANS_MOTEUR` DISPARAÎT DE `src/ui/recherche.js` AVEC SON DERNIER LECTEUR** :
+les quatre nœuds de l'onglet Spécial ont désormais un bouton, donc la constante
+qui disait « ce nœud n'en a pas » ne désigne plus rien. **`BASES-2 T1` est
+RETOURNÉ** — il exigeait EXACTEMENT un bouton sur les quatre lignes, il en exige
+**quatre**, et il NOMME celle qui doit porter lequel : sans ça, un lot qui en
+retirerait trois repasserait au vert.
+⚠⚠ **ET `ERGO T15` NE PEUT PAS SE RACONTER — TROUVÉ, NON CORRIGÉ.** C'est la
+seule garde d'orphelin du dépôt qui balaie **les quatre dossiers de `src/`** et
+qui lit la source **BRUTE** ; ses trois sœurs lisent la source décommentée et ne
+portent que sur un fichier. Conséquence : **aucun fichier de `src/` ne peut
+nommer `COULEUR_OBSTACLE` pour dire qu'elle est partie**, et c'est ce qui a fait
+rougir ce lot-ci au premier jet — la prose a été reformulée, la garde n'a pas
+bougé. **Neuvième fois du dépôt qu'une garde lit ce qu'on écrit à son sujet**, et
+la première où c'est la garde qui a raison de ne pas plier. **Ethan tranche** s'il
+veut qu'elle décommente comme les trois autres.
+⚠ **DEUX TESTS ENTRENT — `SOUT T1` ET `SOUT T2`, dans `test/artillerie-recherche.test.js`
+— ET `test/` PASSE DE 80 À 81 FICHIERS.** `SOUT T1` monte une sauvegarde v40
+**RÉELLE** — sérialisée depuis un état complet, `rapports` et `bases` compris —
+et compare la sauvegarde migrée à l'originale par `deepStrictEqual`, privée de
+`version` et de `recherche.soutiens` : **tout le reste est identique au
+caractère**. `SOUT T2` monte un état à **exactement 7 500 000 points**, mode
+développeur ÉTEINT, achète le seul soutien payable, et exige que les **dix**
+autres vignettes soient identiques au caractère et le solde tombé à **zéro**.
+⚠ **PAS DE TROISIÈME TEST** — le brief l'interdit nommément.
+⚠ **SEPT RÉANCRAGES, AUCUN ASSOUPLI** — `PIC T7` (10 605 304 → **10 606 810**,
+marge 214 696 → **213 190**, 1,98 % → **1,97 %**, avec son `notEqual` sur
+l'ancienne marge), `BASES-2 T1` (un bouton → **quatre**, retourné), **deux**
+blocs de `test/chantier.test.js` sur « une base neuve n'a aucune vignette
+grisée », `MODE-DEV T1` (**huit péages → neuf**, voir ci-dessous), et les
+**huit** épingles de `SAVE_VERSION` réparties sur sept fichiers.
+⚠⚠ **LE LOT AJOUTE UN NEUVIÈME PÉAGE AU MODE DÉVELOPPEUR, ET `MODE-DEV T1` N'A
+PAS ROUGI TOUT SEUL.** `acheterUnSoutien` lève le péage comme `acheter` le fait
+depuis le lot MODE-DEV — même geste, même franchise, mêmes deux moitiés.
+**Mesuré : ce test ÉNUMÈRE les péages, il ne les COMPTE pas**, donc un péage neuf
+y entre en silence dans les deux sens — branché sur la franchise, il passe sans
+être gardé ; non branché, il passe aussi. Son en-tête disait « elle s'applique
+aux **HUIT** péages du dépôt » : une phrase juste hier et fausse aujourd'hui,
+le mensonge que ce fichier punit ailleurs quatre fois. L'énumération est
+étendue — un **resserrement**, jamais un troisième test, que le brief interdit
+nommément — et elle porte désormais **« tout lot qui ajoute un péage ajoute sa
+ligne ici »**.
+⚠ **ET LA MOITIÉ ALLUMÉE VÉRIFIE QUE L'ACHAT GRATUIT A BIEN OUVERT.** La franchise
+saute le **DÉBIT**, jamais l'effet du geste : sans `soutienEstAcquis` après
+l'appel, l'assertion sur `pointsMilli` passerait sur un achat qui n'a pas eu
+lieu, et le péage neuf serait vert pour la mauvaise raison.
+⚠⚠ **ET LA PROPRIÉTÉ « AUCUNE VIGNETTE GRISÉE SUR UNE BASE NEUVE » ÉTAIT ÉCRITE
+DEUX FOIS DANS LE MÊME FICHIER, À QUATRE-VINGT-DIX LIGNES D'ÉCART, AVEC DEUX
+RAISONS DIFFÉRENTES.** Corriger la première a laissé la seconde rouge — `10 !==
+13` — et il a fallu la chercher. Les deux sont retournées, chacune avec son
+`notEqual`, et **leur compte se DÉRIVE de `ARTILLERIES.length`** : le jour où une
+quatrième artillerie entrera, les deux suivront ensemble ou tomberont ensemble.
+⚠ **LE RENDU N'A PAS ÉTÉ VU, ET SE DÉCLARE NON EXÉCUTÉ.** Ce que le lot change se
+VOIT — trois vignettes grisées qui se dégrisent à l'achat, et trois lignes de
+prix dans l'onglet Spécial — et **rien n'a été ouvert dans un navigateur** : tout
+est mesuré sur le faux document de `chantier.test.js` et sur des fonctions PURES.
+**À regarder au premier essai** : que les trois libellés de soutien tiennent sur
+la ligne du bouton, et que la phrase de grisage ne déborde pas de la vignette.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠ **ET LE LOT N'EST PAS SUR LA BRANCHE QUE LE BRIEF NOMME — ÉCART DÉCLARÉ.** Il
+demande `claude/artillerie-recherche` ; l'environnement d'exécution épingle la
+session à `claude/rayons-artillerie-arbitrage-8jyf8c` et interdit de pousser
+ailleurs sans autorisation explicite.
+
+**Auparavant, après le lot ARTILLERIE (22/09) :**
 ⚠⚠ **LES TROIS ARTILLERIES DU JOUEUR CESSENT D'ÊTRE DES IDENTIFIANTS SANS
 LECTEUR, ET ELLES NE TIRENT TOUJOURS PAS.** Lot ARTILLERIE. Elles sont dans
 `BASE_BATIMENTS` depuis BÂTIMENTS-JOUEUR-V2, avec leurs sprites et leurs quatre
@@ -664,7 +815,38 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 22/09/2026 (après le lot ARTILLERIE), à confronter :**
+**Référence au 23/09/2026 (après le lot ARTILLERIE-RECHERCHE), à confronter :**
+`npm test` rend **1668 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 667 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **deux**, `SOUT T1` et
+`SOUT T2` dans le nouveau `test/artillerie-recherche.test.js` — `test/` passe de
+80 à **81** fichiers, et aucun fichier n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **10 606 810 octets**, 0 référence externe.
+Coût **+1 506 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre
+le livrable rebâti dans un `git worktree` pristine de `main` = `40c83a3`, qui EST
+le merge du lot ARTILLERIE (**10 605 304**, retrouvé à l'octet) : **JavaScript
++1 506 · images +0 · audio +0 · feuille +0 · balisage +0**, et les cinq postes
+PARTITIONNENT le fichier des deux côtés — écart **0 · 0**. `data:` à **316
+lignes / 315 URI** de part et d'autre. Borne T10 **10 820 000, NON TOUCHÉE**,
+marge **213 190 octets, 1,97 %**, au-dessus du plancher de 150 000 ; `PIC T7`
+réancré **sur le POURCENTAGE** — les 1 506 octets valent un trente-troisième de
+sa tolérance de 50 000, donc il serait resté VERT en faisant mentir cette §0.
+**Troisième fois de suite que ce test est réancré par sa décimale plutôt que par
+sa tolérance.**
+⚠ **`SAVE_VERSION` PASSE DE 40 À 41**, et la sauvegarde grandit de **14 octets
+exactement, sur les 25 graines** — `,"soutiens":[]`. Le témoin de BASES-0 prend
+sa **trente-troisième** couche : un seul champ, `recherche`, sur les **quatorze**
+phases ; les vingt-deux autres ne bougent sur aucune.
+⚠ Le lot touche `src/data/recherche.js`, `src/sim/{recherche,state}.js`,
+`src/ui/{chantier,recherche}.js`, **douze** fichiers de `test/` — le témoin de
+BASES-0 compris —, `package.json`, ce fichier et
+`RAPPORT-lotARTILLERIE-RECHERCHE.md` ; il FAIT ENTRER
+`test/artillerie-recherche.test.js` et n'en sort aucun. **Pas une ligne de
+`src/render/`, `src/son/`, `src/sim/combat.js`, `src/data/` hors `recherche.js`,
+`tools/` ni `art/`** — vérifié au diff.
+
+**Auparavant, après le lot ARTILLERIE (22/09) :**
 `npm test` rend **1666 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 665 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
@@ -14580,7 +14762,7 @@ src/son/                la politique de voix, sans un octet de navigateur — 2 
     ⚠ Il a gagné une quatrième dépendance, `../data/sites.js`, pour les bâtiments
     de l'Ouvrage — et rien d'autre : que des tables, aucun moteur.
 
-test/                   80 fichiers *.test.js (node:test) ; NEUF n'en sont PAS
+test/                   81 fichiers *.test.js (node:test) ; NEUF n'en sont PAS
   arsenal  assaut  banc  base  carte  champs  chantier  cible  clock  combat
   defense
   disposition  disposition-ouvrage  documentation donnees  economie-base  generateur
@@ -14594,6 +14776,7 @@ test/                   80 fichiers *.test.js (node:test) ; NEUF n'en sont PAS
   voisinage  paquets  art-90  emprises-et-delai  mur  approche  vitesse
   bareme-et-rejeu  contact  predilection  frein  silhouettes  mode-dev
   ancres-zenith  ruines-defense  verrous  avaries-grosses-bases
+  artillerie-recherche
   ⤷ ⚠⚠ LE NEUVIÈME EST `portants.js`, ENTRÉ AU LOT ÉCRASEMENT (18/09, audit
     défaut n° 2 — le déblocage PAR PIÈCE), et cette ligne disait « HUIT »
     jusqu'au lot GRILLE-PORTÉE : il traduit les

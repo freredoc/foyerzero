@@ -40,6 +40,15 @@ import {
   // donc là où `sim/recherche.js` les écrit, et nulle part ailleurs.
   rangDeLaBaseSuivante, coutDeLaBaseSuivanteMilli,
   problemesDeLAchatDUneBase, acheterUneBaseDePlus,
+  // ⚠⚠ ET LES TROIS SOUTIENS PASSENT PAR LES LEURS, POUR LA MÊME RAISON — lot
+  // ARTILLERIE-RECHERCHE, 23/09. Ils ne sont pas dans `ARBRE_RECHERCHE` non
+  // plus : `problemesDeLAchat` les refuserait par le code `inconnue`, et leur
+  // ouvrir sa signature ferait avaler à trente et une lignes un cas qui ne les
+  // concerne pas. ⚠ Ils diffèrent du nœud de base sur UN point, et c'est celui
+  // qui commande l'écran : un soutien s'achète UNE fois, donc il peut être
+  // ACQUIS — d'où `soutienEstAcquis`, qui n'a pas d'équivalent au-dessus.
+  coutDuSoutienMilli, problemesDeLAchatDUnSoutien,
+  soutienEstAcquis, acheterUnSoutien,
 } from '../sim/recherche.js';
 // ⚠ IMPORTÉS, PAS RECOPIÉS. `poserCouches` porte l'inversion d'ordre entre le
 // canevas et `background-image` ; `nomDeLaPieceDeDefense` lit le nom joueur
@@ -374,19 +383,53 @@ export function etatDuCadre(achat) {
   return achat.achetable ? 'achetable' : 'bloque';
 }
 
-/** Ce que porte une ligne de l'onglet Spécial qui n'a pas encore de moteur. */
-export const SANS_MOTEUR = 'pas encore de moteur en jeu';
+// ⚠⚠ `SANS_MOTEUR` EST PARTI AVEC SON SUJET — lot ARTILLERIE-RECHERCHE, 23/09.
+// Il portait la phrase des lignes de l'onglet Spécial qui s'affichaient sans
+// pouvoir s'acheter ; les TROIS soutiens étaient les trois dernières, et elles
+// s'achètent depuis ce lot. La quatrième ligne, le nœud répétable, a son moteur
+// depuis BASES-2 : plus une seule ligne de cet onglet n'est dans ce cas, donc
+// plus un seul lecteur. Une constante que plus rien ne lit est un commentaire
+// menteur en puissance — c'est ce que `REPARATION_AILLEURS` et
+// `RETRAIT_FLECHE` ont coûté avant elle. La remettre demande d'abord un
+// cinquième nœud écrit avant son moteur, ce qu'`effetNonCable` refuse déjà
+// ailleurs pour les modules.
+//
+// ⚠⚠ ET LE PREMIER JET NOMMAIT UN TROISIÈME PRÉCÉDENT, QUI A FAIT TOMBER
+// `ERGO T15` — NEUVIÈME FOIS DU DÉPÔT QU'UNE GARDE LIT LA PROSE ÉCRITE À SON
+// SUJET. Celle de l'aplat d'obstacle balaie les QUATRE dossiers de `src/` sur
+// la source BRUTE, là où ses trois sœurs — `REPARATION_AILLEURS`,
+// `RETRAIT_FLECHE` et `estStructureDefensive` — lisent la source DÉCOMMENTÉE et
+// sont bornées à UN fichier. C'est donc le TEXTE qui cède ici, et le nom du
+// précédent est remplacé par deux qui disent la même chose ; **la garde n'est
+// pas touchée**, ce lot-ci n'ayant pas à la réparer. ⚠ Conséquence à
+// connaître : tant qu'elle lira le brut, AUCUN fichier de `src/` ne pourra
+// raconter le départ de cette constante-là, ce que l'idiome du dépôt demande
+// pourtant partout ailleurs — « chacune laisse à sa place le paragraphe qui dit
+// ce qu'elle valait et pourquoi elle est partie ».
 
 /**
  * Les quatre lignes de l'onglet Spécial.
  *
- * ⚠⚠ UNE SEULE DES QUATRE S'ACHÈTE, ET C'EST UN RENVERSEMENT — lot BASES-2,
- * 11/09. Ce commentaire disait « aucune ne s'achète […] la deuxième base
- * n'existe pas » : c'était vrai le 06/09 et faux depuis BASES-1, qui a écrit et
- * testé `acheterUneBaseDePlus` sans qu'aucun écran ne l'appelle. Le nœud
- * répétable porte donc désormais son rang, son prix et son bouton ; les TROIS
- * soutiens n'ont toujours ni moteur, ni prix retenu, ni bouton, et leur donner
- * l'un des trois prendrait les points du joueur contre rien.
+ * ⚠⚠ LES QUATRE S'ACHÈTENT DÉSORMAIS, ET C'EST LE SECOND RENVERSEMENT DE CE
+ * COMMENTAIRE — lot ARTILLERIE-RECHERCHE, 23/09. Il a d'abord dit « aucune ne
+ * s'achète » (vrai le 06/09, faux depuis BASES-1), puis « une seule des quatre
+ * s'achète […] les TROIS soutiens n'ont toujours ni moteur, ni prix retenu, ni
+ * bouton, et leur donner l'un des trois prendrait les points du joueur contre
+ * rien » — vrai le 11/09, faux depuis que `sim/recherche.js` porte les quatre
+ * fonctions de soutien et que `data/recherche.js` porte les trois prix.
+ *
+ * ⚠⚠ MAIS LES DEUX ESPÈCES DE NŒUD NE SE CONFONDENT PAS, ET L'ÉCRAN LE DIT PAR
+ * `acquis`. Le nœud répétable ne l'est JAMAIS — il se rachète, rang après rang,
+ * et son prix monte de cinq demis à chaque fois ; un soutien s'achète UNE fois
+ * et le reste. C'est la seule différence de forme entre les deux branches, et
+ * c'est elle que `etatDuCadre` lit pour peindre la troisième classe.
+ *
+ * ⚠ ET LE PRIX D'UN SOUTIEN VIENT DE `coutDuSoutienMilli`, jamais d'un
+ * `BigInt(SPECIAL[id].cout) * 1000n` recomposé ici. Il est fixe, donc les deux
+ * écritures rendent le même texte AUJOURD'HUI — ce qui est exactement ce qui
+ * les rend dangereuses à laisser côte à côte : la seconde survivrait muette au
+ * jour où un soutien deviendrait répétable, comme celle du nœud de base l'a
+ * failli. `sim/recherche.js` est la seule lecture de cette grandeur.
  *
  * ⚠⚠ LE RANG SE DEMANDE, IL NE SE RECOMPTE PAS SUR `etat.bases.length`.
  * `sim/recherche.js` le dit de face : il se compte sur ce qui est ACHETÉ, pas
@@ -407,21 +450,25 @@ export const SANS_MOTEUR = 'pas encore de moteur en jeu';
  *
  * @param {object} etat
  * @returns {{id: string, libelle: string, prix: string,
- *   achetable: boolean, raison: string}[]}
+ *   achetable: boolean, acquis: boolean, raison: string}[]}
  */
 export function lignesSpeciales(etat) {
   return Object.keys(SPECIAL).map((id) => {
     if (id !== NOEUD_BASE_SUPPLEMENTAIRE) {
+      const acquis = soutienEstAcquis(etat, id);
+      const problemes = problemesDeLAchatDUnSoutien(etat, id);
       return {
         id,
         libelle: SPECIAL[id].libelle,
-        // ⚠ LES TROIS SOUTIENS N'ONT PAS DE PRIX RETENU : un tiret, jamais un
-        // zéro qui se lirait « gratuit ». La branche qui formate un `cout` non
-        // nul reste écrite — elle dira le prix d'un cinquième nœud le jour où
-        // Ethan en arbitrera un, sans lui donner de bouton pour autant.
-        prix: SPECIAL[id].cout === null ? '—' : formaterPoints(BigInt(SPECIAL[id].cout) * 1000n),
-        achetable: false,
-        raison: SANS_MOTEUR,
+        prix: formaterPoints(coutDuSoutienMilli(id)),
+        achetable: problemes.length === 0,
+        acquis,
+        // ⚠ UN SOUTIEN ACQUIS NE DIT RIEN SOUS SON PRIX, ET C'EST L'IDIOME DE
+        // `lignePourLAchat` repris au mot : `dejaAcquise` est un ÉTAT que la
+        // ligne dit déjà par son cadre et par son libellé de bouton, et
+        // `raisonsAffichables` le tait de toute façon. Le `acquis ? '' :` reste
+        // écrit pour que la ligne ne dépende pas de ce filtre-là.
+        raison: acquis ? '' : raisonsAffichables(problemes).map((p) => p.message).join(' ; '),
       };
     }
     const problemes = problemesDeLAchatDUneBase(etat);
@@ -430,6 +477,12 @@ export function lignesSpeciales(etat) {
       libelle: `${SPECIAL[id].libelle} (rang ${rangDeLaBaseSuivante(etat)})`,
       prix: formaterPoints(coutDeLaBaseSuivanteMilli(etat)),
       achetable: problemes.length === 0,
+      // ⚠ LE NŒUD RÉPÉTABLE N'EST JAMAIS ACQUIS, ET LE CHAMP EST ÉCRIT QUAND
+      // MÊME : les quatre lignes ont la même forme, donc le DOM n'a pas à
+      // savoir laquelle il peint. L'omettre rendrait `undefined`, que
+      // `etatDuCadre` lirait comme `false` — juste par accident, et muet le
+      // jour où la table changerait.
+      acquis: false,
       raison: raisonsAffichables(problemes).map((p) => p.message).join(' ; '),
     };
   });
@@ -559,11 +612,14 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
   }
 
   /**
-   * Le bouton du nœud répétable — l'autre appelant, et le seul de l'onglet.
+   * Le bouton du nœud répétable — l'un des deux appelants de l'onglet.
    *
    * ⚠ SA CLÉ SE DÉRIVE DE L'IDENTIFIANT, elle ne se retape pas : `special/` plus
    * le nom du nœud. Deux boutons ne peuvent pas porter la même clé, sans quoi
    * armer l'un armerait l'autre.
+   *
+   * ⚠ ET IL NE PASSE PAS `acquis` : le nœud est RÉPÉTABLE, il n'est jamais
+   * acquis, et le défaut `false` de `boutonADeuxTouchers` dit exactement ça.
    */
   function boutonDeLaBase(ligne) {
     return boutonADeuxTouchers({
@@ -572,6 +628,33 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
       achetable: ligne.achetable,
       verifier: () => problemesDeLAchatDUneBase(etatCourant),
       agir: () => acheterUneBaseDePlus(etatCourant),
+    });
+  }
+
+  /**
+   * Le bouton d'un soutien — le second appelant de l'onglet, depuis le lot
+   * ARTILLERIE-RECHERCHE.
+   *
+   * ⚠⚠ IL EST CALQUÉ SUR SON VOISIN, ET IL EN DIFFÈRE SUR UN SEUL CHAMP :
+   * `acquis`. Un soutien s'achète une fois ; passé cet achat, le bouton porte
+   * « Acquis » et ne reçoit plus rien — `boutonADeuxTouchers` n'attache son
+   * écouteur que si `achetable`, et `problemesDeLAchatDUnSoutien` rend
+   * `dejaAcquise` pour toujours. C'est l'idiome de l'arbre, où trente et une
+   * lignes se comportent déjà ainsi.
+   *
+   * ⚠ ET `verifier` RELIT L'ÉTAT AU SECOND TOUCHER, il ne se fie pas à ce que
+   * `lignesSpeciales` a mesuré à la peinture : entre les deux touchers le
+   * joueur a pu acheter ailleurs, et les points sont une réserve commune aux
+   * deux branches et aux quatre nœuds.
+   */
+  function boutonDuSoutien(ligne) {
+    return boutonADeuxTouchers({
+      cle: `special/${ligne.id}`,
+      libelle: ligne.acquis ? 'Acquis' : ligne.prix,
+      acquis: ligne.acquis,
+      achetable: ligne.achetable,
+      verifier: () => problemesDeLAchatDUnSoutien(etatCourant, ligne.id),
+      agir: () => acheterUnSoutien(etatCourant, ligne.id),
     });
   }
 
@@ -676,11 +759,21 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
       // seconde fois les trois codes visuels du point 16, qui auraient divergé
       // au premier réglage de teinte.
       //
-      // ⚠ ET « ACQUIS » N'EXISTE PAS ICI : le nœud est RÉPÉTABLE, donc il n'est
-      // jamais acquis — il est achetable ou il ne l'est pas. Les trois soutiens
-      // tombent sur `bloque`, ce qu'ils sont de fait.
+      // ⚠⚠ ET « ACQUIS » EXISTE ICI DEPUIS LE LOT ARTILLERIE-RECHERCHE. Ce bloc
+      // écrivait `acquis: false` en dur, avec le motif : « le nœud est
+      // RÉPÉTABLE, donc il n'est jamais acquis — il est achetable ou il ne
+      // l'est pas. Les trois soutiens tombent sur `bloque`, ce qu'ils sont de
+      // fait. » Le motif reste vrai du nœud répétable, et il est FAUX des trois
+      // soutiens, qui s'achètent une fois : sans ce champ, un soutien payé sept
+      // millions et demi resterait peint comme un nœud hors de portée.
+      //
+      // ⚠ LA LIGNE PORTE DONC SON `acquis`, ET LE DOM NE LE RECALCULE PAS.
+      // `lignesSpeciales` sait laquelle des deux espèces elle décrit ; le lui
+      // redemander ici par un `id === NOEUD_BASE_SUPPLEMENTAIRE` ferait la
+      // seconde lecture de cette distinction, et c'est déjà la troisième fois
+      // qu'elle se pose dans ce fichier.
       bloc.classList.add(CLASSE_DE_L_ETAT[etatDuCadre({
-        acquis: false, achetable: ligne.achetable,
+        acquis: ligne.acquis, achetable: ligne.achetable,
       })]);
       const rangee = doc.createElement('div');
       rangee.className = 'rangee';
@@ -694,17 +787,22 @@ export function initialiserEcranRecherche(doc, { apresAchat } = {}) {
       // prix écrit deux fois dans la même rangée serait le premier à diverger,
       // et le joueur lirait le rang 2 à côté du prix du rang 3.
       //
-      // ⚠ UNE LIGNE SANS MOTEUR GARDE SON PRIX EN TEXTE, sans bouton : elle
-      // ANNONCE, elle ne propose pas.
+      // ⚠⚠ ET LES QUATRE LIGNES ONT UN BOUTON DEPUIS LE LOT ARTILLERIE-RECHERCHE.
+      // Ce bloc portait « une ligne SANS MOTEUR garde son prix en TEXTE, sans
+      // bouton : elle ANNONCE, elle ne propose pas » — vrai des trois soutiens
+      // tant qu'ils n'en avaient pas. Le `span.prix` n'a plus aucun écrivain ;
+      // sa règle CSS reste, elle sert les trente et une lignes de l'arbre.
+      //
+      // ⚠ DEUX APPELANTS, PAS UN GÉNÉRIQUE. Les deux espèces de nœud ne
+      // vérifient ni n'agissent par la même fonction du moteur — un `verifier`
+      // qui choisirait sur l'identifiant mettrait ce partage-là dans le DOM,
+      // où la prochaine correction ne le chercherait pas.
       rangee.append(pastille, nom);
-      if (ligne.id === NOEUD_BASE_SUPPLEMENTAIRE) {
-        rangee.appendChild(boutonDeLaBase(ligne));
-      } else {
-        const prix = doc.createElement('span');
-        prix.className = 'prix';
-        prix.textContent = ligne.prix;
-        rangee.appendChild(prix);
-      }
+      rangee.appendChild(
+        ligne.id === NOEUD_BASE_SUPPLEMENTAIRE
+          ? boutonDeLaBase(ligne)
+          : boutonDuSoutien(ligne),
+      );
       bloc.appendChild(rangee);
       // ⚠ PAS DE `div.raison` VIDE, comme dans `cadreDOM` : depuis que le manque
       // de points est écarté, la ligne du nœud n'a plus rien à dire, et peindre

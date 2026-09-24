@@ -2,10 +2,17 @@
 //
 // Deux tests, sur les deux verrous du lot, et pas un de plus.
 //
-// T1 porte sur la franchise : elle s'applique aux HUIT péages du dépôt, elle
+// T1 porte sur la franchise : elle s'applique aux NEUF péages du dépôt, elle
 // n'écrit RIEN dans l'état, et elle ne lève aucun verrou qui ne soit pas un
 // prix. Le montage vérifie les trois, dans les deux sens — chaque péage est
 // d'abord mesuré ACTIF, mode éteint, sur un état volontairement fauché.
+//
+// ⚠⚠ LE NEUVIÈME EST ENTRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09, ET CETTE LIGNE
+// DISAIT HUIT. Le dépôt en comptait huit le 19/09 ; `acheterUnSoutien` en fait
+// un de plus, au même geste que `acheter`. ⚠ CE TEST N'A PAS ROUGI TOUT SEUL :
+// il ÉNUMÈRE les péages, il ne les COMPTE pas — un péage neuf non branché sur
+// la franchise serait donc passé en silence, et un péage neuf branché laissait
+// cette phrase mentir. **Tout lot qui ajoute un péage ajoute sa ligne ici.**
 //
 // T2 porte sur le codec : aller-retour à l'octet par SHA-256, et refus nommés
 // sur tout ce qui n'est pas une sauvegarde.
@@ -23,6 +30,7 @@ import { baseCourante } from '../src/sim/base-courante.js';
 import { enModeDeveloppeur } from '../src/sim/mode-developpeur.js';
 import {
   problemesDeLAchat, acheter, problemesDeLAchatDUneBase, acheterUneBaseDePlus,
+  problemesDeLAchatDUnSoutien, acheterUnSoutien, soutienEstAcquis,
 } from '../src/sim/recherche.js';
 import { problemesDuRaid, executerRaid } from '../src/sim/raid.js';
 import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
@@ -88,10 +96,10 @@ function caseVoisine(etat) {
 }
 
 // ---------------------------------------------------------------------------
-// MODE-DEV T1 — la franchise porte sur les huit péages, et sur eux seuls
+// MODE-DEV T1 — la franchise porte sur les neuf péages, et sur eux seuls
 // ---------------------------------------------------------------------------
 
-test('MODE-DEV T1 — la franchise lève les huit péages, n\'écrit rien, et ne lève rien d\'autre', () => {
+test('MODE-DEV T1 — la franchise lève les neuf péages, n\'écrit rien, et ne lève rien d\'autre', () => {
   // ⚠⚠ LE MONTAGE SE MESURE AVANT D'ÊTRE CRU. Mode ÉTEINT, chaque péage doit
   // MORDRE : sans cette moitié, un test qui verrait tout passer en mode allumé
   // ne prouverait rien — il pourrait mesurer une partie riche, ou un refus qui
@@ -117,8 +125,12 @@ test('MODE-DEV T1 — la franchise lève les huit péages, n\'écrit rien, et ne
     'péage 7 (transfert) : la taxe ne mord pas sur vingt cases');
   assert.ok(codes(problemesDuDeplacement(fauche, caseVoisine(fauche))).includes('delai'),
     'péage 8 (délai) : le montage n\'est pas fraîchement déplacé');
+  // ⚠ LE NEUVIÈME PREND LE SOUTIEN LE MOINS CHER — 1 500 000 points : un montage
+  // qui ne paie déjà pas le Bélier ne le paie pas non plus, donc le péage mord.
+  assert.ok(codes(problemesDeLAchatDUnSoutien(fauche, 'soutienAntiInfanterie')).includes('pointsInsuffisants'),
+    'péage 9 (soutien d\'artillerie) : le montage n\'est pas fauché');
 
-  // ⚠ ET MAINTENANT LE MÊME MONTAGE, ALLUMÉ. Les huit tombent.
+  // ⚠ ET MAINTENANT LE MÊME MONTAGE, ALLUMÉ. Les neuf tombent.
   const dev = partieFauchee(true);
   const cibleDev = campProche(dev);
   const base = baseCourante(dev);
@@ -138,6 +150,8 @@ test('MODE-DEV T1 — la franchise lève les huit péages, n\'écrit rien, et ne
   assert.equal(apercuDuTransfert(dev, 0, 1, 1_000_000).recuMilli, 1_000_000,
     'péage 7 : le transfert est encore taxé');
   assert.equal(ticksAvantProchainDeplacement(dev), 0, 'péage 8 : le délai court encore');
+  assert.deepEqual(codes(problemesDeLAchatDUnSoutien(dev, 'soutienAntiInfanterie')), [],
+    'péage 9 : le soutien d\'artillerie se paie encore');
 
   // ⚠⚠ LE VRAI VERROU DU LOT : LES GESTES PASSENT, ET RIEN NE S'ÉCRIT. Un mode
   // qui CRÉDITERAIT des ressources passerait tous les `assert` ci-dessus et
@@ -157,6 +171,7 @@ test('MODE-DEV T1 — la franchise lève les huit péages, n\'écrit rien, et ne
   ameliorerEffectif(dev, 'armee', 0);
   acheter(dev, 'offense', 'belier', 'unite');
   acheterUneBaseDePlus(dev);
+  acheterUnSoutien(dev, 'soutienAntiInfanterie');
 
   assert.deepEqual(base.economie.ressources, ressourcesAvant,
     'un stock a bougé : la franchise crédite au lieu de lever le péage');
@@ -164,6 +179,12 @@ test('MODE-DEV T1 — la franchise lève les huit péages, n\'écrit rien, et ne
     'une réserve de temps a bougé');
   assert.equal(base.reserveReparationBatiments, 0, 'la réserve des bâtiments a bougé');
   assert.equal(dev.recherche.pointsMilli, pointsAvant, 'les points de recherche ont bougé');
+  // ⚠⚠ ET L'OUVERTURE, ELLE, A BIEN EU LIEU. La franchise saute le DÉBIT, jamais
+  // l'effet du geste : un mode qui ne donnerait rien ferait passer l'assertion
+  // ci-dessus sur un achat qui n'a pas eu lieu, et le péage 9 serait vert pour
+  // la mauvaise raison.
+  assert.equal(soutienEstAcquis(dev, 'soutienAntiInfanterie'), true,
+    'péage 9 : l\'achat gratuit n\'a rien ouvert');
   assert.equal(dev.attaque.points, attaqueAvant, 'les points d\'attaque ont bougé');
   assert.deepEqual({ ticks: paye.ticks, scorie: paye.scorie }, { ticks: 0, scorie: 0 },
     'la réparation annonce une facture qu\'elle n\'a pas prélevée');

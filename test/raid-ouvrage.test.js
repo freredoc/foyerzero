@@ -1309,7 +1309,10 @@ test('RCU T12 — `SAVE_VERSION` ne bouge pas : rien n\'est ajouté à l\'état'
   // ⚠ RÉANCRÉ AU LOT VERROUS, 20/09/2026 : 38 → 39. Ce que ce test garde est
   // que SON lot n'a rien ajouté à l'état, pas que le nombre ne bouge jamais.
   // ⚠ RÉANCRÉ AU LOT GRILLE LONGUE, 20/09/2026 : 39 → 40.
-  assert.equal(SAVE_VERSION, 40, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — GRILLE LONGUE, lui, y est passé (20/09)');
+  // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
+  // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
+  // première ouverture de l'écran Recherche.
+  assert.equal(SAVE_VERSION, 41, 'le lot RAID-CIBLE-UNIQUE ne bumpe pas SAVE_VERSION — ARTILLERIE-RECHERCHE, lui, y est passé (23/09)');
   const etat = partieAvecBases(7, [A_NORD, B_SUD]);
   const json = serialiser(etat, 1_700_000_000_000);
   assert.deepEqual(migrer(JSON.parse(json)), JSON.parse(json),

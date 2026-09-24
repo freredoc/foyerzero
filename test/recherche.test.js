@@ -27,6 +27,7 @@ import { executerRaid, pvMaxDeLUnite } from '../src/sim/raid.js';
 import { APRES_RAID } from '../src/data/sites.js';
 import { genererSite } from '../src/sim/generateur.js';
 import { rosterDefensif } from '../src/data/couts-militaires.js';
+import { ARTILLERIES } from '../src/data/base.js';
 import {
   creerAcquises, estAcquise, moduleEstAcquis, nomDuModule, coutMilli,
   problemesDeLAchat, problemesDeLAchatDUneBase, acheter, acquisesDe,
@@ -152,13 +153,44 @@ test('T3bis — la table des modules et les données se recouvrent, dans les deu
   assert.equal(MODULES.fumigene, undefined, '« fumigene » est revenu dans la table');
 });
 
-test('recherche — l\'onglet Spécial : une ligne qui s\'achète, trois sans mécanique', () => {
+test('recherche — l\'onglet Spécial : les quatre lignes s\'achètent, et trois ouvrent', () => {
   assert.equal(Object.keys(SPECIAL).length, 4, 'l\'onglet Spécial n\'a plus quatre lignes');
-  // ⚠ `cout: null` DIT « le classeur n'a pas retenu de prix », pas « gratuit ».
-  // Un zéro se lirait « à prendre », et l'écran l'afficherait comme tel.
+  // ⚠⚠ RETOURNÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026, ET NON ASSOUPLI.
+  // Ce test exigeait EXACTEMENT l'inverse : « `cout: null` dit "le classeur n'a
+  // pas retenu de prix", pas "gratuit" », et nommait les trois soutiens comme
+  // les trois lignes sans prix. C'est la propriété que le lot renverse — les
+  // trois prix sont arbitrés par Ethan — donc l'assertion est REMISE DANS
+  // L'AUTRE SENS plutôt que retirée : plus AUCUNE des quatre ne porte `null`, et
+  // un `cout: null` qui reviendrait ferait tomber ce test au lieu d'afficher un
+  // tiret que l'écran ne sait plus peindre.
   const sansPrix = Object.keys(SPECIAL).filter((k) => SPECIAL[k].cout === null);
-  assert.deepEqual(sansPrix.sort(),
-    ['soutienAntiAerien', 'soutienAntiInfanterie', 'soutienAntiVehicule']);
+  assert.deepEqual(sansPrix, [], `nœud sans prix retenu : ${sansPrix.join(' ')}`);
+  // ⚠ LES TROIS PRIX SONT ÉPINGLÉS EN CLAIR. Ils sont arbitrés, pas dérivés :
+  // aucune formule ne les rend, et un test qui se contenterait de « non nul »
+  // laisserait passer un facteur mille — sept milliards et demi au lieu de sept
+  // millions et demi, ce que le compteur du haut afficherait sans broncher.
+  assert.equal(SPECIAL.soutienAntiVehicule.cout, 7500000);
+  assert.equal(SPECIAL.soutienAntiAerien.cout, 3500000);
+  assert.equal(SPECIAL.soutienAntiInfanterie.cout, 1500000);
+  // ⚠⚠ ET `ouvre` SE CROISE AVEC `ARTILLERIES`, DANS LES DEUX SENS. C'est le
+  // motif de `F5a` / `F5b` du lot ARTILLERIE, qui gardaient déjà
+  // `SOUTIEN_DE_BASE` contre la même liste dérivée : ni une artillerie sans
+  // nœud qui l'ouvre — elle serait INPOSABLE pour toujours —, ni un nœud qui
+  // ouvrirait autre chose qu'une artillerie. Les deux ensembles doivent
+  // COÏNCIDER, pas se contenir.
+  const ouvertsParSoutien = Object.keys(SPECIAL)
+    .filter((k) => SPECIAL[k].ouvre !== undefined)
+    .map((k) => SPECIAL[k].ouvre)
+    .sort();
+  assert.deepEqual(ouvertsParSoutien, [...ARTILLERIES].sort(),
+    'les nœuds de soutien et les artilleries ne décrivent plus le même ensemble');
+  assert.equal(ouvertsParSoutien.length, 3, 'le lot ARTILLERIE en posait trois');
+  // ⚠ ET LE NŒUD RÉPÉTABLE N'A PAS DE CLÉ `ouvre`, ce qui est la moitié qui
+  // rend `soutienQuiOuvre` et `estUnSoutien` sûrs : ils balaient `SPECIAL` sur
+  // ce seul champ. Lui en donner une — fût-ce `null` — ferait du droit de
+  // fonder un soutien, donc une porte de bâtiment.
+  assert.ok(!('ouvre' in SPECIAL[NOEUD_BASE_SUPPLEMENTAIRE]),
+    'le nœud répétable a gagné une clé `ouvre` : il ouvre un RANG, pas un bâtiment');
   // ⚠ LE NŒUD A CHANGÉ DE NOM AU LOT BASES-1, ET PAS DE PRIX. « deuxiemeBase »
   // devenait faux au rang 3 ; le prix de départ, lui, est resté celui qui était
   // déjà là. Un test qui asserte les deux dit lequel a bougé.
@@ -4527,20 +4559,26 @@ test('T15 — l\'en-tête montre les points, et une peinture désarme tout', () 
   assert.ok(!estAcquise(etat, 'offense', 'belier'), 'le premier toucher a payé après une peinture');
 });
 
-// ⚠⚠ `T15` EST RETOURNÉ, PAS RETIRÉ — lot BASES-2, 11/09. Il s'appelait
-// « l'onglet Spécial s'affiche et NE S'ACHÈTE PAS », et son propre montage de
-// falsification était écrit en toutes lettres : « réutiliser `boutonDAchat` pour
-// la deuxième base ». C'est exactement ce que ce lot fait, et sur demande
-// d'Ethan. La garde exigeait ZÉRO bouton sur les quatre lignes ; elle en exige
-// désormais **exactement un**, et elle FALSIFIE L'ANCIENNE RÈGLE DE FACE en
-// nommant la ligne qui doit le porter — sans quoi un lot futur qui retirerait le
-// bouton de la base repasserait au vert sans que rien ne le dise.
+// ⚠⚠ `T15` EST RETOURNÉ POUR LA SECONDE FOIS, ET JAMAIS ASSOUPLI — lot
+// ARTILLERIE-RECHERCHE, 23/09/2026. Il s'appelait d'abord « l'onglet Spécial
+// s'affiche et NE S'ACHÈTE PAS » et exigeait ZÉRO bouton ; BASES-2 l'a retourné
+// le 11/09 sur **exactement un**, en nommant la ligne qui devait le porter. Ce
+// lot-ci ouvre les trois dernières : il en exige **quatre**, et il FALSIFIE
+// L'ANCIENNE RÈGLE DE FACE — aucune ligne ne porte plus de tiret, aucune ne dit
+// « pas encore de moteur », et un lot futur qui rendrait un soutien muet
+// repasserait donc au ROUGE au lieu de repasser au vert.
 //
-// ⚠ CE QU'IL GARDAIT DE VRAI RESTE, MOT POUR MOT : les trois soutiens n'ont ni
-// bouton ni prix retenu — un tiret, jamais un zéro qui se lirait « gratuit » —
-// et leur raison dit qu'il n'y a pas encore de moteur. Ce sont les seules
-// lignes du dépôt dont l'écran ANNONCE un prix sans le proposer.
-test('T15 — l\'onglet Spécial : une ligne s\'achète, trois annoncent sans moteur', () => {
+// ⚠⚠ ET CE QU'IL GARDE DE VRAI EST CE QUI NE DÉPEND PAS DU NOMBRE : le bouton
+// PORTE le prix et remplace le `span.prix` — jamais les deux —, et une ligne
+// achetable ne peint aucune raison. Ces deux propriétés-là valaient pour la
+// seule ligne de BASES-2 ; elles valent pour les quatre, et c'est le partage
+// COMPTÉ qui le dit, jamais une liste d'identifiants recopiée.
+//
+// ⚠ LE `span.prix` N'A DONC PLUS AUCUN ÉCRIVAIN DANS CE PANNEAU, et le test le
+// mesure sur les quatre lignes plutôt que sur celle qui s'achetait : c'est la
+// forme que prendrait un retour en arrière — un soutien rendu à un prix en
+// texte, sans bouton, donc annoncé et impossible à prendre.
+test('T15 — l\'onglet Spécial : les quatre lignes s\'achètent, et aucune n\'annonce à vide', () => {
   const doc = fauxDocument();
   const ecran = initialiserEcranRecherche(doc);
   const etat = partie(String(10n ** 15n));
@@ -4554,33 +4592,38 @@ test('T15 — l\'onglet Spécial : une ligne s\'achète, trois annoncent sans mo
   const avecBouton = blocs.filter(
     (b) => rangeeDuCadre(b).children.some((c) => c.tagName === 'BUTTON'),
   );
-  assert.equal(avecBouton.length, 1,
-    `${avecBouton.length} lignes du panneau Spécial portent un bouton, 1 attendue`);
+  assert.equal(avecBouton.length, 4,
+    `${avecBouton.length} lignes du panneau Spécial portent un bouton, 4 attendues`);
 
   for (const bloc of blocs) {
     const rangee = rangeeDuCadre(bloc);
     const raison = bloc.children.find((c) => c.className === 'raison');
-    if (rangee.children.some((c) => c.tagName === 'BUTTON')) {
-      // La ligne qui s'achète : le bouton PORTE le prix — jamais un second
-      // `span.prix` à côté, qui divergerait au premier changement de rang.
-      assert.ok(!rangee.children.some((c) => c.className === 'prix'),
-        'la ligne qui s\'achète porte son prix DEUX fois');
-      assert.match(boutonDe(rangee).textContent, /M$/,
-        'le bouton de la base n\'annonce pas un prix');
-      // Et avec de quoi payer mille fois, elle n'a RIEN à reprocher au joueur.
-      assert.equal(raison, undefined,
-        'la ligne achetable peint une raison alors qu\'elle est achetable');
-    } else {
-      assert.match(raison.textContent, /pas encore de moteur/);
-    }
+    // Le bouton PORTE le prix — jamais un second `span.prix` à côté, qui
+    // divergerait au premier changement de rang.
+    assert.ok(!rangee.children.some((c) => c.className === 'prix'),
+      'une ligne du panneau Spécial porte son prix DEUX fois');
+    assert.match(boutonDe(rangee).textContent, /M$/,
+      'un bouton du panneau Spécial n\'annonce pas un prix');
+    // Et avec de quoi payer mille fois, aucune n'a RIEN à reprocher au joueur.
+    assert.equal(raison, undefined,
+      'une ligne achetable peint une raison alors qu\'elle est achetable');
   }
 
-  // Trois lignes sur quatre n'ont même pas de prix retenu : elles affichent un
-  // tiret, jamais un zéro qui se lirait « gratuit ».
-  const prix = lignesSpeciales(etat).map((l) => l.prix);
-  assert.equal(prix.filter((p) => p === '—').length, 3);
-  assert.equal(prix.filter((p) => p !== '—').length, 1);
-  assert.ok(prix.includes('2,00M'), 'la base supplémentaire a perdu son prix');
+  // ⚠ L'ANCIENNE RÈGLE FALSIFIÉE DE FACE : plus un tiret, plus une phrase de
+  // nœud sans moteur. Les quatre prix se lisent, et les trois arbitrés sont
+  // épinglés — un facteur mille les rendrait « 7,50G » sans qu'une longueur ne
+  // bouge.
+  const lignes = lignesSpeciales(etat);
+  const prix = lignes.map((l) => l.prix);
+  assert.equal(prix.filter((p) => p === '—').length, 0, 'un nœud affiche encore un tiret');
+  assert.deepEqual(lignes.filter((l) => l.raison !== '').map((l) => l.id), [],
+    'un nœud du panneau Spécial écrit encore une raison');
+  const parId = Object.fromEntries(lignes.map((l) => [l.id, l.prix]));
+  assert.equal(parId.soutienAntiVehicule, '7,50M');
+  assert.equal(parId.soutienAntiAerien, '3,50M');
+  assert.equal(parId.soutienAntiInfanterie, '1,50M');
+  assert.equal(parId[NOEUD_BASE_SUPPLEMENTAIRE], '2,00M',
+    'la base supplémentaire a perdu son prix');
 });
 
 // ---------------------------------------------------------------------------
@@ -4607,14 +4650,26 @@ test('BASES-2 T1 — la base supplémentaire s\'achète en deux touchers, et le 
   const ecran = initialiserEcranRecherche(doc);
   ecran.peindre(etat);
 
-  // (a) La ligne porte un bouton, les trois soutiens n'en ont pas.
+  // (a) LES QUATRE LIGNES PORTENT UN BOUTON, ET CELLE-CI ANNONCE SON RANG.
+  // ⚠⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 1 → 4. Cette
+  // assertion écrivait « la ligne porte un bouton, les trois soutiens n'en ont
+  // pas », et c'était la propriété que ce lot-ci renverse — les trois soutiens
+  // ont un prix, un moteur et un bouton depuis qu'ils ouvrent chacun un
+  // bâtiment d'artillerie. Le nombre d'avant est écrit à côté de celui
+  // d'après, et la contre-assertion refuse son retour : un lot qui
+  // reconditionnerait le bouton sur `ligne.id === NOEUD_BASE_SUPPLEMENTAIRE`
+  // ferait ROUGIR ce test au lieu de le laisser vert.
   const cadres = piecesDuPanneau(doc, 'special');
   const ids = Object.keys(SPECIAL);
   const cadreDeLaBase = cadres[ids.indexOf(NOEUD_BASE_SUPPLEMENTAIRE)];
   const bouton = boutonDe(rangeeDuCadre(cadreDeLaBase));
-  assert.equal(
-    cadres.filter((c) => rangeeDuCadre(c).children.some((x) => x.tagName === 'BUTTON')).length,
-    1, 'un soutien a gagné un bouton');
+  const avecBouton = cadres.filter(
+    (c) => rangeeDuCadre(c).children.some((x) => x.tagName === 'BUTTON'));
+  assert.equal(avecBouton.length, 4, 'une ligne de l\'onglet Spécial a perdu son bouton');
+  assert.notEqual(avecBouton.length, 1,
+    'le bouton est redevenu le privilège du nœud répétable');
+  assert.equal(avecBouton.length, ids.length,
+    'le panneau Spécial ne compte plus autant de boutons que de nœuds');
   assert.match(rangeeDuCadre(cadreDeLaBase).children.find((c) => c.tagName === 'B').textContent,
     /rang 2/, 'le libellé n\'annonce pas le rang que l\'achat ouvrirait');
 

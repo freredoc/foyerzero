@@ -109,7 +109,11 @@ function exigerEtat(etat) {
   if (etat.recherche === undefined) {
     throw new Error('recherche : champ « recherche » absent de l\'état');
   }
-  for (const champ of ['acquises', 'modules', 'basesAutorisees']) {
+  // ⚠ `soutiens` ENTRE ICI AU LOT ARTILLERIE-RECHERCHE, ET IL EST EXIGÉ COMME
+  // LES TROIS AUTRES. Une v40 non migrée n'en porte pas : le message nomme la
+  // migration plutôt que de laisser `undefined.includes` lever au fond d'une
+  // palette, et c'est le maillon 40 → 41 de `sim/state.js` qui le pose.
+  for (const champ of ['acquises', 'modules', 'basesAutorisees', 'soutiens']) {
     if (etat.recherche[champ] === undefined) {
       throw new Error(
         `recherche : champ « recherche.${champ} » absent — sauvegarde non migrée ?`,
@@ -136,9 +140,19 @@ function exigerEtat(etat) {
  * Il vit dans `recherche` parce qu'il est ACHETÉ — le mettre à la racine de
  * l'état en ferait une propriété de la partie plutôt que du progrès du joueur.
  *
+ * ⚠⚠ `soutiens` ENTRE AU LOT ARTILLERIE-RECHERCHE, ET IL EST PLAT. Les trois
+ * nœuds de l'onglet Spécial n'ont pas de branche — un soutien n'est ni offensif
+ * ni défensif, il ouvre un BÂTIMENT — donc une liste unique, triée et sans
+ * doublon, comme `acquises.offense` et pour la même raison : deux sauvegardes du
+ * même joueur doivent se comparer au caractère près.
+ *
+ * ⚠ ET IL NAÎT VIDE. Aucun soutien n'est gratuit : les trois portent un prix, et
+ * `gratuitesDe` ne connaît que `ARBRE_RECHERCHE`, où ils ne sont pas.
+ *
  * @returns {{acquises: {offense: string[], defense: string[]},
  *            modules: {offense: string[], defense: string[]},
- *            basesAutorisees: number}}
+ *            basesAutorisees: number,
+ *            soutiens: string[]}}
  */
 export function creerAcquises() {
   return {
@@ -152,6 +166,7 @@ export function creerAcquises() {
       defense: gratuitesDe('defense').sort(),
     },
     modules: { offense: [], defense: [] },
+    soutiens: [],
   };
 }
 
@@ -551,5 +566,152 @@ export function acheterUneBaseDePlus(etat) {
     etat.recherche.pointsMilli = reste.toString();
   }
   etat.recherche.basesAutorisees += 1;
+  return etat;
+}
+
+
+// ---------------------------------------------------------------------------
+// Les trois soutiens d'artillerie — lot ARTILLERIE-RECHERCHE
+// ---------------------------------------------------------------------------
+
+/**
+ * Ce nœud est-il un soutien ? — c'est-à-dire : porte-t-il un `ouvre` ?
+ *
+ * ⚠ LA QUESTION SE POSE À LA TABLE, PAS À UNE LISTE DE TROIS NOMS. Le jour où un
+ * quatrième soutien entrera dans `SPECIAL`, il sera reconnu sans qu'une ligne
+ * bouge ici ; une liste écrite à la main serait la première à l'oublier.
+ * `baseSupplementaire` n'a pas de `ouvre`, donc il n'en est pas — et c'est la
+ * seule chose qui les sépare, ce qu'un test exige dans les deux sens.
+ *
+ * @param {string} id
+ * @returns {boolean}
+ */
+function estUnSoutien(id) {
+  return SPECIAL[id] !== undefined && SPECIAL[id].ouvre !== undefined;
+}
+
+/**
+ * Le joueur a-t-il acheté ce soutien ?
+ *
+ * @param {object} etat
+ * @param {string} id identifiant du nœud de `SPECIAL`
+ * @returns {boolean}
+ */
+export function soutienEstAcquis(etat, id) {
+  exigerEtat(etat);
+  return etat.recherche.soutiens.includes(id);
+}
+
+/**
+ * Quel soutien ouvre ce bâtiment ? — `null` si aucun.
+ *
+ * ⚠⚠ C'EST UNE BOUCLE, ET C'EST DÉLIBÉRÉ. Un index `bâtiment → soutien` serait
+ * la seconde vérité que §4 interdit, rangée à l'envers : il faudrait le tenir
+ * d'accord avec `ouvre` à chaque renommage, et rien ne le dirait s'il dérivait.
+ * Trois entrées : la boucle coûte trois comparaisons.
+ *
+ * @param {string} idBatiment
+ * @returns {string|null} l'identifiant du nœud, ou `null`
+ */
+export function soutienQuiOuvre(idBatiment) {
+  for (const id of Object.keys(SPECIAL)) {
+    if (SPECIAL[id].ouvre === idBatiment) return id;
+  }
+  return null;
+}
+
+/**
+ * Le prix d'un soutien, en MILLI-points.
+ *
+ * ⚠ LA TABLE EST EN POINTS, LE MOTEUR EN MILLI — même convention que
+ * `coutMilli` et `coutDeLaBaseSuivanteMilli`. La conversion se fait ici, une
+ * fois ; écrire des milli dans `SPECIAL` mettrait deux unités dans la même
+ * table, et la ligne `baseSupplementaire` est en points.
+ *
+ * @param {string} id
+ * @returns {bigint} milli-points
+ */
+export function coutDuSoutienMilli(id) {
+  if (!estUnSoutien(id)) throw new RangeError(`recherche : « ${id} » n'est pas un soutien`);
+  return BigInt(SPECIAL[id].cout) * MILLE;
+}
+
+/**
+ * Les refus de l'achat d'un soutien — une LISTE, comme partout ici.
+ *
+ * ⚠ TROIS CODES, ET CE SONT CEUX QUI EXISTENT DÉJÀ : `inconnue`, `dejaAcquise`,
+ * `pointsInsuffisants`. Un quatrième code pour une quatrième porte serait un
+ * vocabulaire de plus à apprendre pour un refus que l'écran peint pareil.
+ *
+ * ⚠ `inconnue` COURT-CIRCUITE, comme dans `problemesDeLAchat` : sans nœud, il
+ * n'y a ni prix à comparer ni possession à lire, donc rien d'autre à dire.
+ *
+ * ⚠⚠ ET AUCUN PRÉREQUIS ENTRE LES TROIS. Ethan n'en a nommé aucun ; en inventer
+ * un — « l'anti-infanterie d'abord, elle est la moins chère » — trancherait une
+ * mécanique de jeu à sa place. Les prix seuls ordonnent, et le joueur choisit.
+ *
+ * @param {object} etat
+ * @param {string} id
+ * @returns {Array<{code: string, message: string}>}
+ */
+export function problemesDeLAchatDUnSoutien(etat, id) {
+  exigerEtat(etat);
+  if (!estUnSoutien(id)) {
+    // Rien d'autre n'est calculable : ni prix, ni possession.
+    return [{ code: 'inconnue', message: `« ${id} » n'est pas un soutien` }];
+  }
+  const problemes = [];
+  if (soutienEstAcquis(etat, id)) {
+    problemes.push({ code: 'dejaAcquise', message: 'déjà acquis' });
+  }
+  // ⚠⚠ LE MODE DÉVELOPPEUR LÈVE LE PÉAGE, PAS LE DOUBLON — même geste que
+  // `problemesDeLAchat`, et c'est la discipline du lot MODE-DEV : il saute le
+  // refus et le débit, il ne CRÉDITE rien et il n'autorise rien d'absurde.
+  // Racheter un soutien déjà acquis reste refusé, gratuit ou non.
+  if (enModeDeveloppeur(etat)) return problemes;
+  const du = coutDuSoutienMilli(id);
+  const ai = BigInt(etat.recherche.pointsMilli);
+  if (du > ai) {
+    const manque = (du - ai + MILLE - 1n) / MILLE;
+    problemes.push({
+      code: 'pointsInsuffisants',
+      message: `il manque ${grouper(manque)} point${manque > 1n ? 's' : ''}`,
+    });
+  }
+  return problemes;
+}
+
+/**
+ * Achète un soutien : débite, et ouvre le bâtiment.
+ *
+ * ⚠ LE DÉBIT ET L'OUVERTURE SONT INDISSOCIABLES, comme dans `acheter` et
+ * `acheterUneBaseDePlus`. Si l'un passait sans l'autre, le joueur paierait sans
+ * recevoir, et une sauvegarde garderait la faute.
+ *
+ * ⚠ IL NE POSE AUCUN BÂTIMENT. Acheter donne l'ACCÈS ; poser est un geste de
+ * base, qui passe par `problemesDeLaPose`. Et la règle « une seule artillerie
+ * par base » du lot ARTILLERIE n'est pas touchée : le soutien ouvre la vignette,
+ * il ne lève pas le verrou d'emprise.
+ *
+ * @param {object} etat modifié en place
+ * @param {string} id
+ * @returns {object} le même état
+ */
+export function acheterUnSoutien(etat, id) {
+  const problemes = problemesDeLAchatDUnSoutien(etat, id);
+  if (problemes.length > 0) {
+    throw new Error(
+      `recherche : achat impossible — ${problemes.map((p) => p.message).join(' ; ')}`,
+    );
+  }
+  // ⚠ Même geste qu'`acheter` : le débit saute, l'ouverture non.
+  if (!enModeDeveloppeur(etat)) {
+    const reste = BigInt(etat.recherche.pointsMilli) - coutDuSoutienMilli(id);
+    etat.recherche.pointsMilli = reste.toString();
+  }
+  // Triée et sans doublon : `problemesDeLAchatDUnSoutien` a déjà refusé le
+  // doublon, et le tri rend la sauvegarde comparable d'une partie à l'autre.
+  etat.recherche.soutiens.push(id);
+  etat.recherche.soutiens.sort();
   return etat;
 }
