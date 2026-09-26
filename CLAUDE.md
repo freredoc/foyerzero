@@ -7,7 +7,70 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **26/09/2026**, version 0.99.78 · build 190.
+Dernière révision : **26/09/2026**, version 0.99.79 · build 191.
+⚠⚠ **LES IMPACTS SE TAISENT, LES TIRS DES DEUX CAMPS SE MÉLANGENT PAR
+PONDÉRATION, ET LE LOT NE TOUCHE PAS UN OCTET D'AUDIO.** Lot SON-MÉLANGE.
+Ethan, 25/09 : « j'entends toujours les premiers bruits qui font tamtam. Pas de
+bruit de déplacement. Certains n'ont plus de sons. Ou parfois les deux en même
+temps. » Puis : « enlever les sons d'impacts », et « Ne pas limiter à 3 tirs,
+faire un mélange de tirs par pondération. » Cinq causes, toutes du câblage :
+les impacts couvraient tout ; la cadence du bus `armes` et l'ordre alphabétique
+laissaient passer `weapon_ouvrage_*` avant `weapon_player_*` ; la première
+lecture d'un fichier était muette et l'éviction le rendait muet à nouveau ;
+`etatDesUnites` comparait un nombre à un objet, donc toutes les unités
+« roulaient » et les six moteurs à l'arrêt ne sonnaient jamais ; et un bouton
+jouait `ui_click` PLUS le son de son geste.
+⚠⚠ **MESURÉ SUR UN RAID SIMULÉ DE 35 s, LE VRAI ADAPTATEUR SUR UN FAUX
+`AudioContext` QUI DÉCODE EN 30 ms** — `main` = `9dd71e2` puis le lot : impacts
+**563 → 0**, tirs du joueur **0 → 91** (145 avec les explosions que le pack
+donne aux Sapeurs et à l'Albatros), tirs de l'Ouvrage **65 → 167**, pour
+638 et 963 tirs demandés des deux côtés ; boucles distinctes **7 → 10**, les
+trois de plus étant les moteurs à l'arrêt du joueur ; `enMouvement`
+**1 635 vrai / 0 faux → 1 061 / 574**. Harnais jetable, source au rapport.
+⚠⚠ **`choisirLesTirs` REMPLACE LA CADENCE, ET LE PLAFOND EST EN VOIX VIVANTES.**
+`VOIX_PAR_BUS = { armes: 6 }` : les candidats DISTINCTS d'un relevé sont tirés
+au poids de leurs occurrences, sans remise, et chacun prend une voix libre tant
+qu'il en reste — une voix se rend à la FIN du son, jamais par un compteur de
+relevé. `gardesBus` et l'étape 2 bis de `demanderUnSon` disparaissent. ⚠ Le
+poids décide de l'ORDRE d'accès aux voix, pas d'un nombre de voix : chaque
+événement sonne au plus une fois par relevé, donc le camp qui a plus d'armes
+DISTINCTES en occupe plus — le joueur pèse **39,8 %** des demandes et **46,5 %**
+des tirs joués. Déclaré, pas réglé : laisser un même son prendre plusieurs voix
+recréerait le « tamtam ». ⚠ `choisirLesTirs` consomme un tirage par candidat,
+qu'il sonne ou non ; le commentaire de `tirer` disait le contraire pour le
+plafond, réécrit.
+⚠⚠ **LES TIRS SONT UNE LISTE, LES COUPS UN ENSEMBLE.** `tirsDuJournal` rend un
+tir par fait, ordre conservé, les tireurs muets écartés — c'est le POIDS ;
+`evenementsDuJournal` rend l'ensemble du reste, sans armes ni impacts. L'écran
+de raid les relève à part (`tirsSonores()`) et la session appelle
+`son.jouerLesTirs`. `IMPACT_LOURD_MILLIEMES` disparaît avec son dernier lecteur.
+⚠⚠ **UN SON DEMANDÉ PENDANT SON DÉCODAGE SONNE À LA RÉSOLUTION**, sauf s'il
+arrive plus de `RETARD_MAX_DECODAGE_MS` (150) après la demande — un coup de feu
+entendu une demi-seconde trop tard est pire qu'un coup muet. `lire` fait ce
+choix ; `brancher` garde le corps d'avant. ⚠ **Et un bouton ne sonne qu'une
+fois** : `jouerLeSonDUnGeste` lève `gesteSonne`, que l'écouteur de capture
+abaisse, et le `ui_click` délégué se tait quand le geste a son propre son.
+⚠⚠ **LES 44 IMPACTS RESTENT AU LIVRABLE — 70 582 OCTETS D'OPUS — ET DEVIENNENT
+MUETS.** 157 sons atteignables au lieu de 165, 106 muets ; aucun Opus retiré,
+aucun volume changé. `tools/sons.py` ne change que la table qu'il écrit dans
+`src/data/`, jamais l'encodage.
+⚠ **ONZE TESTS RÉÉCRITS, UN ENTRE — `MIX T1`** —, et chaque compte retiré est
+remplacé par un `notEqual` sur l'ancien nombre. Falsifications de `MIX T1`,
+messages réels : premier candidat trié → « le tir rare sort 1000 fois sur 1000
+pour un poids de 1 sur 100 » ; sans pondération → « … 486 fois sur 1000 … ». Le
+plafond retiré fait tomber `SB T2`, `SB T3` et `MIX T1` (« lot 0 : 2 décisions
+pour une voix libre ») : **`choisirLesTirs` ne rend jamais plus de décisions que
+de voix libres, et c'est la suite qui le dit.**
+⚠⚠ **L'ÉCOUTE N'A PAS ÉTÉ FAITE**, faute d'appareil ; Ethan vérifie sur le S25
+FE, Options affichant « v0.99.79 · b191 » après le relancement qui applique la
+mise à jour. **`VOIX_PAR_BUS.armes` se règle à l'oreille** ; 312 tirs joués
+pour 1 601 demandés sur le raid simulé, neuf par seconde environ.
+⚠ `python3 tools/verifier.py` : **965 identiques · 176 différents · 0 · 0** — les
+176 préexistants, et **les 263 `.opus` identiques à l'octet**.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 42.** Pas une ligne de `src/sim/`,
+`src/render/` ni `art/`. Rapport : `rapports/RAPPORT-lotSON-MELANGE.md`.
+
+**Auparavant, après le lot ÉTAI-RÉTABLI (26/09) :**
 ⚠⚠ **L'ÉTAI SE RÉTABLIT EN UNE HEURE, SA PUISSANCE DE RÉCUPÉRATION REMONTE AVEC
 LUI, ET LES DÉFENSES QU'IL COMMANDE NE RESTENT PLUS À TERRE.** Lot ÉTAI-RÉTABLI.
 Ethan, 25/09 : « J'ai rasé un étai lors d'un raid puis AFK. Il est revenu à
@@ -986,7 +1049,31 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 26/09/2026 (après le lot ÉTAI-RÉTABLI, FUSIONNÉ sur BARRES-ET-RÉPARER), à confronter :**
+**Référence au 26/09/2026 (après le lot SON-MÉLANGE), à confronter :**
+`npm test` rend **1672 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 671 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **un**, `MIX T1` dans
+`test/son.test.js`, et en RÉÉCRIT onze du même fichier ; `test/` reste à **81**
+fichiers, et aucun fichier n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **10 612 153 octets**, 0 référence externe.
+Coût **+821 octets, ENTIÈREMENT DU JAVASCRIPT** (449 559 → 450 380), mesuré
+contre le livrable de `main` = `9dd71e2`, qui EST le merge du lot ÉTAI-RÉTABLI
+(**10 611 332**) ; `data:` à **316 lignes / 315 URI** de part et d'autre. Borne
+T10 **10 820 000, NON TOUCHÉE**, marge **207 847 octets, 1,92 %** ; `PIC T7`
+réancré, avec un `notEqual` qui refuse 208 668. ⚠ Le brief annonçait **+781**
+pour son prototype : **40 octets d'écart, non attribués**.
+⚠ `python3 tools/verifier.py` : **965 identiques · 176 différents · 0 nouveau · 0 MANQUANT**
+en 649,9 s, code de sortie 1 sur les 176 préexistants (132 `bâtiment/` · 24 `defense/` ·
+18 `socle/` · 2 `chassis/`, la répartition documentée depuis RUINES-DÉFENSE) et sur la
+ligne `ATLAS` de `main` ; **aucun `.opus` parmi les différents, les 263 identiques à
+l'octet**. Non rejoué sur un pristine à ce lot — confronté à la répartition écrite.
+`entrees.py` : 518 / 518 · 175 / 175.
+⚠ Le lot touche `package.json`, `src/data/sons.js` (généré),
+`src/son/{cablage,politique}.js`, `src/ui/{raid,session,son}.js`, trois fichiers
+de `test/`, `tools/sons.py`, ce fichier et `rapports/RAPPORT-lotSON-MELANGE.md`.
+
+**Auparavant, après le lot ÉTAI-RÉTABLI (26/09) :**
 `npm test` rend **1671 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 670 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le

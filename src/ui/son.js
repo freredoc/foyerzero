@@ -17,8 +17,10 @@
 // qu'on doit voir » —, et l'asymétrie est voulue : une carte noire rend le jeu
 // injouable, un jeu muet reste entièrement jouable.
 
-import { SONS, BUS, MEMOIRE, RAMPE_BOUCLE_MS } from '../data/sons.js';
-import { creerVoix, demanderUnSon, reconcilierLesBoucles, boucleDeLEvenement } from '../son/politique.js';
+import { SONS, BUS, MEMOIRE, RAMPE_BOUCLE_MS, RETARD_MAX_DECODAGE_MS } from '../data/sons.js';
+import {
+  creerVoix, demanderUnSon, choisirLesTirs, reconcilierLesBoucles, boucleDeLEvenement,
+} from '../son/politique.js';
 
 /**
  * L'identifiant DOM qui porte le `data:` d'un son.
@@ -218,7 +220,7 @@ export function initialiserLeSon(doc, { reglages, graine }) {
    * ⚠⚠ À LA PREMIÈRE UTILISATION, JAMAIS AU DÉMARRAGE. Décoder les 263 à
    * l'ouverture ajouterait 64,7 Mo et le temps qui va avec, là où le démarrage
    * n'en prend aucun aujourd'hui. Rien ici n'est appelé par `reveiller` : les
-   * seuls appelants sont `jouer` et `demarrerUneBoucle`.
+   * seuls appelants sont `lire` et `demarrerUneBoucle`.
    *
    * ⚠ ET UN ÉCHEC SE TAIT. Le son reste absent de la table, les autres
    * continuent de sonner — la dégradation silencieuse du lot précédent, tenue
@@ -260,25 +262,16 @@ export function initialiserLeSon(doc, { reglages, graine }) {
   }
 
   /**
-   * Demande à la politique, puis joue ce qu'elle accorde.
+   * Branche un tampon DÉJÀ DÉCODÉ sur son bus, et le lance.
    *
-   * @param {string} evenement une clé d'`EVENEMENTS`
+   * ⚠ C'EST LE CORPS D'AVANT LE LOT SON-MÉLANGE, PAS UNE LIGNE DE CHANGÉE : la
+   * source, le gain de la décision, le bus du son, `tenir` avant `start`, et
+   * `relacher` sur les deux issues. Ce qui a changé est QUI l'appelle et QUAND.
+   *
+   * @param {{son: string, gain: number}} decision ce que la politique a accordé
+   * @param {AudioBuffer} tampon
    */
-  function jouer(evenement) {
-    reveiller();
-    if (horsService || contexte === null) return;
-    const decision = demanderUnSon(voix, evenement, contexte.currentTime * 1000, reglages);
-    if (!decision.jouer) return;
-    rang += 1;
-    usages.set(decision.son, rang);
-    assurerLeTampon(decision.son);
-    const tampon = tampons.get(decision.son);
-    // Le décodage est asynchrone : la PREMIÈRE demande d'un son tombe toujours
-    // avant lui, et le son ne sort pas. La politique a déjà compté l'instance —
-    // c'est sans conséquence, elle expirera d'elle-même à la durée du son.
-    // ⚠ C'est le prix du décodage paresseux, et il est déclaré : le premier
-    // geste qui demande un son donné est muet, les suivants sonnent.
-    if (tampon === undefined) return;
+  function brancher(decision, tampon) {
     try {
       const source = contexte.createBufferSource();
       source.buffer = tampon;
@@ -299,6 +292,71 @@ export function initialiserLeSon(doc, { reglages, graine }) {
         throw erreur;
       }
     } catch { /* la sortie audio a disparu sous nous : on se tait */ }
+  }
+
+  /**
+   * Fait sortir une décision accordée : tout de suite si le tampon est là, au
+   * retour du décodage sinon.
+   *
+   * ⚠⚠ LA PREMIÈRE LECTURE D'UN SON N'EST PLUS PERDUE — lot SON-MÉLANGE, 26/09.
+   * Jusqu'ici, la demande qui déclenchait le décodage tombait AVANT lui, et le
+   * son ne sortait pas ; au raid, c'était la première salve de chaque arme, et
+   * c'était aussi CHAQUE salve d'une arme dont le tampon venait d'être évincé —
+   * la moitié du « certains n'ont plus de sons » du 25/09. On attend donc le
+   * tampon, et on branche à son arrivée.
+   *
+   * ⚠ MAIS PAS AU-DELÀ DE `RETARD_MAX_DECODAGE_MS`, MESURÉS SUR L'HORLOGE DU
+   * CONTEXTE AUDIO. Un coup de canon qui sort une demi-seconde après son tir ne
+   * désigne plus rien, et c'est un CONSTAT — le son est arrivé trop tard —, pas
+   * une permission : la politique a déjà dit oui, et elle a déjà compté la
+   * lecture, qui expirera d'elle-même à sa durée comme avant ce lot.
+   *
+   * @param {{son: string, gain: number}} decision
+   */
+  function lire(decision) {
+    rang += 1;
+    usages.set(decision.son, rang);
+    const tampon = tampons.get(decision.son);
+    if (tampon !== undefined) {
+      brancher(decision, tampon);
+      return;
+    }
+    const demandeA = contexte.currentTime * 1000;
+    assurerLeTampon(decision.son).then((decode) => {
+      if (decode === null) return;
+      if (contexte.currentTime * 1000 - demandeA > RETARD_MAX_DECODAGE_MS) return;
+      brancher(decision, decode);
+    });
+  }
+
+  /**
+   * Demande à la politique, puis joue ce qu'elle accorde.
+   *
+   * @param {string} evenement une clé d'`EVENEMENTS`
+   */
+  function jouer(evenement) {
+    reveiller();
+    if (horsService || contexte === null) return;
+    const decision = demanderUnSon(voix, evenement, contexte.currentTime * 1000, reglages);
+    if (!decision.jouer) return;
+    lire(decision);
+  }
+
+  /**
+   * Les tirs d'un relevé : la politique choisit lesquels sortent, on les lit.
+   *
+   * ⚠ RIEN N'EST TRANCHÉ ICI. `choisirLesTirs` tire dans le lot au prorata des
+   * tirs demandés et borne le bus des armes ; ce fichier reçoit ses décisions
+   * et les lit, comme `jouer` lit la sienne. Pas de `reveiller` : un tir n'est
+   * pas un geste du joueur, et le contexte a été ouvert par le geste qui a
+   * lancé le raid — même discipline que `reconcilier`.
+   *
+   * @param {string[]} tirs un événement par tir publié, doublons compris
+   */
+  function jouerLesTirs(tirs) {
+    if (horsService || contexte === null) return;
+    const decisions = choisirLesTirs(voix, tirs, contexte.currentTime * 1000, reglages);
+    for (const decision of decisions) lire(decision);
   }
 
   /**
@@ -442,6 +500,7 @@ export function initialiserLeSon(doc, { reglages, graine }) {
   return {
     reveiller,
     jouer,
+    jouerLesTirs,
     reconcilier,
     /**
      * La mesure de la mémoire décodée — pour les tests, et pour eux seuls.

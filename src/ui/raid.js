@@ -98,7 +98,7 @@ import { baseCourante } from '../sim/base-courante.js';
 // ⚠ LES QUATRE VIENNENT DE `ui/rapport.js` DEPUIS LE 11/09 — voir la note à
 // l'endroit où elles étaient écrites, quelques lignes plus bas.
 import { lignesDuPanneauDeFin, formaterDuree } from './rapport.js';
-import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
+import { etatDesUnites, evenementsDuJournal, tirsDuJournal } from '../son/cablage.js';
 // ⚠⚠ LE PLAFOND DU ZOOM ET LA POSE D'UN SPRITE SE PRENNENT LÀ OÙ ILS SONT DÉJÀ.
 // `COTE_CASE_MAX` est le plafond de la base — « le raid prend le même » —, et
 // `poserCouches` porte l'inversion d'ordre entre le canevas et une liste
@@ -644,6 +644,18 @@ export function initialiserEcranRaid(doc, crochets = {}) {
    * donc il ne peut pas grossir.
    */
   const evenementsSonores = new Set();
+  /**
+   * Les TIRS que le déroulé a publiés depuis le dernier relevé — une LISTE.
+   *
+   * ⚠⚠ C'EST L'EXCEPTION À L'ENSEMBLE CI-DESSUS, ET ELLE EST VOULUE — lot
+   * SON-MÉLANGE, 26/09. Un tir porte un POIDS : quatre-vingt-dix tirs de
+   * l'Ouvrage contre un du joueur n'ont pas le même droit à une voix, et c'est
+   * ce que `choisirLesTirs` de `son/politique.js` lit dans la longueur de cette
+   * liste. Elle ne demande PAS cent cinquante sons : la politique en accorde au
+   * plus `VOIX_PAR_BUS.armes` à la fois, et la liste est vidée à chaque relevé
+   * de la session.
+   */
+  const tirsSonores = [];
 
   const canvas = $('raid-canvas');
   const ctx = canvas === null ? null : canvas.getContext('2d');
@@ -789,12 +801,16 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     relever();
   }
 
-  /** Verse le journal du dernier tick dans l'ensemble en attente. */
+  /**
+   * Verse le journal du dernier tick dans l'ensemble en attente — et ses tirs
+   * dans la liste, un par tir.
+   */
   function relever() {
     if (combat === null) return;
     for (const evenement of evenementsDuJournal(combat.journal)) {
       evenementsSonores.add(evenement);
     }
+    tirsSonores.push(...tirsDuJournal(combat.journal));
   }
 
   function arreterBoucle() {
@@ -2560,6 +2576,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       evenementsSonores.clear();
       return sortie;
     },
+    /**
+     * Les tirs publiés depuis le dernier appel, un par tir — et il VIDE, pour
+     * la même raison qu'`evenementsSonores` : un tir a lieu une fois.
+     */
+    tirsSonores() { return tirsSonores.splice(0); },
     /** La mesure M2 : le coût moyen d'une image du déroulé. */
     mesureImages() {
       return { images: mesure.images, moyenneMs: mesure.images === 0 ? 0 : mesure.totalMs / mesure.images };
