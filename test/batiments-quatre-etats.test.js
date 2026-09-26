@@ -344,7 +344,10 @@ test('B4 T7 — le champ décide DU collecteur, et la palette n\'en propose qu\'
   // transformation — la grille d'un site voyage dans ses rapports.
   // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui pose
   // `recherche.soutiens` sur toute partie en cours.
-  assert.equal(SAVE_VERSION, 41);
+  // ⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 25/09/2026 : 41 → 42, maillon VIDE — le
+  // champ `retour.sansPalier` est facultatif, donc aucune v41 n'a rien à gagner
+  // à une conversion ; le numéro dit seulement qu'une v42 peut le porter.
+  assert.equal(SAVE_VERSION, 42);
   assert.notEqual(SAVE_VERSION, 38, 'le maillon des verrous a été défait');
 
   // Le terrain tranche, dans les deux sens, et rien d'autre ne se pose dessus.

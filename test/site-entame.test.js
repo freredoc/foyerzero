@@ -10,8 +10,13 @@ import assert from 'node:assert/strict';
 import {
   TICKS_REPARATION_BASE, TICKS_REPARATION_DEFENSES, cleDuSite, plancheAUnPv, pvApresRaid,
   enregistrerLeRaid, etatDuSite, montageCourant, resumeCourant, reparerLesSites,
-  problemesDesSitesEntames,
+  problemesDesSitesEntames, ticksDeRegeneration,
 } from '../src/sim/site-entame.js';
+import {
+  pvApresRetour, pvMaxDeLaPieceDeGarnisonMilli, pvSousUneSanteQuiRemonte,
+} from '../src/sim/reparation.js';
+import { RETOUR_DEFENSES } from '../src/data/base.js';
+import { TICKS_PAR_HEURE } from '../src/sim/clock.js';
 import {
   creerEtat, tickJeu, rattraperJeu, serialiser, charger, migrer, SAVE_VERSION,
 } from '../src/sim/state.js';
@@ -227,7 +232,10 @@ test('réparation — une base revient ENTIÈREMENT au bout d\'une heure, pas av
   enregistrerLeRaid(etat, cible, resultatSur(montage, { batiments: { 2: 0.1 }, defenses: { 0: 0 } }));
   assert.ok(etatDuSite(etat, cible), 'montage sans mordant : rien n\'a été rangé');
 
-  // Un tick avant l'heure : rien n'a bougé.
+  // Un tick avant l'heure, l'entrée tient encore. ⚠ « RIEN N'A BOUGÉ » ÉTAIT
+  // ÉCRIT ICI, ET C'EST FAUX DEPUIS LE LOT ÉTAI-RÉTABLI : les bâtiments d'une
+  // base MONTENT pendant l'heure au lieu de sauter à son terme, et la défense
+  // détruite a déjà reçu son palier. Ce qui n'a pas eu lieu, c'est la PURGE.
   rattraperJeu(etat, TICKS_REPARATION_BASE - 1);
   assert.ok(etatDuSite(etat, cible), 'la base s\'est réparée avant l\'heure');
 
@@ -247,56 +255,160 @@ test('réparation — une base revient ENTIÈREMENT au bout d\'une heure, pas av
 // camp ne reviennent jamais), ci-dessous.
 
 test('RETOUR-D T13 — sur une BASE de l\'Ouvrage aussi, l\'Étai commande les défenses', () => {
-  // ⚠⚠ AVANT CE LOT, LES DÉFENSES D'UNE BASE RENTRAIENT PAR LA PORTE DES
-  // BÂTIMENTS : `reparerLesSites` traitait le type `base` dans une branche qui
-  // rendait TOUT au bout d'une heure et `continue`ait avant d'atteindre l'Étai.
-  // Désormais les deux se séparent — les bâtiments à l'heure, les défenses sur
-  // la rampe — et c'est l'Étai ABÎMÉ qui le rend visible.
-  const etat = partie();
-  const cible = { type: 'base', niveau: 30, saveur: null, instance: 0, rangee: 150, colonne: 16 };
-  const intact = montageDuSite(etat.graine, cible);
-  const indexEtai = intact.batiments.findIndex((b) => b.id === 'etai');
-  assert.ok(indexEtai >= 0, 'montage : pas d\'Étai dans cette base');
+  // ⚠⚠ RÉÉCRIT PAR LE LOT ÉTAI-RÉTABLI, 25/09 — et il tourne sur TROIS types. Ethan :
+  // « j'ai rasé un étai lors d'un raid puis AFK. Il est revenu à 100 %, mais les
+  // défenses détruites ne se sont pas régénérées. » Ce test figeait exactement
+  // cela : l'Étai à 1 PV valait zéro millième, la rampe des défenses planchait sa
+  // division à un millième, et le site ne redevenait entier qu'au bout de MILLE
+  // heures. La règle d'Ethan : « l'étai se restaure en 1 h, et donc sa puissance
+  // de récupération » — et « il ne récupère pas 100 % d'un coup ».
+  //
+  // ⚠ CE QU'IL MESURE, AU MILLI-PV PRÈS : l'Étai remonte en ligne droite pendant
+  // l'heure ; les défenses le suivent, si bien qu'une pièce rasée a reçu la
+  // MOITIÉ de ses PV à l'heure et TOUT à une heure et demie. Les trois bornes
+  // sont des égalités : une lecture « à peu près » laisserait passer une vitesse
+  // restée sur la santé figée du raid.
+  //
+  // ⚠ ET UN VERROU EST UNE BASE — `baseVerrou` porte la même heure que `base` dans
+  // `TYPES_SITE`. Le code écrivait `=== 'base'` : son Étai ne planchait pas, donc
+  // il tombait à zéro, et plus rien ne revenait jamais.
+  //
+  // ⚠⚠ ET IL PORTE LES DEUX RÉPONSES DE LA RELECTURE HOSTILE DU BRIEF, OBTENUES EN
+  // LANÇANT LA SUITE ET NON EN LISANT LE CODE. « La forme neuve de la rampe
+  // peut-elle s'appliquer à un Étai intact ? » et « un produit de l'intégrale
+  // passe-t-il quelque part hors de `BigInt` ? » — les deux falsifications ont
+  // d'abord été jouées sur la version précédente de ce test, et la suite est restée
+  // VERTE sur les deux : 1 667 pass, le seul rouge étant le compte de tests de
+  // `CLAUDE.md`. Ce test ne répondait donc à aucune des deux questions. Il y répond
+  // maintenant par deux morceaux écrits APRÈS la mesure — l'Étai intact, et la
+  // seconde heure de la base finale —, et chacun prouve d'abord qu'il discrimine.
+  //
+  // ⚠ LA BASE FINALE EST LÀ POUR LE SECOND, ET SON NIVEAU N'EST PAS UN CHOIX : c'est
+  // `GEOGRAPHIE.niveauDeLaBaseFinale`, le plus haut du jeu, donc les plus gros PV.
+  // Au niveau 30 le produit sort bien des entiers sûrs, mais le flottant retombe
+  // sur le bon entier à chaque tick de la seconde heure — mesuré, zéro écart : un
+  // montage au niveau 30 seul ne pouvait pas voir un `Number` à la place du `BigInt`.
+  const H = RETOUR_DEFENSES.heuresDeBase * TICKS_PAR_HEURE;
+  let ecartsDuFlottant = 0;
+  for (const [type, niveau] of [['base', 30], ['baseVerrou', 30], ['baseTerminale', 60]]) {
+    const etat = partie();
+    const cible = { type, niveau, saveur: null, instance: 0, rangee: 150, colonne: 16 };
+    const intact = montageDuSite(etat.graine, cible);
+    const indexEtai = intact.batiments.findIndex((b) => b.id === 'etai');
+    assert.ok(indexEtai >= 0, `montage : pas d'Étai dans ce site ${type}`);
+    const d0 = intact.defenseurs[0];
+    // Le facteur de dépassement vaut mille quand la pièce est au niveau de
+    // l'Étai : c'est ce qui fait tomber la moitié à l'heure pile.
+    assert.equal(d0.niveau, cible.niveau,
+      `montage : la défense de ${type} n'est pas au niveau du site`);
+    const maxD0 = pvMaxDeLaPieceDeGarnisonMilli(d0.id, d0.niveau);
+    assert.equal(maxD0 % 2, 0,
+      `montage : ${maxD0} est impair, « la moitié à l'heure » ne tombe plus sur un entier`);
 
-  // L'Étai tombe à 1 PV — sur une base, tout planche, donc il ne meurt pas.
-  enregistrerLeRaid(etat, cible, resultatSur(intact, {
-    batiments: { [indexEtai]: 0 }, defenses: { 0: 0, 1: 0.5 },
-  }));
-  const entree = etatDuSite(etat, cible);
-  assert.ok(entree, 'montage sans mordant : rien n\'a été rangé');
-  assert.equal(entree.pvBatimentsMilli[indexEtai], APRES_RAID.plancherPvMilli,
-    'l\'Étai d\'une base ne planche plus à 1 PV');
+    // L'Étai tombe à 1 PV — sur une base, tout planche, donc il ne meurt pas —
+    // et la première défense est rasée.
+    const resultat = resultatSur(intact, { batiments: { [indexEtai]: 0 }, defenses: { 0: 0 } });
+    const maxEtai = resultat.batiments[indexEtai].pvMaxMilli;
+    enregistrerLeRaid(etat, cible, resultat);
+    const entree = etatDuSite(etat, cible);
+    assert.ok(entree, `${type} : montage sans mordant, rien n'a été rangé`);
+    const plancher = APRES_RAID.plancherPvMilli;
+    assert.equal(entree.pvBatimentsMilli[indexEtai], plancher,
+      `${type} : l'Étai ne planche pas à 1 PV`);
+    assert.equal(entree.pvDefensesMilli[0], plancher,
+      `${type} : la défense rasée ne planche pas à 1 PV`);
+    assert.equal(entree.santeComplexeMilli, 0,
+      `${type} : la santé figée d'un Étai à 1 PV ne vaut pas zéro millième`);
 
-  // À l'heure : les BÂTIMENTS sont revenus, les défenses NON.
-  rattraperJeu(etat, TICKS_REPARATION_BASE);
-  const apresUneHeure = etatDuSite(etat, cible);
-  assert.ok(apresUneHeure, 'l\'entrée a disparu : les défenses sont revenues avec les bâtiments');
-  assert.ok(apresUneHeure.pvBatimentsMilli.every((v) => v === null),
-    'les bâtiments de la base ne sont pas revenus à l\'heure');
-  assert.ok(apresUneHeure.pvDefensesMilli.some((v) => v !== null),
-    'les défenses sont revenues à l\'heure, comme avant le lot');
-  assert.equal(apresUneHeure.santeComplexeMilli, 0,
-    'la santé figée d\'un Étai à 1 PV ne vaut pas zéro millième');
+    const T = ticksDeRegeneration(type);
+    assert.equal(T, TICKS_REPARATION_BASE,
+      `${type} : l'Étai ne se régénère pas en une heure`);
+    assert.equal(T % 2, 0, 'montage : une heure impaire en ticks n\'a pas de demi-heure');
 
-  // ⚠⚠ ET LE PALIER, LUI, A DÉJÀ JOUÉ — mais à santé nulle il ne rend rien : la
-  // rampe seule ramènera les défenses. ⚠ RÉÉCRIT LE 12/09, ET LE NOMBRE A CHANGÉ
-  // D'ORDRE DE GRANDEUR : l'ancienne pénalité linéaire plafonnait à 24 h, la
-  // règle de vitesse divise par la santé et la santé se range en MILLIÈMES. Un
-  // Étai à 1 PV y vaut zéro millième ; `ticksDeRetour` planche la division à un
-  // millième, donc à MILLE heures. C'est le pire cas que la nouvelle règle sache
-  // décrire, et c'est ce qui distingue « très lent » de « jamais » — l'entrée se
-  // purge pour de bon, et le site redevient entier.
-  // ⚠ UNE HEURE S'EST DÉJÀ ÉCOULÉE PLUS HAUT : on s'arrête à 999 h au total,
-  // donc un cheveu AVANT le bout, pour que le « pas encore » mesure quelque
-  // chose. `TICKS_REPARATION_BASE` vaut une heure — asserté par `RETOUR-D T13`
-  // lui-même, qui l'emploie comme unité.
-  rattraperJeu(etat, 998 * TICKS_REPARATION_BASE);
-  assert.ok(etatDuSite(etat, cible),
-    'les défenses sont revenues AVANT le bout : le plancher de division a sauté');
-  rattraperJeu(etat, 2 * TICKS_REPARATION_BASE);
-  assert.equal(etatDuSite(etat, cible), null,
-    'les défenses de la base ne sont pas revenues au bout de la rampe');
-  assert.deepEqual(montageCourant(etat, cible), intact, 'la base n\'est pas revenue entière');
+    // À LA DEMI-HEURE : l'Étai a fait exactement la moitié du chemin.
+    rattraperJeu(etat, T / 2);
+    const etaiDemi = montageCourant(etat, cible).batiments.find((b) => b.id === 'etai');
+    assert.equal(etaiDemi.pvMilli, plancher + Math.floor((maxEtai - plancher) / 2),
+      `${type} : l'Étai ne remonte pas linéairement (${etaiDemi.pvMilli} sur ${maxEtai})`);
+
+    // À L'HEURE : l'Étai est entier — tous les bâtiments le sont —, et la défense
+    // rasée a reçu la moitié de ses PV, pas un de plus.
+    rattraperJeu(etat, T / 2);
+    const aLHeure = montageCourant(etat, cible);
+    assert.deepEqual(aLHeure.batiments, intact.batiments,
+      `${type} : les bâtiments ne sont pas entiers à l'heure`);
+    const attenduALHeure = plancher + maxD0 / 2;
+    assert.equal(aLHeure.defenseurs[0].pvMilli, attenduALHeure,
+      `${type} : la défense n'a pas reçu la moitié de ses PV à l'heure `
+      + `(${aLHeure.defenseurs[0].pvMilli}, attendu ${attenduALHeure})`);
+
+    let ecoule = T;
+
+    // AU BOUT : l'Étai est plein, donc la vitesse l'est aussi — il reste
+    // `maxD0 / 2 − plancher` à rendre, à `maxD0` par heure.
+    const reste = Math.ceil(((maxD0 / 2 - plancher) * T) / maxD0);
+
+    // LA SECONDE HEURE, EN ENTIERS EXACTS. Le produit `pvMax × intégrale` y sort des
+    // entiers sûrs ; on cherche les ticks où un `Number` retomberait d'un milli-PV
+    // à côté — l'expression est celle qu'écrirait quelqu'un qui retirerait les
+    // `BigInt`, au caractère près —, et on exige que le SITE rende le quotient
+    // exact à chacun d'eux. La référence est calculée ici en `BigInt`, jamais lue
+    // dans le module qu'on garde.
+    for (let e = T + 1; e < T + reste; e += 1) {
+      const sigma = T * T * 1000 + 2 * T * 1000 * (e - T);
+      const exact = Number((BigInt(maxD0) * BigInt(sigma)) / BigInt(2 * T * H * 1000));
+      const flottant = Math.floor((maxD0 * sigma) / (2 * T * H * 1000));
+      if (flottant === exact) continue;
+      assert.ok(maxD0 * sigma > Number.MAX_SAFE_INTEGER,
+        `${type} : le flottant se trompe au tick ${e} SANS être sorti des entiers sûrs`);
+      ecartsDuFlottant += 1;
+      rattraperJeu(etat, e - ecoule);
+      ecoule = e;
+      assert.equal(montageCourant(etat, cible).defenseurs[0].pvMilli, plancher + exact,
+        `${type} : au tick ${e} de la rampe, la défense ne porte pas le quotient EXACT `
+        + `(attendu ${plancher + exact}, un produit en flottant rendrait ${plancher + flottant}) `
+        + '— l\'intégrale est passée hors de `BigInt`');
+    }
+
+    rattraperJeu(etat, T + reste - 1 - ecoule);
+    assert.ok(etatDuSite(etat, cible),
+      `${type} : l'entrée a été purgée un tick AVANT le bout de la rampe`);
+    rattraperJeu(etat, 1);
+    assert.equal(etatDuSite(etat, cible), null,
+      `${type} : l'entrée n'est pas purgée au bout de la rampe (${T + reste} ticks)`);
+    assert.deepEqual(montageCourant(etat, cible), intact, `${type} : le site n'est pas revenu entier`);
+
+    // L'ÉTAI INTACT GARDE LA RAMPE D'AVANT, AU MILLI-PV PRÈS. Les deux formes
+    // coïncident à l'arrondi près quand la santé vaut déjà mille ; on cherche le
+    // premier tick où elles s'écartent — il faut qu'il existe, sinon ce morceau ne
+    // distingue rien — et le site doit y rendre l'ancienne.
+    const etatIntact = partie();
+    enregistrerLeRaid(etatIntact, cible, resultatSur(intact, { defenses: { 0: 0 } }));
+    const entreeIntacte = etatDuSite(etatIntact, cible);
+    assert.ok(entreeIntacte, `${type} : montage sans mordant, rien n'a été rangé sous un Étai intact`);
+    assert.equal(entreeIntacte.santeComplexeMilli, 1000,
+      `${type} : la santé figée d'un Étai intact ne vaut pas mille millièmes`);
+    const rampe = {
+      pvMaxMilli: maxD0, pvApresRaidMilli: plancher, niveau: d0.niveau,
+      niveauComplexe: entreeIntacte.niveau, santeMilli: 1000,
+    };
+    let tickQuiDiscrimine = null;
+    let ancienne = null;
+    for (let e = 1; e <= T && tickQuiDiscrimine === null; e += 1) {
+      const a = pvApresRetour({ ...rampe, ecouleTicks: e });
+      const n = pvSousUneSanteQuiRemonte({ ...rampe, ticksDeRemontee: T, ecouleTicks: e });
+      if (a !== n) { tickQuiDiscrimine = e; ancienne = a; }
+    }
+    assert.ok(tickQuiDiscrimine !== null,
+      `${type} : montage sans mordant — sous un Étai intact, les deux rampes coïncident à chaque tick`);
+    rattraperJeu(etatIntact, tickQuiDiscrimine);
+    assert.equal(montageCourant(etatIntact, cible).defenseurs[0].pvMilli, ancienne,
+      `${type} : un Étai INTACT a pris la rampe de la remontée au tick ${tickQuiDiscrimine} `
+      + `(attendu ${ancienne}, la formule d'avant)`);
+  }
+  assert.ok(ecartsDuFlottant > 0,
+    'montage sans mordant : le flottant ne se trompe sur aucun tick de la seconde heure, '
+    + 'donc ce test ne distinguerait pas un produit hors de `BigInt`');
 });
 
 test('RETOUR-D T15 — aucun bâtiment de camp ne revient, abîmé comme détruit', () => {

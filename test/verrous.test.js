@@ -20,6 +20,13 @@
 // seize rangées de défense et 78 défenses, et leur grille voyage jusqu'au
 // rejeu. Même règle qu'au-dessus : on mesure où sont les rangées et ce qui
 // rejoue, jamais si 78 défenses sont jouables — c'est l'affaire d'Ethan.
+//
+// ⚠⚠ UN TEST DE PLUS AU LOT ÉTAI-RÉTABLI, 25/09/2026 — `VERROU T8` —, ET IL
+// GARDE UN DÉFAUT TROUVÉ EN RELISANT, PAS UN ARBITRAGE. `retirerLeSite`
+// n'inscrivait parmi les ruines que le type `'base'` écrit en dur : un verrou
+// rasé par sa Souche rendait `{ rase: true }` et RESTAIT DEBOUT. Mesuré sur la
+// graine 2026 au build 188 : `basesRasees` à zéro entrée, six verrous debout —
+// la porte de la base finale ne pouvait donc jamais s'ouvrir.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -44,7 +51,12 @@ import {
   creerEtat, SAVE_VERSION, migrer, rattraperJeu, serialiser, charger, poserEffectif,
 } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
-import { creerCombat, resoudre, serialiserEtat } from '../src/sim/combat.js';
+import {
+  creerCombat, resoudre, serialiserEtat, construireResultat,
+} from '../src/sim/combat.js';
+import { enregistrerLeRaid } from '../src/sim/site-entame.js';
+import { campDeLaCase, territoireDeLaFenetre } from '../src/sim/territoire.js';
+import { spriteDeLaRuine } from '../src/render/embleme.js';
 import {
   densite, genererSite, facteurDeDefenseMilli, effectifDeDefense, tiersDeLaDefense,
   casesDeDefense,
@@ -414,7 +426,10 @@ test('VERROU T7 — la v39 retire les ruines tombées sous les sept emprises', (
   // ce test garde est que SON maillon, 38 → 39, est encore dans la chaîne.
   // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41. Ce que ce test
   // garde est que SON maillon, 38 → 39, est encore dans la chaîne — pas le nombre.
-  assert.equal(SAVE_VERSION, 41, 'SAVE_VERSION n\'est plus celle du lot ARTILLERIE-RECHERCHE');
+  // ⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 25/09/2026 : 41 → 42, maillon VIDE — le
+  // champ `retour.sansPalier` est facultatif, donc aucune v41 n'a rien à gagner
+  // à une conversion ; le numéro dit seulement qu'une v42 peut le porter.
+  assert.equal(SAVE_VERSION, 42, 'SAVE_VERSION n\'est plus celle du lot ÉTAI-RÉTABLI');
 
   // ⚠⚠ CE QUE CE MAILLON ÉVITE EST UNE PANNE MUETTE. `siteDeLaCase` interroge
   // `casesRasees` AVANT de rendre une grosse base : une case rasée sous une
@@ -452,6 +467,69 @@ test('VERROU T7 — la v39 retire les ruines tombées sous les sept emprises', (
     assert.ok(siteDeLaCase(etat, base.rangee, base.colonne),
       `« ${base.type} » reste introuvable après migration`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// T8 — un verrou rasé est une ruine, pas un rapport qui ment
+// ---------------------------------------------------------------------------
+
+test('VERROU T8 — raser un verrou par sa Souche l\'inscrit parmi les ruines', () => {
+  // ⚠⚠ C'EST LA PORTE DE LA BASE FINALE QUI EST EN JEU. `verrousDebout` compte
+  // les ancres qui ne sont PAS dans `casesRasees` : un verrou rasé que
+  // `retirerLeSite` n'inscrit pas reste compté debout pour toujours, et
+  // `finaleDeverrouillee` ne peut jamais rendre vrai. Rien ne lève — le raid
+  // dit « rasé », le joueur voit le verrou revenir, et la partie ne peut plus
+  // finir.
+  const etat = creerEtat(2026);
+  rattraperJeu(etat, 3001);
+  const p = positionsDesVerrous()[0];
+  const identite = siteDeLaCase(etat, p.rangee, p.colonne);
+  assert.ok(identite !== null, 'le montage ne mesure rien : aucun site sur le premier verrou');
+  assert.equal(identite.type, 'baseVerrou',
+    'le montage ne mesure rien : le premier verrou ne rend pas un verrou');
+
+  const avant = verrousDebout(etat);
+  const ruinesAvant = etat.basesRasees.length;
+  assert.equal(avant, positionsDesVerrous().length,
+    'le montage ne mesure rien : un verrou était déjà tombé');
+
+  // Un résultat de combat vrai — le montage régénéré du site —, dont on ne
+  // retient que la cause : c'est la seule chose que `enregistrerLeRaid` lise
+  // avant de raser.
+  const resultat = construireResultat(creerCombat(montageDuSite(etat.graine, identite)));
+  resultat.cause = 'souche';
+
+  assert.deepEqual(enregistrerLeRaid(etat, identite, resultat), { rase: true });
+  assert.equal(etat.basesRasees.length, ruinesAvant + 1,
+    'le verrou rasé n\'a pas rejoint les ruines');
+  assert.equal(verrousDebout(etat), avant - 1,
+    `le verrou rasé est toujours compté debout : ${verrousDebout(etat)} sur ${avant}`);
+
+  // ⚠ ET CHACUNE DES CASES DE SON EMPRISE CESSE DE LE RENDRE — pas seulement
+  // l'ancre. Une grosse base rend le MÊME site depuis chacune de ses cases
+  // (`VERROU T4`) ; une ruine qui ne mordrait que l'ancre laisserait le verrou
+  // attaquable par ses trois autres cases.
+  const e = empriseDeLaGrosseBase(GEOGRAPHIE.verrous.cotes, p);
+  assert.ok(e.cotes > 1, 'le montage ne mesure rien : un verrou d\'une seule case');
+  for (let r = e.rangee; r < e.rangee + e.cotes; r++) {
+    for (let c = e.colonne; c < e.colonne + e.cotes; c++) {
+      assert.equal(siteDeLaCase(etat, r, c), null,
+        `la case (${r}, ${c}) du verrou rasé porte toujours un site`);
+    }
+  }
+
+  // Et la ruine se dessine, et elle émet — le type qu'elle porte est celui du
+  // VAINCU, et les deux lecteurs doivent le connaître.
+  const ruine = etat.basesRasees.at(-1);
+  assert.equal(ruine.type, 'baseVerrou', 'la ruine n\'a pas le type du verrou');
+  assert.doesNotThrow(() => spriteDeLaRuine(ruine.type, 1));
+  assert.doesNotThrow(() => campDeLaCase(etat, p.rangee, p.colonne));
+  assert.doesNotThrow(() => territoireDeLaFenetre(etat, {
+    premiereRangee: Math.max(1, p.rangee - 5),
+    derniereRangee: p.rangee + 5,
+    premiereColonne: 1,
+    derniereColonne: GEOGRAPHIE.carte.largeur,
+  }));
 });
 
 // ---------------------------------------------------------------------------
@@ -680,7 +758,8 @@ test('LONGUE T2 — la grille longue voyage jusqu\'au rejeu, et le maillon la la
   v39.version = 39;
   const migre = migrer(v39);
   // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE : la chaîne ne s'arrête plus à 40.
-  assert.equal(migre.version, 41);
+  // ⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 25/09/2026 : ni à 41 — maillon vide 41 → 42.
+  assert.equal(migre.version, 42);
   assert.deepEqual(migre.rapports, JSON.parse(serialiser(ancien, 1_700_000_000_000)).rapports,
     'le maillon 39 → 40 a réécrit les rapports');
   assert.equal(JSON.stringify(migre.rapports[0].rejeu), JSON.stringify(rapportAncien.rejeu),

@@ -2604,7 +2604,10 @@ test('PD T10 — aucune migration : `SAVE_VERSION` ne bouge pas, aucune sauvegar
   // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
   // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
   // première ouverture de l'écran Recherche.
-  assert.equal(SAVE_VERSION, 41, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — ARTILLERIE-RECHERCHE, lui, y est passé (23/09)');
+  // ⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 25/09/2026 : 41 → 42, maillon VIDE — le
+  // champ `retour.sansPalier` est facultatif, donc aucune v41 n'a rien à gagner
+  // à une conversion ; le numéro dit seulement qu'une v42 peut le porter.
+  assert.equal(SAVE_VERSION, 42, 'le lot PRODUCTION-EN-DÉFENSE ne bumpe pas SAVE_VERSION — ÉTAI-RÉTABLI, lui, y est passé (25/09)');
   assert.notEqual(SAVE_VERSION, 40, 'le maillon des soutiens a été défait');
 
   // Une sauvegarde à la version courante traverse `migrer` sans être touchée.
@@ -2760,7 +2763,10 @@ test('MODULES-PIÈCE T1 — la migration v35 → v36 traduit les listes d\'un re
   // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
   // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
   // première ouverture de l'écran Recherche.
-  assert.equal(SAVE_VERSION, 41, 'la version cible a bougé : ce test est à reprendre');
+  // ⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 25/09/2026 : 41 → 42, maillon VIDE — le
+  // champ `retour.sansPalier` est facultatif, donc aucune v41 n'a rien à gagner
+  // à une conversion ; le numéro dit seulement qu'une v42 peut le porter.
+  assert.equal(SAVE_VERSION, 42, 'la version cible a bougé : ce test est à reprendre');
   assert.deepEqual(
     migre.rapports[0].rejeu.modulesDebloques.ouvrage,
     { offense: [], defense: ['herse', 'merlon', 'ronce'] },

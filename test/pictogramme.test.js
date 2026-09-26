@@ -484,7 +484,7 @@ test('PIC T6 — la famille neuve n\'a déplacé aucun des atlas d\'avant', () =
 // PIC T7 — le poids reste sous la borne, et la marge est écrite en clair
 // ---------------------------------------------------------------------------
 
-test('PIC T7 — le livrable pèse 10 608 405 octets, la marge sur la borne T10 est de 1,96 %', () => {
+test('PIC T7 — le livrable pèse 10 611 332 octets, la marge sur la borne T10 est de 1,93 %', () => {
   // ⚠⚠ DEUX MESURES, ET LA SECONDE EST CELLE QUI COMPTE. Le lot PICTOGRAMMES
   // avait produit les sprites SANS les câbler : le livrable n'avait alors pris
   // que **+911 octets**, tous en JavaScript, et le compte de `data:` n'avait pas
@@ -1051,12 +1051,51 @@ test('PIC T7 — le livrable pèse 10 608 405 octets, la marge sur la borne T10 
   // ⚠ LA BORNE T10 NE BOUGE PAS, ET C'EST §5 PRISE À LA LETTRE : elle se RELÈVE
   // quand une ressource entre légitimement, et ce lot n'en fait entrer aucune.
   // Marge **211 595 octets**, au-dessus du plancher de 150 000.
+  //
+  // ⚠⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 26/09/2026, ET C'EST ENCORE LE POURCENTAGE.
+  // Le lot coûte **+2 931 octets, ENTIÈREMENT DU JAVASCRIPT** : mesuré poste par
+  // poste contre le livrable rebâti dans un `git worktree` pristine de `main` =
+  // `78af575`, qui EST le merge du lot ARTILLERIE-RECHERCHE (**10 606 810**,
+  // retrouvé à l'octet), **images +0 · audio +0 · JavaScript +2 931 · feuille +0 ·
+  // balisage +0**, les cinq postes PARTITIONNANT le fichier des deux côtés —
+  // écart **0 · 0** — et `data:` à **316 lignes / 315 URI** de part et d'autre.
+  // La marge s'arrondit à **1,94 %** et non plus à 1,97 % : 2 931 octets valent
+  // un dix-septième de la tolérance, donc c'est la décimale qui l'a dit, pour la
+  // quatrième fois de suite. ⚠ Le brief annonçait **+2 216** sur son prototype :
+  // l'écart de 715 octets est MESURÉ ET NON ATTRIBUÉ — le prototype n'est pas au
+  // dépôt, donc rien ne se compare ligne à ligne, et le brief ne demandait pas
+  // de le tenir.
+  //
+  // ⚠ LA BORNE T10 NE BOUGE PAS, ET C'EST §5 PRISE À LA LETTRE : elle se RELÈVE
+  // quand une ressource entre légitimement, et ce lot n'en fait entrer aucune.
+  // Marge **210 259 octets**, au-dessus du plancher de 150 000.
+  //
+  // ⚠⚠ ET C'EST UN RÉANCRAGE DE FUSION, LE SIXIÈME : ÉTAI-RÉTABLI ET
+  // BARRES-ET-RÉPARER ONT ÉTÉ ÉCRITS EN PARALLÈLE SUR LA MÊME BASE `78af575`, ET
+  // LEURS DEUX ANCRES — 210 259 ET 211 595 — ÉTAIENT JUSTES SÉPARÉMENT ET FAUSSES
+  // ENSEMBLE. BARRES a atterri le premier : `main` = `252fb50` pèse **10 608 405**,
+  // retrouvé à l'octet dans un `git worktree` pristine. Le livrable fusionné pèse
+  // **10 611 332** — **+2 927 octets, ENTIÈREMENT DU JAVASCRIPT**, poste par poste :
+  // images +0 · audio +0 · JavaScript +2 927 · feuille +0 · balisage +0, partition
+  // exacte des deux côtés, `data:` à 316 lignes / 315 URI de part et d'autre.
+  // ⚠ **QUATRE OCTETS DE MOINS QUE LES 2 931 QU'ÉTAI MESURAIT SEUL** : la somme
+  // des deux diffs aurait donné 10 611 336, et c'est pourquoi le nombre se
+  // MESURE — `esbuild` ne rend pas la somme de deux lots qui touchent le même
+  // paquet. ⚠ Et `package.json` s'était auto-fusionné EN SILENCE : les deux lots
+  // avaient pris `0.99.77 · build 189`, git n'a vu aucun conflit, et deux
+  // livrables différents auraient porté le même `config.build`. La fusion prend
+  // **0.99.78 · build 190**, de même longueur, donc sans un octet d'écart.
+  // Marge **208 668 octets, 1,93 %**, au-dessus du plancher de 150 000.
   const BORNE = 10_820_000;          // T10 de `banc.test.js`, relevée au lot GRILLE LONGUE
-  const MESURE = 10_608_405;         // lot BARRES-ET-RÉPARER sur `main` = 78af575 (ARTILLERIE-RECHERCHE)
-  const MARGE = BORNE - MESURE;      // 211 595 octets — 213 190 avant le lot BARRES-ET-RÉPARER
-  assert.equal(MARGE, 211_595);
+  const MESURE = 10_611_332;         // fusion ÉTAI-RÉTABLI sur `main` = 252fb50 (BARRES-ET-RÉPARER)
+  const MARGE = BORNE - MESURE;      // 208 668 octets — 211 595 sur `main`, 210 259 pour ÉTAI seul
+  assert.equal(MARGE, 208_668);
+  assert.notEqual(MARGE, 210_259,
+    'la marge est celle d\'ÉTAI-RÉTABLI seul : la fusion avec BARRES-ET-RÉPARER a été défaite');
+  assert.notEqual(MARGE, 211_595,
+    'la marge est celle de BARRES-ET-RÉPARER seul : l\'Étai qui remonte n\'est plus dans le livrable');
   assert.notEqual(MARGE, 213_190,
-    'la marge est celle d\'ARTILLERIE-RECHERCHE : les barres de vie et le repli de « Tout réparer » ne sont plus dans le livrable');
+    'la marge est celle d\'ARTILLERIE-RECHERCHE : l\'Étai qui remonte n\'est plus dans le livrable');
   assert.notEqual(MARGE, 214_696,
     'la marge est celle d\'ARTILLERIE : la porte des trois soutiens n\'est plus dans le livrable');
   assert.notEqual(MARGE, 216_055,
@@ -1093,7 +1132,7 @@ test('PIC T7 — le livrable pèse 10 608 405 octets, la marge sur la borne T10 
     'la marge est celle d\'avant FREIN : le réancrage a été défait');
   assert.notEqual(MARGE, 213_293,
     'la marge est celle d\'avant ÉCHELLE-RECHERCHE : le réancrage a été défait');
-  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.96);  // 1,96 %
+  assert.equal(Math.round((MARGE / BORNE) * 10_000) / 100, 1.93);  // 1,93 %
   // ⚠ ET LA MARGE NE DESCEND PAS SOUS CENT CINQUANTE MILLE OCTETS. C'est la
   // borne que le brief du lot SOL-OUVRAGE pose sur le choix du côté des
   // planches : sous ce seuil, un lot de code ordinaire ne passerait plus.

@@ -526,7 +526,10 @@ test('JRN T10 — `SAVE_VERSION` ne bouge pas : rien n\'entre dans l\'état', ()
   // ⚠ RÉANCRÉ AU LOT ARTILLERIE-RECHERCHE, 23/09/2026 : 40 → 41, maillon qui
   // pose `recherche.soutiens` — sans lui, toute partie en cours lève à la
   // première ouverture de l'écran Recherche.
-  assert.equal(SAVE_VERSION, 41);
+  // ⚠ RÉANCRÉ AU LOT ÉTAI-RÉTABLI, 25/09/2026 : 41 → 42, maillon VIDE — le
+  // champ `retour.sansPalier` est facultatif, donc aucune v41 n'a rien à gagner
+  // à une conversion ; le numéro dit seulement qu'une v42 peut le porter.
+  assert.equal(SAVE_VERSION, 42);
 
   // Une sauvegarde écrite AVANT le lot se relit, journal compris.
   const etat = baseSousLeFeu();

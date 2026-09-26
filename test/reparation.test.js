@@ -1497,14 +1497,21 @@ test('RETOUR-D T10 — sans Complexe construit, la garnison ne revient JAMAIS', 
   assert.ok(piece.degatsMilli < degats, 'le Complexe posé n\'a rien changé');
 });
 
-test('RETOUR-D T11 — la santé se FIGE à l\'instant du raid', () => {
-  // ⚠ RÉPARER LE COMPLEXE ENSUITE NE RACCOURCIT PAS LA RAMPE EN COURS. C'est ce
-  // qui donne une raison de le garder entier AVANT d'être attaqué.
+test('RETOUR-D T11 — réparer le Complexe relance la rampe à pleine vitesse, sans palier', () => {
+  // ⚠⚠ RETOURNÉ LE 25/09, lot ÉTAI-RÉTABLI. Ce test s'appelait « la santé se
+  // FIGE à l'instant du raid » et il exigeait que réparer le Complexe NE
+  // raccourcisse PAS la rampe en cours. Ethan : « l'étai se restaure en 1 h, et
+  // donc sa puissance de récupération ». La santé reste figée DANS LE STAMP —
+  // c'est ce qui garde la rampe analytique —, mais quand celle du Complexe la
+  // dépasse, la pièce est RELANCÉE : d'où elle en est, à la vitesse neuve, et
+  // SANS le palier des 70 %, qui est ce que rend la FIN d'un raid et pas un coup
+  // de marteau sur le Complexe. Le montage n'a pas changé d'une ligne.
   const etat = baseAvecComplexe(5);
   santeDuComplexe(etat, 0.5);
   const piece = abimerLaPiece(poserEnGarnison(etat, 'merlon', 5), 0.5);
   tickJeu(etat);
   const avant = retourDeLaPiece(baseCourante(etat), piece, etat.horloge.nbTicks).ticks;
+  const pvMax = pvMaxDeLaPieceDeGarnisonMilli('merlon', 5);
   // ⚠ RÉÉCRIT LE 12/09 : la borne était « plus d'une heure », ce qu'une pièce à
   // moitié abîmée ne met plus sous aucun Complexe — elle met 15 % d'une heure à
   // pleine santé. Ce que le montage doit prouver n'a pas changé : le Complexe
@@ -1515,26 +1522,115 @@ test('RETOUR-D T11 — la santé se FIGE à l\'instant du raid', () => {
     niveauComplexe: 5,
     santeMilli: 1000,
     perdusMilli: piece.retour.degatsAuDebutMilli,
-    pvMaxMilli: pvMaxDeLaPieceDeGarnisonMilli('merlon', 5),
+    pvMaxMilli: pvMax,
   });
   assert.ok(avant > sousUnComplexeEntier,
     `le montage ne mesure rien : ${avant} ticks, autant qu'un Complexe entier`);
-  const degatsAvant = piece.degatsMilli;
+  const ancien = { ...piece.retour };
+  assert.ok(ancien.santeMilli < 1000, 'le montage ne mesure rien : le stamp du raid est à pleine santé');
+  assert.equal(ancien.sansPalier, undefined,
+    'le stamp posé par le filet porte « sansPalier » : le palier ne jouerait plus après un raid');
 
-  // Le Complexe est remis à neuf : la rampe en cours ne doit pas bouger.
+  // Le Complexe est remis à neuf, puis un tick passe. Ce que la relance doit
+  // faire, on le calcule AVANT de la regarder, par la fonction de la rampe et
+  // sur le stamp qu'elle remplace : les dégâts que l'ANCIENNE rampe explique à
+  // l'instant de la relance, et pas un milli-PV de moins.
   santeDuComplexe(etat, 1);
   tickJeu(etat);
-  const apres = retourDeLaPiece(baseCourante(etat), piece, etat.horloge.nbTicks).ticks;
-  assert.equal(apres, avant - 1, `l'échéance a bougé de ${avant - apres} ticks`);
-  assert.ok(piece.degatsMilli < degatsAvant, 'la rampe ne s\'est pas mise en route');
+  const maintenant = etat.horloge.nbTicks;
+  const attendus = pvMax - pvApresRetour({
+    pvMaxMilli: pvMax,
+    pvApresRaidMilli: pvMax - ancien.degatsAuDebutMilli,
+    niveau: 5,
+    niveauComplexe: ancien.niveauComplexe,
+    santeMilli: ancien.santeMilli,
+    ecouleTicks: maintenant - ancien.tickDuRaid,
+  });
+  assert.ok(attendus > 0, 'le montage ne mesure rien : l\'ancienne rampe avait fini');
+  assert.equal(piece.retour.santeMilli, 1000,
+    `la rampe n'a pas été relancée : sa santé vaut encore ${piece.retour.santeMilli}`);
+  assert.equal(piece.retour.sansPalier, true, 'la relance n\'est pas marquée « sans palier »');
+  assert.equal(piece.retour.tickDuRaid, maintenant,
+    'la relance est datée d\'un autre instant que le sien');
+  assert.equal(piece.retour.degatsAuDebutMilli, attendus,
+    'la relance repart d\'un autre point que celui où l\'ancienne rampe en était');
+  assert.equal(piece.degatsMilli, attendus,
+    `la relance a rendu des PV d'un coup : le palier a rejoué (${attendus - piece.degatsMilli} milli-PV de trop)`);
+
+  // L'échéance est celle d'une rampe NEUVE, sans palier, sous un Complexe entier
+  // — et elle est plus courte que celle qu'on quitte.
+  const apres = retourDeLaPiece(baseCourante(etat), piece, maintenant).ticks;
+  assert.equal(apres, ticksDeRetour({
+    niveau: 5,
+    niveauComplexe: 5,
+    santeMilli: 1000,
+    perdusMilli: attendus,
+    pvMaxMilli: pvMax,
+    avecPalier: false,
+  }), 'l\'échéance n\'est pas celle d\'une rampe neuve sans palier');
+  assert.ok(apres < avant - 1,
+    `la relance n'a rien raccourci : ${apres} ticks contre ${avant - 1}`);
+
+  // ⚠ STRICTEMENT : une santé ÉGALE ne relance plus. Sans ça, chaque tick
+  // restamperait la pièce, et elle ne reviendrait jamais.
+  const stamp = piece.retour.tickDuRaid;
+  tickJeu(etat);
+  assert.equal(piece.retour.tickDuRaid, stamp, 'une santé égale a relancé la rampe une seconde fois');
+  assert.ok(piece.degatsMilli < attendus, 'la rampe relancée n\'avance pas');
+
+  // ⚠ LE CHAMP N'A QUE DEUX FORMES : ABSENT, OU `true`. Un `false` écrit serait
+  // une seconde façon de dire « avec palier » ; et un aller-retour de sauvegarde
+  // doit garder la relance telle qu'elle est — sans quoi recharger rejouerait
+  // le palier sur une pièce déjà relancée.
+  assert.deepEqual(problemesDuRetour(piece.retour), []);
+  assert.equal(problemesDuRetour({ ...piece.retour, sansPalier: false }).length, 1,
+    'un « sansPalier: false » passe au chargement');
+  const indice = baseCourante(etat).garnison.indexOf(piece);
+  const relu = charger(serialiser(etat, 1_000), 1_000);
+  assert.equal(baseCourante(relu).garnison[indice].retour.sansPalier, true,
+    'la sauvegarde a perdu « sansPalier »');
+  assert.equal(baseCourante(relu).garnison[indice].degatsMilli, piece.degatsMilli,
+    'la sauvegarde rechargée a rendu des PV');
 
   // ⚠ FALSIFIABLE : une pièce abîmée APRÈS la réparation, elle, profite du
-  // Complexe neuf. Sans ce couple, « figée » serait vrai d'un code qui ne lit
-  // jamais la santé.
+  // Complexe neuf dès son stamp. Sans ce couple, « relancée » serait vrai d'un
+  // code qui ne lit jamais la santé.
   const neuve = abimerLaPiece(poserEnGarnison(etat, 'casemate', 5), 0.5);
   tickJeu(etat);
   assert.equal(retourDeLaPiece(baseCourante(etat), neuve, etat.horloge.nbTicks).ticks,
     9 * (TICKS_PAR_HEURE / 60), 'la pièce neuve n\'a pas profité du Complexe réparé');
+
+  // --- Les deux chemins d'avancement, par le VRAI geste ----------------------
+  // ⚠⚠ LA RELANCE SE FAIT DANS LE GESTE, ET C'EST CE QUI TIENT LES DEUX CHEMINS
+  // ENSEMBLE. `rattraperJeu` n'appelle `ramenerLaGarnison` qu'aux bornes de ses
+  // segments : si la réparation ne relançait pas elle-même, la boucle
+  // relancerait au tick suivant et le rattrapage bien plus tard.
+  const chemins = [];
+  for (const parBoucle of [true, false]) {
+    const e = baseAvecComplexe(5);
+    santeDuComplexe(e, 0.5);
+    const merlon = abimerLaPiece(poserEnGarnison(e, 'merlon', 5), 0.9);
+    tickJeu(e);
+    const laBase = baseCourante(e);
+    laBase.reserveReparationBatiments = 100 * TICKS_PAR_HEURE;
+    laBase.economie.ressources.quartz = 1_000_000_000;
+    const index = laBase.disposition.findIndex((b) => b.id === 'complexeDeDefense');
+    assert.deepEqual(problemesDeLaReparationDUnBatiment(e, index), [],
+      'le montage ne mesure rien : le Complexe ne se répare pas');
+    const tickDuGeste = e.horloge.nbTicks;
+    reparerUnBatiment(e, index);
+    if (parBoucle) for (let i = 0; i < 600; i += 1) tickJeu(e);
+    else rattraperJeu(e, 600);
+    chemins.push({ merlon, tickDuGeste });
+  }
+  const [boucle, saut] = chemins;
+  assert.equal(boucle.merlon.degatsMilli, saut.merlon.degatsMilli,
+    `boucle et rattrapage divergent après une réparation du Complexe : ${boucle.merlon.degatsMilli} contre ${saut.merlon.degatsMilli}`);
+  assert.equal(boucle.merlon.retour.tickDuRaid, saut.merlon.retour.tickDuRaid,
+    'boucle et rattrapage datent la relance de deux instants différents');
+  assert.equal(boucle.merlon.retour.tickDuRaid, boucle.tickDuGeste,
+    'la relance n\'a pas eu lieu à l\'instant du geste');
+  assert.equal(boucle.merlon.retour.sansPalier, true, 'le geste n\'a rien relancé');
 });
 
 test('RETOUR-D T12 — les deux chemins d\'avancement rendent la même garnison, RAID COMPRIS', () => {

@@ -805,10 +805,23 @@ test('C24 T19 — la carcasse est celle du vaincu, et seules les bases en laisse
   assert.equal(spriteDeLaRuine('base', 5), 'site_base_o_n5_ruine');
   assert.equal(spriteDeLaRuine('baseJoueur', 5), 'site_base_j_n5_ruine');
 
+  // ⚠⚠ UN VERROU ET LA FINALE SONT DES BASES, ET ILS LAISSENT LA RUINE D'UNE
+  // BASE DE L'OUVRAGE — lot ÉTAI-RÉTABLI, 25/09. Ce test mettait `baseTerminale`
+  // dans la liste de ce qui LÈVE : c'était vrai tant qu'un raid ne pouvait pas
+  // raser une grosse base, faux depuis que `retirerLeSite` lit `TYPES_DE_BASE`.
+  // Une ruine qui lève dans la boucle de dessin vide TOUT l'écran Monde — le
+  // défaut que `dessinerGrosseBase` a coûté au lot ZOOM-CONTINU. ⚠ Et le dessin
+  // est celui d'une case, pas celui d'une emprise 2 × 2 ou 3 × 3 : c'est une
+  // question d'art, posée à Ethan dans le rapport et non tranchée ici.
+  for (const type of ['baseVerrou', 'baseTerminale']) {
+    assert.equal(spriteDeLaRuine(type, 9), 'site_base_o_n9_ruine',
+      `« ${type} » ne rend pas la ruine d'une base de l'Ouvrage`);
+  }
+
   // ⚠ SEULES LES BASES EN LAISSENT — un camp ou un avant-poste RESPAWNE, et
   // l'art n'a pas de ruine pour eux. L'appel lève plutôt que de rendre un nom
   // absent de l'atlas, qui ne se verrait qu'au dessin.
-  for (const type of ['camp', 'avantPoste', 'baseTerminale', 'poiQuartz', 'inconnu']) {
+  for (const type of ['camp', 'avantPoste', 'poiQuartz', 'inconnu']) {
     assert.throws(() => spriteDeLaRuine(type, 5), /ne laisse pas de ruine/,
       `« ${type} » rend un nom de ruine`);
   }
