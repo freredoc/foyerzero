@@ -35,7 +35,7 @@
 // renommage d'image.
 
 import { ATLAS, COTE_SPRITE } from '../data/atlas.js';
-import { GEOGRAPHIE, POI } from '../data/sites.js';
+import { GEOGRAPHIE, POI, TYPES_DE_BASE } from '../data/sites.js';
 import { empriseDeLaGrosseBase } from '../sim/carte.js';
 import { existeDansAtlas, celluleDuSprite } from './sprite.js';
 
@@ -228,6 +228,16 @@ export function spriteDuSite(type, palier, saveur, avarie = 'aucune') {
  * de ruine de camp. Un appel avec un autre type LÈVE plutôt que de rendre un nom
  * absent de l'atlas : le sprite manquant se verrait au dessin, pas à l'appel.
  *
+ * ⚠⚠ « LES BASES », CE SONT LES TROIS TYPES DE `TYPES_DE_BASE` — lot
+ * ÉTAI-RÉTABLI, 25/09. Un verrou et la base finale sont des bases de l'Ouvrage,
+ * et depuis ce lot un verrou rasé par sa Souche entre bien dans `basesRasees` :
+ * il en sort une ruine `baseVerrou` ou `baseTerminale`, que `dessinerRuines` de
+ * `ui/monde.js` demande ICI, sans `try`. Lever sur ces deux types ferait tomber
+ * la carte à chaque image où la case rasée est à l'écran. Ils rendent la ruine
+ * de base de l'Ouvrage, posée sur la case d'ANCRAGE — une ruine à la taille de
+ * l'emprise 2 × 2 ou 3 × 3 demanderait de l'art : **question pour Ethan, non
+ * tranchée ici**. La liste se LIT dans `data/sites.js`, elle ne se recopie pas.
+ *
  * @param {string} type le type du site tombé, tel que `siteDeLaCase` le rend
  * @param {number} palier 1…9, de `palierDeNiveau`
  * @returns {string} un nom de la famille `carte`
@@ -236,7 +246,7 @@ export function spriteDeLaRuine(type, palier) {
   if (!Number.isInteger(palier) || palier < 1 || palier > 9) {
     throw new RangeError(`emblème : palier ${palier} hors de 1…9`);
   }
-  if (type === 'base') return `site_base_o_n${palier}${SUFFIXE_RUINE}`;
+  if (TYPES_DE_BASE.includes(type)) return `site_base_o_n${palier}${SUFFIXE_RUINE}`;
   if (type === 'baseJoueur') return `site_base_j_n${palier}${SUFFIXE_RUINE}`;
   throw new RangeError(
     `emblème : « ${type} » ne laisse pas de ruine — seules les bases en laissent`,

@@ -1816,9 +1816,11 @@ export function ruineDeLaCase(etat, rangee, colonne) {
  * Le titre du panneau d'une ruine.
  *
  * ⚠ LE NOM DE CE QUI EST TOMBÉ VIENT D'`EMBLEMES_CARTE`, comme celui d'un site.
- * `spriteDeLaRuine` n'accepte que `base` et `baseJoueur` — un camp ou un
- * avant-poste RESPAWNE et ne laisse rien —, donc les deux clés existent dans la
- * table ; un type hors table LÈVE plutôt que d'écrire un titre vide.
+ * `spriteDeLaRuine` n'accepte que les bases — les trois types de `TYPES_DE_BASE`
+ * et `baseJoueur` ; un camp ou un avant-poste RESPAWNE et ne laisse rien —, et
+ * les quatre clés existent dans la table : une ruine de verrou se titre « Ruine —
+ * Verrou » depuis le lot ÉTAI-RÉTABLI, qui l'a fait naître. Un type hors table
+ * LÈVE plutôt que d'écrire un titre vide.
  */
 export function nomDeLaRuine(ruine) {
   const embleme = EMBLEMES_CARTE[ruine.type];

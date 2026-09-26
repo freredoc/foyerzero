@@ -7,7 +7,85 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **23/09/2026**, version 0.99.76 · build 188.
+Dernière révision : **26/09/2026**, version 0.99.77 · build 189.
+⚠⚠ **L'ÉTAI SE RÉTABLIT EN UNE HEURE, SA PUISSANCE DE RÉCUPÉRATION REMONTE AVEC
+LUI, ET LES DÉFENSES QU'IL COMMANDE NE RESTENT PLUS À TERRE.** Lot ÉTAI-RÉTABLI.
+Ethan, 25/09 : « J'ai rasé un étai lors d'un raid puis AFK. Il est revenu à
+100 %, mais les défenses détruites ne se sont pas régénérées. » Le défaut était
+une GÉOMÉTRIE, pas un oubli : la santé de l'Étai était FIGÉE à l'instant du raid,
+donc un Étai rasé commandait une rampe de **999,97 h**, pendant que l'Étai
+lui-même revenait à 100 % au bout d'une heure sans que rien ne le relise. Mesuré
+au build 188 sur 34 défenses : **0,107 %** de PV rendus au bout de la première
+heure, défenses pleines au bout de **35 998 866 ticks**.
+⚠⚠ **LA SANTÉ RELEVÉE AU RAID EST UN POINT DE DÉPART, PLUS UNE VALEUR FIGÉE.**
+Ethan : « L'étai se restaure en 1 h, et donc sa puissance de récupération. » —
+« L'étai se régénère, il ne récupère pas 100 % d'un coup. » Côté OUVRAGE, la
+santé de l'Étai monte LINÉAIREMENT de `s0` à 1 000 sur `ticksDeRegeneration`
+(une heure, lue dans `TYPES_SITE[type].reparationHeures`), et la rampe des
+défenses INTÈGRE cette santé : l'intégrale est fermée — `2T·s0·e + (1000 −
+s0)·e²` jusqu'à `T`, affine ensuite —, calculée en **`BigInt`**, et l'échéance se
+trouve par BISSECTION ENTIÈRE. Mesuré, défenses pleines : Étai rasé **1,500 h**
+au lieu de 999,97 ; Étai à 50 % **0,897 h** au lieu de 1,300 ; Étai intact
+**0,300 h, inchangé au tick**.
+⚠⚠ **UN ÉTAI INTACT GARDE L'ANCIENNE FORMULE AU TICK PRÈS, ET C'EST UNE GARDE
+ÉCRITE.** `remonteeDeLEtai` rend `null` dès que la santé relevée vaut 1 000 : la
+forme neuve n'a rien à intégrer, et l'appliquer quand même déplacerait l'arrondi
+d'un milli-PV — mesuré par falsification, « un Étai INTACT a pris la rampe de la
+remontée au tick 7 (attendu 7775328, la formule d'avant) ». `RETOUR-D T13` le
+tient, sur les trois types de base.
+⚠⚠ **LES BÂTIMENTS DES TROIS TYPES DE BASE REMONTENT LINÉAIREMENT EN UNE HEURE,
+ET DEUX D'ENTRE EUX NE REMONTAIENT PAS DU TOUT.** `base` sautait de ses PV du
+raid à 100 % au bout d'une heure ; **`baseVerrou` et `baseTerminale` ne
+revenaient jamais** — `reparerLesSites` ne connaissait que `'base'` écrit en dur.
+`TYPES_DE_BASE` de `data/sites.js` fait foi désormais, et l'entrée de
+`sitesEntames` n'est JAMAIS réécrite pendant la remontée : tout se calcule à la
+lecture, et elle se PURGE au terme. Ethan, pour les verrous : « L'étai doit
+revenir aussi au bout d'une heure. »
+⚠⚠ **ET UN DÉFAUT DU LOT VERROUS A ÉTÉ TROUVÉ EN RELISANT : UN VERROU RASÉ PAR SA
+SOUCHE RESTAIT DEBOUT, DONC LA BASE FINALE NE POUVAIT JAMAIS S'OUVRIR.**
+`retirerLeSite` n'inscrivait parmi les ruines que `'base'`. Mesuré sur la graine
+2026, verrou (3, 16) : au build 188 `enregistrerLeRaid` rend `{ rase: true }` et
+`basesRasees` reste à **0 entrée, six verrous debout** ; après le lot, **1 entrée,
+cinq debout**, l'emprise vidée. `VERROU T8` le garde. ⚠ Conséquence déclarée :
+la mission `sites-detruits` de type `base` se coche désormais sur un verrou rasé.
+⚠ **TROIS SUITES DE CE CORRECTIF, TOUTES DÉCLARÉES** : `sim/territoire.js` borne
+son exposant à `NIVEAU_MAXIMAL_DUN_SITE` (**60**) et plus à 50 — la ruine d'une
+finale aurait levé ; `CAMP_D_ORIGINE_DE_LA_RUINE` se DÉRIVE de `TYPES_DE_BASE` ;
+et la ruine d'un verrou ou de la finale se dessine avec `site_base_o_n*_ruine`
+sur la case d'ancrage, pas à la taille de l'emprise — **question d'art ouverte,
+Ethan tranche**. `C24 T19` est retravaillé en conséquence.
+⚠⚠ **CÔTÉ JOUEUR, RÉPARER LE COMPLEXE RELANCE LA RAMPE — SANS REJOUER LE
+PALIER.** La garnison est réécrite au tick, donc elle ne peut pas intégrer une
+santé qui bouge sans changer la forme de l'état. `ramenerLaGarnison` RESTAMPE les
+pièces dont la santé stampée est sous celle du Complexe d'aujourd'hui —
+`tickDuRaid` remis à maintenant, dégâts au début = dégâts restants,
+**`sansPalier: true`** — et elle est appelée par `reparerUnBatiment`, par `poser`
+du Complexe et par `ameliorer`. Sans `sansPalier`, les 70 % se rejoueraient :
+mesuré par falsification, « le palier a rejoué (666092 milli-PV de trop) ».
+`RETOUR-D T11` est RETOURNÉ — il exigeait que la santé reste figée.
+⚠⚠ **`SAVE_VERSION` PASSE DE 41 À 42, PAR UN MAILLON VIDE.** `retour.sansPalier`
+est FACULTATIF — absent vaut « avec palier » —, donc aucune v41 n'a rien à
+convertir ; le numéro dit seulement qu'une v42 peut le porter, et
+`problemesDuRetour` refuse toute autre valeur que `true` ou l'absence. **Sept
+épingles** réancrées 41 → 42, dans six fichiers. La sauvegarde ne grandit pas
+d'un octet — `"version":42` a la longueur de `"version":41` — et le témoin de
+BASES-0 est **vert sans une ligne de changée**.
+⚠⚠ **LA RELECTURE HOSTILE DU BRIEF A ÉTÉ OBTENUE EN LANÇANT LA SUITE.** Deux
+questions : la forme neuve de la rampe peut-elle s'appliquer à un Étai intact, et
+un produit de l'intégrale passe-t-il hors de `BigInt` ? Les deux falsifications
+qui y répondent **ne mordaient pas au premier relevé** — suite entièrement
+verte. `RETOUR-D T13` a été RESSERRÉ — tronçon d'Étai intact comparé au tick,
+quotient exact vérifié dans la seconde heure —, et les deux tombent désormais,
+messages au rapport.
+⚠ **HORS PÉRIMÈTRE, NON TOUCHÉ** : le rapport de raid dit toujours « Étai 0 % »
+(c'est un relevé AU raid), `forceDeLaDefense` non plus, ni `RETOUR_DEFENSES`, ni
+le palier, ni le plancher ; les bâtiments du joueur se réparent toujours au
+geste. ⚠ Le paragraphe de `MODELE-REPARATION-1.md` qui décrit la pénalité
+linéaire à 24 h est périmé depuis le lot VITESSE — **relevé, non réécrit**.
+⚠ **LE RENDU N'A PAS ÉTÉ VU**, et `python3 tools/verifier.py` n'a pas été lancé —
+conforme : zéro fichier d'`art/` ou de `tools/` au diff.
+
+**Auparavant, après le lot ARTILLERIE-RECHERCHE (23/09) :**
 ⚠⚠ **LES TROIS SOUTIENS D'ARTILLERIE PRENNENT LEUR PORTE, ET LE LOT NE FAIT QUE
 ÇA.** Lot ARTILLERIE-RECHERCHE. `soutienAntiInfanterie`, `soutienAntiAerien` et
 `soutienAntiVehicule` portaient `cout: null` depuis le lot RECHERCHE — ni prix,
@@ -815,7 +893,37 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 23/09/2026 (après le lot ARTILLERIE-RECHERCHE), à confronter :**
+**Référence au 26/09/2026 (après le lot ÉTAI-RÉTABLI), à confronter :**
+`npm test` rend **1669 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 668 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **un**, `VERROU T8` dans
+`test/verrous.test.js` ; il RETOURNE `RETOUR-D T11` et RÉÉCRIT `RETOUR-D T13` sur
+les trois types de base. `test/` reste à **81** fichiers, et aucun fichier
+n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **10 609 741 octets**, 0 référence externe.
+Coût **+2 931 octets, ENTIÈREMENT DU JAVASCRIPT**, mesuré poste par poste contre
+le livrable rebâti dans un `git worktree` pristine de `main` = `78af575`, qui EST
+le merge du lot ARTILLERIE-RECHERCHE (**10 606 810**, retrouvé à l'octet) :
+**JavaScript +2 931 · images +0 · audio +0 · feuille +0 · balisage +0**, et les
+cinq postes PARTITIONNENT le fichier des deux côtés — écart **0 · 0**. `data:` à
+**316 lignes / 315 URI** de part et d'autre. Borne T10 **10 820 000, NON
+TOUCHÉE**, marge **210 259 octets, 1,94 %**, au-dessus du plancher de 150 000 ;
+`PIC T7` réancré **sur le POURCENTAGE** — les 2 931 octets valent un dix-septième
+de sa tolérance de 50 000. **Quatrième fois de suite que ce test est réancré par
+sa décimale plutôt que par sa tolérance.** ⚠ Le brief annonçait **10 609 026**
+pour son prototype : l'écart de **715 octets** est mesuré et NON attribué — le
+prototype n'est pas au dépôt, il n'y a rien à comparer ligne à ligne.
+⚠ **`SAVE_VERSION` PASSE DE 41 À 42 PAR UN MAILLON VIDE**, et la sauvegarde ne
+grandit pas d'un octet. Le témoin de BASES-0 ne prend **aucune** couche.
+⚠ Le lot touche `src/data/base.js` (prose), `src/render/embleme.js`,
+`src/sim/{reparation,site-entame,state,territoire}.js`, `src/ui/monde.js`
+(prose), **dix** fichiers de `test/`, `MODELE-REPARATION-1.md`, `package.json`,
+ce fichier et `rapports/RAPPORT-lotETAI-RETABLI.md`. **Pas une ligne de
+`src/son/`, `src/sim/combat.js`, `src/data/` hors `base.js`, `tools/` ni `art/`**
+— vérifié au diff.
+
+**Auparavant, après le lot ARTILLERIE-RECHERCHE (23/09) :**
 `npm test` rend **1668 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 667 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le

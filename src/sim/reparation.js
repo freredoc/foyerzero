@@ -1042,6 +1042,16 @@ export function reparerUnBatiment(etat, index) {
   laBase.reserveReparationBatiments -= ticks;
   laBase.economie.ressources.quartz -= quartz * MILLE;
   laBase.disposition[index].degatsMilli = 0;
+  // ⚠⚠ LA GARNISON SE RELANCE SUR-LE-CHAMP, PAS AU TICK SUIVANT — lot
+  // ÉTAI-RÉTABLI. Si ce bâtiment est le Complexe, sa santé vient de monter, et
+  // `ramenerLaGarnison` relance la rampe des pièces stampées plus bas. L'appeler
+  // ici n'est pas une précaution : le rattrapage n'appelle ce module qu'aux
+  // BORNES de ses segments, si bien que sans cet appel la relance tomberait au
+  // prochain tick sur un chemin et au bout de la fenêtre sur l'autre — mesuré,
+  // 1 664 123 milli-PV contre 1 688 480 sur la même pièce, six cents ticks plus
+  // tard. ⚠ Sur tout autre bâtiment l'appel ne change rien : la rampe est
+  // analytique, la relire au même instant ne la fait pas avancer.
+  ramenerLaGarnison(etat);
   return { batiment: cout.batiment, ticks, quartz };
 }
 
@@ -1203,16 +1213,30 @@ export function problemesDeLaReserveDesBatiments(reserve) {
 // CONSTRUCTION et non par vérification — la même raison que `reparerLesSites`
 // porte déjà, et la seule qui tienne devant un rattrapage de dix ans.
 //
-// ⚠⚠ LA SANTÉ SE FIGE À L'INSTANT DU RAID, ET LE NIVEAU DU COMPLEXE AVEC ELLE.
-// Réparer le Complexe ensuite NE RACCOURCIT PAS l'attente en cours — ça ne sert
-// que pour le raid suivant. C'est ce qui donne une raison de garder le Complexe
-// entier AVANT d'être attaqué, et non après. ⚠ ÉCART DÉCLARÉ AU BRIEF : il ne
-// nomme que trois champs et ne fige que la santé ; le niveau y est ajouté parce
-// que les deux décrivent LE MÊME bâtiment au MÊME instant, et qu'en figer un
-// seul ferait de l'autre une seconde vérité — une montée du Complexe
-// raccourcirait alors une attente déjà commencée, ce que le prorata figé refuse
-// justement. Conséquence assumée : démolir le Complexe pendant une attente ne
-// l'interrompt pas ; ce sont les dégâts SUIVANTS qui n'auront plus d'échéance.
+// ⚠⚠ LA SANTÉ SE FIGE À L'INSTANT DU RAID — ET C'EST UN POINT DE DÉPART DEPUIS
+// LE LOT ÉTAI-RÉTABLI, 25/09/2026, PLUS UNE FIN. Ethan : « l'étai se restaure en
+// 1 h, et donc sa puissance de récupération ». Le lot RETOUR-DÉFENSES (06/09)
+// figeait la santé pour toute la rampe, si bien qu'un Étai rasé à 1 PV — zéro
+// millième — ramenait ses défenses en MILLE heures, pendant que l'Étai, lui,
+// revenait entier au bout d'une heure. Ce qui change, camp par camp :
+//
+//   • CÔTÉ OUVRAGE (base, verrou, finale), la santé MONTE avec l'Étai, qui se
+//     régénère tout seul, linéairement, en une heure. La rampe se calcule alors
+//     par `pvSousUneSanteQuiRemonte` — l'intégrale de la vitesse sous une santé
+//     qui croît —, et plus par `pvApresRetour`. Le palier des 70 % reste celui
+//     de la fin du raid, sur la santé d'alors : il n'y en a pas un second.
+//   • CÔTÉ JOUEUR, le Complexe ne se régénère PAS — il se RÉPARE, par un geste.
+//     Quand sa santé du moment dépasse strictement celle qu'une pièce porte,
+//     `ramenerLaGarnison` RELANCE la rampe de cette pièce : dégâts du moment,
+//     santé neuve, niveau du jour, et `sansPalier: true` — on accélère ce qui
+//     reste, on ne rend pas un second palier.
+//
+// ⚠ LE NIVEAU DU COMPLEXE SE FIGE AVEC LA SANTÉ, ET POUR LA MÊME RAISON : les
+// deux décrivent le même bâtiment au même instant. Une relance les reprend
+// ENSEMBLE — le niveau du jour et la santé du jour —, jamais l'un sans l'autre.
+// ⚠ Et ce qui ne relance RIEN reste vrai : une santé qui BAISSE (Complexe
+// démoli, abîmé une seconde fois sans raid sur la pièce) ne ralentit pas une
+// attente commencée ; ce sont les dégâts SUIVANTS qui en porteront le prix.
 //
 // ⚠⚠ ET UN SECOND RAID PENDANT L'ATTENTE REPART DE ZÉRO — c'est un RENVERSEMENT
 // de la lecture du lot COMPLEXE, et il est forcé par la forme analytique. Une
@@ -1290,12 +1314,20 @@ export function complexeDeLaBase(laBase) {
  * La tentation, le 12/09, était de traiter la santé arrondie à zéro comme un
  * « jamais » : la règle de vitesse divise par la santé, et zéro y rend `Infinity`.
  * **Elle a été écrite, puis retirée sur la mesure.** Sur une base de l'Ouvrage,
- * `santeComplexeMilli` est FIGÉE au raid : un Étai laissé à 1 PV y vaut zéro
+ * `santeComplexeMilli` est relevée au raid : un Étai laissé à 1 PV y vaut zéro
  * millième, donc ses défenses ne seraient JAMAIS revenues et l'entrée n'aurait
  * jamais été purgée — le site serait resté sans défense pour toujours, là où la
  * règle d'avant le rendait en 24 h. Le « jamais » reste donc ce qu'il a toujours
  * été : pas de Complexe, ou un Complexe à ZÉRO PV. C'est `ticksDeRetour` qui
  * planche la DIVISION à un millième, et lui seul.
+ *
+ * ⚠⚠ ET DEPUIS LE LOT ÉTAI-RÉTABLI (25/09) CE ZÉRO-LÀ EST UN POINT DE DÉPART, PLUS
+ * UNE VITESSE. Ce que la phrase ci-dessus appelait « figée au raid » ne l'est plus
+ * que jusqu'au tick suivant : sur une base, l'Étai remonte à mille millièmes en une
+ * heure, et la rampe des défenses suit sa santé DU MOMENT — `pvSousUneSanteQuiRemonte`.
+ * Traiter le zéro comme un « jamais » couperait donc la rampe AVANT qu'elle ne
+ * démarre, et c'est exactement ce qu'Ethan a vu le 25/09 : l'Étai revenu à cent
+ * pour cent, les défenses restées à terre.
  *
  * ⚠ `undefined` EST TRAITÉ COMME `null` — une sauvegarde d'avant le champ, ou une
  * entrée de site que `santeFigee` n'a pas renseignée.
@@ -1367,25 +1399,25 @@ export function palierInstantaneMilli(perdusMilli, santeMilli) {
  * de `direLaDuree`. Une durée nulle diviserait par zéro dans la rampe, et une
  * éraflure que le palier rend en entier tombe très exactement dans ce cas.
  *
+ * ⚠⚠ `avecPalier` N'EXISTE QUE POUR LA RELANCE DU COMPLEXE — lot ÉTAI-RÉTABLI,
+ * 25/09. Une rampe que le joueur relance en réparant son Complexe n'a pas de fin
+ * de raid : le palier des 70 % a déjà été rendu au raid, et le rejouer rendrait
+ * une seconde fois des PV que personne n'a perdus. `false` rend donc TOUT ce qui
+ * reste par la rampe. Le défaut vaut `true`, et c'est tout le reste du dépôt.
+ *
  * @param {object} arg
  * @param {number} arg.niveau niveau de la PIÈCE
  * @param {number} arg.niveauComplexe
  * @param {number} arg.santeMilli dans [0, 1000] — `rendLesPv` en amont
  * @param {number} arg.perdusMilli les PV à rendre, GELÉS au tick du raid
  * @param {number} arg.pvMaxMilli les PV maximaux de la pièce
+ * @param {boolean} [arg.avecPalier=true] `false` pour une relance du Complexe
  * @returns {number} ticks, ≥ 1
  */
 export function ticksDeRetour({
-  niveau, niveauComplexe, santeMilli, perdusMilli, pvMaxMilli,
+  niveau, niveauComplexe, santeMilli, perdusMilli, pvMaxMilli, avecPalier = true,
 }) {
-  if (!Number.isInteger(niveau) || niveau < 1) {
-    throw new RangeError(`réparation : niveau de pièce « ${niveau} » — entier ≥ 1 attendu`);
-  }
-  if (!rendLesPv(santeMilli)) {
-    throw new RangeError(
-      `réparation : santé « ${santeMilli} » — rien ne revient, la durée n'a pas de sens`,
-    );
-  }
+  const facteur = controlerLaRampe({ niveau, niveauComplexe, santeMilli, pvMaxMilli });
   // ⚠⚠ LE PLANCHER DE DIVISION, ET IL NE TOUCHE PAS LE PALIER. La santé se range
   // en MILLIÈMES ENTIERS : un PV sur les 2 500 000 milli-PV du plus petit
   // Complexe possible vaut 0,4 millième, donc ZÉRO une fois arrondi — le cas est
@@ -1397,7 +1429,45 @@ export function ticksDeRetour({
   // rend rien, ce qui est juste, et surtout `pvApresRetour` calcule le sien avec
   // la même valeur : deux `reste` différents feraient diverger la rampe de son
   // échéance.
+  // ⚠⚠ « MILLE HEURES » EST VRAI DE CETTE FONCTION, ET FAUX DU JEU SUR UNE BASE DE
+  // L'OUVRAGE DEPUIS LE LOT ÉTAI-RÉTABLI. Là-bas l'Étai remonte à pleine santé en
+  // une heure, et c'est `ticksDeRetourSousUneSanteQuiRemonte` qui décrit l'attente :
+  // une pièce rasée sous un Étai laissé à zéro y revient en UNE HEURE ET DEMIE. Le
+  // plancher ne sert plus qu'à ce qui ne remonte pas — un camp, un avant-poste, et
+  // le Complexe du joueur tant qu'il n'est pas réparé.
   const santeQuiDivise = Math.max(1, santeMilli);
+  const perdus = Math.max(0, Math.min(pvMaxMilli, perdusMilli));
+  const reste = perdus - palierDeLaRampe(perdus, santeMilli, avecPalier);
+  const heures = (reste / pvMaxMilli)
+    * RETOUR_DEFENSES.heuresDeBase
+    * (MILLE / santeQuiDivise)
+    * (facteur / MILLE);
+  return Math.max(1, Math.ceil(heures * TICKS_PAR_HEURE));
+}
+
+/**
+ * Les quatre contrôles d'une rampe, écrits UNE fois pour ses deux formes.
+ *
+ * ⚠⚠ C'EST UNE FACTORISATION, PAS UNE RECOPIE, ET L'ORDRE EST CELUI D'AVANT.
+ * `ticksDeRetour` les portait en tête depuis le 12/09 ; la rampe sous une santé
+ * qui remonte a besoin des MÊMES — niveau entier, santé qui rend quelque chose,
+ * PV maximaux positifs, dépassement sous le plafond — et une seconde écriture du
+ * contrôle de plafond aurait laissé une des deux formes accepter un niveau que
+ * l'autre refuse. Les messages n'ont pas bougé d'un caractère : des tests les
+ * lisent.
+ *
+ * @param {{ niveau: number, niveauComplexe: number, santeMilli: number|null, pvMaxMilli: number }} arg
+ * @returns {number} le facteur de dépassement, en MILLIÈMES — `facteurMilli`
+ */
+function controlerLaRampe({ niveau, niveauComplexe, santeMilli, pvMaxMilli }) {
+  if (!Number.isInteger(niveau) || niveau < 1) {
+    throw new RangeError(`réparation : niveau de pièce « ${niveau} » — entier ≥ 1 attendu`);
+  }
+  if (!rendLesPv(santeMilli)) {
+    throw new RangeError(
+      `réparation : santé « ${santeMilli} » — rien ne revient, la durée n'a pas de sens`,
+    );
+  }
   if (!(pvMaxMilli > 0)) {
     throw new RangeError(`réparation : pvMax « ${pvMaxMilli} » — milli-PV > 0 attendus`);
   }
@@ -1408,13 +1478,25 @@ export function ticksDeRetour({
       + `Complexe niveau ${niveauComplexe}, plafond ${NIVEAU.plafond}`,
     );
   }
-  const perdus = Math.max(0, Math.min(pvMaxMilli, perdusMilli));
-  const reste = perdus - palierInstantaneMilli(perdus, santeMilli);
-  const heures = (reste / pvMaxMilli)
-    * RETOUR_DEFENSES.heuresDeBase
-    * (MILLE / santeQuiDivise)
-    * (facteurMilli(1 + depassement) / MILLE);
-  return Math.max(1, Math.ceil(heures * TICKS_PAR_HEURE));
+  return facteurMilli(1 + depassement);
+}
+
+/**
+ * Le palier de la rampe, ou rien — la seule lecture d'`avecPalier`.
+ *
+ * ⚠ UN BOOLÉEN, ET RIEN D'AUTRE. Une chaîne `'false'` est VRAIE en JavaScript : elle
+ * rendrait le palier à une relance et ferait sauter la pièce d'un coup, sans lever.
+ *
+ * @param {number} perdusMilli
+ * @param {number} santeMilli
+ * @param {boolean} avecPalier
+ * @returns {number} milli-PV
+ */
+function palierDeLaRampe(perdusMilli, santeMilli, avecPalier) {
+  if (avecPalier !== true && avecPalier !== false) {
+    throw new RangeError(`réparation : avecPalier « ${avecPalier} » — booléen attendu`);
+  }
+  return avecPalier ? palierInstantaneMilli(perdusMilli, santeMilli) : 0;
 }
 
 /**
@@ -1463,10 +1545,13 @@ export function ticksDeRetourDUnePieceRasee(niveau, niveauComplexe, santeMilli) 
  * @param {number} arg.niveauComplexe niveau du Complexe ou de l'Étai
  * @param {number|null} arg.santeMilli santé FIGÉE, `null` = rien ne revient
  * @param {number} arg.ecouleTicks depuis le raid
+ * @param {boolean} [arg.avecPalier=true] `false` pour une relance du Complexe —
+ *   voir `ticksDeRetour`
  * @returns {number} milli-PV courants
  */
 export function pvApresRetour({
   pvMaxMilli, pvApresRaidMilli, niveau, niveauComplexe, santeMilli, ecouleTicks,
+  avecPalier = true,
 }) {
   const apres = Math.max(0, Math.min(pvMaxMilli, pvApresRaidMilli));
   const perdus = pvMaxMilli - apres;
@@ -1477,13 +1562,174 @@ export function pvApresRetour({
   // Une pièce à zéro a tout perdu, donc elle se relève à 70 % × santé — c'est le
   // changement de fond du 05/09, la règle d'avant ne touchant que les
   // survivantes d'un camp.
-  const instantane = palierInstantaneMilli(perdus, santeMilli);
+  const instantane = palierDeLaRampe(perdus, santeMilli, avecPalier);
   const duree = ticksDeRetour({
-    niveau, niveauComplexe, santeMilli, perdusMilli: perdus, pvMaxMilli,
+    niveau, niveauComplexe, santeMilli, perdusMilli: perdus, pvMaxMilli, avecPalier,
   });
   const ecoule = Math.max(0, ecouleTicks);
   if (ecoule >= duree) return pvMaxMilli;
   return apres + instantane + Math.floor(((perdus - instantane) * ecoule) / duree);
+}
+
+/**
+ * Ce que la rampe a rendu après `e` ticks, quand la santé qui la pilote REMONTE
+ * — l'intégrale de la vitesse, en milli-PV.
+ *
+ * ⚠⚠ LA VITESSE DE LA RÈGLE, INTÉGRÉE ET NON RÉÉCRITE. `ticksDeRetour` rend des PV
+ * à `pvMax × s / (H × fM)` par tick sous une santé `s` fixe, `H` étant
+ * `heuresDeBase` en ticks et `fM` le facteur de dépassement en millièmes. La santé
+ * remonte ici linéairement de `s0` à mille en `T` ticks, puis reste pleine : la
+ * somme de la vitesse sur `[0, e]` vaut `pvMax × Σ(e) / (2T × H × fM)` avec
+ *
+ *     Σ(e) = 2T·s0·e + (1000 − s0)·e²             pour e ≤ T
+ *     Σ(e) = T²·(s0 + 1000) + 2T·1000·(e − T)      pour e > T
+ *
+ * Sous `s0 = 0`, `T = H` et une pièce à son niveau, la moitié revient à l'heure et
+ * le tout à une heure et demie — le relevé du brief, rejoué par `RETOUR-D T13`.
+ *
+ * ⚠⚠ TOUT LE PRODUIT EN `BigInt`, ET LA DIVISION EN DERNIER. `pvMax` va jusqu'à
+ * quelques 10⁸ milli-PV au niveau 60 et `Σ` jusqu'à quelques 10¹² : le produit
+ * passe 10²⁰, cent mille fois l'entier sûr. En flottant il perdrait des unités
+ * exactement dans les cas qu'on assert au milli-PV près. Le quotient, lui, tient
+ * sous `pvMax`, donc il redevient un `Number` sans rien perdre.
+ *
+ * @param {number} pvMaxMilli entier
+ * @param {number} santeMilli santé au raid, dans [0, 1000]
+ * @param {number} facteur facteur de dépassement, en millièmes
+ * @param {number} ticksDeRemontee `T`
+ * @param {number} e ticks écoulés, ≥ 0
+ * @returns {number} milli-PV rendus par la rampe, sans borne haute
+ */
+function renduSousUneSanteQuiRemonte(pvMaxMilli, santeMilli, facteur, ticksDeRemontee, e) {
+  const h = BigInt(RETOUR_DEFENSES.heuresDeBase * TICKS_PAR_HEURE);
+  const t = BigInt(ticksDeRemontee);
+  const s0 = BigInt(santeMilli);
+  const mille = BigInt(MILLE);
+  const x = BigInt(e);
+  const sigma = e <= ticksDeRemontee
+    ? 2n * t * s0 * x + (mille - s0) * x * x
+    : t * t * (s0 + mille) + 2n * t * mille * (x - t);
+  return Number((BigInt(pvMaxMilli) * sigma) / (2n * t * h * BigInt(facteur)));
+}
+
+/**
+ * Les contrôles propres à la remontée, en plus de ceux de toute rampe.
+ *
+ * ⚠ `BigInt` LÈVERAIT DE TOUTE FAÇON SUR UN NON-ENTIER, mais avec un message qui ne
+ * nomme ni la pièce ni la grandeur. On nomme.
+ */
+function controlerLaRemontee({ santeMilli, pvMaxMilli, ticksDeRemontee }) {
+  if (!Number.isInteger(ticksDeRemontee) || ticksDeRemontee < 1) {
+    throw new RangeError(
+      `réparation : remontée de « ${ticksDeRemontee} » ticks — entier ≥ 1 attendu`,
+    );
+  }
+  if (!Number.isInteger(pvMaxMilli)) {
+    throw new RangeError(`réparation : pvMax « ${pvMaxMilli} » — milli-PV ENTIERS attendus`);
+  }
+  if (!Number.isInteger(santeMilli) || santeMilli < 0 || santeMilli > MILLE) {
+    throw new RangeError(`réparation : santé « ${santeMilli} » — 0…${MILLE} attendu`);
+  }
+}
+
+/**
+ * Combien de ticks la rampe met à rendre ce qui reste, quand la santé du Complexe
+ * — l'Étai, côté Ouvrage — REMONTE de sa valeur au raid jusqu'à mille millièmes
+ * en `ticksDeRemontee`.
+ *
+ * ⚠⚠ C'EST LA JUMELLE DE `ticksDeRetour`, SUR LES MÊMES CONSTANTES — lot
+ * ÉTAI-RÉTABLI, 25/09. Ethan : « l'étai se restaure en 1 h, et donc sa puissance
+ * de récupération ». Même `heuresDeBase`, même palier des 70 % pris sur la santé
+ * AU RAID, même facteur de dépassement, mêmes contrôles — `controlerLaRampe` est
+ * appelée par les deux. Seule change la VITESSE, qui suit la santé du moment.
+ *
+ * ⚠⚠ UNE BISSECTION ENTIÈRE, PAS UNE RACINE. L'attente est le plus petit `e` où
+ * l'intégrale atteint ce qui reste ; la résoudre par la formule du second degré
+ * demanderait une racine en flottant, et une racine qui tombe d'un ulp à côté
+ * rendrait une échéance que la rampe dément d'un tick — la pièce serait déclarée
+ * revenue un tick avant d'avoir ses PV, ou l'inverse. La borne haute se prend
+ * large : `T` plus l'attente à pleine santé plus deux, où l'intégrale a rendu
+ * au moins tout ce qui reste, quelle que soit la santé de départ.
+ *
+ * ⚠ PLANCHER À UN TICK, comme `ticksDeRetour` : une éraflure que le palier rend en
+ * entier ne doit pas rendre une durée nulle.
+ *
+ * @param {object} arg
+ * @param {number} arg.niveau niveau de la PIÈCE
+ * @param {number} arg.niveauComplexe niveau de l'Étai, figé au raid
+ * @param {number} arg.santeMilli santé AU RAID, dans [0, 1000]
+ * @param {number} arg.perdusMilli les PV perdus au raid
+ * @param {number} arg.pvMaxMilli les PV maximaux de la pièce
+ * @param {number} arg.ticksDeRemontee le temps que met la santé à redevenir pleine
+ * @returns {number} ticks, ≥ 1
+ */
+export function ticksDeRetourSousUneSanteQuiRemonte({
+  niveau, niveauComplexe, santeMilli, perdusMilli, pvMaxMilli, ticksDeRemontee,
+}) {
+  const facteur = controlerLaRampe({ niveau, niveauComplexe, santeMilli, pvMaxMilli });
+  controlerLaRemontee({ santeMilli, pvMaxMilli, ticksDeRemontee });
+  const perdus = Math.max(0, Math.min(pvMaxMilli, perdusMilli));
+  const reste = perdus - palierInstantaneMilli(perdus, santeMilli);
+  if (reste <= 0) return 1;
+  const pleine = ticksDeRetour({
+    niveau, niveauComplexe, santeMilli: MILLE, perdusMilli: reste, pvMaxMilli, avecPalier: false,
+  });
+  let bas = 1;
+  let haut = ticksDeRemontee + pleine + 2;
+  while (bas < haut) {
+    const milieu = Math.floor((bas + haut) / 2);
+    const rendu = renduSousUneSanteQuiRemonte(
+      pvMaxMilli, santeMilli, facteur, ticksDeRemontee, milieu,
+    );
+    if (rendu >= reste) haut = milieu;
+    else bas = milieu + 1;
+  }
+  return bas;
+}
+
+/**
+ * LE CŒUR DE LA RÈGLE, QUAND LE COMPLEXE REVIENT LUI AUSSI — les milli-PV courants
+ * d'une pièce de défense sous un Étai qui se régénère.
+ *
+ * ⚠⚠ ELLE NE REMPLACE PAS `pvApresRetour`, ELLE LA PROLONGE. Même palier, pris sur
+ * la santé AU RAID ; même garde « rien ne revient » ; même lecture seule de ses
+ * arguments. Ce qui diffère est la rampe : `min(reste, rendu(e))`, où `rendu` est
+ * l'intégrale d'une vitesse qui monte avec l'Étai au lieu d'une droite. Le
+ * `min` suffit à rendre la pièce entière exactement quand l'attente se termine :
+ * `ticksDeRetourSousUneSanteQuiRemonte` est le PREMIER `e` où `rendu(e) ≥ reste`.
+ *
+ * ⚠⚠ ELLE NE SERT QU'AUX BASES DE L'OUVRAGE, ET SEULEMENT SOUS UN ÉTAI ENTAMÉ. Un
+ * camp garde sa santé figée, et un Étai intact rend la formule d'avant au tick
+ * près — c'est `sim/site-entame.js` qui choisit, et les témoins de combat qui
+ * gardent la seconde moitié.
+ *
+ * @param {object} arg
+ * @param {number} arg.pvMaxMilli
+ * @param {number} arg.pvApresRaidMilli ce que le raid a laissé
+ * @param {number} arg.niveau niveau de la PIÈCE
+ * @param {number} arg.niveauComplexe niveau de l'Étai
+ * @param {number|null} arg.santeMilli santé AU RAID, `null` = rien ne revient
+ * @param {number} arg.ticksDeRemontee le temps que met l'Étai à redevenir plein
+ * @param {number} arg.ecouleTicks depuis le raid
+ * @returns {number} milli-PV courants
+ */
+export function pvSousUneSanteQuiRemonte({
+  pvMaxMilli, pvApresRaidMilli, niveau, niveauComplexe, santeMilli, ticksDeRemontee,
+  ecouleTicks,
+}) {
+  const apres = Math.max(0, Math.min(pvMaxMilli, pvApresRaidMilli));
+  const perdus = pvMaxMilli - apres;
+  if (perdus <= 0) return pvMaxMilli;
+  if (!rendLesPv(santeMilli)) return apres;
+  const facteur = controlerLaRampe({ niveau, niveauComplexe, santeMilli, pvMaxMilli });
+  controlerLaRemontee({ santeMilli, pvMaxMilli, ticksDeRemontee });
+  const instantane = palierInstantaneMilli(perdus, santeMilli);
+  const reste = perdus - instantane;
+  const ecoule = Math.max(0, ecouleTicks);
+  const rendu = renduSousUneSanteQuiRemonte(
+    pvMaxMilli, santeMilli, facteur, ticksDeRemontee, ecoule,
+  );
+  return apres + instantane + Math.min(reste, rendu);
 }
 
 /**
@@ -1537,8 +1783,21 @@ export function retourDeLaPiece(laBase, piece, maintenant) {
     santeMilli: r.santeMilli,
     perdusMilli: r.degatsAuDebutMilli,
     pvMaxMilli,
+    avecPalier: avecPalierDuRetour(r),
   });
   return { etat: 'en-attente', ticks: Math.max(0, r.tickDuRaid + duree - maintenant) };
+}
+
+/**
+ * Le palier se rejoue-t-il pour ce stamp-là ?
+ *
+ * ⚠ LA SEULE LECTURE DE `sansPalier`. Le champ n'existe que sur un stamp posé par
+ * une RELANCE du Complexe, et il vaut alors `true` ; partout ailleurs il est
+ * absent. Deux lecteurs — l'écran et la rampe — qui le liraient chacun à sa façon
+ * finiraient par ne pas dire la même chose d'une pièce.
+ */
+function avecPalierDuRetour(retour) {
+  return retour.sansPalier !== true;
 }
 
 /** Les dégâts que la rampe explique à cet instant, pour une pièce stampée. */
@@ -1551,6 +1810,7 @@ function degatsAttendusMilli(piece, maintenant) {
     niveauComplexe: piece.retour.niveauComplexe,
     santeMilli: piece.retour.santeMilli,
     ecouleTicks: maintenant - piece.retour.tickDuRaid,
+    avecPalier: avecPalierDuRetour(piece.retour),
   });
   return pvMax - pv;
 }
@@ -1601,6 +1861,18 @@ function degatsAttendusMilli(piece, maintenant) {
  * ⚠ TOUTES LES BASES, PAS SEULEMENT LA COURANTE — même raison que
  * `crediterLesReserves` : la base qu'on ne regarde pas doit vivre aussi.
  *
+ * ⚠⚠ ET ELLE RELANCE CE QUE LE COMPLEXE PEUT DÉSORMAIS RAMENER PLUS VITE — lot
+ * ÉTAI-RÉTABLI, 25/09. La santé d'un stamp est figée au raid, comme avant ; mais
+ * quand la santé ACTUELLE du Complexe la dépasse STRICTEMENT, la pièce reçoit un
+ * stamp neuf, qui part des dégâts que l'ancienne rampe explique à cet instant, à
+ * la vitesse neuve et SANS PALIER — `sansPalier: true`. Côté joueur la santé du
+ * Complexe ne monte que par un GESTE, et les trois qui la font monter —
+ * `reparerUnBatiment`, `ameliorer`, et `poser` d'un Complexe — appellent cette
+ * fonction avant de rendre la main, sans quoi les deux chemins d'avancement ne
+ * relanceraient pas au même tick. Côté Ouvrage il n'y a rien à relancer :
+ * `sim/site-entame.js` calcule la même idée analytiquement, l'Étai y remontant
+ * tout seul en une heure.
+ *
  * @param {object} etat modifié en place
  * @returns {number} nombre de pièces touchées
  */
@@ -1633,6 +1905,39 @@ export function ramenerLaGarnison(etat) {
               // « stamper `santeMilli: null` la condamnerait pour toujours ».
               || !rendLesPv(piece.retour.santeMilli))) {
         piece.retour = null;
+      }
+      if (piece.retour !== null && piece.retour !== undefined) {
+        // ⚠⚠ LA RELANCE — lot ÉTAI-RÉTABLI, 25/09. Ethan : « l'étai se restaure en
+        // 1 h, et donc sa puissance de récupération ». Côté joueur le Complexe ne
+        // se régénère pas tout seul : sa santé ne MONTE que par un geste — le
+        // réparer, l'améliorer, en poser un neuf. Quand elle dépasse STRICTEMENT
+        // celle que le stamp a figée, la rampe repart d'où elle en est, à la
+        // vitesse neuve, et SANS PALIER : les 70 % d'un coup sont ce que la FIN
+        // D'UN RAID rend, et un coup de marteau sur le Complexe n'en est pas une.
+        // Les rejouer ferait de chaque réparation un soin instantané.
+        // ⚠ STRICTEMENT : une santé égale ou plus basse ne touche à rien — un raid
+        // qui entame le Complexe ne ralentit pas ce qui revient déjà.
+        if (complexe === undefined) complexe = complexeDeLaBase(base);
+        if (complexe !== null && rendLesPv(complexe.santeMilli)
+            && complexe.santeMilli > piece.retour.santeMilli) {
+          // (1) ce que l'ancienne rampe avait déjà rendu, à l'instant même ;
+          const restants = degatsAttendusMilli(piece, maintenant);
+          piece.degatsMilli = restants;
+          touches += 1;
+          // (2) rien à relancer si elle avait fini ;
+          if (restants <= 0) {
+            piece.retour = null;
+            continue;
+          }
+          // (3) sinon, un stamp neuf qui part d'ici, sous le Complexe du jour.
+          piece.retour = {
+            tickDuRaid: maintenant,
+            santeMilli: complexe.santeMilli,
+            niveauComplexe: complexe.niveau,
+            degatsAuDebutMilli: restants,
+            sansPalier: true,
+          };
+        }
       }
       if (piece.retour === null || piece.retour === undefined) {
         if (complexe === undefined) complexe = complexeDeLaBase(base);
@@ -1682,6 +1987,13 @@ export function problemesDuRetour(valeur) {
   const s = valeur.santeMilli;
   if (s !== null && (!Number.isInteger(s) || s < 0 || s > MILLE)) {
     problemes.push(`retour de défense — santé « ${s} » : 0…${MILLE} ou null attendu`);
+  }
+  // ⚠ `sansPalier` N'A QUE DEUX FORMES LÉGALES : ABSENT, OU `true`. Un `false`
+  // écrit serait une seconde façon de dire « avec palier », et deux écritures
+  // d'un même fait finissent par ne plus dire la même chose — `avecPalierDuRetour`
+  // ne lit que `=== true`.
+  if (valeur.sansPalier !== undefined && valeur.sansPalier !== true) {
+    problemes.push(`retour de défense — « sansPalier » vaut « ${valeur.sansPalier} » : true ou absent attendu`);
   }
   return problemes;
 }

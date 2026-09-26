@@ -1122,13 +1122,24 @@ export const REPARATION_BASE_JOUEUR = {
 // Écrire « 1 » ici ferait deux vérités pour la même heure, et la seconde
 // resterait à 1 le jour où Ethan changerait la première.
 //
-//     santé       = PV restants du Complexe / ses PV maximaux   FIGÉE AU RAID
+//     santé       = PV restants du Complexe / ses PV maximaux   RELEVÉE AU RAID
 //     dépassement = max(0, niveau de la pièce − niveau du Complexe)
 //     instantané  = partInstantaneeMilli/1000 × PV perdus × santé   À LA FIN DU RAID
 //     durée       = heuresDeBase × facteurMilli(1 + dépassement)/1000
 //                                × pénalité(santé)
 //     pv(t)       = pvAprèsRaid + instantané
 //                   + (PV perdus − instantané) × min(1, écoulé / durée)
+//
+// ⚠⚠ « RELEVÉE AU RAID » EST UN POINT DE DÉPART DEPUIS LE 25/09, PLUS UNE
+// VITESSE POUR TOUTE LA RAMPE — lot ÉTAI-RÉTABLI. Ethan : « l'étai se restaure
+// en 1 h, et donc sa puissance de récupération ». Côté OUVRAGE, sur une base,
+// un verrou et la finale, l'Étai remonte linéairement de cette santé à 1000 en
+// `reparationHeures`, et la vitesse de la défense suit la santé de l'Étai À
+// CHAQUE INSTANT — `pvSousUneSanteQuiRemonte` de `sim/reparation.js`. Côté
+// JOUEUR le Complexe ne se régénère pas : ce qui fait monter sa santé est un
+// GESTE, et la rampe repart alors d'où elle en est, sans palier. Le palier
+// ci-dessous, lui, ne se joue qu'à la FIN D'UN RAID, avec la santé relevée au
+// raid — des deux côtés.
 //
 // ⚠⚠ LE PALIER PORTE SUR L'ENSEMBLE DE LA DÉFENSE, DÉTRUITES COMPRISES — ETHAN,
 // 05/09. Chaque pièce regagne d'un coup 70 % de SES PROPRES PV perdus, multipliés

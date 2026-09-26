@@ -49,7 +49,7 @@ import {
 } from './economie-base.js';
 import {
   BASE_BATIMENTS, BATIMENT_DE_CHASSIS, coutDeMontee, remboursementDuNiveau,
-  messageSansBatiment,
+  messageSansBatiment, RETOUR_DEFENSES,
 } from '../data/base.js';
 import {
   GEOGRAPHIE, POINTS_ARMEE, EMPLACEMENTS_ASSAUT, APRES_RAID,
@@ -81,7 +81,7 @@ import { ARBRE_RECHERCHE, gratuitesDe } from '../data/recherche.js';
 export { baseCourante } from './base-courante.js';
 
 /** Version courante du format de sauvegarde. */
-export const SAVE_VERSION = 41;
+export const SAVE_VERSION = 42;
 
 /**
  * Les DOUZE champs qui appartiennent à UNE BASE — lot BASES-0, 02/09/2026.
@@ -994,6 +994,14 @@ export function poser(etat, id, rangee, colonne) {
   const residu = {};
   for (const r of RESSOURCES) residu[r] = 0;
   base.economie.residus.push(residu);
+  // ⚠⚠ UN COMPLEXE NEUF EST UN COMPLEXE ENTIER, DONC UNE SANTÉ QUI MONTE — lot
+  // ÉTAI-RÉTABLI. La garnison encore stampée sous l'ancien, démoli ou tombé, se
+  // relance sur-le-champ à pleine vitesse ; au prochain tick, un des deux chemins
+  // d'avancement l'aurait fait et pas l'autre. SEUL le bâtiment qui commande le
+  // retour déclenche l'appel, et on le LIT dans la table — un
+  // `'complexeDeDefense'` écrit ici serait la seconde vérité que `CLAUDE.md` §4
+  // interdit.
+  if (id === RETOUR_DEFENSES.indexeeSur) ramenerLaGarnison(etat);
   return etat;
 }
 
@@ -1237,6 +1245,13 @@ export function ameliorer(etat, index) {
     for (const r of RESSOURCES) base.economie.ressources[r] -= cout[r] * MILLI;
   }
   batiment.niveau += 1;
+  // ⚠ LA GARNISON SE RELANCE SUR-LE-CHAMP — lot ÉTAI-RÉTABLI. Monter un
+  // Complexe ABÎMÉ lève ses PV maximaux sans toucher à ses dégâts, qui sont un
+  // absolu : sa santé en millièmes MONTE donc toute seule, et `ramenerLaGarnison`
+  // relance ce qu'elle ramène plus vite. C'est une conséquence de la règle, pas
+  // un cadeau ajouté — et c'est dit pour que personne ne la « corrige ». Sur tout
+  // autre bâtiment l'appel ne change rien : la rampe est analytique.
+  ramenerLaGarnison(etat);
   return etat;
 }
 
@@ -3630,6 +3645,31 @@ const MIGRATIONS = {
     s.version = 41;
     if (s.recherche === null || typeof s.recherche !== 'object') return;
     if (!Array.isArray(s.recherche.soutiens)) s.recherche.soutiens = [];
+  },
+
+  /**
+   * v41 → v42 : le stamp de retour d'une pièce de garnison peut porter
+   * `sansPalier` — lot ÉTAI-RÉTABLI, 26/09/2026.
+   *
+   * ⚠⚠ C'EST UNE MONTÉE DE VERSION SANS TRANSFORMATION, ET ELLE LE DIT EN TOUTES
+   * LETTRES POUR QU'ON NE LA LISE PAS COMME UN OUBLI — même forme que le maillon
+   * 39 → 40. Ce qui change est la FORME d'un champ persisté :
+   * `ramenerLaGarnison` pose `sansPalier: true` sur le stamp d'une pièce qu'une
+   * RELANCE du Complexe vient de reprendre, et `problemesDuRetour` le refuse sous
+   * toute autre valeur. Un champ de sauvegarde neuf, c'est un numéro de plus.
+   *
+   * ⚠⚠ ET IL N'Y A RIEN À RÉÉCRIRE. Une v41 n'a jamais relancé une rampe : tous
+   * ses stamps sont nés d'un raid ou du filet, donc TOUS rejouent le palier, et
+   * le champ absent dit exactement ça. Lui poser `sansPalier: false` écrirait une
+   * seconde forme du même fait, et `problemesDuRetour` la refuserait. Côté
+   * Ouvrage non plus : `sitesEntames` ne change pas de forme — l'Étai et les
+   * bâtiments d'une base remontent à la LECTURE, depuis l'entrée telle que le
+   * raid l'a rangée.
+   *
+   * @param {object} s
+   */
+  41: (s) => {
+    s.version = 42;
   },
 };
 

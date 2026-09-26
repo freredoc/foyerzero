@@ -279,6 +279,32 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**.
    et réparer le Complexe ensuite ne raccourcit pas la rampe en cours. Ce qu'on y gagne est une
    raison de garder le Complexe entier AVANT d'être attaqué ; ce qu'on y perd est l'accélération
    que ce point décrit. À rouvrir si Ethan la veut.
+   ⚠⚠ **ROUVERT ET TRANCHÉ LE 25/09 — lot ÉTAI-RÉTABLI.** Ethan : « L'étai se restaure en 1 h,
+   et donc sa puissance de récupération. » et « L'étai se régénère, il ne récupère pas 100 %
+   d'un coup. » La règle est UNE, pour les deux camps : **la vitesse suit la santé, le palier
+   ne joue qu'à la fin d'un raid.**
+   - **Côté Ouvrage**, sur les trois types de base (`base`, `baseVerrou`, `baseTerminale` —
+     `TYPES_DE_BASE`) : chaque bâtiment abîmé remonte en LIGNE DROITE de ses PV d'après raid à
+     ses PV maximaux, en une heure ; la santé de l'Étai suit donc une droite de `s0` (figée au
+     raid) à 1000 ; le palier de 70 % × `s0` joue une fois, à la fin du raid ; et la rampe des
+     défenses prend, à chaque tick, la santé de l'Étai À CE TICK. Ce qui est rendu à l'écoulé
+     `e` est l'intégrale `A(e) = ⌊pvMax × Σ(e) / (2T × H × fM)⌋`, avec
+     `Σ(e) = 2T·s0·e + (1000 − s0)·e²` pendant la remontée et `T²·(s0 + 1000) + 2T·1000·(e − T)`
+     ensuite — en `BigInt`, `Σ × pvMax` dépassant 2⁵³ ; la durée est le plus petit `e` tel que
+     `A(e) ≥ reste`, par dichotomie entière.
+   - **Côté joueur**, le Complexe ne se régénère pas, il se répare d'un GESTE : quand sa santé
+     courante dépasse STRICTEMENT la santé stampée d'une pièce, la rampe repart de là où elle
+     en est, sous la nouvelle santé, **sans palier** (`sansPalier: true` sur le stamp).
+   **L'objection d'intégration ne tient plus, et c'est pourquoi le prorata n'est plus figé :**
+   la rampe reste ANALYTIQUE. Côté Ouvrage, l'entrée de `sitesEntames` n'est jamais réécrite
+   pendant la remontée — `tickDuRaid`, les PV d'après raid et `s0` suffisent à lire l'intégrale
+   à n'importe quel tick, donc `rattraperJeu(n)` rend encore exactement ce que `tickJeu` × n
+   rend, par construction. Côté joueur, la santé ne bouge qu'à un geste, et le geste appelle
+   `ramenerLaGarnison` sur-le-champ : les deux chemins restampent au même tick. Ce qui manquait
+   le 06/09 n'était pas une impossibilité, c'était la forme close de l'intégrale.
+   ⚠ **UN ÉTAI INTACT GARDE LA FORMULE D'HIER, AU TICK PRÈS** : la forme neuve ne sert que sous
+   une santé strictement sous 1000, où la santé monte vraiment. Un camp et un avant-poste
+   gardent leur santé figée — rien ne s'y régénère.
 6. ~~**Formule du dépassement** : de combien le temps de réparation dépasse-t-il l'heure quand
    les défenses sont au-dessus du Complexe ?~~ **CLOS LE 06/09, PAR ARBITRAGE ET NON PAR
    MESURE** — et il faut le dire dans ce sens-là : aucune des trente captures ne le montre, et
@@ -291,6 +317,12 @@ PV bruts. Planchers et réparations sont une **écriture d'après-raid**.
    durée       = 1 h × facteurMilli(1 + dépassement)/1000 × pénalité(santé)
    pénalité(s) = 1 + (24 − 1) × (1 − s)          ← LINÉAIRE, plancher 24 h
    ```
+
+   ⚠⚠ **LA PÉNALITÉ CI-DESSUS EST PÉRIMÉE DEPUIS LE LOT VITESSE (12/09), ET CE PARAGRAPHE NE
+   L'AVAIT PAS SUIVI** — relevé au lot ÉTAI-RÉTABLI, non réécrit ici. « Une heure » y est
+   devenue une VITESSE et `heuresAuPlancher` a disparu : `ticksDeRetour` de
+   `src/sim/reparation.js` lit `(reste / pvMax) × heuresDeBase × (1000 / santé) × fM / 1000`.
+   C'est lui qui fait foi ; la forme linéaire à 24 h est de l'histoire.
 
    ⚠ **LA DURÉE EST CELLE DE LA RAMPE, ET LE PALIER DES 70 % LA PRÉCÈDE** — voir §3. Sur un site
    de l'Ouvrage le dépassement vaut TOUJOURS zéro, tout y étant au niveau du site : la durée s'y

@@ -57,7 +57,7 @@
 // fenêtre visible ferait apparaître et disparaître des bordures au bord de
 // l'écran à chaque défilement.
 
-import { GEOGRAPHIE } from '../data/sites.js';
+import { GEOGRAPHIE, NIVEAU_MAXIMAL_DUN_SITE, TYPES_DE_BASE } from '../data/sites.js';
 import { basesDeLaFenetre } from './peuplement.js';
 import { distanceOctogonaleDInfluence } from './points-attaque.js';
 
@@ -120,11 +120,20 @@ export const NIVEAU_DEN = BigInt(GEOGRAPHIE.raisonDeNiveau.denominateur);
 /**
  * Le plafond de niveau, en `BigInt` — le budget d'exposants du dénominateur.
  *
- * ⚠ LU DANS `GEOGRAPHIE`, comme les rayons. Un plafond qui monterait sans que ce
- * nombre suive rendrait un exposant NÉGATIF, et `BigInt` lève dessus — bruyant,
- * ce qui est ce qu'on veut, mais loin de la cause.
+ * ⚠ LU DANS `data/sites.js`, comme les rayons. Un plafond qui monterait sans que
+ * ce nombre suive rendrait un exposant NÉGATIF, et `BigInt` lève dessus —
+ * bruyant, ce qui est ce qu'on veut, mais loin de la cause.
+ *
+ * ⚠⚠ C'EST LE NIVEAU MAXIMAL D'UN SITE, 60, ET PLUS LE PLAFOND DE LA CARTE, 50 —
+ * lot ÉTAI-RÉTABLI, 25/09. Une base finale rasée laisse une ruine de niveau 60
+ * (`ruineFraiche` l'accepte depuis le lot VERROUS), et cette ruine émet « du
+ * niveau de la base rasée » pendant vingt-quatre heures. Tant que `retirerLeSite`
+ * n'inscrivait que le type `base`, aucune ne naissait ; depuis qu'il inscrit les
+ * trois types de base, la carte levait dessus. Élargir le budget d'exposants
+ * multiplie TOUTES les forces par le même facteur `5¹⁰` : aucune comparaison ne
+ * change, et c'est la seule chose que ces nombres servent à faire.
  */
-export const NIVEAU_MAX = BigInt(GEOGRAPHIE.niveauPlafond);
+export const NIVEAU_MAX = BigInt(NIVEAU_MAXIMAL_DUN_SITE);
 
 /**
  * De combien tous les exposants sont décalés pour rester positifs.
@@ -143,10 +152,17 @@ export const DECALAGE_DES_EXPOSANTS = Math.max(...Object.values(RAYONS));
 /**
  * De quel camp venait la base dont une ruine est le décombre.
  *
- * ⚠⚠ LES DEUX SEULES CLÉS SONT CELLES QUE `spriteDeLaRuine` ACCEPTE — `base` et
- * `baseJoueur`, « seules les bases en laissent ». La table est donc close par
- * construction, et une clé inconnue fait LEVER `rayonDeLaForce` plutôt que de
- * rendre un rayon plausible.
+ * ⚠⚠ SES CLÉS SONT CELLES QUE `spriteDeLaRuine` ACCEPTE — les trois types de
+ * `TYPES_DE_BASE`, plus `baseJoueur` —, « seules les bases en laissent ». La
+ * table est donc close par construction, et une clé inconnue fait LEVER
+ * `rayonDeLaForce` plutôt que de rendre un rayon plausible.
+ *
+ * ⚠⚠ ELLE NE PORTAIT QUE `base` JUSQU'AU LOT ÉTAI-RÉTABLI, 25/09, et c'était
+ * juste par accident : `retirerLeSite` n'inscrivait aucune autre ruine de
+ * l'Ouvrage. Depuis qu'un verrou rasé par sa Souche entre dans `basesRasees`, sa
+ * ruine `baseVerrou` — ou `baseTerminale` — faisait lever `campDeLaCase` et
+ * `territoireDeLaFenetre`, donc toute la carte. Les types de l'Ouvrage se
+ * DÉRIVENT de `TYPES_DE_BASE` : une quatrième base en hériterait sans une ligne.
  *
  * ⚠ ELLE EST ICI ET NON DANS `sim/ruines.js`, ET C'EST UNE CONTRAINTE
  * D'IMPORTS : `JOUEUR` et `OUVRAGE` vivent dans ce fichier, et `ruines.js`
@@ -154,7 +170,7 @@ export const DECALAGE_DES_EXPOSANTS = Math.max(...Object.values(RAYONS));
  * lui » — son en-tête le dit. Les deux lecteurs sont d'ailleurs ici.
  */
 export const CAMP_D_ORIGINE_DE_LA_RUINE = Object.freeze({
-  base: OUVRAGE,
+  ...Object.fromEntries(TYPES_DE_BASE.map((type) => [type, OUVRAGE])),
   baseJoueur: JOUEUR,
 });
 
@@ -287,9 +303,9 @@ export function forceDUneBase(niveau, distance) {
   // ⚠ LES DEUX BORNES SE GARDENT ICI, ET ELLES LÈVENT. Hors d'elles, un des
   // trois exposants devient négatif et `BigInt` lève de son côté — mais avec un
   // message qui parle d'arithmétique, très loin de la grandeur en cause.
-  if (!Number.isInteger(niveau) || niveau < 0 || niveau > GEOGRAPHIE.niveauPlafond) {
+  if (!Number.isInteger(niveau) || niveau < 0 || niveau > NIVEAU_MAXIMAL_DUN_SITE) {
     throw new RangeError(
-      `territoire : niveau « ${niveau} » — entier de 0 à ${GEOGRAPHIE.niveauPlafond} attendu`,
+      `territoire : niveau « ${niveau} » — entier de 0 à ${NIVEAU_MAXIMAL_DUN_SITE} attendu`,
     );
   }
   if (!Number.isInteger(distance) || distance < 0 || distance > DECALAGE_DES_EXPOSANTS) {
