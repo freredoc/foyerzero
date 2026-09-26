@@ -463,11 +463,18 @@
      VIGNETTES ; les EMPLACEMENTS portaient encore `#161914`. La déclaration se
      REMPLACE, jamais ne s'omet : c'est la leçon payée sur `.posable`, et
      `PAL T4` la garde.
-     ⚠⚠ CE QUE L'APLAT CACHAIT A ÉTÉ RELEVÉ AVANT DE LE RETIRER : rien. Les six
+     ⚠⚠ CE QUE L'APLAT CACHAIT A ÉTÉ RELEVÉ AVANT DE LE RETIRER : rien. Les cinq
      états de cette case se disent par leur LISERÉ seul — `.occupe` en
-     `solid #161914`, `.inactive` `dashed #68727E`, `.abimee` `#E43E32`,
-     `.chargee` `#F5B636`, `.enmain` un `outline` d'os. `PAL T5` les confronte
-     deux à deux, comme `ÉD T11` pour la vignette de palette. */
+     `solid #161914`, `.inactive` `dashed #68727E`, `.chargee` `#F5B636`,
+     `.enmain` un `outline` d'os. `PAL T5` les confronte deux à deux, comme
+     `ÉD T11` pour la vignette de palette.
+     ⚠⚠ ILS ÉTAIENT SIX JUSQU'AU 25/09 : `.abimee` bordait en rouge une unité
+     entamée. Il est parti, classe et règle — lot BARRES-ET-RÉPARER, Ethan :
+     « on remplace le liseré rouge de la grille du raid par la même barre ?
+     Oui. » C'est le geste que la Base a fait le 12/09 avec `.jeton.abimee` :
+     un liseré dit QU'IL Y A une avarie, la barre dit COMBIEN, et les deux ne
+     cohabitent pas. La barre est un DESCENDANT (`.emplacement .barre-vie`), pas
+     un état : `PAL T4` ne la regarde pas. */
   #ecran-raid .emplacement {
     /* ⚠ `relative` POUR LA PASTILLE DE NIVEAU — même motif qu'à l'Offense. */
     position: relative;
@@ -482,9 +489,6 @@
   /* Une unité qu'on laisse à la maison — le drapeau `actif` de RAID-0. Elle
      reste posée, elle ne part pas : le liseré tireté dit « pas du voyage ». */
   #ecran-raid .emplacement.inactive { border: 1px dashed #68727E; color: #68727E; }
-  /* Une unité abîmée : elle part quand même tant qu'elle est au-dessus du
-     plancher, mais le joueur doit voir qu'elle coûtera de la réserve. */
-  #ecran-raid .emplacement.abimee { border-color: #E43E32; }
   /* L'unité au bout du doigt pendant un glissement — os, comme la sélection du
      Chantier et de l'Offense. */
   #ecran-raid .emplacement.enmain { outline: 2px solid #F5F3E8; outline-offset: -2px; }
@@ -1378,18 +1382,23 @@
      bas-droit depuis le lot ERGONOMIE ; deux nombres superposés ne se lisent
      ni l'un ni l'autre.
 
-     ⚠ LES DEUX TEINTES SONT CELLES DE LA FICHE, ET AUCUNE N'EST NEUVE. Le fond
-     est le rouge sombre `#8A1E17` — la teinte de l'anti-véhicule, qui est déjà
-     celle des dégâts sur cet écran ; ce qui reste est le kaki clair `#8C9A72`,
-     la rampe du joueur, c'est-à-dire « ce qui est encore à moi ».
+     ⚠⚠ LE FOND EST NEUTRE, ET LA TEINTE DE CE QUI RESTE N'EST PAS ÉCRITE ICI —
+     lot BARRES-ET-RÉPARER, 25/09. Le fond était le rouge sombre de
+     l'anti-véhicule ; une barre CRITIQUE, rouge elle aussi, s'y serait fondue.
+     Il vaut désormais l'ombre `#161914`, celle des pastilles de niveau. Et le
+     `<i>` ne porte plus de `background` : sa teinte suit les seuils d'Ethan
+     (« jaune de 20 à 80 %, rouge en dessous de 20 ») et `rafraichirLesJetons`
+     l'écrit en ligne, depuis `couleurDeLaBarrePv` de `render/scene.js`. Deux
+     écrivains pour une teinte — la feuille et le code — est la faute que le
+     dépôt refuse.
 
      ⚠ `pointer-events: none` N'EST PAS COSMÉTIQUE : la barre couvre le haut du
      jeton, et sans lui elle avalerait le toucher qui vise la pièce. */
   .jeton .barre-vie {
     position: absolute; left: 0; right: 0; top: 0; height: 3px;
-    pointer-events: none; background: #8A1E17;
+    pointer-events: none; background: #161914;
   }
-  .jeton .barre-vie i { display: block; height: 100%; background: #8C9A72; }
+  .jeton .barre-vie i { display: block; height: 100%; }
   /* ⚠⚠ LE REBOURS D'UNE PIÈCE, SOUS SA BARRE — Ethan, 12/09. La tête de bande
      annonce « 7 pièces en retour, la première dans 39 min » ; elle ne dit pas
      LAQUELLE, et c'est tout ce que ce nœud ajoute.
@@ -1955,8 +1964,23 @@
      calque en `pointer-events: none` posé sur la grille le rendrait inerte. Le
      corriger demande de lui réserver sa place d'avance, ce qui coûte cette
      hauteur en permanence : c'est un arbitrage, et il revient à Ethan. */
+  /* ⚠⚠ `z-index: 3` ET 22 px DE HAUT — lot BARRES-ET-RÉPARER, 25/09, point 1
+     d'Ethan : « Tout réparer doit apparaître si on clique une fois sur
+     Réparer ». Il paraissait DÉJÀ, et on ne le voyait pas : posé `bottom: 100%`
+     de la barre contextuelle, il tombait exactement sous la ligne de mode
+     (`#chantier-avis`, `z-index: 1`) et sous la bascule (`z-index: 2`), et lui
+     n'avait AUCUN `z-index`. Mesuré dans Chromium à 360 × 780 : la ligne de mode
+     de 576 à 602, la barre de 581 à 603 — on lisait le mode, ni la réserve ni
+     le bouton. Aucun test ne comparait les empilements : le bouton existait et
+     se touchait dans le faux document.
+     ⚠ LA HAUTEUR EST CELLE D'AUJOURD'HUI, ÉCRITE : 3 px de `padding` en haut et
+     en bas plus 16 px de bouton, `box-sizing: border-box` étant posé sur `*`.
+     Elle est explicite parce que la ligne de mode et la bascule montent de CE
+     nombre-là quand la barre paraît — `sous-reparation`, plus bas —, et un
+     nombre que deux règles supposent doit être écrit dans la première. */
   #chantier-reparation {
-    position: absolute; left: 0; right: 0; bottom: 100%;
+    position: absolute; left: 0; right: 0; bottom: 100%; z-index: 3;
+    height: 22px;
     display: flex; align-items: center; justify-content: space-between;
     gap: 8px; padding: 3px 8px; background: #343A2C;
   }
@@ -2039,6 +2063,32 @@
      c'est ce qu'Ethan a demandé le 28/08, « rajouter un texte à la place des
      toasts quand mode démolir et améliorer sont en fonctionnement ». */
   #chantier-avis.mode { background: #343A2C; color: #F5F3E8; }
+  /* ⚠⚠ QUAND LA BARRE DE RÉPARATION PARAÎT, CE QU'ELLE COUVRIRAIT MONTE — lot
+     BARRES-ET-RÉPARER, 25/09. `marquerBoutonsAction` de `ui/chantier.js` pose
+     `sous-reparation` sur `#chantier-champ` en même temps qu'il déplie la barre,
+     et la retire en même temps qu'il la replie : une seule source décide.
+     La ligne de mode monte des 22 px de la barre ; la bascule garde ses 6 px de
+     bord et y ajoute les 22 — donc 28.
+     ⚠⚠ CES RÈGLES VIENNENT APRÈS LA RÈGLE D'ORIGINE DE CHAQUE SÉLECTEUR, ET CE
+     N'EST PAS UN ORDRE D'ÉCRITURE : plusieurs gardes lisent la PREMIÈRE règle
+     qui nomme `#chantier-avis` ou `#chantier-bascule-bande`. Posées avant, elles
+     font tomber `EC T3` et `ÉD T5` — mesuré au prototype.
+     ⚠ ET LE CHAMP NE CHANGE PAS DE HAUTEUR : les deux éléments sont en
+     `absolute`, seul leur point d'ancrage bouge. Le décor ne se recadre pas. */
+  #chantier-champ.sous-reparation #chantier-avis { bottom: 22px; }
+  #chantier-champ.sous-reparation #chantier-bascule-bande { bottom: 28px; }
+  /* ⚠⚠ SAUF QUAND LA MINI-FENÊTRE DU TUTORIEL EST OUVERTE — trouvé à la capture
+     Chromium, pas au prototype. Elle est dans le FLUX sous `#chantier-vue` : la
+     barre, posée au bas du champ, couvre alors le bas de la FENÊTRE, et la ligne
+     de mode, posée au bas de la vue, n'a plus rien dessous. La monter laissait
+     22 px de terrain nu entre elle et le tutoriel. Mesuré : ligne 466 → 492 sans
+     cette règle, 488 → 514 avec, comme avant le lot.
+     ⚠ Et la barre qui couvre la dernière ligne du tutoriel N'EST PAS de ce lot :
+     elle la couvrait déjà, `position: absolute` peignant par-dessus un bloc du
+     flux (relevé sur le livrable d'avant). Lui rendre la place changerait la
+     hauteur de la vue, donc recadrerait le décor à chaque armement. */
+  #chantier-champ.sous-reparation:has(> #chantier-tuto:not([hidden])) #chantier-avis { bottom: 0; }
+  #chantier-champ.sous-reparation:has(> #chantier-tuto:not([hidden])) #chantier-bascule-bande { bottom: 6px; }
   /* Une sauvegarde qu'on n'a pas su relire ne laisse pas un écran blanc, et
      elle ne se supprime pas non plus : on montre, on propose, le joueur
      tranche. `[hidden]` porte un `!important` en tête de feuille — sans lui,
@@ -2319,6 +2369,26 @@
     font-size: 11px; font-weight: 700; line-height: 1;
     color: #F5B636; background: #161914; padding: 0 2px; pointer-events: none;
   }
+  /* ⚠⚠ LA BARRE DE VIE DES DEUX GRILLES DE VAGUES — Ethan, 25/09 : « menu
+     armée : afficher les barres de PV quand une unité est abîmée ». Elle est
+     calquée sur `.jeton .barre-vie` de la Base, et fabriquée par la même
+     fonction, `barreDeVie` d'`ui/chantier.js` : rien n'est posé sur une pièce
+     intacte, donc une armée neuve ne porte aucune barre.
+     ⚠ EN HAUT, PARCE QUE LES DEUX COINS DU BAS SONT PRIS — `.niveau` à droite,
+     `.module` à gauche. Le badge passager d'un porteur est posé APRÈS elle dans
+     le DOM et la recouvre sur sa largeur : il se prend au doigt, elle non.
+     ⚠ LE `<i>` N'A PAS DE TEINTE ICI, comme sur la Base : `barreDeVie` l'écrit
+     en ligne, par seuil. Une règle à deux sélecteurs, comme `.niveau` et
+     `.module` — c'est la même convention sur les deux écrans.
+     ⚠ `pointer-events: none` N'EST PAS COSMÉTIQUE : la barre couvre le haut de
+     l'emplacement, qui reçoit le glisser-déposer et le toucher de réparation. */
+  #ecran-offense .emplacement .barre-vie,
+  #ecran-raid .emplacement .barre-vie {
+    position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    pointer-events: none; background: #161914;
+  }
+  #ecran-offense .emplacement .barre-vie i,
+  #ecran-raid .emplacement .barre-vie i { display: block; height: 100%; }
   /* Le premier des deux touchers : l'unité est MONTRÉE, pas encore posée. Un
      liseré tireté et un mot éteint disent « pas encore là » — pas de
      transparence, la palette est fermée et ne tolère qu'un seul rgba. */
@@ -2813,6 +2883,12 @@
     background: #6A7658; color: #161914; font-size: 9px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.04em;
   }
+  /* ⚠⚠ IL NE PARAÎT QU'AU MODE RÉPARER — Ethan, 25/09. `visibility` et non
+     `display` : le bouton garde sa place, donc la réserve à côté garde sa
+     largeur, donc la barre garde sa hauteur et la grille ne bouge pas quand on
+     arme. `visibility: hidden` retire aussi le toucher — un bouton qu'on ne
+     voit pas ne doit rien faire sous le doigt. Voir le balisage. */
+  #offense-tout-reparer.repliee { visibility: hidden; }
   /* La barre contextuelle de l'Offense — jumelle de `#chantier-contexte`, même
      hauteur, mêmes quatre boutons, même modèle « armer puis toucher ». Elle ne
      coexiste jamais avec celle du Chantier : c'est l'autre écran. */
@@ -3233,10 +3309,13 @@
            seconde vérité. Le plafond, lui, est le même pour les trois :
            l'écrire une fois suffit.
            ⚠ ELLE EST DANS LE FLUX, ET ELLE COÛTE SA HAUTEUR EN PERMANENCE. Elle
-           n'apparaît ni ne disparaît — il n'y a pas de mode Réparer sur cet
-           écran, `ACTIONS_ARMEE.reparer.agir` valant `null` — donc elle ne
-           recadre jamais rien. C'est la différence avec `#chantier-reparation`,
-           qui paraît avec un mode et pousse le champ quand il paraît.
+           n'apparaît ni ne disparaît, donc elle ne recadre jamais rien. Ce
+           paragraphe ajoutait « il n'y a pas de mode Réparer sur cet écran » :
+           c'est FAUX depuis le lot ÉCRANS du 10/09, qui a donné son moteur au
+           geste unitaire, et c'est le mode qui commande désormais le bouton
+           voisin — lot BARRES-ET-RÉPARER, 25/09. La RÉSERVE, elle, reste
+           affichée hors du mode : c'est le compteur qu'Ethan demandait au 07/09,
+           et on le lit avant de décider d'armer.
            ⚠ ET CE N'EST PAS UNE CINQUIÈME BARRE FIXE : `flex: 0 0 auto`, donc la
            garde des 288 px ne la compte pas. -->
       <!-- ⚠⚠ LA RÉSERVE ET « TOUT RÉPARER » PARTAGENT UNE BARRE — Ethan,
@@ -3244,17 +3323,27 @@
            armée ». La réserve était seule dans le flux et coûtait déjà sa
            hauteur ; le bouton se range à côté d'elle plutôt que sur une ligne à
            lui, donc l'écran ne gagne pas un pixel de chrome.
-           ⚠⚠ ET IL EST LÀ EN PERMANENCE, PAS SOUS UN MODE. C'est la différence
-           avec `#chantier-reparation` et `#raid-tout-reparer`, qui paraissent le
-           mode Réparer armé : les faire paraître ici recréerait le défaut du
-           point 5 sur l'écran qu'il vient de réparer. Ce qui ne varie pas ne
-           recadre rien.
+           ⚠⚠ ET IL NE PARAÎT PLUS QU'AU MODE RÉPARER — Ethan, 25/09 : « Tout
+           réparer doit apparaître si on clique une fois sur Réparer, que ce soit
+           menu bâtiment ou armée. » Ce paragraphe disait l'inverse depuis le
+           10/09 — « il est là en permanence, pas sous un mode » —, et son motif
+           tient toujours : ce qui varie ne doit rien recadrer. D'où le moyen.
+           ⚠⚠ `visibility`, PAS `display` NI L'ATTRIBUT `hidden`. La barre est
+           dans le flux et sa ligne de réserve REVIENT À LA LIGNE (345,91 px
+           demandés pour 235,48 reçus, mesuré au 11/09) : retirer le bouton du
+           flux élargirait la réserve, la ferait tenir sur une ligne, donc
+           changerait la hauteur de la barre et recadrerait la grille à chaque
+           armement — le défaut du point 5 du 10/09. Le bouton garde sa place,
+           invisible et sans toucher. Et `hidden` porte un `!important` en tête
+           de feuille : il l'emporterait sur la classe. Le bouton naît donc
+           `repliee`, et `marquerBoutonsAction` de `ui/offense.js` est le seul
+           à basculer la classe.
            ⚠ LA FORME EST CELLE DE LA BARRE DU CHANTIER — même corps, même ton,
            même famille de mots. Deux vocabulaires pour la même grandeur
            obligeraient le joueur à traduire d'un écran à l'autre. -->
       <div id="offense-reparation">
         <p id="offense-reserve">—</p>
-        <button type="button" id="offense-tout-reparer">Tout réparer</button>
+        <button type="button" id="offense-tout-reparer" class="repliee">Tout réparer</button>
       </div>
       <!-- ⚠ LA BARRE CONTEXTUELLE, NEUVE AU 29/08. Ethan : « on ne peut pas
            supprimer une unité en cliquant dessus. D'ailleurs les boutons

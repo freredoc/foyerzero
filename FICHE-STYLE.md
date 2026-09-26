@@ -220,6 +220,29 @@ unité, un bâtiment, une défense se peignent sur les rampes de châssis et
 d'ardoise ci-dessus, inchangées. « Aucun vert dans le terrain, nulle part »
 reste vrai : une frontière n'est pas du terrain, c'est ce qui le borne.
 
+### Barres de PV — deux tons d'état (2 tons)
+
+Arrêtés le **25/09/2026**, sur retour d'Ethan : « Barre de PV : jaune de 20 à
+80 %, rouge en dessous de 20 », arbitré le même soir **partout** — champ de
+bataille, Base, Armée, grille du raid — **et avec des teintes qui ne sont pas
+les accents**. Au-dessus de 80 %, la barre garde le kaki lumière des châssis.
+
+| État | Seuil (PV restants) | Teinte |
+|---|---|---|
+| Pleine | plus de 80 % | kaki lumière, rampe des châssis |
+| **Entamée** | de 20 à 80 %, bornes comprises | `#E0D060` |
+| **Critique** | moins de 20 % | `#C23A5A` |
+
+⚠ **Ce ne sont pas des accents, et ils ne s'y substituent pas.** Un accent dit
+ce que l'unité peut tuer ; ces deux tons disent l'état d'une barre, rien
+d'autre. Ils sont choisis loin des deux accents qu'ils rappellent à l'œil :
+ΔE2000 **13,3** entre l'entamée et l'anti-aérien clair, **15,9** entre la
+critique et l'anti-véhicule clair. Contre le fond de barre — le contour des
+châssis — ils rendent un contraste de **11,3** et **3,4**.
+
+⚠ **Le fond d'une barre est le contour des châssis, jamais l'anti-véhicule
+sombre** : une barre critique rouge sur un fond rouge sombre ne se lirait pas.
+
 ### Divers
 
 | Rôle | Valeur |

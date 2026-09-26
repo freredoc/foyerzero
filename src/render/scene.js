@@ -105,6 +105,13 @@ export const PALETTE = {
     vehicule: { sombre: '#8A1E17', clair: '#E43E32' },
     structureOuAviation: { sombre: '#A67018', clair: '#F5B636' },
   },
+  // Barres de PV — deux tons d'état (2 tons), lot BARRES-ET-RÉPARER, 25/09.
+  // ⚠ CE NE SONT PAS DES ACCENTS : ils disent l'état d'une barre, jamais ce que
+  // l'entité peut tuer. Choisis loin des deux accents qu'ils rappellent —
+  // ΔE2000 13,3 contre l'anti-aérien clair et 15,9 contre l'anti-véhicule clair,
+  // relevés dans `FICHE-STYLE.md` §3.
+  barreEntamee: '#E0D060',
+  barreCritique: '#C23A5A',
   // Divers.
   ombrePortee: 'rgba(0,0,0,0.31)',
 };
@@ -116,10 +123,49 @@ export const PALETTE = {
  */
 export const FOND = PALETTE.contour;
 
-/** Barres : remplissage de PV en kaki lumière, de réserve en métal clair.
- * Jamais un accent — la fiche interdit d'employer une couleur d'accent pour
- * autre chose que la cible. */
-export const COULEUR_BARRE_PV = PALETTE.kakiLumiere;
+/**
+ * Barres de PV : trois teintes, choisies par SEUIL — lot BARRES-ET-RÉPARER,
+ * Ethan, 25/09 : « Barre de PV : jaune de 20 à 80 %, rouge en dessous de 20 »,
+ * arbitré « partout », champ de bataille compris. Au-dessus de 80 %, le kaki
+ * lumière d'avant ; de 20 à 80 % inclus, l'entamée ; sous 20 %, la critique.
+ *
+ * ⚠ JAMAIS UN ACCENT — la fiche interdit d'employer une couleur d'accent pour
+ * autre chose que la cible. Le jaune et le rouge d'Ethan ne sont donc ni
+ * `#F5B636` ni `#E43E32` : ce sont les deux tons d'état de la palette.
+ *
+ * ⚠ L'ANCIEN NOM, `COULEUR_BARRE_PV`, EST RETIRÉ SANS ALIAS : un lecteur oublié
+ * doit lever à l'import plutôt que de peindre toute barre en kaki.
+ */
+export const COULEURS_BARRE_PV = Object.freeze({
+  pleine: PALETTE.kakiLumiere,
+  entamee: PALETTE.barreEntamee,
+  critique: PALETTE.barreCritique,
+});
+
+/**
+ * La teinte d'une barre de PV, lue sur ses deux bornes — le SEUL endroit qui
+ * tranche entre les trois. En entiers et sans arrondi :
+ *   - pleine    si `pv × 5 > pvMax × 4` (strictement plus de 80 %) ;
+ *   - critique  si `pv × 5 < pvMax`      (strictement moins de 20 %) ;
+ *   - entamée   sinon — 80 % et 20 % EXACTS sont entamés, « de 20 à 80 ».
+ * Le champ de bataille, la légende, les jetons de la Base et les barres de
+ * l'Armée et du raid la demandent tous : deux écritures du seuil divergeraient
+ * au premier réglage.
+ *
+ * @param {number} pvMilli
+ * @param {number} pvMaxMilli
+ * @returns {string}
+ */
+export function couleurDeLaBarrePv(pvMilli, pvMaxMilli) {
+  if (!(pvMaxMilli > 0)) {
+    throw new RangeError(`barre de PV : pvMax « ${pvMaxMilli} » — > 0 attendu`);
+  }
+  if (pvMilli * 5 > pvMaxMilli * 4) return COULEURS_BARRE_PV.pleine;
+  if (pvMilli * 5 < pvMaxMilli) return COULEURS_BARRE_PV.critique;
+  return COULEURS_BARRE_PV.entamee;
+}
+
+/** Barre de réserve : métal clair. Jamais un accent, pour la même raison. */
 export const COULEUR_BARRE_RESERVE = PALETTE.metalClair;
 
 // --- classes et accents ------------------------------------------------------
@@ -1322,7 +1368,7 @@ export function listeAffichage(
     const y = yDe(e);
     liste.push(rect(x + 1, y + 1, t - 2, bh, PALETTE.contour));
     liste.push(rect(x + 1, y + 1, Math.floor(((t - 2) * e.pvMilli) / e.pvMaxMilli), bh,
-      COULEUR_BARRE_PV));
+      couleurDeLaBarrePv(e.pvMilli, e.pvMaxMilli)));
     if (e.camp === 'attaque' && e.genre === 'unite') {
       const reserveMax = UNITES[e.id].reserve;
       liste.push(rect(x + 1, y + 2 + bh, t - 2, bh, PALETTE.contour));
@@ -1369,7 +1415,7 @@ export function listeAffichage(
   //
   // ⚠⚠ LA COULEUR N'EST PAS L'AMBRE DE L'ÉTOILE DU DOM, ET C'EST UNE CONTRAINTE
   // DE FICHE, PAS UN OUBLI. `#F5B636` est l'accent `structureOuAviation`, et
-  // l'en-tête de `COULEUR_BARRE_PV` rappelle que « la fiche interdit d'employer
+  // l'en-tête de `COULEURS_BARRE_PV` rappelle que « la fiche interdit d'employer
   // une couleur d'accent pour autre chose que la cible ». Le badge prend donc le
   // kaki lumière, celui des libellés de légende. Si Ethan préfère l'ambre, c'est
   // la règle de fiche qu'il faudra desserrer, ici et dans la fiche.
@@ -1610,7 +1656,10 @@ export function listeLegende(projection) {
   );
   ligneVignette((yv) => {
     liste.push(rect(marge, yv + Math.floor(t / 2) - bh, t, bh, PALETTE.contour));
-    liste.push(rect(marge, yv + Math.floor(t / 2) - bh, Math.floor((t * 2) / 3), bh, COULEUR_BARRE_PV));
+    // ⚠ LA VIGNETTE DIT LA RÈGLE À LA LARGEUR QU'ELLE DESSINE : une barre aux
+    // deux tiers est ENTAMÉE, donc jaune — lot BARRES-ET-RÉPARER, écart déclaré.
+    liste.push(rect(marge, yv + Math.floor(t / 2) - bh, Math.floor((t * 2) / 3), bh,
+      couleurDeLaBarrePv(2, 3)));
   }, 'Barre de PV — au-dessus de chaque entité');
   ligneVignette((yv) => {
     liste.push(rect(marge, yv + Math.floor(t / 2) - bh, t, bh, PALETTE.contour));

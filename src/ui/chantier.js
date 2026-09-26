@@ -77,7 +77,7 @@ import {
 import { COTE_SPRITE } from '../data/atlas.js';
 import { existeDansAtlas, fondDuSprite, fondDeCellule } from '../render/sprite.js';
 import { nomDeVariante, variante } from '../render/variante.js';
-import { couchesDeLEntite, genreDeLaGarnison } from '../render/scene.js';
+import { couchesDeLEntite, genreDeLaGarnison, couleurDeLaBarrePv } from '../render/scene.js';
 import { casesAPortee, porteeQuiTire } from '../render/portee.js';
 // ⚠ `poser` EST IMPORTÉ SOUS UN AUTRE NOM, ET C'EST DÉLIBÉRÉ. `src/ui/` porte
 // DEUX fonctions `poser` sans rapport : celle-ci, qui pose un bâtiment dans la
@@ -2853,6 +2853,40 @@ export function partRestanteMilli(degatsMilli, pvMaxMilli) {
 }
 
 /**
+ * La barre de vie d'une pièce, prête à poser — `null` si elle est intacte.
+ *
+ * ⚠⚠ UNE SEULE FABRIQUE POUR LES DEUX GRILLES DE COMPOSITION — lot
+ * BARRES-ET-RÉPARER, Ethan, 25/09 : « menu armée : afficher les barres de PV
+ * quand une unité est abîmée », et, à « on remplace le liseré rouge de la grille
+ * du raid par la même barre ? », « oui ». L'écran Armée et l'écran de raid
+ * posent les MÊMES pièces dans la même grille de vagues : deux constructions
+ * auraient divergé au premier réglage, et le joueur aurait lu deux avaries pour
+ * une même unité.
+ *
+ * ⚠ MÊME STRUCTURE QUE LE JETON DE LA BASE — un `<span class="barre-vie">` qui
+ * porte un `<i>` —, mais le jeton garde SA construction : il se rafraîchit dix
+ * fois par seconde sans se refabriquer, quand une vague se repeint à chaque
+ * geste. Ce qu'ils partagent est ce qui se CALCULE — `partRestanteMilli` pour la
+ * largeur, `couleurDeLaBarrePv` pour la teinte —, jamais une seconde écriture.
+ *
+ * @param {Document} doc
+ * @param {number} degatsMilli
+ * @param {number} pvMaxMilli
+ * @returns {HTMLElement|null}
+ */
+export function barreDeVie(doc, degatsMilli, pvMaxMilli) {
+  const part = partRestanteMilli(degatsMilli, pvMaxMilli);
+  if (part === null) return null;
+  const barre = doc.createElement('span');
+  barre.className = 'barre-vie';
+  const reste = doc.createElement('i');
+  reste.style.width = `${part / 10}%`;
+  reste.style.background = couleurDeLaBarrePv(pvMaxMilli - (degatsMilli ?? 0), pvMaxMilli);
+  barre.appendChild(reste);
+  return barre;
+}
+
+/**
  * Les cases où le bâtiment d'indice donné peut être DÉPLACÉ.
  *
  * Jumelle de `casesPosables`, et pour les mêmes raisons : on interroge
@@ -5297,6 +5331,16 @@ export function initialiserEcranChantier(doc, {
     if (barre === null) return;
     const repliee = actionArmee !== 'reparer';
     barre.classList.toggle('repliee', repliee);
+    // ⚠⚠ ET CE QU'ELLE COUVRIRAIT MONTE AVEC ELLE — lot BARRES-ET-RÉPARER,
+    // 25/09, point 1 d'Ethan. La barre se pose `bottom: 100%` de la barre
+    // contextuelle, donc exactement sur la ligne de mode et sous la bascule :
+    // elle paraissait, et on ne la voyait pas. La feuille remonte les deux de
+    // sa hauteur sous `sous-reparation`, et la classe se pose ICI, au même
+    // geste que le repli : deux sources qui décideraient séparément finiraient
+    // par se contredire, et la ligne de mode flotterait au-dessus d'une barre
+    // repliée.
+    const champ = $('chantier-champ');
+    if (champ !== null) champ.classList.toggle('sous-reparation', !repliee);
     if (!repliee) ecrireLaReserve();
   }
 
@@ -6104,9 +6148,18 @@ export function initialiserEcranChantier(doc, {
       const terrain = TERRAINS[j.cleTerrain];
       const piece = terrain.pieces(etat)[j.index];
       if (piece === undefined) continue;
-      const part = partRestanteMilli(piece.degatsMilli, terrain.pvMaxDe(piece));
+      const pvMax = terrain.pvMaxDe(piece);
+      const part = partRestanteMilli(piece.degatsMilli, pvMax);
       j.barre.hidden = part === null;
-      if (part !== null) j.reste.style.width = `${part / 10}%`;
+      if (part !== null) {
+        j.reste.style.width = `${part / 10}%`;
+        // ⚠⚠ LA TEINTE DIT LE SEUIL, ET ELLE SE DEMANDE — lot BARRES-ET-RÉPARER,
+        // arbitrage B d'Ethan, 25/09. Kaki lumière au-dessus des quatre
+        // cinquièmes, jaune en dessous, rouge sous le cinquième : la même
+        // fonction que le champ de bataille et la légende, lue ici au lieu
+        // d'être recopiée en trois seuils à côté.
+        j.reste.style.background = couleurDeLaBarrePv(pvMax - (piece.degatsMilli ?? 0), pvMax);
+      }
       if (j.rebours === null) continue;
       const badge = badgeDuRetour(terrain.retourDUnePiece(laBase, piece, maintenant));
       j.rebours.hidden = badge === null;
