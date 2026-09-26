@@ -19,7 +19,7 @@ import {
   positionInterpolee, prendrePositions,
 } from '../src/render/interpolation.js';
 import {
-  PALETTE, FOND, COULEUR_BARRE_PV, OPACITE_PLEINE,
+  PALETTE, FOND, COULEURS_BARRE_PV, OPACITE_PLEINE,
   classeDe, accentDe, NB_PRIMITIVES, listeAffichage,
 } from '../src/render/scene.js';
 import { executer } from '../src/render/canvas2d.js';
@@ -290,8 +290,11 @@ test('T3 — alpha 0 : précédent · alpha 1000 : courant · alpha 500 : milieu
 
   // Les PV ne s'interpolent JAMAIS : la barre de PV a la même largeur de
   // remplissage à alpha 0 et à alpha 999 du même tick.
+  // ⚠ UNE BARRE SE RECONNAÎT À L'UNE DES TROIS TEINTES — lot BARRES-ET-RÉPARER.
+  // Comparer au seul kaki laisserait sortir de la sonde toute barre entamée ou
+  // critique, et ce test resterait vert en cessant de mesurer ce qu'il annonce.
   const largeursPv = (liste) => liste
-    .filter((p) => p.couleur === COULEUR_BARRE_PV)
+    .filter((p) => Object.values(COULEURS_BARRE_PV).includes(p.couleur))
     .map((p) => p.l);
   assert.deepEqual(
     largeursPv(listeAffichage(etat, proj, precedentes, 0)),
@@ -431,7 +434,7 @@ test('T5 — composition et ordre de dessin stables', () => {
     && (p.famille === 'defense' || p.famille === 'socle'));
   const iUnite = indexOu((p) => p.forme === 'sprite'
     && (p.famille === 'unite' || p.famille === 'chassis'));
-  const iBarre = indexOu((p) => p.couleur === COULEUR_BARRE_PV);
+  const iBarre = indexOu((p) => Object.values(COULEURS_BARRE_PV).includes(p.couleur));
   // Le montage doit porter les trois genres, sans quoi l'ordre ne mesure rien.
   assert.ok(iBatiment > 1, 'aucun bâtiment dans la scène : l\'ordre ne prouve rien');
   assert.ok(iStructure > 1, 'aucune structure dans la scène : l\'ordre ne prouve rien');
@@ -1331,7 +1334,7 @@ test('AER T3 — la liste partitionne : tout le sol, puis tout l\'air', () => {
         else if (estSpriteDUnite(p)) sol.push(i);
         else if (p.forme === 'sprite' && p.famille === 'batiment') batiments.push(i);
         else if (p.forme === 'sprite' && (p.famille === 'defense' || p.famille === 'socle')) structures.push(i);
-        else if (p.couleur === COULEUR_BARRE_PV) barres.push(i);
+        else if (Object.values(COULEURS_BARRE_PV).includes(p.couleur)) barres.push(i);
       });
       if (air.length > 0) ticksAvecAir++;
       if (sol.length > 0) ticksAvecSol++;

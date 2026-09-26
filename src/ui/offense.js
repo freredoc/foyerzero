@@ -73,9 +73,14 @@ import {
   formaterEntier, ligneAAfficher, messageDeRefus, actionSansMoteur,
   messageDePose, messageDeConfirmation,
   DUREE_TOAST_MS, poserCouches,
-  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau,
+  apercuDeLaPiece, lignesDeLaPiece, peindreVueDuPanneau, barreDeVie,
 } from './chantier.js';
 import { baseCourante } from '../sim/base-courante.js';
+// ⚠ LE MAXIMUM D'UNE PIÈCE D'ARMÉE SE DEMANDE AU MOTEUR DU RAID — lot
+// BARRES-ET-RÉPARER, 25/09. C'est la fonction que `reporterLesDegats` et la
+// réparation emploient déjà : une barre qui lirait un autre maximum annoncerait
+// une avarie que la réparation ne facturerait pas.
+import { pvMaxDeLUnite } from '../sim/raid.js';
 
 /**
  * Le titre d'une vague, et le retard avec lequel elle part.
@@ -611,6 +616,10 @@ export function vueDeLOffense(etat) {
       nom: UNITES[piece.id].nom.joueur,
       niveau: piece.niveau,
       degatsMilli: piece.degatsMilli,
+      // ⚠ LE MAXIMUM VOYAGE AVEC LES DÉGÂTS — lot BARRES-ET-RÉPARER, 25/09. La
+      // barre de vie est une PART des PV maximaux, jamais un absolu ; la vue le
+      // porte pour que l'écran ne relise pas la table.
+      pvMaxMilli: pvMaxDeLUnite(piece.id, piece.niveau),
       // ⚠⚠ ETHAN, 18/09 : « il faudrait un élément visible pour le joueur quand
       // il voit des unités avec modules débloqués, à côté du numéro de niveau ».
       // Le drapeau se calcule ICI, dans la vue, et jamais dans l'écran : le
@@ -808,10 +817,24 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
     marquerBoutonsAction();
   }
 
-  /** Le bouton d'une action armée s'allume ; les autres s'éteignent. */
+  /**
+   * Le bouton d'une action armée s'allume ; les autres s'éteignent.
+   *
+   * ⚠⚠ ET « TOUT RÉPARER » NE PARAÎT QU'AU MODE RÉPARER — Ethan, 25/09 : « Tout
+   * réparer doit apparaître si on clique une fois sur Réparer, que ce soit menu
+   * bâtiment ou armée. » C'est la discipline de la Base et du raid, et elle se
+   * pose ICI, au seul point par lequel passent tous les changements de mode —
+   * armement, désarmement, choix d'une vignette, câblage. La feuille rend la
+   * classe `visibility: hidden` : le bouton garde sa place et la grille ne
+   * bouge pas.
+   */
   function marquerBoutonsAction() {
     for (const [nom, action] of Object.entries(ACTIONS_ARMEE)) {
       $(action.bouton).classList.toggle('arme', actionArmee === nom);
+    }
+    const toutReparer = $('offense-tout-reparer');
+    if (toutReparer !== null) {
+      toutReparer.classList.toggle('repliee', actionArmee !== 'reparer');
     }
   }
 
@@ -1217,6 +1240,16 @@ export function initialiserEcranOffense(doc, { apresPose, sonDeRefus } = {}) {
           // bas-droit, en os sur une ombre d'un pixel. Une troisième façon
           // d'écrire un niveau apprendrait au joueur deux grammaires pour la
           // même grandeur.
+          //
+          // ⚠⚠ ET LA BARRE DE VIE PASSE AVANT LUI — lot BARRES-ET-RÉPARER, Ethan,
+          // 25/09 : « menu armée : afficher les barres de PV quand une unité est
+          // abîmée ». Elle se pose en haut de la case et n'existe que sur une
+          // pièce entamée — `barreDeVie` rend `null` sur une intacte, pour la
+          // raison que `partRestanteMilli` écrit : trente-six barres pleines
+          // feraient une armée qui a l'air abîmée. Les deux nombres viennent de
+          // la vue, comme le niveau.
+          const barre = barreDeVie(doc, occupant.degatsMilli, occupant.pvMaxMilli);
+          if (barre !== null) element.appendChild(barre);
           const niveau = doc.createElement('span');
           niveau.className = 'niveau';
           niveau.textContent = String(occupant.niveau);

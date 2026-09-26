@@ -108,7 +108,7 @@ import { etatDesUnites, evenementsDuJournal } from '../son/cablage.js';
 // il faut `attaque`, ce que son propre commentaire annonce.
 import {
   COTE_CASE_MAX, poserCouches, formaterEntier, LIBELLE_VERDICT,
-  peindreVueDuPanneau, LIBELLES_COLONNE_DEGATS, formaterDelai,
+  peindreVueDuPanneau, LIBELLES_COLONNE_DEGATS, formaterDelai, barreDeVie,
 } from './chantier.js';
 import { couchesDeLUniteDAssaut } from './offense.js';
 // ⚠ LES PICTOGRAMMES SE DEMANDENT — voir `./pictogramme.js`.
@@ -158,7 +158,10 @@ function vignetteDeLaPiece(piece, index) {
     niveau: piece.niveau,
     actif: piece.actif !== false,
     degatsMilli: piece.degatsMilli ?? 0,
-    // Ce qui reste de la pièce, en pour-cent — la barre de vie de la vignette.
+    // ⚠ LE MAXIMUM VOYAGE AVEC LES DÉGÂTS — lot BARRES-ET-RÉPARER, 25/09 : la
+    // barre de vie est une PART, et c'est celui que `pvPct` lit déjà.
+    pvMaxMilli: pvMax,
+    // Ce qui reste de la pièce, en pour-cent — pour la bulle de la case.
     pvPct: Math.max(0, Math.round(((pvMax - (piece.degatsMilli ?? 0)) * 100) / pvMax)),
   };
 }
@@ -1366,7 +1369,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
           emplacement.classList.add('occupe');
           emplacement.dataset.index = String(occupant.index);
           if (!occupant.actif) emplacement.classList.add('inactive');
-          if (occupant.degatsMilli > 0) emplacement.classList.add('abimee');
+          // ⚠⚠ `.abimee` EST PARTIE — lot BARRES-ET-RÉPARER, Ethan, 25/09. Le
+          // liseré rouge disait « abîmée » sans dire COMBIEN ; la barre de vie
+          // posée plus bas le dit, avec la teinte du seuil. C'est le geste que
+          // la Base a fait le 12/09 avec `.jeton.abimee` : le carré ne cohabite
+          // pas avec la barre qui le remplace.
           emplacement.title = `${occupant.nom} · niveau ${occupant.niveau}`
             + ` · ${occupant.pvPct} % de PV${occupant.actif ? '' : ' · reste à la maison'}`;
           // ⚠⚠ LE SPRITE A REMPLACÉ LE NOM — Ethan, 04/09 : « il n'y a pas les
@@ -1388,6 +1395,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
           // écrire d'un côté seulement aurait laissé au joueur un écran où le
           // niveau se lit et un autre où il ne se lit pas, pour une armée qui
           // est la même. Le nombre vient de `vaguesDeLArmee`, qui le porte déjà.
+          //
+          // ⚠⚠ ET LA BARRE DE VIE PASSE AVANT LUI, par la MÊME fabrique que
+          // l'écran Armée — lot BARRES-ET-RÉPARER, 25/09. Ce sont les mêmes
+          // pièces dans la même grille : deux barres construites deux fois
+          // divergeraient au premier réglage.
+          const barre = barreDeVie(doc, occupant.degatsMilli, occupant.pvMaxMilli);
+          if (barre !== null) emplacement.appendChild(barre);
           const niveau = doc.createElement('span');
           niveau.className = 'niveau';
           niveau.textContent = String(occupant.niveau);
@@ -1490,8 +1504,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
       // Les messages de refus se reprennent MOT POUR MOT : ils sont déjà écrits
       // en français lisible dans `sim/`, et les reformuler ici en ferait une
       // seconde formulation qui finirait par dire autre chose que la règle.
+      //
+      // ⚠⚠ ET LE MODE RESTE ARMÉ — lot BARRES-ET-RÉPARER, Ethan, 25/09 : « bouton
+      // du menu raid activé réparer : hold ». C'est la règle que la Base et
+      // l'Armée ont reçue le 17/09, « il faut rester que le bouton en mode
+      // hold », et que cet écran n'avait pas reçue. Le refus remplace l'invite
+      // sur la ligne d'avis ; le prochain toucher réussi la rend.
       avis(problemes.map((p) => p.message).join(' ; '));
-      desarmer();
       peindreVagues();
       return;
     }
@@ -1503,7 +1522,17 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // test ne l'aurait dit — les deux chemins sont muets.
     if (m.ecritSurLArmee) resynchroniserLaFormation(etatCourant, formation);
     retenir();
-    desarmer();
+    // ⚠⚠ LE MODE RESTE ARMÉ APRÈS UNE RÉUSSITE, ET LA LIGNE D'AVIS REVIENT À
+    // L'INVITE — lot BARRES-ET-RÉPARER, 25/09. Jusque-là `desarmer` était le
+    // SEUL à vider la ligne ; sans lui, un refus suivi d'une réparation réussie
+    // laisserait le message de refus affiché sous un mode toujours armé. Cet
+    // écran n'a pas de `toast` : le retour à l'invite est donc explicite.
+    //
+    // ⚠ LA RÈGLE VAUT AUSSI POUR « ACTIVER », parce que la ligne retirée est
+    // commune aux deux modes de `MODES_RAID` — c'est « le mode est collant » du
+    // 17/09. Si Ethan veut qu'Activer se désarme, c'est une condition sur `mode`
+    // ici, une ligne.
+    avis(m.invite);
     peindreVagues();
     apresGeste();
   }
@@ -1577,9 +1606,13 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // ne traîne pas. La dette d'ergonomie déclarée en tête de ce fichier —
     // modes tactiles et glissement sur la même grille 4 × 9 — reste entière, et
     // ce lot ne l'aggrave pas.
+    //
+    // ⚠ ET UNE CASE VIDE NE DÉSARME PLUS — lot BARRES-ET-RÉPARER, 25/09, comme
+    // l'Armée depuis le 17/09. Le mode vit jusqu'à ce qu'on retouche son
+    // bouton ou qu'on en arme un autre ; un doigt qui tombe à côté d'une pièce
+    // ne doit pas obliger à le réarmer.
     if (mode !== null) {
       if (index !== undefined) agirSur(Number(index));
-      else desarmer();
       return;
     }
     if (index === undefined) return;
@@ -1920,7 +1953,11 @@ export function initialiserEcranRaid(doc, crochets = {}) {
     // Même raison qu'au mode « Réparer » : la formation porte une copie des
     // dégâts, et c'est elle que le raid emporte.
     resynchroniserLaFormation(etatCourant, formation);
-    desarmer();
+    // ⚠⚠ ET IL NE REPLIE PLUS LA BARRE QUI LE PORTE — lot BARRES-ET-RÉPARER,
+    // 25/09. `desarmer()` se trouvait ici : presser « Tout réparer » faisait
+    // disparaître le bouton sous le doigt qui venait de le presser, et
+    // désarmait un mode qu'Ethan veut « en hold ». Le bilan remplace l'invite
+    // sur la ligne d'avis ; le prochain toucher réussi la rend.
     peindreVagues();
     apresGeste();
     // ⚠ `toutReparer` NE S'ARRÊTE PAS À LA PREMIÈRE IMPAYABLE : elle répare tout

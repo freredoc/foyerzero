@@ -1,6 +1,7 @@
 # RAPPORT — lot ÉTAI-RÉTABLI
 
-**Version produite : 0.99.77 · build 189.** `SAVE_VERSION` passe de **41 à 42**,
+**Version produite : 0.99.78 · build 190** — 0.99.77 · build 189 avant la fusion
+avec BARRES-ET-RÉPARER, voir §9. `SAVE_VERSION` passe de **41 à 42**,
 par un maillon vide.
 Branche : `claude/new-session-9gp1vq`. Le brief ne nomme aucune branche, et
 l'environnement d'exécution épingle celle-ci.
@@ -358,3 +359,27 @@ par une relance.
 | Verdict | **1 668 pass · 0 fail · 1 skipped** |
 | `npm run check` | sortie **0**, relevé sur l'arbre final : `# tests 1669 · # pass 1668 · # fail 0 · # skipped 1` ; `dist/index.html` **10 609 741** octets |
 | `test/` | 81 fichiers, inchangé |
+
+## 9. Fusion avec BARRES-ET-RÉPARER (PR #170)
+
+Ethan a fusionné la PR #170 pendant que celle-ci était ouverte : `main` passe de
+`78af575` à `252fb50`. Les deux lots ont été écrits sur la même base, et ils ne
+partagent **aucun fichier de `src/`**. Ils se croisent sur les trois fichiers que
+deux lots parallèles heurtent toujours :
+
+| Fichier | Résolution |
+|---|---|
+| `CLAUDE.md` | les deux blocs §0 gardés mot pour mot ; ÉTAI en tête, BARRES rétrogradé en « Auparavant » — c'est l'ordre d'atterrissage qui tranche |
+| `test/pictogramme.test.js` | les deux paragraphes de `PIC T7` gardés ; ancre **remesurée** sur le livrable fusionné, deux `notEqual` neufs (210 259 = ÉTAI seul, 211 595 = BARRES seul) |
+| `package.json` | **auto-fusionné EN SILENCE** : les deux lots avaient pris `0.99.77 · build 189`. Fusion bumpée à **0.99.78 · build 190**, deux chaînes |
+
+Mesures, prises sur l'arbre fusionné et non additionnées :
+
+| Grandeur | Valeur |
+|---|---|
+| `main` = `252fb50`, rebâti dans un `git worktree` pristine | **10 608 405** octets, retrouvé à l'octet |
+| Livrable fusionné | **10 611 332** octets |
+| Coût contre `main` | **+2 927**, JavaScript seul — images +0 · audio +0 · feuille +0 · balisage +0 ; `data:` 316 lignes / 315 URI des deux côtés |
+| Somme des deux diffs | 10 611 336 — **4 octets de trop**, d'où la mesure |
+| Marge T10 | **208 668 octets, 1,93 %** (borne 10 820 000 non touchée) |
+| `npm run check` | sortie **0** : `# tests 1671 · # pass 1670 · # fail 0 · # skipped 1` (1668 + `VERROU T8` + `BARRE T1` + `MODE T1`) |

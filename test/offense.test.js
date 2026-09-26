@@ -19,7 +19,8 @@ import {
   ligneDuCoutDeLaPiece, vueDuDevisDeReparation, TITRE_DEVIS,
 } from '../src/ui/offense.js';
 import { existeDansAtlas } from '../src/render/sprite.js';
-import { couchesDeLEntite } from '../src/render/scene.js';
+import { couchesDeLEntite, couleurDeLaBarrePv, COULEURS_BARRE_PV } from '../src/render/scene.js';
+import { pvMaxDeLUnite } from '../src/sim/raid.js';
 import {
   creerEtat, poser, poserEffectif, niveauDeCommandement, pointsEngages,
   problemesDeLaPoseDEffectif,
@@ -1803,17 +1804,56 @@ test('EC T4 — l\'armée répare : quatre actions, quatre moteurs, un bouton gl
   assert.deepEqual(Object.keys(ACTIONS_ARMEE).sort(), Object.keys(MESSAGES_MODE_ARMEE).sort(),
     'la table des actions et celle des messages ont divergé');
 
-  // ⚠⚠ ET LE BOUTON GLOBAL EST PERMANENT, PAS SOUS MODE. C'est la différence
-  // avec `#raid-tout-reparer`, replié tant que « Réparer » n'est pas armé :
-  // l'écran d'armée n'a pas de mode « réparation » à ouvrir, et un bouton qu'il
-  // faut armer pour voir serait un bouton qu'on ne trouve pas. Il n'a donc ni
-  // `hidden` ni `repliee` dans le balisage.
+  // ⚠⚠ ET LE BOUTON GLOBAL EST SOUS MODE DEPUIS LE 25/09 — c'est le RETOURNEMENT
+  // de ce que ce test gardait. Il affirmait « permanent, pas sous mode », au
+  // motif que l'écran d'armée n'avait pas de mode « réparation » à ouvrir. Ethan,
+  // 25/09, point 2 : « Tout réparer doit apparaître si on clique une fois sur
+  // Réparer, que ce soit menu bâtiment ou armée. » Le mode existe — c'est
+  // « Réparer » armé — et le bouton suit désormais la discipline du Chantier et
+  // du raid. Il naît donc `repliee` dans le balisage, et jamais `hidden` : la
+  // tête de feuille porte `[hidden] { display: none !important }`, qui
+  // l'emporterait sur la classe et ferait bouger la grille au premier toucher.
   const html = feuilleDecommentee();
   assert.match(html, /id="offense-tout-reparer"/, 'le bouton « Tout réparer » manque à l\'armée');
   assert.doesNotMatch(html, /id="offense-tout-reparer"[^>]*\shidden/,
-    'le bouton « Tout réparer » de l\'armée naît caché');
-  assert.doesNotMatch(html, /id="offense-tout-reparer"[^>]*class="[^"]*repliee/,
-    'le bouton « Tout réparer » de l\'armée naît replié');
+    'le bouton « Tout réparer » de l\'armée naît caché par `hidden` : le repli doit être une classe');
+  assert.match(html, /id="offense-tout-reparer"[^>]*class="[^"]*repliee/,
+    'le bouton « Tout réparer » de l\'armée ne naît plus replié : il paraît avant le mode');
+
+  // ⚠⚠ ET LE REPLI RÉSERVE SA PLACE — `visibility: hidden`, jamais
+  // `display: none`. Un bouton qui paraîtrait et disparaîtrait dans le flux
+  // recadrerait les vagues sous le doigt à chaque armement : c'est le défaut
+  // exact que le lot ÉCRANS a mesuré sur la ligne d'avis. Le sélecteur passe
+  // BRUT à `regleCss`, qui échappe lui-même.
+  const repli = regleCss('#offense-tout-reparer.repliee');
+  assert.match(repli, /visibility:\s*hidden/,
+    'le repli de « Tout réparer » n\'est plus un `visibility: hidden`');
+  assert.doesNotMatch(repli, /display:\s*none/,
+    'le repli de « Tout réparer » retire le bouton du flux : la grille bougerait à l\'armement');
+
+  // ⚠⚠ ET L'ÉCRAN MONTÉ LE MONTRE AU MODE, ET À LUI SEUL. Lire la classe dans le
+  // balisage ne dit rien de ce que le JavaScript en fait — c'est le proxy que
+  // le dépôt a payé cinq fois. Trois temps : sans mode, premier toucher de
+  // « Réparer », second toucher.
+  {
+    const etat = baseAvecCommandement(12);
+    const { parId } = ecranOffenseMonte(etat);
+    const bouton = parId.get('offense-tout-reparer');
+    assert.ok(bouton.classList.contains('repliee'),
+      'sans mode, « Tout réparer » est visible sur l\'écran d\'armée');
+    parId.get('offense-reparer').envoyer('click');
+    assert.ok(!bouton.classList.contains('repliee'),
+      'au premier toucher de « Réparer », « Tout réparer » reste replié');
+    parId.get('offense-reparer').envoyer('click');
+    assert.ok(bouton.classList.contains('repliee'),
+      'au second toucher de « Réparer », « Tout réparer » ne se replie pas');
+    // ⚠ ET UN AUTRE MODE LE REPLIE AUSSI : armer « Déplacer » par-dessus
+    // « Réparer » quitte le mode de réparation, donc le bouton doit partir.
+    parId.get('offense-reparer').envoyer('click');
+    parId.get('offense-deplacer').envoyer('click');
+    assert.ok(bouton.classList.contains('repliee'),
+      'armer « Déplacer » par-dessus « Réparer » laisse « Tout réparer » à l\'écran');
+  }
 
   // ⚠⚠ ET `REPARATION_AILLEURS` A DISPARU AVEC SON DERNIER LECTEUR. Elle disait
   // « les unités se réparent sur l'écran de raid » — vrai jusqu'à ce lot, faux
@@ -2456,4 +2496,72 @@ test('FIX T7 — l\'étoile du module se pose à côté du niveau, et seulement 
     'la règle ne sert pas les DEUX écrans : l\'armée est la même des deux côtés');
   const regleNiveau = html.match(/#ecran-offense \.emplacement \.niveau,[\s\S]{0,400}?\}/);
   assert.match(regleNiveau[0], /right: 1px/, 'le niveau n\'est plus au coin bas-droit');
+});
+
+// ---------------------------------------------------------------------------
+// BARRE T1 — la barre de vie de l'armée : trois tons, et deux seuils au PV près
+// ---------------------------------------------------------------------------
+
+test('BARRE T1 — une pièce d\'armée abîmée porte sa barre, et sa teinte change aux deux seuils', () => {
+  // ⚠⚠ ETHAN, 25/09, POINTS 3 ET 4 : « menu armée : afficher les barres de PV
+  // quand une unité est abîmée », puis « PV entre 80 et 20 % en jaune, en
+  // dessous de 20 % en rouge ». Deux seuils, trois tons, et une seule fonction
+  // qui les tranche — `couleurDeLaBarrePv` de `render/scene.js`, que le champ de
+  // bataille, la base et les deux grilles de composition lisent tous.
+  //
+  // ⚠ LE MONTAGE PREND UN MAXIMUM DIVISIBLE PAR CINQ, et il le prouve. Sans ça
+  // « un PV au-dessus du seuil » n'existerait pas en entiers, et les quatre
+  // valeurs ci-dessous ne mesureraient pas une borne mais un arrondi.
+  const max = pvMaxDeLUnite('meute', 1);
+  assert.equal(max % 5, 0, `le maximum d'une Meute (${max}) ne se coupe pas en cinquièmes : le montage ne mesure rien`);
+
+  // ⚠⚠ LES DEUX BORNES, AU MILLI-PV PRÈS. Les quatre valeurs encadrent les deux
+  // seuils de part et d'autre : `>` écrit `>=` au premier fait tomber la
+  // deuxième ligne, `<` écrit `<=` au second fait tomber la troisième.
+  const quatreCinquiemes = (max * 4) / 5;
+  const unCinquieme = max / 5;
+  assert.equal(couleurDeLaBarrePv(quatreCinquiemes + 1, max), COULEURS_BARRE_PV.pleine,
+    'un PV au-dessus des quatre cinquièmes n\'est pas « pleine »');
+  assert.equal(couleurDeLaBarrePv(quatreCinquiemes, max), COULEURS_BARRE_PV.entamee,
+    'exactement quatre cinquièmes n\'est pas « entamée » : le premier seuil est inclusif');
+  assert.equal(couleurDeLaBarrePv(unCinquieme, max), COULEURS_BARRE_PV.entamee,
+    'exactement un cinquième n\'est pas « entamée » : le second seuil a mangé sa borne');
+  assert.equal(couleurDeLaBarrePv(unCinquieme - 1, max), COULEURS_BARRE_PV.critique,
+    'un PV sous le cinquième n\'est pas « critique »');
+  // ⚠ ET LES TROIS TONS SONT DEUX À DEUX DIFFÉRENTS — sans quoi les quatre
+  // assertions ci-dessus passeraient sur une table qui rend la même teinte.
+  assert.equal(new Set(Object.values(COULEURS_BARRE_PV)).size, 3,
+    'deux tons de barre de PV sont la même teinte');
+
+  // ⚠⚠ ET L'ÉCRAN MONTÉ LES PEINT — une fonction juste qu'aucun écran
+  // n'appelle ne montre rien au joueur. Quatre Meutes de même niveau, du même
+  // maximum, à quatre dégâts : intacte, un PV, la moitié, et un PV sous le
+  // cinquième restant.
+  const etat = baseAvecCommandement(12);
+  const degats = [0, 1, max / 2, max - (unCinquieme - 1)];
+  for (let colonne = 1; colonne <= 4; colonne += 1) {
+    poserEffectif(etat, 'armee', { id: 'meute', vague: 1, colonne, niveau: 1 });
+  }
+  const armee = baseCourante(etat).armee;
+  assert.equal(armee.length, 4, 'une Meute n\'a pas été posée : le montage ne mesure rien');
+  armee.forEach((piece, i) => { piece.degatsMilli = degats[i]; });
+
+  const { parId } = ecranOffenseMonte(etat);
+  const barreDe = (colonne) => caseDe(parId, 1, colonne).children
+    .find((e) => e.classList.contains('barre-vie')) ?? null;
+
+  // ⚠ UNE PIÈCE INTACTE N'A PAS DE BARRE : trente-six barres pleines feraient
+  // une armée qui a l'air abîmée.
+  assert.equal(barreDe(1), null, 'une Meute intacte porte une barre de vie');
+  for (const colonne of [2, 3, 4]) {
+    assert.ok(barreDe(colonne) !== null, `la Meute abîmée de la colonne ${colonne} n'a pas de barre`);
+  }
+  const reste = (colonne) => barreDe(colonne).children[0];
+  assert.equal(reste(2).style.background, COULEURS_BARRE_PV.pleine,
+    'une Meute à un PV près n\'est pas peinte « pleine »');
+  assert.equal(reste(3).style.background, COULEURS_BARRE_PV.entamee,
+    'une Meute à moitié n\'est pas peinte « entamée »');
+  assert.equal(reste(3).style.width, '50%', 'la barre d\'une Meute à moitié ne fait pas la moitié');
+  assert.equal(reste(4).style.background, COULEURS_BARRE_PV.critique,
+    'une Meute sous le cinquième n\'est pas peinte « critique »');
 });
