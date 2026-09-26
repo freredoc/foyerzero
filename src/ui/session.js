@@ -658,6 +658,10 @@ export function initialiserSession(doc) {
     graine: (maintenantMs() & 0x7fffffff) || 1,
   });
 
+  // ⚠ LE DRAPEAU D'UN GESTE QUI A SONNÉ, remis à faux au début de CHAQUE clic
+  // — voir `jouerLeSonDUnGeste` et l'écouteur en phase de capture, plus bas.
+  let gesteSonne = false;
+
   /**
    * Ce que le son doit faire d'un GESTE de l'écran.
    *
@@ -672,7 +676,31 @@ export function initialiserSession(doc) {
    */
   function sonDeGeste(geste, quoi) {
     const evenement = evenementDuGeste(geste, quoi);
-    if (evenement !== null) son.jouer(evenement);
+    if (evenement !== null) jouerLeSonDUnGeste(evenement);
+  }
+
+  /**
+   * Le seul chemin par lequel un GESTE sonne — et c'est ce qui fait taire le
+   * clic qui l'accompagne.
+   *
+   * ⚠⚠ « OU PARFOIS LES DEUX EN MÊME TEMPS » — Ethan, 25/09, lot SON-MÉLANGE.
+   * Tout clic dont la cible remonte à un bouton joue `ui_click` par l'écouteur
+   * délégué, et le geste de ce bouton demandait EN PLUS son propre son, dans le
+   * même clic : une amélioration, un refus, la réactivation du son. Les deux
+   * sortaient ensemble. Le son propre du geste REMPLACE désormais le clic : il
+   * lève `gesteSonne`, et l'écouteur délégué — qui passe APRÈS les gestionnaires
+   * des boutons, en phase de bouillonnement à la racine — ne joue plus rien.
+   *
+   * ⚠ LES QUATRE PORTES Y PASSENT, ET AUCUNE AUTRE : `sonDeGeste` quand le
+   * câblage rend VRAIMENT un son, les deux `sonDeRefus` et l'interrupteur
+   * d'OPTIONS. Un geste sans son (`evenementDuGeste` rend `null`) ne lève rien,
+   * et son bouton garde son clic.
+   *
+   * @param {string} evenement une clé d'`EVENEMENTS`
+   */
+  function jouerLeSonDUnGeste(evenement) {
+    gesteSonne = true;
+    son.jouer(evenement);
   }
 
   /**
@@ -712,6 +740,12 @@ export function initialiserSession(doc) {
     // groupé dans ce fichier-ci.
     if (surLeRaid) {
       for (const evenement of ecranRaid.evenementsSonores()) son.jouer(evenement);
+      // ⚠⚠ ET LES TIRS PASSENT À PART, PAR LE MÉLANGE — lot SON-MÉLANGE, 26/09.
+      // Ils ne sont pas un ENSEMBLE mais une LISTE, un nom par tir publié : la
+      // politique tire dans le lot au prorata de ce qui a vraiment tiré, et
+      // borne le bus des armes. Les passer dans `evenementsSonores` les aurait
+      // dédoublonnés, donc aurait rendu un Fusilier aussi bruyant que cent.
+      son.jouerLesTirs(ecranRaid.tirsSonores());
     }
   }
 
@@ -1546,7 +1580,20 @@ export function initialiserSession(doc) {
   // ⚠ ET C'EST AUSSI CE QUI RÉVEILLE LE CONTEXTE. Un `AudioContext` créé avant
   // un geste naît suspendu ; celui-ci naît DANS le geste. `jouer` réveille
   // lui-même, donc il n'y a pas deux chemins à tenir d'accord.
+  //
+  // ⚠⚠ ET IL SE TAIT QUAND LE GESTE DU BOUTON A SONNÉ — lot SON-MÉLANGE, 26/09.
+  // « Ou parfois les deux en même temps » : le clic et le son propre du geste
+  // partaient ensemble. Le drapeau `gesteSonne` est remis à faux en phase de
+  // CAPTURE, donc AVANT les gestionnaires des boutons ; ceux qui sonnent le
+  // lèvent par `jouerLeSonDUnGeste` ; l'écouteur délégué, en phase de
+  // bouillonnement à la racine, passe en DERNIER et lit le verdict.
+  //
+  // ⚠ LA CAPTURE N'EST PAS UN DÉTAIL. Remis à faux ailleurs — à la fin de cet
+  // écouteur-ci, par exemple —, un geste qui sonne HORS d'un clic, au toucher
+  // d'un canevas, laisserait le drapeau levé, et le clic SUIVANT serait muet.
+  doc.addEventListener('click', () => { gesteSonne = false; }, true);
   doc.addEventListener('click', (evenement) => {
+    if (gesteSonne) return;
     const cible = evenement.target;
     if (cible !== null && typeof cible.closest === 'function' && cible.closest('button') !== null) {
       son.jouer('ui_click');
@@ -1574,7 +1621,7 @@ export function initialiserSession(doc) {
     reglages.muet = !reglages.muet;
     rendreLesReglages();
     enregistrerLesReglages();
-    if (!reglages.muet) son.jouer('ui_toggle_on');
+    if (!reglages.muet) jouerLeSonDUnGeste('ui_toggle_on');
   });
   // `input` et non `change` : le volume suit le doigt, sinon le joueur règle à
   // l'aveugle et ne s'entend qu'après avoir lâché.
@@ -1614,7 +1661,7 @@ export function initialiserSession(doc) {
     // ⚠ `ui/offense.js` PORTE SON PROPRE `toast`, ET IL N'EST PAS BRANCHÉ ICI —
     // écart déclaré : le brief pose TROIS points de câblage, pas quatre, et le
     // lot du catalogue unifiera les deux registres.
-    sonDeRefus: () => son.jouer('ui_error'),
+    sonDeRefus: () => jouerLeSonDUnGeste('ui_error'),
     // ⚠⚠ ET LES CINQ GESTES DE L'ÉCRAN DE LA BASE PASSENT PAR UN SEUL CROCHET.
     // L'écran nomme un geste — sélection, pose, amélioration, déplacement,
     // retrait — et `src/son/cablage.js` décide s'il fait du bruit et lequel.
@@ -1663,7 +1710,7 @@ export function initialiserSession(doc) {
   // et muet sur l'armée, pour la même faute du joueur.
   ecranOffense = initialiserEcranOffense(doc, {
     apresPose: () => sauvegarder(),
-    sonDeRefus: () => son.jouer('ui_error'),
+    sonDeRefus: () => jouerLeSonDUnGeste('ui_error'),
   });
   // ⚠ LES DEUX VUES DU TUTORIEL SE CÂBLENT ENSEMBLE, et chacune agit sur
   // l'autre : la croix ferme la mini-fenêtre, le bouton de l'onglet Mission la

@@ -1320,9 +1320,12 @@ test('JOURNAL T8 — l\'encaissé est publié avec les PV max de la cible (falsi
     'le compte des écarts est revenu à celui du lot CONTACT-2');
   assert.ok(ecartsNonPublies.length > 0,
     'aucun écart : l’exception a cessé d’être exercée, et les gardes ci-dessus sont vacueuses');
-  // ⚠⚠ ET LA PART EST BORNÉE, CE QUE LE MONTANT N'EST PAS. C'est la mesure qui
-  // justifie `IMPACT_LOURD_MILLIEMES` : un seuil ABSOLU serait ininterprétable,
-  // `facteurMilli` mettant dégâts et PV à l'échelle ensemble.
+  // ⚠⚠ ET LA PART EST BORNÉE, CE QUE LE MONTANT N'EST PAS. Un seuil ABSOLU sur
+  // un impact serait ininterprétable, `facteurMilli` mettant dégâts et PV à
+  // l'échelle ensemble. C'est cette mesure qui justifiait le seuil de taille
+  // d'impact du son ; le son ne traduit plus les impacts depuis le lot
+  // SON-MÉLANGE (26/09), le seuil est parti avec, et la mesure reste : le
+  // journal PUBLIE toujours ses impacts, et leur part se lit toujours ainsi.
   parts = parts.sort((a, b) => a - b);
   assert.ok(parts[parts.length - 1] <= 1000, 'une part dépasse les PV max de la cible');
   assert.ok(parts[Math.floor(parts.length / 2)] > 0, 'la médiane des parts est nulle');

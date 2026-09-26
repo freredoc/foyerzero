@@ -22,7 +22,7 @@ import { BASE_BATIMENTS } from '../data/base.js';
 import { BATIMENTS } from '../data/sites.js';
 import {
   AMBIANCE_PAR_ECRAN, BOUCLES_DE_BATIMENT, EFFONDREMENT_PV, EXPLOSION_PV,
-  IMPACT_LOURD_MILLIEMES, ROULEMENT_PAR_CHASSIS, ARCHETYPE_PAR_UNITE, PASSAGE_AERIEN,
+  ROULEMENT_PAR_CHASSIS, ARCHETYPE_PAR_UNITE, PASSAGE_AERIEN,
   DEPLOIEMENT_PAR_PAIRE, ARME_PAR_PAIRE, ARME_PAR_DEFENSE, MOTEUR_PAR_CHASSIS,
 } from '../data/sons.js';
 
@@ -78,9 +78,17 @@ export function paireDeLUnite(id) {
  * une ambiance se lit, par réconciliation. Les deux mécanismes coexistent parce
  * qu'ils répondent à deux questions différentes.
  *
- * ⚠ SEUL LE CAMP `attaque` SE DÉPLACE — `deplacement()` de `sim/combat.js`
- * écarte tout le reste depuis toujours —, donc comparer les rangées suffit et
- * il n'y a pas de second critère à inventer.
+ * ⚠⚠ LA POSITION D'AVANT EST UN OBJET, PAS UN NOMBRE — lot SON-MÉLANGE,
+ * 26/09. `precedentes` est ce que `prendrePositions` de
+ * `render/interpolation.js` rend : `{ rangeeMilli, colonneMilli }` par entité.
+ * Ce module comparait `e.rangeeMilli` à l'OBJET entier, donc un nombre à un
+ * objet, donc `!==` rendait VRAI à chaque tick : toutes les unités passaient
+ * pour « en mouvement » pour toujours, les roulements sonnaient à l'arrêt et
+ * les moteurs à l'arrêt ne sonnaient jamais — le « pas de bruit de
+ * déplacement » d'Ethan du 25/09, vu par l'autre bout. On compare les deux
+ * coordonnées : une unité bouge si sa rangée OU sa colonne a changé. Le camp
+ * `attaque` ne change pas de colonne aujourd'hui ; lire les deux coûte une
+ * comparaison et ne laisse pas de second piège le jour où il en changera.
  *
  * ⚠ UNE UNITÉ QUI VIENT DE PARAÎTRE N'A PAS DE POSITION D'AVANT, ET ELLE NE
  * COMPTE PAS. Les vagues entrent en cours de combat — `ajouterEntite` allonge
@@ -97,7 +105,8 @@ export function paireDeLUnite(id) {
  * c'est une propriété du moteur, pas une hypothèse de ce module.
  *
  * @param {{entites: object[]}|null} combat l'état de combat, ou null
- * @param {number[]|null} precedentes les `rangeeMilli` d'avant le tick
+ * @param {Array<{rangeeMilli: number, colonneMilli: number}>|null} precedentes
+ *   les positions d'avant le tick, telles que `prendrePositions` les rend
  * ⚠⚠ ET LES DEUX MOITIÉS SORTENT ENSEMBLE, DEPUIS QUE LES MOTEURS À L'ARRÊT
  * SONT CÂBLÉS. « A bougé » et « n'a pas bougé » sont la même lecture prise dans
  * les deux sens ; en faire deux fonctions ferait deux parcours de la même liste,
@@ -116,7 +125,9 @@ export function etatDesUnites(combat, precedentes) {
     // ⚠ UNE UNITÉ QUI VIENT DE PARAÎTRE N'A PAS DE POSITION D'AVANT : elle n'est
     // ni en mouvement ni à l'arrêt, elle n'est pas encore comparable.
     if (precedentes[i] === undefined) return;
-    const enMouvement = e.rangeeMilli !== precedentes[i];
+    const avant = precedentes[i];
+    const enMouvement = e.rangeeMilli !== avant.rangeeMilli
+      || e.colonneMilli !== avant.colonneMilli;
     const cle = `${e.id}|${e.proprietaire}|${enMouvement}`;
     vus.set(cle, { id: e.id, proprietaire: e.proprietaire, enMouvement });
   });
@@ -345,16 +356,30 @@ export function explosionDeLaPiece({ id, genre, proprietaire }) {
 }
 
 /**
- * Ce que le journal d'UN tick demande au son.
+ * Ce que le journal d'UN tick demande au son — HORS TIRS.
  *
- * ⚠⚠ UN ENSEMBLE, PAS UNE LISTE, ET C'EST LA RÉPONSE AU POINT DUR DU LOT. La
- * simulation avance par TICKS, l'écran par IMAGES, et `ticksDus` en résout
- * jusqu'à douze dans la même image en ×4. Demander un son par tir publié ferait
- * cent cinquante coups de canon dans la même milliseconde ; la politique de voix
- * les refuserait, mais compter sur un refus n'est pas une conception — ce serait
- * demander cent cinquante sons pour en obtenir deux, à chaque image. **Un
- * événement distinct sonne au plus une fois par relevé**, quel que soit le
- * nombre de faits qui le réclament.
+ * ⚠⚠ UN ENSEMBLE, PAS UNE LISTE, ET C'EST LA RÉPONSE AU POINT DUR DU LOT
+ * JOURNAL-DE-COMBAT. La simulation avance par TICKS, l'écran par IMAGES, et
+ * `ticksDus` en résout jusqu'à douze dans la même image en ×4. **Un événement
+ * distinct sonne au plus une fois par relevé**, quel que soit le nombre de
+ * faits qui le réclament.
+ *
+ * ⚠⚠ LES TIRS N'Y SONT PLUS — lot SON-MÉLANGE, 26/09. Réduits à un ensemble, ils
+ * perdaient leur POIDS : un tir du joueur contre quatre-vingt-dix de l'Ouvrage
+ * pesait autant qu'un, et la cadence du bus des armes tranchait ensuite par
+ * ordre ALPHABÉTIQUE — `weapon_ouvrage_*` passait avant `weapon_player_*`, et le
+ * joueur n'entendait jamais ses propres armes. Ils sortent par `tirsDuJournal`,
+ * une LISTE qui garde leur nombre, et `choisirLesTirs` de `son/politique.js` les
+ * tire au prorata de ce nombre. Le reste — vagues, apparitions, destructions —
+ * reste un ensemble, et pour la raison d'origine.
+ *
+ * ⚠⚠ ET LES IMPACTS NON PLUS, ET C'EST UN RETRAIT. Tout impact était du métal —
+ * le moteur ne publie un impact que sur une ENTITÉ touchée —, et chaque tir en
+ * portait un : les deux sons d'impact recouvraient tout le combat, c'est le
+ * « tamtam » d'Ethan. Mesuré sur un raid simulé de 35 s au build 188 :
+ * **562 impacts joués pour ZÉRO tir du joueur**. Le journal PUBLIE toujours ses
+ * impacts ; ce module cesse seulement de les traduire, et les quarante-quatre
+ * fichiers restent au livrable, muets, comptés par `SON T20`.
  *
  * ⚠ ET C'EST L'APPELANT QUI DÉCIDE DE LA FENÊTRE. `src/ui/raid.js` relève le
  * journal là où il prend son instantané d'interpolation — donc une fois par tick
@@ -393,25 +418,6 @@ export function evenementsDuJournal(journal) {
     if (deploiement !== undefined) voulu.add(deploiement[fait.proprietaire]);
   }
 
-  for (const fait of journal.tirs) {
-    const arme = armeDuTireur(fait);
-    if (arme !== null) voulu.add(arme);
-  }
-
-  // ⚠⚠ TOUT IMPACT EST DU MÉTAL, ET C'EST MESURÉ, PAS SUPPOSÉ. Le moteur ne
-  // publie un impact que sur une ENTITÉ touchée : il n'a ni tir manqué, ni
-  // projectile qui retombe à côté, donc aucune case vide n'est jamais frappée.
-  // `impact_dirt_*`, `impact_quartz_*` et `impact_scoria_*` restent muets — le
-  // champ de bataille ne connaît d'ailleurs ni quartz ni scorie, mesuré : le
-  // montage porte `obstacles`, jamais un champ de ressource.
-  for (const fait of journal.impacts) {
-    // ⚠ EN MILLIÈMES DES PV MAX DE LA CIBLE, JAMAIS EN MILLI-PV ABSOLUS — voir
-    // `IMPACT_LOURD_MILLIEMES`. Un produit puis une comparaison : pas de
-    // division, donc pas d'arrondi à discuter.
-    const lourd = fait.encaisseMilli * 1000 >= fait.pvMaxMilli * IMPACT_LOURD_MILLIEMES;
-    voulu.add(lourd ? 'impact_metal_heavy' : 'impact_metal_small');
-  }
-
   for (const fait of journal.destructions) {
     const mot = motDuProprietaire(fait.proprietaire);
     if (fait.genre === 'batiment') {
@@ -433,4 +439,31 @@ export function evenementsDuJournal(journal) {
   // ici qu'il se branchera, et `faitDeLEntite` donne déjà le propriétaire dont
   // le choix du son a besoin.
   return [...voulu].sort();
+}
+
+/**
+ * Les tirs d'UN tick, un événement d'arme par tir, dans l'ordre du journal.
+ *
+ * ⚠⚠ UNE LISTE, PAS UN ENSEMBLE, ET C'EST TOUT CE QUI LA DISTINGUE DE SA
+ * VOISINE. Le nombre de tirs est le POIDS que `choisirLesTirs` lira : réduire à
+ * un ensemble ferait peser autant un tir du joueur que quatre-vingt-dix de
+ * l'Ouvrage, et c'est exactement ce qui rendait ses armes inaudibles. Un tireur
+ * qui n'a pas d'arme au pack — un bâtiment, une barrière — ne rend rien : son
+ * `armeDuTireur` vaut `null`, et il est sauté plutôt que compté.
+ *
+ * ⚠ L'ORDRE EST CELUI DU JOURNAL, ET IL NE DÉCIDE DE RIEN : la politique regroupe
+ * et trie avant de tirer. Il est gardé tel quel pour qu'un appelant qui compte
+ * n'ait pas de second ordre à deviner.
+ *
+ * @param {{tirs: object[]}|null} journal
+ * @returns {string[]} des clés d'`EVENEMENTS`, une par tir sonore
+ */
+export function tirsDuJournal(journal) {
+  if (journal === null || journal === undefined) return [];
+  const tirs = [];
+  for (const fait of journal.tirs) {
+    const arme = armeDuTireur(fait);
+    if (arme !== null) tirs.push(arme);
+  }
+  return tirs;
 }

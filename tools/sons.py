@@ -402,46 +402,49 @@ COMMENTAIRE_EXPLOSION = """/**
  * {500…800} · {900…1300} · {1500…2000}. Deux nombres qui se changent seuls.
  */"""
 
-COMMENTAIRE_IMPACT = """/**
- * Au-delà de quelle PART de ses PV une cible prend un impact « lourd », en
- * millièmes.
+COMMENTAIRE_VOIX_BUS = """/**
+ * COMBIEN DE SONS D'UN BUS PEUVENT SONNER EN MÊME TEMPS — lot SON-MÉLANGE,
+ * 26/09. Au plus six tirs qui sonnent ensemble.
  *
- * ⚠⚠ UNE PART, ET NON UN MONTANT, PARCE QUE LE MONTANT SUIT LE NIVEAU. Mesuré
- * sur **57 864 impacts** de raids réels, l'encaissé va de 67 à 34 683 675
- * milli-PV — cinq ordres de grandeur —, `facteurMilli` mettant dégâts et PV à
- * l'échelle ensemble : un seuil absolu classerait tout en `small` au niveau 5 et
- * tout en `heavy` au niveau 50. La part, elle, ne bouge pas — médiane **12 · 13
- * · 13 · 14** millièmes aux niveaux 5, 20, 35 et 50.
+ * ⚠⚠ ELLE REMPLACE LA CADENCE DE 334 ms, QUI CHOISISSAIT PAR L'ORDRE
+ * ALPHABÉTIQUE. Le relevé d'un tick était trié ; avec une porte qui ne laisse
+ * passer qu'un tir par tiers de seconde, le premier nom du tri gagnait presque
+ * toujours — `weapon_ouvrage_*` passe avant `weapon_player_*`. Mesuré sur un
+ * raid simulé de 35 s : **zéro tir du joueur joué pour 540 demandés.** Ethan,
+ * 25/09 : « certains n'ont plus de sons ».
  *
- * ⚠ 25 EST LE TROISIÈME QUARTILE MESURÉ, donc « le quart supérieur des coups ».
- * C'est le SEUL arbitrage encore ouvert de ce lot, et il se change seul.
+ * ⚠⚠ CE QUI CHOISIT DÉSORMAIS EST UN TIRAGE PONDÉRÉ, PAS UN TRI.
+ * `choisirLesTirs` de `src/son/politique.js` tire chaque tir avec un poids égal
+ * à son nombre d'occurrences dans le relevé, et ne le laisse passer que si le
+ * bus a une voix libre. Un camp qui tire deux fois plus s'entend deux fois plus.
+ *
+ * ⚠ SIX EST UNE VALEUR DE DÉPART, PAS UNE MESURE : c'est le réglage d'Ethan, et
+ * il se change sur cette seule ligne. MESURÉ À 6, sur le raid simulé du lot —
+ * 35 s, décodage de 30 ms — : **312 tirs joués pour 1 601 demandés**, soit neuf
+ * par seconde ; 145 du joueur sur 638 et 167 de l'Ouvrage sur 963, et 54 des 145
+ * portent un son d'explosion, celui que le pack donne aux Sapeurs et à
+ * l'Albatros.
+ *
+ * ⚠⚠ UNE SEULE ENTRÉE, ET LES BOUCLES N'Y SONT PAS SOUMISES. Les alertes, les
+ * impacts et les effondrements gardent leur garde par événement ; deux sons du
+ * bus `armes` bouclent — `weapon_missile_flight_loop` et
+ * `weapon_ouvrage_beam_loop` — et une boucle ne passe jamais par
+ * `choisirLesTirs`. `SB T3` le vérifie plutôt que de le supposer.
  */"""
 
-COMMENTAIRE_GARDE_BUS = """/**
- * LA CADENCE D'ENSEMBLE D'UN BUS, en millisecondes — point 10 d'Ethan, 10/09 :
- * « La fréquence des tirs du son est basée sur la fréquence. Ce qui est assez
- * inaudible il faudrait plutôt 3 son par seconde. »
+COMMENTAIRE_RETARD = """/**
+ * Au-delà de combien de millisecondes un son qui attendait son décodage ne se
+ * joue plus.
  *
- * ⚠⚠ ELLE NE REMPLACE PAS LA GARDE PAR ÉVÉNEMENT, ELLE S'AJOUTE. Celle-là
- * empêche un même canon de bégayer et n'a jamais eu d'autre objet ; celle-ci
- * borne ce que le bus produit EN TOUT. Mesuré : `weapon_ouvrage_aa` et cinq
- * autres portent `gardeMs: 22`, soit **quarante-cinq déclenchements par seconde
- * pour ce seul événement**, et le bus `armes` en porte vingt-sept qu'une bande
- * de défense fait tirer ensemble. C'est cette somme-là qu'Ethan entend.
+ * ⚠⚠ LA PREMIÈRE DEMANDE D'UN SON N'EST PLUS MUETTE — lot SON-MÉLANGE. Le
+ * tampon se décode à la première lecture, et `jouer` rendait la main sans rien
+ * brancher si le tampon n'était pas là : chaque fichier se taisait une fois, et
+ * chaque éviction le refaisait taire. Il se branche désormais à la résolution
+ * du décodage.
  *
- * ⚠ 334 = ceil(1000 / 3) : trois sons par seconde est un PLAFOND, pas une
- * moyenne. L'écart à la consigne vaut 0,3 %, et il est déclaré.
- *
- * ⚠⚠ UNE SEULE ENTRÉE, ET C'EST VOULU. Les alertes gardent leur cadence propre
- * — 450 ms par événement —, les impacts et les effondrements la leur : Ethan a
- * nommé les TIRS. Le jour où un second bus devra être bridé, il s'ajoute dans
- * cette table et nulle part ailleurs.
- *
- * ⚠⚠ ET LES BOUCLES N'Y SONT PAS SOUMISES. Deux sons du bus `armes` bouclent —
- * `weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop` — et une boucle n'a
- * ni garde ni plafond : `reconcilierLesBoucles` écrit pourquoi, « un refus qui
- * ne se rattrape pas ». La garde vit dans `demanderUnSon`, que les boucles ne
- * traversent jamais.
+ * ⚠ SAUF S'IL ARRIVE TROP TARD : un tir qui sortirait une demi-seconde après
+ * son coup serait faux. Le retard se mesure sur l'horloge du contexte audio.
+ * 150 ms est un temps de décodage SUPPOSÉ sur téléphone, pas mesuré.
  */"""
 
 COMMENTAIRE_REGLAGES = """/**
@@ -644,20 +647,6 @@ EFFONDREMENT_PV = [2000, 3000]
 # ils se changent seuls, comme les deux précédents.
 EXPLOSION_PV = [900, 1500]
 
-# ⚠⚠ AU-DELÀ DE QUELLE PART DE SES PV UNE CIBLE PREND UN IMPACT « LOURD » —
-# EN MILLIÈMES, ET C'EST LE SEUL ARBITRAGE ENCORE OUVERT DE CE LOT.
-#
-# ⚠⚠ UNE PART, PAS UN MONTANT, PARCE QUE LE MONTANT SUIT LE NIVEAU. Mesuré sur
-# 57 864 impacts de raids réels : l'encaissé va de **67 à 34 683 675 milli-PV**,
-# cinq ordres de grandeur, parce que `facteurMilli` met dégâts ET PV à l'échelle
-# ensemble. Un seuil absolu classerait donc tout en `small` au niveau 5 et tout
-# en `heavy` au niveau 50. La PART, elle, ne bouge pas : médiane **12 · 13 · 13 ·
-# 14** millièmes aux niveaux 5, 20, 35 et 50.
-#
-# ⚠ 25 EST LE TROISIÈME QUARTILE MESURÉ : un impact lourd est le quart supérieur.
-# **Ethan tranche ; ce nombre se change seul.**
-IMPACT_LOURD_MILLIEMES = 25
-
 # ⚠⚠ LE ROULEMENT EST PAR CHÂSSIS, ET LES POIDS SONT DÉJÀ ÉCRITS DANS LA CARTE.
 # Arbitrage d'Ethan du 04/09, en entier. Les poids léger/moyen/lourd des blindés
 # sont REPRIS du bloc `player` d'`unit_audio_map.json` — Ratisseur y porte
@@ -763,36 +752,35 @@ BUS = {
     'ambiances': -18,
 }
 
-# ⚠⚠ LA CADENCE D'ENSEMBLE D'UN BUS, EN MILLISECONDES — POINT 10 D'ETHAN, 10/09 :
-# « La fréquence des tirs du son est basée sur la fréquence. Ce qui est assez
-# inaudible il faudrait plutôt 3 son par seconde. »
+# ⚠⚠ COMBIEN DE SONS D'UN BUS SONNENT EN MÊME TEMPS — LOT SON-MÉLANGE, 26/09.
+# Au plus six tirs qui sonnent ensemble.
 #
-# ⚠⚠ LA GARDE PAR ÉVÉNEMENT EXISTAIT, ET ELLE NE POUVAIT PAS TENIR ÇA. Elle
-# empêche un même canon de bégayer, et c'est tout ce qu'elle a jamais fait :
-# mesuré, `weapon_ouvrage_aa`, `weapon_ouvrage_machinegun` et `weapon_*_rifle`
-# portent `gardeMs: 22`, ce qui autorise **quarante-cinq déclenchements par
-# seconde POUR CE SEUL ÉVÉNEMENT** — et le bus `armes` en porte
-# VINGT-SEPT, qu'une bande de défense fait tirer en parallèle. Ce n'est pas un
-# seuil mal réglé, c'est une grandeur qui n'était bornée nulle part.
+# ⚠⚠ ELLE REMPLACE LA CADENCE DE 334 ms DU 10/09, ET LA CADENCE ÉTAIT FAUSSE
+# PAR L'ORDRE DU TRI. Une porte qui ne laisse passer qu'un tir par tiers de
+# seconde, devant un relevé trié par nom, rend toujours le PREMIER nom :
+# `weapon_ouvrage_*` passe avant `weapon_player_*`, et le raid simulé de 35 s
+# jouait zéro tir du joueur pour 540 demandés. Ce qui choisit désormais est un
+# TIRAGE PONDÉRÉ par le nombre de tirs, dans `choisirLesTirs`.
 #
-# ⚠ 334 SE CALCULE : 1000 / 3 = 333,33, ARRONDI AU SUPÉRIEUR pour que trois sons
-# par seconde soit un PLAFOND et non une moyenne. L'écart à la consigne est de
-# 0,3 %, et il est déclaré.
+# ⚠ SIX EST UNE VALEUR DE DÉPART, PAS UNE MESURE : c'est le réglage d'Ethan, et
+# il se change sur cette seule ligne. MESURÉ À 6, sur le raid simulé du lot —
+# 35 s, décodage de 30 ms — : 312 tirs joués pour 1 601 demandés, soit neuf par
+# seconde ; 145 du joueur sur 638 et 167 de l'Ouvrage sur 963, et 54 des 145
+# portent un son d'explosion, celui que le pack donne aux Sapeurs et à
+# l'Albatros. Le « 245 » du brief était celui du prototype, et ne se recopie pas.
 #
-# ⚠⚠ SEULEMENT `armes`, ET C'EST UNE TABLE PLUTÔT QU'UN `if`. Ethan a nommé les
-# TIRS ; les alertes gardent leur cadence propre (450 ms par événement), les
-# impacts et les effondrements la leur. Le jour où un second bus devra être
-# bridé, il s'ajoute ICI et nulle part ailleurs — un `if` sur le nom du bus
-# serait le premier cas particulier écrit à la main dans une table qui se lit.
-#
-# ⚠⚠ ET ELLE N'ATTEINT PAS LES BOUCLES, PAR CONSTRUCTION. Deux sons du bus
-# `armes` BOUCLENT — `weapon_missile_flight_loop` et `weapon_ouvrage_beam_loop` —
-# et une boucle n'a ni garde ni plafond : `reconcilierLesBoucles` l'écrit, « un
-# refus qui ne se rattrape pas ». La garde vit dans `demanderUnSon`, que les
-# boucles ne traversent jamais. `SB T3` le vérifie plutôt que de le supposer.
-GARDE_PAR_BUS = {
-    'armes': 334,
+# ⚠⚠ SEULEMENT `armes`, ET C'EST UNE TABLE PLUTÔT QU'UN `if`. Le jour où un
+# second bus devra être plafonné, il s'ajoute ICI et nulle part ailleurs.
+VOIX_PAR_BUS = {
+    'armes': 6,
 }
+
+# ⚠⚠ AU-DELÀ DE COMBIEN DE MILLISECONDES UN SON QUI ATTENDAIT SON DÉCODAGE NE SE
+# JOUE PLUS — LOT SON-MÉLANGE. La première demande d'un son était muette ; elle
+# se branche désormais à la résolution du décodage, sauf si elle arrive trop
+# tard : un tir une demi-seconde après son coup serait faux. 150 ms est un temps
+# de décodage SUPPOSÉ sur téléphone, à relever s'il se mesure.
+RETARD_MAX_DECODAGE_MS = 150
 
 # ⚠⚠ CE QUE LE JEU RETIRE À UNE FAMILLE, EN PLUS DE CE QUE LE PACK RECOMMANDE.
 # Ethan, 06/09 : « baisser les sons des boutons, garder les seuils pour les
@@ -1015,6 +1003,9 @@ def ecrire_la_table(pack):
               % BUDGET_SECONDES_DECODEES, '',
               COMMENTAIRE_RAMPE,
               'export const RAMPE_BOUCLE_MS = %d;' % RAMPE_BOUCLE_MS, '',
+              COMMENTAIRE_RETARD,
+              'export const RETARD_MAX_DECODAGE_MS = %d;'
+              % RETARD_MAX_DECODAGE_MS, '',
               'export const BUS = {']
     for bus, db in BUS.items():
         lignes.append('  %s: %d,' % (bus, db))
@@ -1039,20 +1030,20 @@ def ecrire_la_table(pack):
         variantes = ', '.join("'%s'" % m['id'] for m in membres)
         lignes.append('  %s: { variantes: [%s], gardeMs: %d },'
                       % (nom, variantes, membres[0]['recommended_cooldown_ms']))
-    # ⚠⚠ LA CADENCE PAR BUS — ET LE GÉNÉRATEUR REFUSE UN BUS QUI N'EXISTE PAS.
+    # ⚠⚠ LES VOIX PAR BUS — ET LE GÉNÉRATEUR REFUSE UN BUS QUI N'EXISTE PAS.
     # C'est ce qu'il fait déjà pour un nom de son (`exiger_une_boucle`) et pour
-    # une catégorie sans bus : une clé mal tapée ici rendrait la garde INERTE en
-    # silence, `GARDE_PAR_BUS[bus]` valant `undefined` pour tout le monde, et le
-    # son se remettrait à bouillir sans qu'une ligne ne le dise.
-    lignes += ['};', '', COMMENTAIRE_GARDE_BUS, 'export const GARDE_PAR_BUS = {']
-    for bus in sorted(GARDE_PAR_BUS):
+    # une catégorie sans bus : une clé mal tapée ici rendrait le plafond INERTE
+    # en silence, `VOIX_PAR_BUS[bus]` valant `undefined` pour tout le monde, et
+    # les tirs se remettraient à bouillir sans qu'une ligne ne le dise.
+    lignes += ['};', '', COMMENTAIRE_VOIX_BUS, 'export const VOIX_PAR_BUS = {']
+    for bus in sorted(VOIX_PAR_BUS):
         if bus not in BUS:
-            raise SystemExit('GARDE_PAR_BUS : « %s » n\'est pas un bus — les cinq '
+            raise SystemExit('VOIX_PAR_BUS : « %s » n\'est pas un bus — les cinq '
                              'sont %s' % (bus, ', '.join(sorted(BUS))))
-        if not isinstance(GARDE_PAR_BUS[bus], int) or GARDE_PAR_BUS[bus] <= 0:
-            raise SystemExit('GARDE_PAR_BUS[%s] : « %s » n\'est pas une durée en '
-                             'millisecondes' % (bus, GARDE_PAR_BUS[bus]))
-        lignes.append('  %s: %d,' % (bus, GARDE_PAR_BUS[bus]))
+        if not isinstance(VOIX_PAR_BUS[bus], int) or VOIX_PAR_BUS[bus] <= 0:
+            raise SystemExit('VOIX_PAR_BUS[%s] : « %s » n\'est pas un nombre de '
+                             'voix' % (bus, VOIX_PAR_BUS[bus]))
+        lignes.append('  %s: %d,' % (bus, VOIX_PAR_BUS[bus]))
     lignes += ['};', '', COMMENTAIRE_REGLAGES,
                'export const REGLAGES_PAR_DEFAUT = { muet: false, volume: 0.7 };', '']
 
@@ -1111,9 +1102,7 @@ def ecrire_la_table(pack):
                % ', '.join(str(n) for n in EFFONDREMENT_PV), '',
                COMMENTAIRE_EXPLOSION,
                'export const EXPLOSION_PV = [%s];'
-               % ', '.join(str(n) for n in EXPLOSION_PV), '',
-               COMMENTAIRE_IMPACT,
-               'export const IMPACT_LOURD_MILLIEMES = %d;' % IMPACT_LOURD_MILLIEMES, '']
+               % ', '.join(str(n) for n in EXPLOSION_PV), '']
 
     chemin = os.path.join(RACINE, 'src', 'data', 'sons.js')
     with open(chemin, 'w', encoding='utf-8') as f:
