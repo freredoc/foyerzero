@@ -55,6 +55,7 @@ import {
 import { creerEtat, rattraperJeu } from '../src/sim/state.js';
 import { baseCourante } from '../src/sim/base-courante.js';
 import { coutDUnRaid } from '../src/sim/prix-du-raid.js';
+import { problemesDeLaReparationDUnePiece } from '../src/sim/reparation.js';
 import { poserLesBatimentsDeProduction } from './batiments-de-production.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -859,11 +860,18 @@ test('RAID-E T8 — le nom nu a quitté les vagues, et le sprite est celui de l\
   assert.match(raid, /emplacement\.title\s*=\s*`\$\{occupant\.nom\}/,
     'le nom de l\'unité a disparu de l\'écran sans reparaître ailleurs');
 
-  // ⚠⚠ ET LES TROIS ÉTATS SURVIVENT, PARCE QU'AUCUN NE PEINT LE SPRITE. C'est
+  // ⚠⚠ ET LES DEUX ÉTATS SURVIVENT, PARCE QU'AUCUN NE PEINT LE SPRITE. C'est
   // la question que le brief pose : un aplat sur l'image rendrait les pièces
-  // méconnaissables. Les trois règles portent sur le LISERÉ.
+  // méconnaissables. Les deux règles portent sur le LISERÉ.
+  // ⚠ ILS ÉTAIENT TROIS JUSQU'AU 25/09 : `abimee` bordait en rouge une unité
+  // entamée, et le lot BARRES-ET-RÉPARER le remplace par la barre de vie de la
+  // Base — Ethan : « on remplace le liseré rouge de la grille du raid par la
+  // même barre ? Oui. » Le carré ne cohabite pas avec la barre qui le remplace.
   const feuille = balisage();
-  for (const classe of ['occupe', 'inactive', 'abimee']) {
+  const feuilleSansProse = feuille.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(feuilleSansProse, /#ecran-raid \.emplacement\.abimee/,
+    'le liseré rouge de l\'unité abîmée est revenu à côté de la barre qui le remplace');
+  for (const classe of ['occupe', 'inactive']) {
     const bloc = feuille.match(new RegExp(`#ecran-raid \\.emplacement\\.${classe}[^{]*\\{([^}]*)\\}`));
     assert.ok(bloc !== null, `l'état « ${classe} » n'a plus de règle`);
     assert.ok(!/background(-color|-image)?:/.test(bloc[1]),
@@ -2978,4 +2986,87 @@ test('FIX T4 bis — les deux portes qui ne passent pas l\'une par l\'autre sold
     assert.equal(ecran.appels.length, peintes,
       '« Visualiser » repeint après un changement d\'écran');
   }
+});
+
+// ---------------------------------------------------------------------------
+// BARRES-ET-RÉPARER — le mode Réparer du raid reste armé, 25/09/2026
+// ---------------------------------------------------------------------------
+
+test('MODE T1 — le mode Réparer du raid reste armé : il répare, puis il attend le toucher suivant', () => {
+  // ⚠⚠ ETHAN, 25/09, point 2 : « bouton du menu raid activé réparer : hold ».
+  // `agirSur` et « Tout réparer » appelaient `desarmer()` après une réparation
+  // RÉUSSIE : il fallait réarmer le mode entre deux unités, et la barre qui
+  // porte « Tout réparer » se repliait sous le doigt qui venait de la presser.
+  // C'est la règle que la Base et l'Armée ont reçue le 17/09, et que cet écran
+  // n'avait pas reçue.
+  const ecran = ecranPret();
+  const { $, etat, cible } = ecran;
+  const armee = baseCourante(etat).armee;
+  for (let i = 0; i < 3; i += 1) armee[i].degatsMilli = 100_000;
+  // ⚠ ON ROUVRE : la formation est une COPIE prise à l'ouverture, et des dégâts
+  // posés après elle ne se peindraient pas — le test mesurerait une grille
+  // intacte en croyant mesurer trois pièces abîmées.
+  ecran.ecran.ouvrir(etat, cible, fauxAtlas());
+
+  // ⚠ LE MONTAGE PROUVE QU'IL MESURE QUELQUE CHOSE : si une seule des trois
+  // réparations était refusée — réserve à sec, bâtiment absent —, le mode
+  // resterait armé pour une autre raison que la règle, et le test passerait
+  // sur le code d'avant le lot.
+  for (let i = 0; i < 3; i += 1) {
+    if (problemesDeLaReparationDUnePiece(etat, i).length > 0) {
+      assert.fail('le montage ne mesure rien : la pièce ' + i + ' ne se répare pas');
+    }
+  }
+
+  const cases = () => $('raid-vagues').children
+    .flatMap((v) => v.children).flatMap((r) => r.children);
+  const caseDe = (index) => cases().find((c) => c.dataset.index === String(index));
+  const aUneBarre = (index) => caseDe(index).children
+    .some((e) => e.classList.contains('barre-vie'));
+  const toucher = (index) => $('raid-vagues').envoyer('pointerdown', {
+    target: {
+      closest: (sel) => (sel === '.emplacement'
+        ? { dataset: { index: String(index) }, classList: { add() {} } }
+        : null),
+    },
+  });
+  const invite = 'Mode RÉPARER : touchez l\'unité à réparer. Retouchez le bouton pour annuler.';
+
+  assert.ok(aUneBarre(0), 'une pièce abîmée ne porte pas de barre de vie');
+  assert.ok(!aUneBarre(3), 'une pièce intacte porte une barre de vie');
+
+  $('raid-reparer').envoyer('click');
+  assert.ok($('raid-reparer').classList.contains('arme'), 'le mode ne s\'arme pas');
+  assert.ok(!$('raid-tout-reparer').classList.contains('repliee'),
+    '« Tout réparer » ne paraît pas quand le mode s\'arme');
+
+  // --- (1) UNE RÉPARATION, ET LE MODE TIENT --------------------------------
+  toucher(0);
+  assert.equal(baseCourante(etat).armee[0].degatsMilli, 0, 'la pièce 0 n\'est pas réparée');
+  assert.ok(!aUneBarre(0), 'la barre survit à la réparation');
+  assert.ok($('raid-reparer').classList.contains('arme'),
+    'le mode s\'est désarmé après une réparation');
+  assert.ok(!$('raid-tout-reparer').classList.contains('repliee'),
+    '« Tout réparer » s\'est replié après une réparation');
+  assert.equal($('raid-avis').textContent, invite, 'la ligne d\'avis ne revient pas à l\'invite');
+
+  // --- (2) LE TOUCHER SUIVANT RÉPARE SANS RÉARMER --------------------------
+  toucher(1);
+  assert.equal(baseCourante(etat).armee[1].degatsMilli, 0,
+    'le second toucher ne répare pas : il fallait réarmer');
+  assert.equal($('raid-avis').textContent, invite, 'la ligne d\'avis ne revient pas à l\'invite');
+
+  // --- (3) « TOUT RÉPARER » NE REPLIE PAS SA PROPRE BARRE ------------------
+  $('raid-tout-reparer').envoyer('click');
+  assert.equal(baseCourante(etat).armee[2].degatsMilli, 0, '« Tout réparer » n\'a rien réparé');
+  assert.ok($('raid-reparer').classList.contains('arme'),
+    'le mode s\'est désarmé après « Tout réparer »');
+  assert.ok(!$('raid-tout-reparer').classList.contains('repliee'),
+    '« Tout réparer » a disparu sous le doigt qui venait de le presser');
+
+  // --- (4) SEUL LE BOUTON DÉSARME ------------------------------------------
+  $('raid-reparer').envoyer('click');
+  assert.ok(!$('raid-reparer').classList.contains('arme'), 'retoucher le bouton ne désarme plus');
+  assert.ok($('raid-tout-reparer').classList.contains('repliee'),
+    '« Tout réparer » reste déplié mode désarmé');
 });

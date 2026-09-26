@@ -114,6 +114,7 @@ import { batimentDeLaVignette } from '../src/data/base.js';
 import { ressourceDeLaCase } from '../src/sim/champs.js';
 import { VIGNETTES_MIXTES } from '../src/data/base.js';
 import { batimentDeReference } from '../src/data/base.js';
+import { COULEURS_BARRE_PV } from '../src/render/scene.js';
 
 /**
  * Le collecteur qui va sur CETTE case de champ.
@@ -5576,6 +5577,46 @@ test('RÉPARER T11 — le bouton global n\'apparaît que le mode Réparer armé'
   assert.ok(pose, 'la règle de pose de la barre a disparu');
   assert.match(pose[1], /position:\s*absolute/,
     'la barre est revenue dans le flux : elle repousserait le champ');
+
+  // ⚠⚠ ET CE QU'ELLE COUVRIRAIT MONTE AVEC ELLE — lot BARRES-ET-RÉPARER, point 1
+  // d'Ethan, 25/09 : « le bouton Tout réparer est caché par Mode réparer ». Posée
+  // `bottom: 100%` de la barre contextuelle, elle occupe exactement la bande où
+  // vivent la ligne de mode et la bascule de bande : sans rien de plus, la ligne
+  // de mode, écrite APRÈS dans le DOM, la recouvrait. La même source qui la
+  // déplie pose `sous-reparation` sur le champ, et la retire en la repliant.
+  const champ = doc.getElementById('chantier-champ');
+  const sous = () => champ.classList.contains('sous-reparation');
+  assert.equal(sous(), false, 'le champ est marqué `sous-reparation` sans mode armé');
+  doc.getElementById('chantier-reparer').click();
+  assert.equal(repliee(), false);
+  assert.equal(sous(), true,
+    'armer Réparer déplie la barre sans faire monter la ligne de mode : elle la recouvre');
+  doc.getElementById('chantier-demolir').click();
+  assert.equal(sous(), false,
+    'armer une autre action laisse le champ marqué : la ligne de mode flotte au-dessus d\'un vide');
+  doc.getElementById('chantier-reparer').click();
+  doc.getElementById('chantier-reparer').click();
+  assert.equal(sous(), false, 'désarmer laisse le champ marqué `sous-reparation`');
+
+  // Et la feuille le peint : la ligne de mode monte des 22 px de la barre, et la
+  // barre passe au-dessus de ce qui resterait dessous — sa hauteur est ÉCRITE,
+  // c'est le nombre que la montée suppose.
+  const montee = feuille.match(/#chantier-champ\.sous-reparation #chantier-avis\s*\{([^}]*)\}/);
+  assert.ok(montee, 'la ligne de mode ne monte pas quand la barre paraît : elle la recouvre');
+  assert.match(montee[1], /bottom:\s*22px/,
+    'la ligne de mode ne monte pas de la hauteur de la barre');
+  // Sauf tutoriel ouvert : la barre couvre alors le bas de la mini-fenêtre, qui
+  // est dans le flux sous la vue, et la ligne de mode n'a rien dessous. Relevé
+  // dans Chromium : sans cette règle, 22 px de terrain nu entre elle et le tuto.
+  const tutoOuvert = feuille.match(
+    /#chantier-champ\.sous-reparation:has\(> #chantier-tuto:not\(\[hidden\]\)\) #chantier-avis\s*\{([^}]*)\}/);
+  assert.ok(tutoOuvert, 'la ligne de mode monte aussi tutoriel ouvert : elle flotte au-dessus d\'un vide');
+  assert.match(tutoOuvert[1], /bottom:\s*0/,
+    'tutoriel ouvert, la ligne de mode ne revient pas au bas de la vue');
+  assert.match(pose[1], /height:\s*22px/,
+    'la hauteur de la barre n\'est plus écrite : la montée suppose un nombre que rien ne tient');
+  assert.match(pose[1], /z-index:\s*3/,
+    'la barre n\'est plus au-dessus de ce qu\'elle recouvre : le bouton redevient inaccessible');
 });
 
 test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', () => {
@@ -5617,6 +5658,17 @@ test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', 
   assert.equal(barreDe(5, 5).hidden, false,
     'un milli de dégât ne fait pas paraître la barre : le seuil n\'est pas « > 0 »');
 
+  // ⚠⚠ LA TEINTE SUIT LES SEUILS D'ETHAN — lot BARRES-ET-RÉPARER, point 3 :
+  // « jaune de 20 à 80 %, rouge en dessous de 20 ». La moitié et les six
+  // dixièmes sont ENTAMÉS ; un milli de dégât laisse la pièce PLEINE. Le code
+  // l'écrit en ligne, depuis `couleurDeLaBarrePv` : la feuille n'en porte plus.
+  assert.equal(barreBatiment.children[0].style.background, COULEURS_BARRE_PV.entamee,
+    'le bâtiment à moitié de vie ne porte pas la teinte entamée');
+  assert.equal(barreGarnison.children[0].style.background, COULEURS_BARRE_PV.entamee,
+    'la garnison à six dixièmes ne porte pas la teinte entamée');
+  assert.equal(barreDe(5, 5).children[0].style.background, COULEURS_BARRE_PV.pleine,
+    'une pièce à un milli de dégât ne porte pas la teinte pleine');
+
   // Falsifiable : un intact ne la montre pas, sinon la barre ne dirait rien.
   const chantier = laBase.disposition[0];
   assert.equal(barreDe(chantier.rangee, chantier.colonne).hidden, true,
@@ -5625,10 +5677,20 @@ test('RÉPARER T12 — un abîmé se voit sur la grille, dans les DEUX bandes', 
   // Et la feuille la peint — une classe sans règle est un lot invisible.
   const feuille = readFileSync(join(RACINE, 'src', 'index.src.html'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.match(feuille, /\.jeton \.barre-vie\s*\{[^}]*#8A1E17/,
-    'la barre de vie du jeton n\'a pas de règle');
-  assert.match(feuille, /\.jeton \.barre-vie i\s*\{[^}]*#8C9A72/,
-    'la part restante de la barre n\'a pas de teinte');
+  // ⚠⚠ LE FOND A QUITTÉ L'ACCENT — lot BARRES-ET-RÉPARER. Il était le rouge
+  // sombre de l'anti-véhicule, où une barre CRITIQUE se serait fondue ; il est
+  // l'ombre `#161914`. Et le `<i>` n'a plus de teinte dans la feuille : deux
+  // écrivains pour une teinte — la feuille et le code — est la faute refusée.
+  const regleBarre = feuille.match(/\.jeton \.barre-vie\s*\{([^}]*)\}/);
+  assert.ok(regleBarre, 'la barre de vie du jeton n\'a pas de règle');
+  assert.match(regleBarre[1], /background:\s*#161914/,
+    'le fond de la barre n\'est pas l\'ombre neutre');
+  assert.doesNotMatch(regleBarre[1], /#8A1E17/,
+    'le fond de la barre est revenu à l\'accent anti-véhicule : une barre critique s\'y fond');
+  const regleReste = feuille.match(/\.jeton \.barre-vie i\s*\{([^}]*)\}/);
+  assert.ok(regleReste, 'la part restante de la barre n\'a pas de règle');
+  assert.doesNotMatch(regleReste[1], /background/,
+    'la feuille teinte la part restante : deux écrivains pour la même teinte');
   // ⚠ ET LE CARRÉ NE REVIENT PAS. Une règle que plus rien ne pose est une
   // décoration que rien n'explique ; les deux ensemble diraient deux fois le
   // même fait, dont une fois sans le chiffre.
@@ -7298,7 +7360,10 @@ test('PAL T5 — les états d\'un emplacement restent deux à deux distincts san
   // cadre des panneaux `#raid-sim` / `#raid-fin`. Aucune des deux n'est un état
   // d'emplacement. Les vrais sont relevés ci-dessous, par balayage.
   for (const [ecran, attendus] of [
-    ['#ecran-raid', ['vide', 'occupe', 'inactive', 'abimee', 'enmain', 'chargee']],
+    // ⚠ `abimee` EST PARTI — lot BARRES-ET-RÉPARER, 25/09 : le liseré rouge
+    // d'une unité entamée est remplacé par la barre de vie de la Base, qui est un
+    // DESCENDANT (`.emplacement .barre-vie`) et non un état. Cinq états.
+    ['#ecran-raid', ['vide', 'occupe', 'inactive', 'enmain', 'chargee']],
     ['#ecran-offense', ['vide', 'occupe', 'apercu', 'enmain']],
   ]) {
     const etats = etatsDeLEmplacement(ecran);

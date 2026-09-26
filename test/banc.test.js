@@ -22,8 +22,8 @@ import { PREREGLAGES, montagePreregle } from './prereglages-lot3a.js';
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * La palette de `FICHE-STYLE.md`, transcrite. Quarante et une teintes depuis le
- * 05/09. Un test plus bas l'asserte contre le document, dans les deux sens.
+ * La palette de `FICHE-STYLE.md`, transcrite. Quarante-trois teintes depuis le
+ * 25/09. Un test plus bas l'asserte contre le document, dans les deux sens.
  */
 const PALETTE_FICHE = [
   // châssis kaki — le joueur
@@ -56,6 +56,11 @@ const PALETTE_FICHE = [
   // rampe des châssis. Aucun des huit n'est employé dans `src/` aujourd'hui.
   '#161A0E', '#2F3C20', '#475A2F', '#5F7A3E',
   '#100916', '#26193C', '#3B285C', '#523A7A',
+  // BARRES DE PV — deux tons d'état entrés le 25/09, lot BARRES-ET-RÉPARER, sur
+  // arbitrage d'Ethan (« jaune de 20 à 80 %, rouge en dessous de 20 », partout,
+  // et pas avec les accents). L'entamée puis la critique ; la pleine reste le
+  // kaki lumière des châssis, déjà plus haut.
+  '#E0D060', '#C23A5A',
 ];
 
 /** Retire commentaires de ligne, de bloc et HTML avant un balayage de code. */

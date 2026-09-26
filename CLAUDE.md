@@ -7,7 +7,100 @@ pour le contenu du jeu, voir la hiérarchie ci-dessous.
 distribué comme un fichier HTML autonome, avec enveloppe Android WebView et
 auto-update par GitHub Pages. Paquet : `fr.freredoc.foyerzero`.
 
-Dernière révision : **23/09/2026**, version 0.99.76 · build 188.
+Dernière révision : **26/09/2026**, version 0.99.77 · build 189.
+⚠⚠ **QUATRE RETOURS D'ETHAN DU 25/09, TOUS D'ÉCRAN, ET PAS UNE LIGNE DE MOTEUR.**
+Lot BARRES-ET-RÉPARER. « Tout réparer » paraît au premier toucher sur Réparer,
+Base comme Armée ; Réparer reste armé sur l'écran de raid ; les pièces abîmées
+portent une barre de PV dans l'Armée et sur la grille du raid ; et la barre
+change de teinte à deux seuils, **partout**. `src/sim/`, `src/data/`,
+`src/son/`, `tools/` et `art/` n'ont pas un fichier de changé — vérifié au diff
+—, et **`SAVE_VERSION` reste à 41**.
+⚠⚠ **LE BOUTON DE LA BASE ÉTAIT LÀ, ET ON NE LE VOYAIT PAS — LE DÉFAUT NE SE
+LISAIT QU'EN REGARDANT.** Mesuré dans Chromium, 360 × 780 CSS, DPR 3, Réparer
+armé : `#chantier-avis` en 576 → 602 et `z-index: 1`, `#chantier-reparation` en
+581 → 603 et `z-index: auto`, la bascule ▼ en 556 → 596. On lisait la ligne de
+mode, **ni la réserve ni le bouton**. ⚠ Et `elementFromPoint` au centre du
+bouton rendait DÉJÀ le bouton — la ligne de mode est en `pointer-events: none` :
+le toucher passait, c'est la LECTURE qui manquait. Aucun test ne pouvait le voir,
+et c'est pourquoi la capture était obligatoire.
+⚠ **LE REMÈDE EST UN ÉTAGE ET UNE CLASSE.** `#chantier-reparation` prend
+`z-index: 3` et 22 px de haut ; `marquerBoutonsAction` pose `sous-reparation` sur
+`#chantier-champ` quand la barre paraît, et la ligne de mode monte à `bottom:
+22px`, la bascule à `bottom: 28px`. Relevé après : ligne de mode **554 → 580**,
+bascule **534 → 574**, bouton **584 → 600**, les trois lisibles. ⚠ Les trois
+règles neuves sont écrites APRÈS les règles d'origine de leurs sélecteurs :
+`EC T3`, `ÉD T5` et `RÉPARER T11` lisent la PREMIÈRE, et les poser avant les
+fait rougir.
+⚠⚠ **ET LA CAPTURE A TROUVÉ UN SECOND DÉFAUT QUE LE BRIEF NE CONNAISSAIT PAS —
+TUTORIEL OUVERT, LA LIGNE DE MODE FLOTTAIT AU-DESSUS D'UN VIDE.** Sa fenêtre est
+dans le flux, sous `#chantier-defile` : `#chantier-reparation` y est posé à
+`bottom: 0` du CHAMP, donc au-dessus du tutoriel, et monter la ligne de mode de
+22 px la décollait de tout. Deux règles la rendent à sa place quand le tutoriel
+est ouvert, et ce sont **les premiers `:has()` de la feuille** —
+`#chantier-champ.sous-reparation:has(> #chantier-tuto:not([hidden]))`. ⚠ La
+barre recouvre alors la dernière ligne du tutoriel, comme avant le lot : c'est
+son empilement d'origine, relevé et non corrigé.
+⚠⚠ **L'ARMÉE CACHE SON BOUTON HORS DU MODE, EN `visibility`, JAMAIS EN
+`display`.** `#offense-tout-reparer` naît `repliee` et la classe tombe si et
+seulement si `actionArmee === 'reparer'`. Sa barre est dans le FLUX et sa ligne
+de réserve revient à la ligne : retirer le bouton du flux la ferait tenir sur une
+ligne, donc recadrerait la grille à chaque armement — le défaut du point 5 du
+10/09. Relevé : **`#offense-vagues` en 110 → 573,5 dans les deux états**, au
+pixel. ⚠ C'est un RETOUR sur l'arbitrage du lot ÉCRANS, qui voulait ce bouton
+permanent « parce qu'un bouton qu'il faut armer pour voir est un bouton qu'on ne
+trouve pas » ; Ethan l'a tranché dans l'autre sens.
+⚠⚠ **ET UN DÉFAUT ANTÉRIEUR SE VOIT MIEUX DEPUIS QUE L'ARMÉE A DES BARRES —
+RELEVÉ, NON CORRIGÉ.** `#offense-avis` est posé en `absolute` en haut de
+l'écran (110 → 148, `z-index: 1`) depuis le lot ÉCRANS du 10/09 : au mode
+Réparer il couvre le haut de la vague 1, **barres de vie comprises** (vers
+y 132). Le déplacer est une mise en page d'écran que le brief n'a pas demandée.
+**Ethan tranche.**
+⚠⚠ **RÉPARER RESTE ARMÉ SUR L'ÉCRAN DE RAID, ET « ACTIVER » AUSSI — ÉCART
+DÉCLARÉ.** Quatre `desarmer()` partent de `src/ui/raid.js` : le refus de
+`agirSur`, sa réussite, le toucher d'une case vide et « Tout réparer ». Les
+lignes retirées sont communes aux deux modes de `MODES_RAID`, et c'est la règle
+du 17/09 — « le mode est collant ». ⚠ Et la ligne d'avis revient à l'invite
+après chaque réussite, par `avis(m.invite)` : sans ça, un refus suivi d'une
+réparation réussie laissait le message de refus affiché, mode armé. **Une
+condition sur `mode` dans `agirSur`** désarmerait Activer si Ethan le veut.
+⚠⚠ **UNE SEULE FABRIQUE DE BARRE, EXPORTÉE — `barreDeVie` DE `ui/chantier.js`.**
+L'Armée et la grille du raid l'importent ; le jeton du Chantier garde son propre
+chemin parce qu'il se RAFRAÎCHIT sans être refabriqué — la contrainte de
+`VIT T3 bis`. Une pièce intacte n'a PAS de barre : `barreDeVie` rend `null`.
+⚠ **`.abimee` QUITTE LA GRILLE DU RAID, CLASSE ET RÈGLE** : son liseré rouge
+disait « abîmé » sans dire combien, et la barre le dit.
+⚠⚠ **LA TEINTE CHANGE À DEUX SEUILS, PARTOUT : KAKI AU-DESSUS DE 80 %, `#E0D060`
+DE 20 À 80 % BORNES COMPRISES, `#C23A5A` SOUS 20 %.** Ethan : « jaune de 20 à
+80 %, rouge en dessous de 20 », puis « partout » et « pas les accents ». Les
+seuils s'écrivent en entiers — `pv * 5 > pvMax * 4`, `pv * 5 < pvMax` — donc
+**quatre cinquièmes EXACTS est « entamée »**, et `BARRE T1` le mesure au
+milli-PV près. `COULEUR_BARRE_PV` DISPARAÎT, sans alias ; `COULEURS_BARRE_PV`
+et `couleurDeLaBarrePv` de `render/scene.js` la remplacent, et ils ont QUATRE
+lecteurs — le champ de bataille, la légende, le jeton du Chantier, `barreDeVie`.
+⚠⚠ **LA PALETTE FERMÉE PASSE DE QUARANTE ET UNE À QUARANTE-TROIS**, et c'est le
+second élargissement depuis la v4 de la fiche. Les deux tons entrent dans
+`FICHE-STYLE.md` sous leur propre titre, dans `PALETTE_FICHE` de
+`banc.test.js`, dans la §6 de ce fichier et dans `PALETTE` de `scene.js`.
+**ΔE2000 recalculés hors du dépôt : 13,35 contre l'anti-aérien clair `#F5B636`,
+15,92 contre l'anti-véhicule clair `#E43E32`** — à moins de 0,05 du brief.
+Contraste contre le fond de barre `#161914` : **11,29 et 3,42**. ⚠ Le fond des
+barres de la Base QUITTE l'accent : il était `#8A1E17`, l'anti-véhicule sombre,
+et une barre critique rouge sur un fond rouge sombre ne se lirait pas.
+⚠⚠ **LE RENDU A ÉTÉ VU, DANS CHROMIUM ET PAS SUR L'APPAREIL.** Huit captures dans
+`rapports/`, avant et après. Grille du raid : **Fusiliers à 90 % en
+`rgb(140, 154, 114)`, 50 % en `rgb(224, 208, 96)`, 10 % en `rgb(194, 58, 90)`**.
+Raid en cours, `fillStyle` instrumenté sur 136 ms : **`#e0d060` 8 poses,
+`#c23a5a` 8 poses**, zéro erreur de page, débordement horizontal 0.
+⚠ **HUIT FALSIFICATIONS, HUIT CHUTES, UNE PAR MOITIÉ DU LOT** — messages réels au
+rapport.
+⚠ **`python3 tools/verifier.py` N'A PAS ÉTÉ LANCÉ, ET C'ÉTAIT CONFORME** : le lot
+ne touche ni `art/`, ni un outil de la chaîne — zéro fichier au diff.
+⚠ **ET LE LOT N'EST PAS SUR UNE BRANCHE NOMMÉE PAR LE BRIEF** — il n'en nomme
+aucune ; l'environnement d'exécution épingle la session à
+`claude/new-session-ib50iz` et interdit de pousser ailleurs sans autorisation
+explicite.
+
+**Auparavant, après le lot ARTILLERIE-RECHERCHE (23/09) :**
 ⚠⚠ **LES TROIS SOUTIENS D'ARTILLERIE PRENNENT LEUR PORTE, ET LE LOT NE FAIT QUE
 ÇA.** Lot ARTILLERIE-RECHERCHE. `soutienAntiInfanterie`, `soutienAntiAerien` et
 `soutienAntiVehicule` portaient `cout: null` depuis le lot RECHERCHE — ni prix,
@@ -815,7 +908,37 @@ interdit. Elle avance ici parce qu'une migration réelle l'accompagne.
    question : le dépôt est devenu assez gros pour que le savoir y soit déjà, et
    assez gros pour qu'on ne tombe plus dessus par hasard.
 
-**Référence au 23/09/2026 (après le lot ARTILLERIE-RECHERCHE), à confronter :**
+**Référence au 26/09/2026 (après le lot BARRES-ET-RÉPARER), à confronter :**
+`npm test` rend **1670 pass / 0 fail** au sens de la garde de
+`documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
+est **1 669 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
+08/09), et `npm run check` sort en 0. Le lot en ajoute **deux**, `BARRE T1` dans
+`test/offense.test.js` et `MODE T1` dans `test/raid-ecran.test.js` — `test/`
+reste à **81** fichiers, et aucun fichier n'entre ni ne sort de `src/`.
+`npm run build` → `dist/index.html`, **10 608 405 octets**, 0 référence externe.
+Coût **+1 595 octets**, mesuré poste par poste contre le livrable rebâti dans un
+`git worktree` pristine de `main` = `78af575`, qui EST le merge du lot
+ARTILLERIE-RECHERCHE (**10 606 810**, retrouvé à l'octet) : **JavaScript +894 ·
+feuille +685 · balisage +16 · images +0 · audio +0**, et les cinq postes
+PARTITIONNENT le fichier des deux côtés — écart **0 · 0**. `data:` à **316
+lignes / 315 URI** de part et d'autre. Borne T10 **10 820 000, NON TOUCHÉE**,
+marge **211 595 octets, 1,96 %**, au-dessus du plancher de 150 000 ; `PIC T7`
+réancré **sur le POURCENTAGE** — les 1 595 octets valent un trente et unième de
+sa tolérance de 50 000. **Quatrième fois de suite.** ⚠ Le brief prévoyait
+**+1 288** : sur les 307 octets d'écart, les deux règles `:has()` du tutoriel
+ouvert — que le brief ne connaissait pas — en pèsent **211**, mesurés en les
+retirant et en rebâtissant (10 608 194) ; les **96** qui restent sont des écarts
+d'écriture au prototype, non ventilés.
+⚠ **`SAVE_VERSION` NE BOUGE PAS ET RESTE À 41** — vérifié au diff :
+`src/sim/state.js` n'y apparaît pas, et le témoin de BASES-0 n'a pas bougé.
+⚠ Le lot touche `src/index.src.html`, `src/render/scene.js`,
+`src/ui/{chantier,offense,raid}.js`, `FICHE-STYLE.md`, `package.json`, ce
+fichier, **six** fichiers de `test/`, et fait entrer
+`rapports/RAPPORT-lotBARRES-ET-REPARER.md` et huit captures dans `rapports/`.
+**Pas une ligne de `src/sim/`, `src/data/`, `src/son/`, `tools/` ni `art/`** —
+vérifié au diff.
+
+**Auparavant, après le lot ARTILLERIE-RECHERCHE (23/09) :**
 `npm test` rend **1668 pass / 0 fail** au sens de la garde de
 `documentation.test.js` — c'est le NOMBRE de tests DÉCLARÉS ; le verdict mesuré
 est **1 667 pass · 0 fail · 1 skipped** (`LIMITE T8`, suspendu par Ethan le
@@ -16337,13 +16460,19 @@ fenêtre. Un test qui passerait aussi sur du code cassé ne prouve rien.
   ni horloge système, et `maintenantMs` reste seule lectrice de l'horloge dans
   tout `src/`, comme la garde §11 l'exige.
 
-- **LA PALETTE EST FERMÉE : quarante-et-une teintes, plus un seul `rgba`.**
+- **LA PALETTE EST FERMÉE : quarante-trois teintes, plus un seul `rgba`.**
   `banc.test.js` balaie `src/render/`, `src/ui/` et `src/index.src.html` et
   refuse toute couleur hors de `FICHE-STYLE.md`, ainsi que tout `rgba` autre que
   `rgba(0,0,0,0.31)`. Aucune transparence, donc — ni tuile pâle, ni gris
-  intermédiaire. Les quarante-et-une : cinq de châssis kaki, cinq de sol joueur,
+  intermédiaire. Les quarante-trois : cinq de châssis kaki, cinq de sol joueur,
   cinq de sol Ouvrage, cinq d'ardoise Ouvrage, quatre d'accents de terrain,
-  trois de métal, six d'accents fonctionnels, huit de frontière de territoire.
+  trois de métal, six d'accents fonctionnels, huit de frontière de territoire,
+  deux de barre de PV.
+  ⚠⚠ **LES DEUX DERNIÈRES SONT ENTRÉES LE 25/09, LOT BARRES-ET-RÉPARER** —
+  « entamée » et « critique », les deux tons d'ÉTAT de la barre de PV. Ce ne sont
+  pas des accents : un accent désigne une cible, une barre dit une santé. Elles
+  se lisent dans `FICHE-STYLE.md` sous leur propre titre, et `couleurDeLaBarrePv`
+  de `render/scene.js` est leur seul lecteur.
   ⚠⚠ **LES HUIT DERNIÈRES SONT ENTRÉES LE 05/09, ET C'EST LE PREMIER
   ÉLARGISSEMENT DE LA PALETTE DEPUIS LA v4 DE LA FICHE.** Ethan a demandé « un
   vert kaki assez vif » et « un violet assez vif » pour les frontières de
